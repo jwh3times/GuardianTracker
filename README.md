@@ -37,7 +37,7 @@ A web-based app tailored for Destiny 2 players that integrates Bungie APIs to an
 guardian-tracker/
 ├── frontend/                 # React + TypeScript frontend
 ├── backend/
-│   ├── graphql-server/      # Apollo Server (Node.js/TypeScript)
+│   ├── graphql-service/     # Apollo Server (Node.js/TypeScript)
 │   ├── auth-service/        # Go authentication microservice
 │   └── bungie-service/      # Go Bungie API integration service
 ├── infrastructure/
