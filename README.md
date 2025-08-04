@@ -71,7 +71,7 @@ guardian-tracker/
    # Build Go services
    cd ../backend/auth-service && go mod tidy
    cd ../bungie-service && go mod tidy
-   cd ../graphql-server && npm install
+   cd ../graphql-service && npm install
 
    # Start development environment
    docker-compose up -d
