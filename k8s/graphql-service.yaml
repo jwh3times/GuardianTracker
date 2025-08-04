@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphql-service
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: graphql-service
+  template:
+    metadata:
+      labels:
+        app: graphql-service
+    spec:
+      containers:
+        - name: graphql-service
+          image: guardian-tracker/graphql-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 4000
+          env:
+            - name: PORT
+              value: "4000"
+            - name: AUTH_SERVICE_URL
+              value: "http://auth-service:8081"
+            - name: BUNGIE_SERVICE_URL
+              value: "http://bungie-service:8082"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graphql-service
+  namespace: default
+spec:
+  selector:
+    app: graphql-service
+  ports:
+    - port: 4000
+      targetPort: 4000
+      protocol: TCP
+  type: ClusterIP

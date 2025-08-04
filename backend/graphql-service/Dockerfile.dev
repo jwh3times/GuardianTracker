@@ -1,0 +1,20 @@
+# Development Dockerfile for GraphQL Server
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install nodemon globally for development
+RUN npm install -g nodemon ts-node
+
+# Copy package files
+COPY package*.json ./
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 4000
+
+# Start development server with hot reload
+CMD ["npm", "run", "dev"]

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+  namespace: default
+data:
+  BUNGIE_API_KEY: "38bb3aae8e6347198e8e9263e86c3584"
+  BUNGIE_CLIENT_ID: "30139"
+  REACT_APP_AUTH_REDIRECT_URI: "https://51467bc2b8ce.ngrok-free.app/auth/callback"
+  PORT: "8081"
+  GO_ENV: "development"
