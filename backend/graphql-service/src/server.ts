@@ -14,10 +14,15 @@ async function startServer() {
   const app = express();
   const httpServer = http.createServer(app);
 
+  // Log configuration
+  console.log("Starting GraphQL Server...");
+  console.log("Environment:", process.env.NODE_ENV || "development");
+  console.log("Port:", process.env.PORT || 4000);
+
   // Security middleware
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Allow GraphQL Playground in development
+      contentSecurityPolicy: process.env.NODE_ENV === "production", // Enable in production
     })
   );
 
@@ -35,13 +40,19 @@ async function startServer() {
   await server.start();
 
   // CORS configuration
+  const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(",")
+    : ["http://localhost:3000"];
+
   const corsOptions = {
     origin:
       process.env.NODE_ENV === "production"
-        ? ["https://guardian-tracker.com"] // Replace with your production domain
+        ? allowedOrigins
         : ["http://localhost:3000"],
     credentials: true,
   };
+
+  console.log("CORS allowed origins:", corsOptions.origin);
 
   // GraphQL endpoint
   app.use(

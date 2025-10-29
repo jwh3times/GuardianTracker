@@ -49,40 +49,119 @@ guardian-tracker/
 
 ## 🚀 Getting Started
 
-1. **Prerequisites**
+### Prerequisites
 
-   - Node.js 18+
-   - Go 1.21+
-   - Docker & Docker Compose
-   - PostgreSQL
-   - MongoDB or DynamoDB
-   - Redis
+- Node.js 18+
+- Go 1.21+
+- Docker & Docker Compose
+- PostgreSQL
+- MongoDB or DynamoDB
+- Redis
 
-2. **Setup Development Environment**
+### Quick Start
+
+1. **Clone the repository**
 
    ```bash
-   # Clone and setup
    git clone <repo-url>
    cd guardian-tracker
+   ```
 
-   # Install frontend dependencies
-   cd frontend && npm install
+2. **Set up environment variables**
 
-   # Build Go services
-   cd ../backend/auth-service && go mod tidy
-   cd ../bungie-service && go mod tidy
-   cd ../graphql-service && npm install
+   **Important:** Before running any services, you must configure environment variables.
 
-   # Start development environment
+   ```bash
+   # Copy environment templates
+   cp .env.example .env
+   cd backend/auth-service && cp .env.example .env && cd ../..
+   cd backend/bungie-service && cp .env.example .env && cd ../..
+   cd backend/graphql-service && cp .env.example .env && cd ../..
+   cd frontend && cp .env.example .env.local && cd ..
+   ```
+
+   **Next:** Edit each `.env` file with your actual credentials.
+
+   📖 **See [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md) for detailed configuration instructions.**
+
+3. **Get Bungie API Credentials**
+
+   You'll need to create a Bungie.net application to get:
+
+   - API Key
+   - OAuth Client ID
+   - OAuth Client Secret
+
+   📖 **See [ENVIRONMENT_SETUP.md](./ENVIRONMENT_SETUP.md#-getting-bungie-api-credentials) for step-by-step instructions.**
+
+4. **Install dependencies**
+
+   ```bash
+   # Frontend
+   cd frontend && npm install && cd ..
+
+   # GraphQL Service
+   cd backend/graphql-service && npm install && cd ../..
+
+   # Go services (download dependencies)
+   cd backend/auth-service && go mod tidy && cd ../..
+   cd backend/bungie-service && go mod tidy && cd ../..
+   ```
+
+5. **Start services**
+
+   **Option A: Using Docker Compose (Recommended)**
+
+   ```bash
    docker-compose up -d
    ```
 
+   **Option B: Run services individually**
+
+   ```bash
+   # Terminal 1 - Auth Service
+   cd backend/auth-service
+   go run main.go
+
+   # Terminal 2 - Bungie Service
+   cd backend/bungie-service
+   go run main.go
+
+   # Terminal 3 - GraphQL Service
+   cd backend/graphql-service
+   npm run dev
+
+   # Terminal 4 - Frontend
+   cd frontend
+   npm start
+   ```
+
+6. **Access the application**
+   - Frontend: http://localhost:3000
+   - GraphQL Playground: http://localhost:4000/graphql
+   - Auth Service: http://localhost:8081
+   - Bungie Service: http://localhost:8082
+
+### Development with Kubernetes
+
+For Kubernetes deployment on Minikube:
+
+```bash
+cd k8s
+./startup.bat  # Windows
+# or
+./startup.sh   # Linux/Mac
+```
+
+See [k8s/README.md](./k8s/README.md) for detailed Kubernetes setup instructions.
+
 ## 📚 Documentation
 
+- [Environment Setup Guide](./ENVIRONMENT_SETUP.md) ⭐ **Start here!**
 - [Frontend Setup](./frontend/README.md)
 - [Backend Services](./backend/README.md)
-- [Infrastructure](./infrastructure/README.md)
-- [API Documentation](./docs/api.md)
+- [Kubernetes Deployment](./k8s/README.md)
+- [API Documentation](./docs/api.md) (Coming soon)
 
 ## 🔧 Development
 

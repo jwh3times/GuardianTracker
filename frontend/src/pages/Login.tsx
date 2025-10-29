@@ -12,13 +12,17 @@ import { Loader2 } from "lucide-react";
 export function Login() {
   const [bungieLoading, setBungieLoading] = useState(false);
 
+  // Get auth service URL from environment
+  const AUTH_SERVICE_URL =
+    process.env.REACT_APP_AUTH_SERVICE_URL || "http://localhost:8081";
+
   // Bungie OAuth login
   const handleBungieLogin = async () => {
     try {
       setBungieLoading(true);
       console.log("Starting Bungie OAuth flow...");
 
-      const response = await fetch("http://localhost:8081/api/auth/bungie");
+      const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/bungie`);
       console.log("Response status:", response.status);
       console.log("Response headers:", response.headers);
 

@@ -8,6 +8,12 @@ export const OAuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
+  // Get auth service URL from environment (constant per deployment)
+  const AUTH_SERVICE_URL = React.useMemo(
+    () => process.env.REACT_APP_AUTH_SERVICE_URL || "http://localhost:8081",
+    []
+  );
+
   useEffect(() => {
     const handleCallback = async () => {
       const code = searchParams.get("code");
@@ -41,7 +47,7 @@ export const OAuthCallback: React.FC = () => {
 
         // Exchange code for token
         const response = await fetch(
-          "http://localhost:8081/api/auth/bungie/callback",
+          `${AUTH_SERVICE_URL}/api/auth/bungie/callback`,
           {
             method: "POST",
             headers: {
@@ -64,6 +70,7 @@ export const OAuthCallback: React.FC = () => {
         const data = await response.json();
         console.log("Token exchange successful:", {
           user: data.user?.displayName,
+          hasRefreshToken: !!data.refreshToken,
         });
 
         if (data.error) {
@@ -72,8 +79,8 @@ export const OAuthCallback: React.FC = () => {
           );
         }
 
-        // Login with the received token and user data
-        login(data.token, data.user);
+        // Login with the received tokens and user data
+        login(data.token, data.refreshToken, data.user);
 
         alert(`Welcome, ${data.user.displayName}! Authentication successful.`);
 
@@ -89,6 +96,8 @@ export const OAuthCallback: React.FC = () => {
     };
 
     handleCallback();
+    // AUTH_SERVICE_URL is memoized with empty deps, so it won't change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, navigate, login]);
 
   return (

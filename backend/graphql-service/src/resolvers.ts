@@ -2,8 +2,15 @@ import { Context } from "./context";
 import { GraphQLError } from "graphql";
 import axios from "axios";
 
-const AUTH_SERVICE_URL = "http://localhost:8081";
-const BUNGIE_SERVICE_URL = "http://localhost:8082";
+const AUTH_SERVICE_URL =
+  process.env.AUTH_SERVICE_URL || "http://localhost:8081";
+const BUNGIE_SERVICE_URL =
+  process.env.BUNGIE_SERVICE_URL || "http://localhost:8082";
+
+// Log configuration on startup
+console.log("GraphQL Resolvers Configuration:");
+console.log("  AUTH_SERVICE_URL:", AUTH_SERVICE_URL);
+console.log("  BUNGIE_SERVICE_URL:", BUNGIE_SERVICE_URL);
 
 export const resolvers = {
   Query: {
