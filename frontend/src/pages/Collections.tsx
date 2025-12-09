@@ -1,24 +1,61 @@
 import React, { useState } from 'react';
-import { useQuery } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { Button } from '../components/ui/Button';
-import { GET_CURRENT_USER, GET_USER_COLLECTIONS } from '../graphql/queries';
+import { GET_CURRENT_USER, GET_USER_COLLECTIONS, GET_WISH_LIST } from '../graphql/queries';
+import { ADD_TO_WISH_LIST } from '../graphql/mutations';
 import { DestinyItem } from '../types';
 import { getRarityColor, getDifficultyColor, validateImageUrl, sortItemsByDifficulty } from '../lib/utils';
+import { useToast } from '../components/ui/Toast';
+
+type CollectionTab = 'weapons' | 'armor' | 'exotics';
 
 export function Collections() {
-  const [activeTab, setActiveTab] = useState<'weapons' | 'armor' | 'exotics'>('weapons');
+  const [activeTab, setActiveTab] = useState<CollectionTab>('weapons');
   const [difficultyFilter, setDifficultyFilter] = useState<string[]>([]);
+  const [addingItems, setAddingItems] = useState<Set<string>>(new Set());
+  const { showToast } = useToast();
 
   const { data: userData } = useQuery(GET_CURRENT_USER);
-  const { data: collectionsData, loading } = useQuery(GET_USER_COLLECTIONS, {
+  const { data: collectionsData, loading, error } = useQuery(GET_USER_COLLECTIONS, {
     variables: {
       membershipType: userData?.currentUser?.membershipType,
       membershipId: userData?.currentUser?.membershipId,
     },
     skip: !userData?.currentUser,
   });
+
+  const [addToWishList] = useMutation(ADD_TO_WISH_LIST, {
+    refetchQueries: [{ query: GET_WISH_LIST }],
+    onCompleted: () => {
+      showToast('Item added to wish list!', 'success');
+    },
+    onError: (err) => {
+      showToast(`Failed to add item: ${err.message}`, 'error');
+    },
+  });
+
+  const handleAddToWishList = async (item: DestinyItem) => {
+    if (addingItems.has(item.itemHash)) return;
+
+    setAddingItems(prev => new Set(prev).add(item.itemHash));
+
+    try {
+      await addToWishList({
+        variables: {
+          itemHash: item.itemHash,
+          priority: 'MEDIUM',
+        },
+      });
+    } finally {
+      setAddingItems(prev => {
+        const next = new Set(prev);
+        next.delete(item.itemHash);
+        return next;
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -28,11 +65,24 @@ export function Collections() {
     );
   }
 
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Card className="max-w-md">
+          <CardContent className="pt-6 text-center">
+            <p className="text-destructive mb-4">Failed to load collections</p>
+            <p className="text-sm text-muted-foreground">{error.message}</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const collections = collectionsData?.userCollections;
   const activeCollection = collections?.[activeTab];
-  
+
   const filteredItems = difficultyFilter.length > 0
-    ? activeCollection?.missing?.filter((item: DestinyItem) => 
+    ? activeCollection?.missing?.filter((item: DestinyItem) =>
         difficultyFilter.includes(item.difficulty)
       ) || []
     : activeCollection?.missing || [];
@@ -40,12 +90,18 @@ export function Collections() {
   const sortedItems = sortItemsByDifficulty(filteredItems);
 
   const handleDifficultyFilter = (difficulty: string) => {
-    setDifficultyFilter(prev => 
+    setDifficultyFilter(prev =>
       prev.includes(difficulty)
         ? prev.filter(d => d !== difficulty)
         : [...prev, difficulty]
     );
   };
+
+  const tabs: { key: CollectionTab; label: string; icon: string }[] = [
+    { key: 'weapons', label: 'Weapons', icon: '⚔️' },
+    { key: 'armor', label: 'Armor', icon: '🛡️' },
+    { key: 'exotics', label: 'Exotics', icon: '✨' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -59,14 +115,10 @@ export function Collections() {
 
       {/* Collection Tabs */}
       <div className="flex space-x-4 border-b">
-        {[
-          { key: 'weapons', label: 'Weapons', icon: '⚔️' },
-          { key: 'armor', label: 'Armor', icon: '🛡️' },
-          { key: 'exotics', label: 'Exotics', icon: '✨' },
-        ].map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
+            onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.key
                 ? 'border-primary text-primary'
@@ -143,8 +195,8 @@ export function Collections() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {sortedItems.map((item: DestinyItem) => (
           <Card key={item.itemHash} className={`destiny-card hover:shadow-lg transition-shadow ${
-            item.isExotic ? 'destiny-card-exotic' : 
-            item.rarity === 'Legendary' ? 'destiny-card-legendary' : 
+            item.isExotic ? 'destiny-card-exotic' :
+            item.rarity === 'Legendary' ? 'destiny-card-legendary' :
             'destiny-card-rare'
           }`}>
             <CardContent className="p-4">
@@ -154,6 +206,7 @@ export function Collections() {
                     src={validateImageUrl(item.icon)}
                     alt={item.name}
                     className="w-12 h-12 rounded-lg"
+                    loading="lazy"
                   />
                   <div className="flex-1 min-w-0">
                     <h3 className={`font-semibold text-sm ${getRarityColor(item.rarity)}`}>
@@ -162,11 +215,11 @@ export function Collections() {
                     <p className="text-xs text-muted-foreground">{item.itemType}</p>
                   </div>
                 </div>
-                
+
                 <p className="text-xs text-muted-foreground line-clamp-2">
                   {item.description}
                 </p>
-                
+
                 <div className="flex items-center justify-between text-xs">
                   <span className={getDifficultyColor(item.difficulty)}>
                     {item.difficulty}
@@ -175,7 +228,7 @@ export function Collections() {
                     {item.rarity}
                   </span>
                 </div>
-                
+
                 {item.sources && item.sources.length > 0 && (
                   <div className="text-xs text-muted-foreground">
                     <p className="font-medium">Sources:</p>
@@ -189,13 +242,22 @@ export function Collections() {
                     </ul>
                   </div>
                 )}
-                
-                <Button 
-                  size="sm" 
+
+                <Button
+                  size="sm"
                   className="w-full"
                   variant="outline"
+                  onClick={() => handleAddToWishList(item)}
+                  disabled={addingItems.has(item.itemHash)}
                 >
-                  Add to Wish List
+                  {addingItems.has(item.itemHash) ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      <span className="ml-2">Adding...</span>
+                    </>
+                  ) : (
+                    'Add to Wish List'
+                  )}
                 </Button>
               </div>
             </CardContent>

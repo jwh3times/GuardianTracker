@@ -9,8 +9,12 @@ import {
 } from "../components/ui/Card";
 import { Loader2 } from "lucide-react";
 
+// Storage key for OAuth state (CSRF protection)
+const OAUTH_STATE_KEY = "oauth_state";
+
 export function Login() {
   const [bungieLoading, setBungieLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Get auth service URL from environment
   const AUTH_SERVICE_URL =
@@ -20,30 +24,30 @@ export function Login() {
   const handleBungieLogin = async () => {
     try {
       setBungieLoading(true);
-      console.log("Starting Bungie OAuth flow...");
+      setError(null);
 
       const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/bungie`);
-      console.log("Response status:", response.status);
-      console.log("Response headers:", response.headers);
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log("Response data:", data);
 
-      if (data.authUrl) {
-        console.log("Redirecting to:", data.authUrl);
+      if (data.authUrl && data.state) {
+        // Store the state in sessionStorage for CSRF validation
+        sessionStorage.setItem(OAUTH_STATE_KEY, data.state);
+
+        // Redirect to Bungie OAuth
         window.location.href = data.authUrl;
       } else {
         throw new Error("No authorization URL received from server");
       }
-    } catch (error) {
-      console.error("Error initiating Bungie OAuth:", error);
+    } catch (err) {
+      console.error("Error initiating Bungie OAuth:", err);
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      alert(`Failed to start Bungie authentication: ${errorMessage}`);
+        err instanceof Error ? err.message : "Unknown error";
+      setError(`Failed to start authentication: ${errorMessage}`);
       setBungieLoading(false);
     }
   };
@@ -64,6 +68,13 @@ export function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Error Display */}
+            {error && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
+
             {/* Bungie OAuth Login */}
             <div className="space-y-3">
               <Button
@@ -78,7 +89,7 @@ export function Login() {
                     Redirecting to Bungie...
                   </>
                 ) : (
-                  "🚀 Login with Bungie.net"
+                  "Login with Bungie.net"
                 )}
               </Button>
               <p className="text-sm text-muted-foreground text-center">

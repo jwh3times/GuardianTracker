@@ -1,27 +1,38 @@
 import { Context } from "./context";
 import { GraphQLError } from "graphql";
 import axios from "axios";
+import { requireAuth, getAuthenticatedUser } from "./utils/auth";
+import { validateInput, validationSchemas } from "./utils/validation";
 
 const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:8081";
 const BUNGIE_SERVICE_URL =
   process.env.BUNGIE_SERVICE_URL || "http://localhost:8082";
 
-// Log configuration on startup
-console.log("GraphQL Resolvers Configuration:");
-console.log("  AUTH_SERVICE_URL:", AUTH_SERVICE_URL);
-console.log("  BUNGIE_SERVICE_URL:", BUNGIE_SERVICE_URL);
+// Only log in non-production environments
+if (process.env.NODE_ENV !== "production") {
+  console.log("GraphQL Resolvers Configuration:");
+  console.log("  AUTH_SERVICE_URL:", AUTH_SERVICE_URL);
+  console.log("  BUNGIE_SERVICE_URL:", BUNGIE_SERVICE_URL);
+}
+
+// Helper to forward auth token to downstream services
+function getAuthHeaders(context: Context): Record<string, string> {
+  const authHeader = context.req.headers.authorization;
+  return authHeader ? { Authorization: authHeader } : {};
+}
 
 export const resolvers = {
   Query: {
-    currentUser: async (_parent: any, _args: any, _context: Context) => {
+    // Protected: Requires authentication
+    currentUser: async (_parent: unknown, _args: unknown, context: Context) => {
+      requireAuth(context);
+
       try {
-        console.log("Fetching current user from auth service...");
         const response = await axios.get(
-          `${AUTH_SERVICE_URL}/api/auth/profile`
+          `${AUTH_SERVICE_URL}/api/auth/profile`,
+          { headers: getAuthHeaders(context) }
         );
-        console.log("Auth service response:", response.data);
-        console.log("Returning user data:", response.data.user);
         return response.data.user;
       } catch (error) {
         console.error("Error fetching current user:", error);
@@ -29,14 +40,19 @@ export const resolvers = {
       }
     },
 
+    // Protected: Requires authentication + validates input
     userCollections: async (
-      _parent: any,
+      _parent: unknown,
       args: { membershipType: number; membershipId: string },
-      _context: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const validated = validateInput(validationSchemas.userCollections, args);
+
       try {
         const response = await axios.get(
-          `${BUNGIE_SERVICE_URL}/api/collections/${args.membershipType}/${args.membershipId}`
+          `${BUNGIE_SERVICE_URL}/api/collections/${validated.membershipType}/${validated.membershipId}`,
+          { headers: getAuthHeaders(context) }
         );
         return response.data;
       } catch (error) {
@@ -45,14 +61,18 @@ export const resolvers = {
       }
     },
 
+    // Protected: Requires authentication + validates input
     searchItems: async (
-      _parent: any,
-      _args: { query: string; filters?: any },
-      _context: Context
+      _parent: unknown,
+      args: { query: string; filters?: Record<string, unknown> },
+      context: Context
     ) => {
+      requireAuth(context);
+      const validated = validateInput(validationSchemas.searchItems, args);
+
       try {
-        // For now, return empty array since we don't have this endpoint in Go services yet
         // TODO: Implement search endpoint in bungie-service
+        console.log("Searching items with query:", validated.query);
         return [];
       } catch (error) {
         console.error("Error searching items:", error);
@@ -60,9 +80,10 @@ export const resolvers = {
       }
     },
 
+    // Public: Weekly recommendations (no auth required)
     weeklyRecommendations: async (
-      _parent: any,
-      _args: any,
+      _parent: unknown,
+      _args: unknown,
       _context: Context
     ) => {
       try {
@@ -76,26 +97,33 @@ export const resolvers = {
       }
     },
 
-    wishList: async (_parent: any, _args: any, _context: Context) => {
+    // Protected: Requires authentication
+    wishList: async (_parent: unknown, _args: unknown, context: Context) => {
+      requireAuth(context);
+
       try {
-        const response = await axios.get(`${AUTH_SERVICE_URL}/api/wishlist`);
+        const response = await axios.get(`${AUTH_SERVICE_URL}/api/wishlist`, {
+          headers: getAuthHeaders(context),
+        });
+
         // Map the Go service response to match GraphQL schema
-        const mappedWishList = response.data.map((item: any) => ({
+        const mappedWishList = response.data.map((item: Record<string, unknown>) => ({
           id: item.id,
-          itemHash: item.itemId, // Map itemId to itemHash
-          name: item.itemName, // Map itemName to name
-          description: `${item.itemType} from Destiny 2`, // Placeholder description
-          icon: "", // Placeholder icon
+          itemHash: item.itemId,
+          name: item.itemName,
+          description: `${item.itemType} from Destiny 2`,
+          icon: "",
           itemType: item.itemType,
-          tierType: 6, // Placeholder tier type (Legendary)
-          rarity: "Legendary", // Placeholder rarity
-          difficulty: "Moderate", // Placeholder difficulty
-          sources: ["Destiny 2"], // Placeholder sources
+          tierType: 6,
+          rarity: "Legendary",
+          difficulty: "Moderate",
+          sources: ["Destiny 2"],
           isExotic:
-            item.itemName.includes("Vex") || item.itemName.includes("Thorn"), // Simple exotic detection
-          priority: "MEDIUM", // Default priority
-          notes: "", // Default notes
-          dateAdded: new Date(item.addedAt), // Convert string to Date object
+            String(item.itemName).includes("Vex") ||
+            String(item.itemName).includes("Thorn"),
+          priority: "MEDIUM",
+          notes: "",
+          dateAdded: new Date(item.addedAt as string),
         }));
         return mappedWishList;
       } catch (error) {
@@ -106,16 +134,19 @@ export const resolvers = {
   },
 
   Mutation: {
+    // Login: Validates input (creates session)
     login: async (
-      _parent: any,
+      _parent: unknown,
       args: { membershipType: number; membershipId: string },
       _context: Context
     ) => {
+      const validated = validateInput(validationSchemas.login, args);
+
       try {
         const loginData = {
-          membershipType: args.membershipType,
-          membershipId: args.membershipId,
-          displayName: `Guardian#${args.membershipId.slice(-4)}`, // Generate display name
+          membershipType: validated.membershipType,
+          membershipId: validated.membershipId,
+          displayName: `Guardian#${validated.membershipId.slice(-4)}`,
         };
 
         const response = await axios.post(
@@ -133,17 +164,25 @@ export const resolvers = {
       }
     },
 
+    // Protected: Requires authentication + validates input
     addToWishList: async (
-      _parent: any,
+      _parent: unknown,
       args: { itemHash: string; priority?: string; notes?: string },
-      _context: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const validated = validateInput(validationSchemas.addToWishList, args);
+
       try {
-        const response = await axios.post(`${AUTH_SERVICE_URL}/api/wishlist`, {
-          itemId: args.itemHash,
-          priority: args.priority || "MEDIUM",
-          notes: args.notes,
-        });
+        const response = await axios.post(
+          `${AUTH_SERVICE_URL}/api/wishlist`,
+          {
+            itemId: validated.itemHash,
+            priority: validated.priority || "MEDIUM",
+            notes: validated.notes,
+          },
+          { headers: getAuthHeaders(context) }
+        );
         return response.data;
       } catch (error) {
         console.error("Error adding to wish list:", error);
@@ -151,14 +190,19 @@ export const resolvers = {
       }
     },
 
+    // Protected: Requires authentication + validates input
     removeFromWishList: async (
-      _parent: any,
+      _parent: unknown,
       args: { wishListItemId: string },
-      _context: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const validated = validateInput(validationSchemas.removeFromWishList, args);
+
       try {
         const response = await axios.delete(
-          `${AUTH_SERVICE_URL}/api/wishlist/${args.wishListItemId}`
+          `${AUTH_SERVICE_URL}/api/wishlist/${validated.wishListItemId}`,
+          { headers: getAuthHeaders(context) }
         );
         return { success: true, message: response.data.message };
       } catch (error) {
@@ -167,18 +211,21 @@ export const resolvers = {
       }
     },
 
+    // Protected: Requires authentication + validates input
     updateWishListItem: async (
-      _parent: any,
+      _parent: unknown,
       args: { wishListItemId: string; priority?: string; notes?: string },
-      _context: Context
+      context: Context
     ) => {
+      requireAuth(context);
+      const validated = validateInput(validationSchemas.updateWishListItem, args);
+
       try {
         // TODO: Implement PUT endpoint in auth-service for updating wishlist items
-        // For now, return success message
         return {
-          id: args.wishListItemId,
-          priority: args.priority || "MEDIUM",
-          notes: args.notes || "",
+          id: validated.wishListItemId,
+          priority: validated.priority || "MEDIUM",
+          notes: validated.notes || "",
           message: "Wishlist item updated successfully",
         };
       } catch (error) {
@@ -187,14 +234,12 @@ export const resolvers = {
       }
     },
 
-    refreshUserData: async (_parent: any, _args: any, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError("Authentication required");
-      }
+    // Protected: Requires authentication
+    refreshUserData: async (_parent: unknown, _args: unknown, context: Context) => {
+      getAuthenticatedUser(context); // Validates auth, throws if not authenticated
 
       try {
         // TODO: Implement refresh endpoint in bungie-service
-        // For now, return success message
         return {
           success: true,
           message: "User data refreshed successfully",
@@ -206,14 +251,12 @@ export const resolvers = {
       }
     },
 
-    logout: async (_parent: any, _args: any, context: Context) => {
-      if (!context.user) {
-        throw new GraphQLError("Authentication required");
-      }
+    // Protected: Requires authentication
+    logout: async (_parent: unknown, _args: unknown, context: Context) => {
+      getAuthenticatedUser(context); // Validates auth, throws if not authenticated
 
       try {
-        // TODO: Implement logout endpoint in auth-service
-        // For now, return success message
+        // TODO: Implement logout endpoint in auth-service (token blacklist)
         return {
           success: true,
           message: "Successfully logged out",
@@ -229,6 +272,6 @@ export const resolvers = {
   DateTime: {
     serialize: (date: Date) => date.toISOString(),
     parseValue: (value: string) => new Date(value),
-    parseLiteral: (ast: any) => new Date(ast.value),
+    parseLiteral: (ast: { value: string }) => new Date(ast.value),
   },
 };

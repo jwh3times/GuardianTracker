@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useQuery } from "@apollo/client";
 import { gql } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
@@ -12,6 +12,7 @@ import {
 } from "../components/ui/Card";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { Button } from "../components/ui/Button";
+import { useToast } from "../components/ui/Toast";
 
 // Utility functions
 const getTimeUntilReset = (): string => {
@@ -92,8 +93,11 @@ const USER_COLLECTIONS_QUERY = gql`
 export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { data: userData } = useQuery(CURRENT_USER_QUERY);
-  const { data: collectionsData, loading: collectionsLoading } = useQuery(
+  const { showToast } = useToast();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const { data: userData, refetch: refetchUser } = useQuery(CURRENT_USER_QUERY);
+  const { data: collectionsData, loading: collectionsLoading, refetch: refetchCollections } = useQuery(
     USER_COLLECTIONS_QUERY,
     {
       variables: {
@@ -105,6 +109,23 @@ export function Dashboard() {
     }
   );
   // const { data: wishlistData, loading: wishlistLoading } = useQuery(WISHLIST_QUERY); // Future use
+
+  const handleRefreshData = async () => {
+    if (isRefreshing) return;
+
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        refetchUser(),
+        refetchCollections(),
+      ]);
+      showToast('Data refreshed successfully!', 'success');
+    } catch (error) {
+      showToast('Failed to refresh data. Please try again.', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (collectionsLoading) {
     return (
@@ -397,7 +418,20 @@ export function Dashboard() {
             <Button variant="outline" onClick={() => navigate("/wishlist")}>
               Manage Wish List
             </Button>
-            <Button variant="secondary">Refresh Data</Button>
+            <Button
+              variant="secondary"
+              onClick={handleRefreshData}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  <span className="ml-2">Refreshing...</span>
+                </>
+              ) : (
+                'Refresh Data'
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>

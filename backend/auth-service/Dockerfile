@@ -13,23 +13,35 @@ RUN go mod download
 # Copy the source code into the container
 COPY . .
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
+# Build the application with security flags
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags='-w -s -extldflags "-static"' -o main .
 
-# Use a minimal alpine image for the final stage
-FROM alpine:latest
+# Use a specific minimal alpine image for the final stage
+FROM alpine:3.19
 
-# Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
+# Security: Install ca-certificates and create non-root user
+RUN apk --no-cache add ca-certificates && \
+    addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup
 
-WORKDIR /root/
+# Set working directory
+WORKDIR /app
 
 # Copy the pre-built binary file from the previous stage
 COPY --from=builder /app/main .
-COPY --from=builder /app/.env* ./
+
+# Change ownership to non-root user
+RUN chown -R appuser:appgroup /app
+
+# Switch to non-root user
+USER appuser
 
 # Expose port 8081
 EXPOSE 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8081/health || exit 1
 
 # Command to run the executable
 CMD ["./main"]

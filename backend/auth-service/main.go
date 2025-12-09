@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,7 +11,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -29,9 +36,65 @@ type Config struct {
 // Global config
 var config Config
 
+// CSRF state store with expiration (thread-safe)
+var stateStore = struct {
+	sync.RWMutex
+	states map[string]time.Time
+}{states: make(map[string]time.Time)}
+
+const stateExpiration = 10 * time.Minute
+
 func init() {
 	// Load configuration on startup
 	config = loadConfig()
+}
+
+// generateState creates a cryptographically secure random state for CSRF protection
+func generateState() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	state := base64.URLEncoding.EncodeToString(b)
+
+	// Store state with expiration
+	stateStore.Lock()
+	stateStore.states[state] = time.Now().Add(stateExpiration)
+	stateStore.Unlock()
+
+	return state, nil
+}
+
+// validateAndConsumeState checks if a state is valid and removes it (one-time use)
+func validateAndConsumeState(state string) bool {
+	stateStore.Lock()
+	defer stateStore.Unlock()
+
+	expiry, exists := stateStore.states[state]
+	if !exists {
+		return false
+	}
+
+	// Remove state (one-time use)
+	delete(stateStore.states, state)
+
+	// Check if expired
+	return time.Now().Before(expiry)
+}
+
+// cleanupExpiredStates removes expired states periodically
+func cleanupExpiredStates() {
+	ticker := time.NewTicker(5 * time.Minute)
+	for range ticker.C {
+		stateStore.Lock()
+		now := time.Now()
+		for state, expiry := range stateStore.states {
+			if now.After(expiry) {
+				delete(stateStore.states, state)
+			}
+		}
+		stateStore.Unlock()
+	}
 }
 
 // loadConfig loads and validates configuration from environment
@@ -59,10 +122,10 @@ func getEnv(key, fallback string) string {
 // validateEnvironment ensures required environment variables are set
 func validateEnvironment() {
 	required := map[string]string{
-		"BUNGIE_CLIENT_ID":     config.BungieClientID,
-		"BUNGIE_CLIENT_SECRET": config.BungieClientSecret,
-		"BUNGIE_API_KEY":       config.BungieAPIKey,
-		"JWT_SECRET":           config.JWTSecret,
+		"BUNGIE_CLIENT_ID": config.BungieClientID,
+		// BUNGIE_CLIENT_SECRET is optional for public OAuth apps
+		"BUNGIE_API_KEY": config.BungieAPIKey,
+		"JWT_SECRET":     config.JWTSecret,
 	}
 
 	missing := []string{}
@@ -78,6 +141,11 @@ func validateEnvironment() {
 		if config.GoEnv == "production" {
 			log.Fatal("Cannot start in production without required environment variables")
 		}
+	}
+
+	// Validate JWT secret strength in production
+	if config.GoEnv == "production" && len(config.JWTSecret) < 32 {
+		log.Fatal("JWT_SECRET must be at least 32 characters in production")
 	}
 }
 
@@ -123,11 +191,17 @@ func main() {
 		log.Println("No .env file found, using system environment variables")
 	}
 
+	// Reload config after loading .env
+	config = loadConfig()
+
 	// Validate required environment variables
 	validateEnvironment()
 
+	// Start background cleanup of expired CSRF states
+	go cleanupExpiredStates()
+
 	// Setup Gin router
-	if os.Getenv("GO_ENV") == "production" {
+	if config.GoEnv == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
@@ -141,60 +215,106 @@ func main() {
 		c.JSON(200, gin.H{
 			"status":    "ok",
 			"service":   "auth-service",
-			"timestamp": gin.H{"time": "now"},
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
 		})
+	})
+
+	// Ready check for K8s
+	router.GET("/ready", func(c *gin.Context) {
+		c.JSON(200, gin.H{"ready": true})
 	})
 
 	// API routes
 	api := router.Group("/api")
 	{
-		// Bungie OAuth routes
+		// Bungie OAuth routes with CSRF protection
 		api.GET("/auth/bungie", func(c *gin.Context) {
+			// Generate CSRF state
+			state, err := generateState()
+			if err != nil {
+				log.Printf("Error generating CSRF state: %v", err)
+				c.JSON(500, gin.H{"error": "Failed to initialize authentication"})
+				return
+			}
+
 			authURL := fmt.Sprintf(
-				"https://www.bungie.net/en/OAuth/Authorize?client_id=%s&response_type=code&redirect_uri=%s",
+				"https://www.bungie.net/en/OAuth/Authorize?client_id=%s&response_type=code&redirect_uri=%s&state=%s",
 				config.BungieClientID,
 				url.QueryEscape(config.AuthRedirectURI),
+				url.QueryEscape(state),
 			)
 
-			log.Printf("Generated OAuth URL for client ID: %s", config.BungieClientID)
-			c.JSON(200, gin.H{"authUrl": authURL})
+			if config.GoEnv != "production" {
+				log.Printf("Generated OAuth URL with state")
+			}
+
+			c.JSON(200, gin.H{
+				"authUrl": authURL,
+				"state":   state,
+			})
 		})
 
 		api.POST("/auth/bungie/callback", func(c *gin.Context) {
 			code := c.PostForm("code")
+			state := c.PostForm("state")
+
+			// Validate code
 			if code == "" {
 				log.Printf("OAuth callback error: No authorization code provided")
 				c.JSON(400, gin.H{"error": "Authorization code is required"})
 				return
 			}
 
-			log.Printf("Processing OAuth callback with code: %s", code[:10]+"...")
+			// Validate code length to prevent DoS
+			if len(code) > 500 {
+				log.Printf("OAuth callback error: Authorization code too long")
+				c.JSON(400, gin.H{"error": "Invalid authorization code"})
+				return
+			}
+
+			// Validate CSRF state
+			if state == "" {
+				log.Printf("OAuth callback error: No state parameter provided")
+				c.JSON(400, gin.H{"error": "State parameter is required"})
+				return
+			}
+
+			if !validateAndConsumeState(state) {
+				log.Printf("OAuth callback error: Invalid or expired state")
+				c.JSON(400, gin.H{"error": "Invalid or expired state. Please try logging in again."})
+				return
+			}
+
+			if config.GoEnv != "production" {
+				log.Printf("Processing OAuth callback (state validated)")
+			}
 
 			// Exchange code for access token
 			tokenResp, err := exchangeCodeForToken(code)
 			if err != nil {
 				log.Printf("Error exchanging code for token: %v", err)
-				c.JSON(500, gin.H{"error": "Failed to exchange authorization code", "details": err.Error()})
+				// Don't expose internal error details
+				c.JSON(500, gin.H{"error": "Failed to complete authentication"})
 				return
 			}
-
-			log.Printf("Successfully obtained access token")
 
 			// Get user profile from Bungie API
 			userProfile, err := getBungieUserProfile(tokenResp.AccessToken)
 			if err != nil {
 				log.Printf("Error getting user profile: %v", err)
-				c.JSON(500, gin.H{"error": "Failed to get user profile", "details": err.Error()})
+				c.JSON(500, gin.H{"error": "Failed to retrieve user profile"})
 				return
 			}
 
-			log.Printf("Successfully retrieved user profile for: %s", userProfile.DisplayName)
+			if config.GoEnv != "production" {
+				log.Printf("Successfully retrieved user profile for: %s", userProfile.DisplayName)
+			}
 
 			// Generate JWT access token
 			accessToken, err := GenerateAccessToken(userProfile)
 			if err != nil {
 				log.Printf("Error generating access token: %v", err)
-				c.JSON(500, gin.H{"error": "Failed to generate access token", "details": err.Error()})
+				c.JSON(500, gin.H{"error": "Failed to create session"})
 				return
 			}
 
@@ -202,11 +322,9 @@ func main() {
 			refreshToken, err := GenerateRefreshToken(userProfile)
 			if err != nil {
 				log.Printf("Error generating refresh token: %v", err)
-				c.JSON(500, gin.H{"error": "Failed to generate refresh token", "details": err.Error()})
+				c.JSON(500, gin.H{"error": "Failed to create session"})
 				return
 			}
-
-			log.Printf("Successfully generated JWT tokens for user: %s", userProfile.MembershipID)
 
 			c.JSON(200, gin.H{
 				"token":        accessToken,
@@ -257,19 +375,17 @@ func main() {
 			newAccessToken, err := GenerateAccessToken(userProfile)
 			if err != nil {
 				log.Printf("Error generating new access token: %v", err)
-				c.JSON(500, gin.H{"error": "Failed to generate new access token"})
+				c.JSON(500, gin.H{"error": "Failed to refresh session"})
 				return
 			}
 
-			// Optionally generate a new refresh token (rotation strategy)
+			// Generate new refresh token (rotation strategy)
 			newRefreshToken, err := GenerateRefreshToken(userProfile)
 			if err != nil {
 				log.Printf("Error generating new refresh token: %v", err)
-				c.JSON(500, gin.H{"error": "Failed to generate new refresh token"})
+				c.JSON(500, gin.H{"error": "Failed to refresh session"})
 				return
 			}
-
-			log.Printf("Successfully refreshed tokens for user: %s", claims.MembershipID)
 
 			c.JSON(200, gin.H{
 				"token":        newAccessToken,
@@ -286,7 +402,6 @@ func main() {
 
 		// Validate token endpoint (protected route example)
 		api.GET("/auth/validate", AuthMiddleware(), func(c *gin.Context) {
-			// If middleware passes, token is valid
 			membershipID, _ := c.Get("membership_id")
 			displayName, _ := c.Get("display_name")
 			membershipType, _ := c.Get("membership_type")
@@ -304,13 +419,38 @@ func main() {
 			})
 		})
 
-		// Wishlist routes (now protected)
+		// Auth profile endpoint (for GraphQL service)
+		api.GET("/auth/profile", AuthMiddleware(), func(c *gin.Context) {
+			membershipID, _ := c.Get("membership_id")
+			displayName, _ := c.Get("display_name")
+			membershipType, _ := c.Get("membership_type")
+			platform, _ := c.Get("platform")
+
+			c.JSON(200, gin.H{
+				"user": gin.H{
+					"id":             membershipID,
+					"displayName":    displayName,
+					"membershipId":   membershipID,
+					"membershipType": membershipType,
+					"platform":       platform,
+				},
+			})
+		})
+
+		// Wishlist routes (protected)
 		api.POST("/wishlist", AuthMiddleware(), func(c *gin.Context) {
 			membershipID, _ := c.Get("membership_id")
 
+			// Validate input
+			itemID := c.PostForm("itemId")
+			if itemID == "" || len(itemID) > 20 {
+				c.JSON(400, gin.H{"error": "Invalid item ID"})
+				return
+			}
+
 			c.JSON(200, gin.H{
 				"message": "Item added to wishlist successfully",
-				"itemId":  c.PostForm("itemId"),
+				"itemId":  itemID,
 				"userId":  membershipID,
 			})
 		})
@@ -342,6 +482,12 @@ func main() {
 			itemId := c.Param("id")
 			membershipID, _ := c.Get("membership_id")
 
+			// Validate item ID
+			if len(itemId) > 50 {
+				c.JSON(400, gin.H{"error": "Invalid item ID"})
+				return
+			}
+
 			c.JSON(200, gin.H{
 				"message": "Item removed from wishlist",
 				"itemId":  itemId,
@@ -350,16 +496,40 @@ func main() {
 		})
 	}
 
-	// Start server
+	// Create HTTP server with timeouts
 	port := config.Port
-
-	log.Printf("Auth service starting on port %s", port)
-	log.Printf("Environment: %s", config.GoEnv)
-	log.Printf("OAuth Redirect URI: %s", config.AuthRedirectURI)
-
-	if err := router.Run(":" + port); err != nil {
-		log.Fatal("Failed to start server:", err)
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
+	// Start server in goroutine
+	go func() {
+		log.Printf("Auth service starting on port %s", port)
+		log.Printf("Environment: %s", config.GoEnv)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+	}
+
+	log.Println("Server exited gracefully")
 }
 
 // Bungie OAuth data structures
@@ -393,9 +563,10 @@ func exchangeCodeForToken(code string) (*TokenResponse, error) {
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
 	data.Set("client_id", config.BungieClientID)
-	data.Set("client_secret", config.BungieClientSecret)
-
-	log.Printf("Exchanging code for token with client ID: %s", config.BungieClientID)
+	// Only include client_secret if configured (confidential apps)
+	if config.BungieClientSecret != "" {
+		data.Set("client_secret", config.BungieClientSecret)
+	}
 
 	req, err := http.NewRequest("POST", "https://www.bungie.net/platform/app/oauth/token/", strings.NewReader(data.Encode()))
 	if err != nil {
@@ -404,7 +575,7 @@ func exchangeCodeForToken(code string) (*TokenResponse, error) {
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
@@ -416,10 +587,8 @@ func exchangeCodeForToken(code string) (*TokenResponse, error) {
 		return nil, fmt.Errorf("failed to read response: %v", err)
 	}
 
-	log.Printf("Token exchange response status: %d", resp.StatusCode)
 	if resp.StatusCode != 200 {
-		log.Printf("Token exchange response body: %s", string(body))
-		return nil, fmt.Errorf("token exchange failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("token exchange failed with status %d", resp.StatusCode)
 	}
 
 	var tokenResp TokenResponse
@@ -432,8 +601,6 @@ func exchangeCodeForToken(code string) (*TokenResponse, error) {
 
 // Get user profile from Bungie API
 func getBungieUserProfile(accessToken string) (*BungieUserProfile, error) {
-	log.Printf("Fetching user profile from Bungie API")
-
 	req, err := http.NewRequest("GET", "https://www.bungie.net/Platform/User/GetMembershipsForCurrentUser/", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
@@ -442,7 +609,7 @@ func getBungieUserProfile(accessToken string) (*BungieUserProfile, error) {
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("X-API-Key", config.BungieAPIKey)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
@@ -454,10 +621,8 @@ func getBungieUserProfile(accessToken string) (*BungieUserProfile, error) {
 		return nil, fmt.Errorf("failed to read response: %v", err)
 	}
 
-	log.Printf("User profile response status: %d", resp.StatusCode)
 	if resp.StatusCode != 200 {
-		log.Printf("User profile response body: %s", string(body))
-		return nil, fmt.Errorf("profile fetch failed with status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("profile fetch failed with status %d", resp.StatusCode)
 	}
 
 	var apiResp BungieAPIResponse
@@ -468,7 +633,6 @@ func getBungieUserProfile(accessToken string) (*BungieUserProfile, error) {
 	// Get the first Destiny membership
 	if len(apiResp.Response.DestinyMemberships) > 0 {
 		membership := apiResp.Response.DestinyMemberships[0]
-		log.Printf("Found Destiny membership: %s (%s)", membership.DisplayName, getPlatformName(membership.MembershipType))
 		return &BungieUserProfile{
 			MembershipID:   membership.MembershipID,
 			DisplayName:    membership.DisplayName,

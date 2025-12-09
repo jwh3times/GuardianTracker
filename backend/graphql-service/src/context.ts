@@ -9,8 +9,22 @@ if (JWT_SECRET === "dev_secret" && process.env.NODE_ENV === "production") {
   throw new Error("JWT_SECRET must be set in production environment");
 }
 
+// User type from JWT claims
+export interface AuthUser {
+  membership_id: string;
+  membershipId: string;
+  display_name: string;
+  displayName: string;
+  membership_type: number;
+  membershipType: number;
+  platform: string;
+  token_type: string;
+  iat: number;
+  exp: number;
+}
+
 export interface Context {
-  user?: any;
+  user: AuthUser | null;
   req: Request;
   res: Response;
 }
@@ -23,16 +37,27 @@ export async function createContext({
   res: Response;
 }): Promise<Context> {
   // Extract user from JWT token
-  let user = null;
+  let user: AuthUser | null = null;
   const authHeader = req.headers.authorization;
 
-  if (authHeader) {
-    const token = authHeader.replace("Bearer ", "");
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7); // Remove "Bearer " prefix
+
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
-      user = decoded;
+      const decoded = jwt.verify(token, JWT_SECRET, {
+        algorithms: ["HS256"],
+      }) as AuthUser;
+
+      // Validate required claims
+      if (decoded.membership_id || decoded.membershipId) {
+        user = decoded;
+      }
     } catch (error) {
-      console.warn("Invalid JWT token:", error);
+      // Token validation failed - user remains null
+      // Don't log in production to avoid noise from expired tokens
+      if (process.env.NODE_ENV !== "production") {
+        console.warn("JWT validation failed:", (error as Error).message);
+      }
     }
   }
 

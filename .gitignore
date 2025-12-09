@@ -10,12 +10,19 @@ build/
 */dist/
 */build/
 
-# Environment files
+# Environment files (NEVER commit real credentials)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+**/.env
+**/**.env
+
+# Kubernetes secrets (NEVER commit)
+k8s/*-secret.yaml
+k8s/secrets/
+*.secrets.yaml
 
 # Logs
 logs/
@@ -76,3 +83,6 @@ temp/
 
 # Local development
 .air.toml
+
+# Claude Code (user-specific settings)
+.claude/
