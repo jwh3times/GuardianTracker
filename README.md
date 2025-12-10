@@ -33,18 +33,16 @@ A web-based app tailored for Destiny 2 players that integrates Bungie APIs to an
 
 ## 📁 Project Structure
 
-```
+```text
 guardian-tracker/
 ├── frontend/                 # React + TypeScript frontend
 ├── backend/
 │   ├── graphql-service/     # Apollo Server (Node.js/TypeScript)
 │   ├── auth-service/        # Go authentication microservice
 │   └── bungie-service/      # Go Bungie API integration service
-├── infrastructure/
-│   ├── terraform/           # Infrastructure as Code
-│   └── k8s/                # Kubernetes manifests
-├── docker/                  # Docker configurations
-└── .github/                # CI/CD workflows
+├── database/                 # Database initialization scripts
+├── k8s/                      # Kubernetes manifests
+└── .github/                  # CI/CD workflows (coming soon)
 ```
 
 ## 🚀 Getting Started
@@ -137,10 +135,10 @@ guardian-tracker/
    ```
 
 6. **Access the application**
-   - Frontend: http://localhost:3000
-   - GraphQL Playground: http://localhost:4000/graphql
-   - Auth Service: http://localhost:8081
-   - Bungie Service: http://localhost:8082
+   - Frontend: <http://localhost:3000>
+   - GraphQL Playground: <http://localhost:4000/graphql>
+   - Auth Service: <http://localhost:8081>
+   - Bungie Service: <http://localhost:8082>
 
 ### Development with Kubernetes
 
