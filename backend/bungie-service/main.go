@@ -1,96 +1,24 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"guardian-tracker/bungie-service/api/handlers"
+	"guardian-tracker/bungie-service/cache"
+	"guardian-tracker/bungie-service/config"
+	"guardian-tracker/bungie-service/services/bungie"
+	"guardian-tracker/bungie-service/services/collections"
+	"guardian-tracker/bungie-service/services/manifest"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
-
-// Configuration holds all environment variables
-type Config struct {
-	Port               string
-	GoEnv              string
-	BungieAPIKey       string
-	BungieAPIBaseURL   string
-	CORSAllowedOrigins string
-}
-
-// Global config
-var config Config
-
-func init() {
-	// Load configuration on startup
-	config = loadConfig()
-}
-
-// loadConfig loads and validates configuration from environment
-func loadConfig() Config {
-	return Config{
-		Port:               getEnv("PORT", "8082"),
-		GoEnv:              getEnv("GO_ENV", "development"),
-		BungieAPIKey:       os.Getenv("BUNGIE_API_KEY"),
-		BungieAPIBaseURL:   getEnv("BUNGIE_API_BASE_URL", "https://www.bungie.net/Platform"),
-		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:4000"),
-	}
-}
-
-// getEnv gets environment variable with fallback
-func getEnv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
-}
-
-// validateEnvironment ensures required environment variables are set
-func validateEnvironment() {
-	if config.BungieAPIKey == "" {
-		log.Println("WARNING: BUNGIE_API_KEY is not set")
-		log.Println("Please create a .env file based on .env.example")
-		if config.GoEnv == "production" {
-			log.Fatal("Cannot start in production without BUNGIE_API_KEY")
-		}
-	}
-}
-
-// corsMiddleware handles CORS
-func corsMiddleware() gin.HandlerFunc {
-	allowedOrigins := strings.Split(config.CORSAllowedOrigins, ",")
-
-	return func(c *gin.Context) {
-		origin := c.Request.Header.Get("Origin")
-
-		// Check if origin is allowed
-		allowed := false
-		for _, allowedOrigin := range allowedOrigins {
-			if strings.TrimSpace(allowedOrigin) == origin {
-				allowed = true
-				break
-			}
-		}
-
-		if allowed {
-			c.Header("Access-Control-Allow-Origin", origin)
-		} else if config.GoEnv != "production" {
-			// Allow all origins in development
-			c.Header("Access-Control-Allow-Origin", "*")
-		}
-
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		c.Header("Access-Control-Allow-Credentials", "true")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	}
-}
 
 func main() {
 	// Load environment variables
@@ -98,72 +26,198 @@ func main() {
 		log.Println("No .env file found, using system environment variables")
 	}
 
-	// Validate required environment variables
-	validateEnvironment()
+	// Load configuration
+	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Configuration error: %v", err)
+	}
 
-	// Setup Gin router
-	if config.GoEnv == "production" {
+	// Set Gin mode
+	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// Create context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Initialize Bungie API client
+	bungieClient := bungie.NewClient(
+		cfg.BungieAPIKey,
+		cfg.BungieAPIBaseURL,
+		cfg.RateLimitRPS,
+		cfg.RateLimitBurst,
+	)
+
+	// Initialize manifest service
+	manifestService := bungie.NewManifestService(
+		bungieClient,
+		cfg.ManifestDBPath,
+		cfg.ManifestCheckInterval,
+	)
+
+	// Download manifest if not present (blocking on startup)
+	log.Println("Checking manifest status...")
+	if err := manifestService.EnsureReady(ctx); err != nil {
+		log.Printf("Warning: Could not initialize manifest: %v", err)
+		log.Println("Service will start, but collections endpoint will fail until manifest is available")
+	}
+
+	// Start background manifest updater
+	manifestService.StartBackgroundUpdater(ctx)
+
+	// Initialize manifest repository (will fail if manifest not downloaded)
+	var manifestRepo *manifest.Repository
+	if manifestService.IsReady() {
+		var err error
+		manifestRepo, err = manifest.NewRepository(cfg.ManifestDBPath)
+		if err != nil {
+			log.Printf("Warning: Could not open manifest repository: %v", err)
+		}
+	}
+
+	// Initialize cache
+	var appCache cache.Cache
+	if cfg.CacheEnabled {
+		appCache = cache.NewMemoryCache(cfg.CacheTTLCollections, 10*time.Minute)
+	} else {
+		appCache = cache.NewNoOpCache()
+	}
+
+	// Initialize collections service
+	var collectionsService *collections.Service
+	if manifestRepo != nil {
+		collectionsService = collections.NewService(
+			bungieClient,
+			manifestService,
+			manifestRepo,
+			appCache,
+			cfg.CacheTTLCollections,
+		)
+	}
+
+	// Initialize handlers
+	healthHandler := handlers.NewHealthHandler(manifestService)
+	var collectionsHandler *handlers.CollectionsHandler
+	if collectionsService != nil {
+		collectionsHandler = handlers.NewCollectionsHandler(collectionsService)
+	}
+
+	// Setup router
 	router := gin.Default()
 
 	// Add CORS middleware
-	router.Use(corsMiddleware())
+	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 
-	// Health check
-	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":    "ok",
-			"service":   "bungie-service",
-			"timestamp": gin.H{"time": "now"},
-		})
-	})
+	// Health endpoints
+	router.GET("/health", healthHandler.Health)
+	router.GET("/ready", healthHandler.Ready)
 
-	// API routes placeholder
+	// API routes
 	api := router.Group("/api")
 	{
-		api.GET("/collections/:membershipType/:membershipId", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"weapons": gin.H{
-					"total":     500,
-					"collected": 450,
-					"missing":   []gin.H{},
-				},
-				"armor": gin.H{
-					"total":     300,
-					"collected": 280,
-					"missing":   []gin.H{},
-				},
-				"exotics": gin.H{
-					"total":     100,
-					"collected": 85,
-					"missing":   []gin.H{},
-				},
+		// Manifest status
+		api.GET("/manifest/status", healthHandler.ManifestStatus)
+
+		// Collections endpoints
+		if collectionsHandler != nil {
+			api.GET("/collections/:membershipType/:membershipId", collectionsHandler.GetCollections)
+			api.POST("/collections/:membershipType/:membershipId/refresh", collectionsHandler.RefreshCollections)
+		} else {
+			// Fallback if manifest isn't ready
+			api.GET("/collections/:membershipType/:membershipId", func(c *gin.Context) {
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"error": "Manifest database not ready. Please try again later.",
+					"code":  "MANIFEST_NOT_READY",
+				})
 			})
-		})
+		}
 
-		api.GET("/items/search", func(c *gin.Context) {
-			c.JSON(200, []gin.H{})
-		})
-
+		// Weekly recommendations (placeholder for now)
 		api.GET("/weekly/recommendations", func(c *gin.Context) {
-			c.JSON(200, gin.H{
-				"vendors":    []gin.H{},
-				"activities": []gin.H{},
-				"pursuits":   []gin.H{},
+			c.JSON(http.StatusOK, gin.H{
+				"vendors":    []interface{}{},
+				"activities": []interface{}{},
+				"pursuits":   []interface{}{},
 			})
+		})
+
+		// Item search (placeholder for now)
+		api.GET("/items/search", func(c *gin.Context) {
+			c.JSON(http.StatusOK, []interface{}{})
 		})
 	}
 
-	// Start server
-	port := config.Port
+	// Create HTTP server with timeouts
+	server := &http.Server{
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second, // Longer timeout for collection queries
+		IdleTimeout:  120 * time.Second,
+	}
 
-	log.Printf("Bungie service starting on port %s", port)
-	log.Printf("Environment: %s", config.GoEnv)
-	log.Printf("Bungie API Base URL: %s", config.BungieAPIBaseURL)
+	// Start server in goroutine
+	go func() {
+		log.Printf("Bungie service starting on port %s", cfg.Port)
+		log.Printf("Environment: %s", cfg.GoEnv)
+		log.Printf("Manifest ready: %v", manifestService.IsReady())
 
-	if err := router.Run(":" + port); err != nil {
-		log.Fatal("Failed to start server:", err)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Failed to start server: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Println("Shutting down server...")
+	cancel() // Cancel background operations
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server forced to shutdown: %v", err)
+	}
+
+	// Cleanup
+	if manifestRepo != nil {
+		manifestRepo.Close()
+	}
+
+	log.Println("Server exited gracefully")
+}
+
+// corsMiddleware handles CORS
+func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+
+		// Check if origin is allowed
+		allowed := false
+		for _, allowedOrigin := range allowedOrigins {
+			if allowedOrigin == origin || allowedOrigin == "*" {
+				allowed = true
+				break
+			}
+		}
+
+		if allowed {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
+
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
+		c.Header("Access-Control-Allow-Credentials", "true")
+
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+
+		c.Next()
 	}
 }
