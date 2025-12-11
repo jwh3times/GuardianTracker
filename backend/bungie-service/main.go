@@ -12,6 +12,7 @@ import (
 	"guardian-tracker/bungie-service/api/handlers"
 	"guardian-tracker/bungie-service/cache"
 	"guardian-tracker/bungie-service/config"
+	"guardian-tracker/bungie-service/services/auth"
 	"guardian-tracker/bungie-service/services/bungie"
 	"guardian-tracker/bungie-service/services/collections"
 	"guardian-tracker/bungie-service/services/manifest"
@@ -96,11 +97,18 @@ func main() {
 		)
 	}
 
+	// Initialize auth client for fetching Bungie tokens
+	authClient := auth.NewClient(
+		cfg.AuthServiceURL,
+		cfg.InternalAPIKey,
+		cfg.JWTSecret,
+	)
+
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(manifestService)
 	var collectionsHandler *handlers.CollectionsHandler
 	if collectionsService != nil {
-		collectionsHandler = handlers.NewCollectionsHandler(collectionsService)
+		collectionsHandler = handlers.NewCollectionsHandler(collectionsService, authClient)
 	}
 
 	// Setup router

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"guardian-tracker/bungie-service/services/auth"
 	"guardian-tracker/bungie-service/services/bungie"
 	"guardian-tracker/bungie-service/services/collections"
 
@@ -16,12 +17,14 @@ import (
 // CollectionsHandler handles collection-related endpoints
 type CollectionsHandler struct {
 	collectionsService *collections.Service
+	authClient         *auth.Client
 }
 
 // NewCollectionsHandler creates a new collections handler
-func NewCollectionsHandler(svc *collections.Service) *CollectionsHandler {
+func NewCollectionsHandler(svc *collections.Service, authClient *auth.Client) *CollectionsHandler {
 	return &CollectionsHandler{
 		collectionsService: svc,
+		authClient:         authClient,
 	}
 }
 
@@ -55,17 +58,56 @@ func (h *CollectionsHandler) GetCollections(c *gin.Context) {
 		return
 	}
 
-	// Extract access token from Authorization header
-	accessToken := extractBearerToken(c.GetHeader("Authorization"))
-	if accessToken == "" {
+	// Extract app JWT from Authorization header
+	appToken := auth.ExtractBearerToken(c.GetHeader("Authorization"))
+	if appToken == "" {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"error": "Authorization required",
+			"code":  "AUTH_REQUIRED",
 		})
 		return
 	}
 
-	// Get collections
-	result, err := h.collectionsService.GetUserCollections(c.Request.Context(), membershipType, membershipID, accessToken)
+	// Validate the app JWT
+	claims, err := h.authClient.ValidateAppJWT(appToken)
+	if err != nil {
+		log.Printf("JWT validation failed: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid or expired token",
+			"code":  "INVALID_TOKEN",
+		})
+		return
+	}
+
+	// Verify the user is requesting their own data (or allow if admin in future)
+	if claims.MembershipID != membershipID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "You can only access your own collection data",
+			"code":  "FORBIDDEN",
+		})
+		return
+	}
+
+	// Fetch Bungie OAuth token from auth-service
+	bungieToken, err := h.authClient.GetBungieToken(membershipID)
+	if err != nil {
+		log.Printf("Failed to get Bungie token for user %s: %v", membershipID, err)
+		if strings.Contains(err.Error(), "re-authenticate") {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Your Bungie session has expired. Please log in again.",
+				"code":  "BUNGIE_TOKEN_EXPIRED",
+			})
+		} else {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "Unable to retrieve Bungie authorization. Please try again.",
+				"code":  "AUTH_SERVICE_ERROR",
+			})
+		}
+		return
+	}
+
+	// Get collections using the Bungie token
+	result, err := h.collectionsService.GetUserCollections(c.Request.Context(), membershipType, membershipID, bungieToken)
 	if err != nil {
 		handleBungieError(c, err)
 		return
@@ -87,6 +129,34 @@ func (h *CollectionsHandler) RefreshCollections(c *gin.Context) {
 		return
 	}
 
+	// Extract and validate app JWT
+	appToken := auth.ExtractBearerToken(c.GetHeader("Authorization"))
+	if appToken == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Authorization required",
+			"code":  "AUTH_REQUIRED",
+		})
+		return
+	}
+
+	claims, err := h.authClient.ValidateAppJWT(appToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Invalid or expired token",
+			"code":  "INVALID_TOKEN",
+		})
+		return
+	}
+
+	// Verify the user is requesting their own data
+	if claims.MembershipID != membershipID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "You can only refresh your own collection data",
+			"code":  "FORBIDDEN",
+		})
+		return
+	}
+
 	// Invalidate cache
 	h.collectionsService.InvalidateCache(membershipType, membershipID)
 
@@ -98,17 +168,6 @@ func (h *CollectionsHandler) RefreshCollections(c *gin.Context) {
 }
 
 // Helper functions
-
-func extractBearerToken(authHeader string) string {
-	if authHeader == "" {
-		return ""
-	}
-	parts := strings.SplitN(authHeader, " ", 2)
-	if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-		return ""
-	}
-	return parts[1]
-}
 
 func isValidMembershipType(t int) bool {
 	validTypes := []int{1, 2, 3, 4, 5, 6, 10, 254}
@@ -150,9 +209,9 @@ func handleBungieError(c *gin.Context, err error) {
 			return
 		case 36: // ThrottleLimitExceeded
 			c.JSON(http.StatusTooManyRequests, gin.H{
-				"error":       "Bungie API rate limit exceeded. Please try again later.",
-				"code":        "RATE_LIMITED",
-				"retryAfter":  bungieErr.ThrottleSeconds,
+				"error":      "Bungie API rate limit exceeded. Please try again later.",
+				"code":       "RATE_LIMITED",
+				"retryAfter": bungieErr.ThrottleSeconds,
 			})
 			return
 		case 1601: // DestinyUnexpectedError
