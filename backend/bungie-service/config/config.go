@@ -18,6 +18,11 @@ type Config struct {
 	BungieAPIKey     string
 	BungieAPIBaseURL string
 
+	// Auth service settings (for fetching Bungie tokens)
+	AuthServiceURL string
+	InternalAPIKey string
+	JWTSecret      string
+
 	// Manifest settings
 	ManifestDBPath        string
 	ManifestCheckInterval time.Duration
@@ -52,6 +57,11 @@ func Load() *Config {
 		// Bungie API
 		BungieAPIKey:     os.Getenv("BUNGIE_API_KEY"),
 		BungieAPIBaseURL: getEnv("BUNGIE_API_BASE_URL", "https://www.bungie.net/Platform"),
+
+		// Auth service (for fetching Bungie tokens)
+		AuthServiceURL: getEnv("AUTH_SERVICE_URL", "http://localhost:8081"),
+		InternalAPIKey: getEnv("INTERNAL_API_KEY", "dev-internal-key"),
+		JWTSecret:      os.Getenv("JWT_SECRET"),
 
 		// Manifest
 		ManifestDBPath:        getEnv("MANIFEST_DB_PATH", "./data/manifest.sqlite"),
