@@ -31,6 +31,7 @@ type Config struct {
 	AuthRedirectURI    string
 	JWTSecret          string
 	CORSAllowedOrigins string
+	InternalAPIKey     string // For service-to-service auth
 }
 
 // Global config
@@ -108,6 +109,7 @@ func loadConfig() Config {
 		AuthRedirectURI:    getEnv("AUTH_REDIRECT_URI", "http://localhost:3000/auth/callback"),
 		JWTSecret:          os.Getenv("JWT_SECRET"),
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
+		InternalAPIKey:     getEnv("INTERNAL_API_KEY", "dev-internal-key"),
 	}
 }
 
@@ -146,6 +148,25 @@ func validateEnvironment() {
 	// Validate JWT secret strength in production
 	if config.GoEnv == "production" && len(config.JWTSecret) < 32 {
 		log.Fatal("JWT_SECRET must be at least 32 characters in production")
+	}
+}
+
+// internalAPIKeyMiddleware validates the internal API key for service-to-service auth
+func internalAPIKeyMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		apiKey := c.GetHeader("X-Internal-API-Key")
+
+		if apiKey == "" {
+			c.AbortWithStatusJSON(401, gin.H{"error": "Internal API key required"})
+			return
+		}
+
+		if apiKey != config.InternalAPIKey {
+			c.AbortWithStatusJSON(403, gin.H{"error": "Invalid internal API key"})
+			return
+		}
+
+		c.Next()
 	}
 }
 
@@ -305,6 +326,16 @@ func main() {
 				c.JSON(500, gin.H{"error": "Failed to retrieve user profile"})
 				return
 			}
+
+			// Store Bungie tokens for later use by other services
+			now := time.Now()
+			bungieTokenStore.Store(userProfile.MembershipID, &BungieTokens{
+				AccessToken:           tokenResp.AccessToken,
+				RefreshToken:          tokenResp.RefreshToken,
+				AccessTokenExpiresAt:  now.Add(time.Duration(tokenResp.ExpiresIn) * time.Second),
+				RefreshTokenExpiresAt: now.Add(90 * 24 * time.Hour), // Bungie refresh tokens last ~90 days
+				MembershipID:          userProfile.MembershipID,
+			})
 
 			if config.GoEnv != "production" {
 				log.Printf("Successfully retrieved user profile for: %s", userProfile.DisplayName)
@@ -492,6 +523,45 @@ func main() {
 				"message": "Item removed from wishlist",
 				"itemId":  itemId,
 				"userId":  membershipID,
+			})
+		})
+	}
+
+	// Internal API routes (for service-to-service communication)
+	internal := router.Group("/internal")
+	internal.Use(internalAPIKeyMiddleware())
+	{
+		// Get Bungie access token for a user (used by bungie-service)
+		internal.GET("/bungie-token/:membershipId", func(c *gin.Context) {
+			membershipID := c.Param("membershipId")
+
+			if membershipID == "" {
+				c.JSON(400, gin.H{"error": "Membership ID is required"})
+				return
+			}
+
+			// Get valid token (auto-refreshes if needed)
+			accessToken, err := bungieTokenStore.GetValidToken(membershipID)
+			if err != nil {
+				log.Printf("Failed to get Bungie token for %s: %v", membershipID, err)
+				c.JSON(404, gin.H{
+					"error": "No valid Bungie token found for user",
+					"code":  "TOKEN_NOT_FOUND",
+				})
+				return
+			}
+
+			c.JSON(200, gin.H{
+				"accessToken":  accessToken,
+				"membershipId": membershipID,
+			})
+		})
+
+		// Health check for internal services
+		internal.GET("/health", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"status":  "ok",
+				"service": "auth-service-internal",
 			})
 		})
 	}
