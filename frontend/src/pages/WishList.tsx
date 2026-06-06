@@ -1,296 +1,205 @@
-import React, { useState } from "react";
-import { useQuery, useMutation } from "@apollo/client";
-import { useNavigate } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@apollo/client";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/Card";
-import { LoadingSpinner } from "../components/ui/LoadingSpinner";
-import { Button } from "../components/ui/Button";
+  Badge,
+  Button,
+  Dropdown,
+  EmptyState,
+  Icon,
+  ItemTile,
+  PageHead,
+} from "../components/kit";
+import { FilterChip } from "../components/kit";
 import { GET_WISH_LIST } from "../graphql/queries";
 import {
   REMOVE_FROM_WISH_LIST,
   UPDATE_WISH_LIST_ITEM,
 } from "../graphql/mutations";
-import { WishListItem, WishListPriority } from "../types";
-import {
-  getRarityColor,
-  getPriorityColor,
-  getDifficultyColor,
-  validateImageUrl,
-  formatDate,
-} from "../lib/utils";
+import { useToast } from "../components/ui/Toast";
+import { toWishlistEntry } from "../lib/adapters";
+import { PRIORITY_LABEL, wishlist as MOCK_WISHLIST } from "../lib/mockData";
+import type { Priority, WishlistEntry } from "../types/design";
+import type { WishListItem } from "../types";
+
+const PRIORITY_ORDER: Priority[] = ["urgent", "high", "medium", "low"];
+const PRIORITY_ENUM: Record<Priority, string> = {
+  urgent: "URGENT",
+  high: "HIGH",
+  medium: "MEDIUM",
+  low: "LOW",
+};
+type SortKey = "availability" | "priority";
+type FilterKey = "all" | Priority;
 
 export function WishList() {
-  const navigate = useNavigate();
-  const [selectedPriority, setSelectedPriority] = useState<
-    WishListPriority | "ALL"
-  >("ALL");
-
+  const { showToast } = useToast();
   const { data, loading, refetch } = useQuery(GET_WISH_LIST);
   const [removeFromWishList] = useMutation(REMOVE_FROM_WISH_LIST);
   const [updateWishListItem] = useMutation(UPDATE_WISH_LIST_ITEM);
 
-  if (loading) {
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [sort, setSort] = useState<SortKey>("availability");
+  // Local copy used only when falling back to mock data (no live wishlist).
+  const [mockList, setMockList] = useState<WishlistEntry[]>(MOCK_WISHLIST);
+
+  const realRaw = data?.currentUser?.wishList as WishListItem[] | undefined;
+  const usingReal = !!(realRaw && realRaw.length);
+  const list: WishlistEntry[] = usingReal ? realRaw!.map(toWishlistEntry) : mockList;
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: list.length };
+    PRIORITY_ORDER.forEach((p) => (c[p] = list.filter((i) => i.priority === p).length));
+    return c;
+  }, [list]);
+
+  const shown = useMemo(() => {
+    const l = filter === "all" ? list.slice() : list.filter((i) => i.priority === filter);
+    if (sort === "availability") l.sort((a, b) => (b.avail.now ? 1 : 0) - (a.avail.now ? 1 : 0));
+    else if (sort === "priority")
+      l.sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority));
+    return l;
+  }, [list, filter, sort]);
+
+  const setPriority = async (id: string, p: Priority) => {
+    if (usingReal) {
+      try {
+        await updateWishListItem({ variables: { wishListItemId: id, priority: PRIORITY_ENUM[p] } });
+        await refetch();
+      } catch (err) {
+        showToast(`Failed to update priority: ${(err as Error).message}`, "error");
+      }
+    } else {
+      setMockList((l) => l.map((i) => (i.id === id ? { ...i, priority: p } : i)));
+    }
+  };
+
+  const remove = async (id: string, name: string) => {
+    if (usingReal) {
+      try {
+        await removeFromWishList({ variables: { wishListItemId: id } });
+        await refetch();
+        showToast(`Removed ${name}`, "info");
+      } catch (err) {
+        showToast(`Failed to remove item: ${(err as Error).message}`, "error");
+      }
+    } else {
+      setMockList((l) => l.filter((i) => i.id !== id));
+      showToast(`Removed ${name}`, "info");
+    }
+  };
+
+  if (loading && !data) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner size="lg" />
+      <div className="gt-page">
+        <PageHead title="Wishlist" />
+        <div className="gt-itemlist">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="gt-skel" style={{ height: "5.5rem", borderRadius: "var(--r-lg)" }} />
+          ))}
+        </div>
       </div>
     );
   }
 
-  const wishListItems: WishListItem[] = data?.currentUser?.wishList || [];
-
-  const filteredItems =
-    selectedPriority === "ALL"
-      ? wishListItems
-      : wishListItems.filter((item) => item.priority === selectedPriority);
-
-  const priorityOrder: WishListPriority[] = ["URGENT", "HIGH", "MEDIUM", "LOW"];
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    const priorityA = priorityOrder.indexOf(a.priority);
-    const priorityB = priorityOrder.indexOf(b.priority);
-    return priorityA - priorityB;
-  });
-
-  const handleRemoveItem = async (itemId: string) => {
-    try {
-      await removeFromWishList({
-        variables: { wishListItemId: itemId },
-      });
-      await refetch();
-    } catch (error) {
-      console.error("Error removing item:", error);
-    }
-  };
-
-  const handleUpdatePriority = async (
-    itemId: string,
-    priority: WishListPriority
-  ) => {
-    try {
-      await updateWishListItem({
-        variables: { wishListItemId: itemId, priority },
-      });
-      await refetch();
-    } catch (error) {
-      console.error("Error updating item:", error);
-    }
-  };
-
-  const priorityStats = priorityOrder.reduce(
-    (acc, priority) => {
-      acc[priority] = wishListItems.filter(
-        (item) => item.priority === priority
-      ).length;
-      return acc;
-    },
-    {} as Record<WishListPriority, number>
-  );
+  if (list.length === 0) {
+    return (
+      <div className="gt-page">
+        <PageHead title="Wishlist" />
+        <div className="gt-card">
+          <EmptyState
+            icon="wishlist"
+            color="var(--c-signal)"
+            title="Your wishlist is empty"
+            body="Track the items you're chasing. We'll tell you the moment they're available from a vendor or this week's activities."
+            action={
+              <a href="/collections">
+                <Button variant="primary" icon="collections">
+                  Browse Collections
+                </Button>
+              </a>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Wish List</h1>
-        <p className="text-muted-foreground">
-          Track and prioritize the items you want to collect
-        </p>
-      </div>
+    <div className="gt-page">
+      <PageHead
+        title="Wishlist"
+        sub={
+          <span className="mono">
+            {list.length} items · {list.filter((i) => i.avail.now).length} available now
+          </span>
+        }
+        right={
+          <Dropdown
+            label="Sort: Availability"
+            value={{ availability: "Sort: Availability", priority: "Sort: Priority" }[sort]}
+            noClear
+            options={[
+              { v: "availability", l: "Sort: Availability" },
+              { v: "priority", l: "Sort: Priority" },
+            ]}
+            onPick={(v) => v && setSort(v as SortKey)}
+          />
+        }
+      />
 
-      {/* Priority Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {priorityOrder.map((priority) => (
-          <Card key={priority}>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <div
-                  className={`text-2xl font-bold ${getPriorityColor(priority).split(" ")[0]}`}
-                >
-                  {priorityStats[priority]}
-                </div>
-                <p className="text-sm text-muted-foreground capitalize">
-                  {priority.toLowerCase()}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="gt-filterbar gt-wl-filters">
+        {(["all", ...PRIORITY_ORDER] as FilterKey[]).map((p) => (
+          <FilterChip key={p} on={filter === p} onClick={() => setFilter(p)}>
+            {p === "all" ? "All" : PRIORITY_LABEL[p]}{" "}
+            <span className="mono" style={{ opacity: 0.6 }}>
+              {counts[p]}
+            </span>
+          </FilterChip>
         ))}
       </div>
 
-      {/* Priority Filter */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filter by Priority</CardTitle>
-          <CardDescription>
-            View items by their acquisition priority
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={selectedPriority === "ALL" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedPriority("ALL")}
-            >
-              All ({wishListItems.length})
-            </Button>
-            {priorityOrder.map((priority) => (
-              <Button
-                key={priority}
-                variant={selectedPriority === priority ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedPriority(priority)}
-                className={
-                  selectedPriority === priority
-                    ? getPriorityColor(priority)
-                    : ""
-                }
-              >
-                {priority} ({priorityStats[priority]})
-              </Button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Wish List Items */}
-      <div className="space-y-4">
-        {sortedItems.map((item) => (
-          <Card
-            key={item.id}
-            className={`destiny-card ${
-              item.isExotic
-                ? "destiny-card-exotic"
-                : item.rarity === "Legendary"
-                  ? "destiny-card-legendary"
-                  : "destiny-card-rare"
-            }`}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-4">
-                <img
-                  src={validateImageUrl(item.icon)}
-                  alt={item.name}
-                  className="w-16 h-16 rounded-lg flex-shrink-0"
+      <div className="gt-wl-list">
+        {shown.map((i) => (
+          <div key={i.id} className="gt-wl-item gt-card" data-rarity={i.rarity}>
+            <ItemTile rarity={i.rarity} type={i.type} style={{ width: "3rem" }} />
+            <div className="gt-wl-body">
+              <div className="gt-wl-top">
+                <div>
+                  <div className="gt-item-name">{i.name}</div>
+                  <div className="gt-item-type">
+                    {i.type} · <Badge kind={i.rarity} dot />
+                  </div>
+                </div>
+                <Badge kind={i.priority} solid>
+                  {PRIORITY_LABEL[i.priority]}
+                </Badge>
+              </div>
+              {i.avail.now ? (
+                <div className="gt-wl-avail">
+                  <Badge kind="avail-now" dot icon="bolt" />
+                  <span className="gt-wl-where">{i.avail.where}</span>
+                </div>
+              ) : (
+                <div className="gt-action-meta mono">Source: {i.avail.where}</div>
+              )}
+              {i.notes && <div className="gt-wl-notes">“{i.notes}”</div>}
+              <div className="gt-wl-foot">
+                <Dropdown
+                  label="Priority"
+                  value={PRIORITY_LABEL[i.priority]}
+                  noClear
+                  options={PRIORITY_ORDER.map((p) => ({ v: p, l: PRIORITY_LABEL[p] }))}
+                  onPick={(p) => p && setPriority(i.id, p as Priority)}
                 />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3
-                        className={`text-lg font-semibold ${getRarityColor(item.rarity)}`}
-                      >
-                        {item.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {item.itemType}
-                      </p>
-                    </div>
-                    <div
-                      className={`px-3 py-1 rounded-full text-xs font-medium border ${getPriorityColor(item.priority)}`}
-                    >
-                      {item.priority}
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-muted-foreground mb-3">
-                    {item.description}
-                  </p>
-
-                  {item.notes && (
-                    <div className="mb-3 p-3 bg-muted rounded-lg">
-                      <p className="text-sm font-medium mb-1">Notes:</p>
-                      <p className="text-sm text-muted-foreground">
-                        {item.notes}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-                    <span>
-                      Difficulty:{" "}
-                      <span className={getDifficultyColor(item.difficulty)}>
-                        {item.difficulty}
-                      </span>
-                    </span>
-                    <span>Added: {formatDate(item.dateAdded)}</span>
-                  </div>
-
-                  {item.sources && item.sources.length > 0 && (
-                    <div className="mb-4">
-                      <p className="text-sm font-medium mb-2">Sources:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {item.sources.map((source, index) => (
-                          <span
-                            key={index}
-                            className="px-2 py-1 bg-muted rounded text-xs"
-                          >
-                            {source}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center space-x-2">
-                    <select
-                      value={item.priority}
-                      onChange={(e) =>
-                        handleUpdatePriority(
-                          item.id,
-                          e.target.value as WishListPriority
-                        )
-                      }
-                      className="px-3 py-1 border rounded text-sm bg-background"
-                    >
-                      {priorityOrder.map((priority) => (
-                        <option key={priority} value={priority}>
-                          {priority}
-                        </option>
-                      ))}
-                    </select>
-
-                    <Button variant="outline" size="sm">
-                      Edit Notes
-                    </Button>
-
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleRemoveItem(item.id)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
+                <span className="gt-action-meta mono">Added {i.added}</span>
+                <button className="gt-link gt-link--danger" onClick={() => remove(i.id, i.name)}>
+                  <Icon name="close" size="0.8rem" /> Remove
+                </button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         ))}
       </div>
-
-      {sortedItems.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <div className="text-6xl mb-4">📝</div>
-            <h3 className="text-lg font-semibold mb-2">
-              No Items in Wish List
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              {selectedPriority === "ALL"
-                ? "Start building your wish list by adding items from your collections."
-                : `No items with ${selectedPriority.toLowerCase()} priority.`}
-            </p>
-            <Button onClick={() => navigate("/collections")}>
-              Browse Collections
-            </Button>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

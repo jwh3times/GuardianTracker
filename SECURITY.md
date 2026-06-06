@@ -135,7 +135,6 @@ rm .env.secrets
 - [ ] Logging does not include tokens, secrets, or full OAuth codes
 - [ ] Docker images built from pinned base image versions
 - [ ] Kubernetes secrets not stored in version control
-- [ ] `DataSourceBanner` debug component removed from `Collections.tsx` before production deployment
 - [ ] Wishlist endpoints backed by a real database (currently return stub data)
 
 ---

@@ -1,429 +1,324 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation } from '@apollo/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
-import { LoadingSpinner } from '../components/ui/LoadingSpinner';
-import { Button } from '../components/ui/Button';
-import { GET_CURRENT_USER, GET_USER_COLLECTIONS, GET_WISH_LIST } from '../graphql/queries';
-import { ADD_TO_WISH_LIST } from '../graphql/mutations';
-import { DestinyItem } from '../types';
-import { getRarityColor, getDifficultyColor, validateImageUrl, sortItemsByDifficulty } from '../lib/utils';
-import { useToast } from '../components/ui/Toast';
+import React, { useMemo, useState } from "react";
+import { useMutation, useQuery } from "@apollo/client";
+import {
+  CategoryTree,
+  DataFreshnessChip,
+  Dropdown,
+  EmptyState,
+  FilterChip,
+  Icon,
+  ItemCard,
+  ItemCardSkeleton,
+  ItemDetailDrawer,
+  PageHead,
+  StatTile,
+} from "../components/kit";
+import { Button } from "../components/kit";
+import {
+  GET_CURRENT_USER,
+  GET_USER_COLLECTIONS,
+  GET_WISH_LIST,
+} from "../graphql/queries";
+import { ADD_TO_WISH_LIST } from "../graphql/mutations";
+import { useToast } from "../components/ui/Toast";
+import { usePreferences } from "../contexts/PreferencesContext";
+import { toGTItem } from "../lib/adapters";
+import {
+  DIFFS,
+  DIFF_LABEL,
+  items as MOCK_ITEMS,
+  RARITIES,
+  RARITY_LABEL,
+  tree,
+} from "../lib/mockData";
+import type {
+  Difficulty,
+  GTItem,
+  Rarity,
+  TreeNode,
+} from "../types/design";
+import type { DestinyItem } from "../types";
 
-type CollectionTab = 'weapons' | 'armor' | 'exotics';
+type TopCategory = "weapons" | "armor" | "exotics" | "cosmetics";
+type SortKey = "rarity" | "name" | "difficulty" | "avail";
 
-// Debug banner component for testing
-function DataSourceBanner({
-  collections,
-  loading,
-  error,
-  onRefresh
-}: {
-  collections: any;
-  loading: boolean;
-  error: any;
-  onRefresh: () => void;
-}) {
-  // Determine data source based on data characteristics
-  const isRealData = collections && (
-    collections.weapons?.total > 0 ||
-    collections.armor?.total > 0 ||
-    collections.exotics?.total > 0
-  );
+const RARITY_RANK: Record<Rarity, number> = {
+  exotic: 0,
+  legendary: 1,
+  rare: 2,
+  uncommon: 3,
+  common: 4,
+};
+const DIFF_RANK: Record<Difficulty, number> = {
+  challenging: 0,
+  moderate: 1,
+  easy: 2,
+};
 
-  const hasItems = collections && (
-    (collections.weapons?.missing?.length > 0) ||
-    (collections.armor?.missing?.length > 0) ||
-    (collections.exotics?.missing?.length > 0)
-  );
+function topOf(id: string): TopCategory {
+  if (id === "weapons" || id.startsWith("w-")) return "weapons";
+  if (id === "armor" || id.startsWith("a-")) return "armor";
+  if (id === "exotics" || id.startsWith("e-")) return "exotics";
+  return "cosmetics";
+}
 
-  // Check if items have real Bungie data (icons start with /common/)
-  const hasRealIcons = collections?.weapons?.missing?.[0]?.icon?.startsWith('/common/') ||
-    collections?.armor?.missing?.[0]?.icon?.startsWith('/common/') ||
-    collections?.exotics?.missing?.[0]?.icon?.startsWith('/common/');
+function flattenTree(nodes: TreeNode[]): TreeNode[] {
+  const flat: TreeNode[] = [];
+  nodes.forEach((n) => {
+    flat.push(n);
+    (n.children || []).forEach((c) => flat.push(c));
+  });
+  return flat;
+}
 
-  if (loading) return null;
-
-  return (
-    <div className={`rounded-lg p-3 mb-4 flex items-center justify-between ${
-      error
-        ? 'bg-red-500/20 border border-red-500/50'
-        : isRealData && hasRealIcons
-          ? 'bg-green-500/20 border border-green-500/50'
-          : 'bg-yellow-500/20 border border-yellow-500/50'
-    }`}>
-      <div className="flex items-center gap-2">
-        <span className="text-lg">
-          {error ? '❌' : isRealData && hasRealIcons ? '✅' : '⚠️'}
-        </span>
-        <div>
-          <p className="font-medium text-sm">
-            {error
-              ? 'Connection Error'
-              : isRealData && hasRealIcons
-                ? 'Live Bungie Data'
-                : 'Mock/Test Data'}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {error
-              ? `Error: ${error.message}`
-              : isRealData && hasRealIcons
-                ? `Showing ${collections.weapons?.total + collections.armor?.total + collections.exotics?.total} real collectibles`
-                : hasItems
-                  ? 'Data loaded but may be mock data'
-                  : 'No collection data available'}
-          </p>
-        </div>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onRefresh}
-        disabled={loading}
-      >
-        {loading ? <LoadingSpinner size="sm" /> : 'Refresh'}
-      </Button>
-    </div>
-  );
+// Mock-fallback category filter (mirrors the design prototype).
+function mockCategoryItems(active: string): GTItem[] {
+  const top = topOf(active);
+  if (top === "exotics") return MOCK_ITEMS.filter((i) => i.rarity === "exotic");
+  if (top === "cosmetics") return MOCK_ITEMS.filter((i) => i.slot === "Cosmetic");
+  if (top === "armor")
+    return MOCK_ITEMS.filter(
+      (i) =>
+        ["Helmet", "Gauntlets", "Chest Armor", "Leg Armor", "Class Item"].includes(i.type) ||
+        i.slot === "Energy"
+    );
+  return MOCK_ITEMS.filter((i) => i.slot !== "Cosmetic");
 }
 
 export function Collections() {
-  const [activeTab, setActiveTab] = useState<CollectionTab>('weapons');
-  const [difficultyFilter, setDifficultyFilter] = useState<string[]>([]);
-  const [addingItems, setAddingItems] = useState<Set<string>>(new Set());
   const { showToast } = useToast();
+  const { cardStyle, personalize } = usePreferences();
+
+  const [active, setActive] = useState("weapons");
+  const [missingOnly, setMissingOnly] = useState(true);
+  const [rarity, setRarity] = useState<Rarity | null>(null);
+  const [diff, setDiff] = useState<Difficulty | null>(null);
+  const [sort, setSort] = useState<SortKey>("rarity");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  const [wished, setWished] = useState<Set<string>>(new Set());
+  const [detail, setDetail] = useState<GTItem | null>(null);
 
   const { data: userData } = useQuery(GET_CURRENT_USER);
-  const { data: collectionsData, loading, error, refetch } = useQuery(GET_USER_COLLECTIONS, {
+  const { data: collectionsData, loading, refetch } = useQuery(GET_USER_COLLECTIONS, {
     variables: {
       membershipType: userData?.currentUser?.membershipType,
       membershipId: userData?.currentUser?.membershipId,
     },
     skip: !userData?.currentUser,
-    fetchPolicy: 'cache-and-network', // Always check server for fresh data
+    fetchPolicy: "cache-and-network",
   });
-
-  const handleRefresh = () => {
-    refetch();
-  };
 
   const [addToWishList] = useMutation(ADD_TO_WISH_LIST, {
     refetchQueries: [{ query: GET_WISH_LIST }],
-    onCompleted: () => {
-      showToast('Item added to wish list!', 'success');
-    },
-    onError: (err) => {
-      showToast(`Failed to add item: ${err.message}`, 'error');
-    },
+    onError: (err) => showToast(`Failed to add item: ${err.message}`, "error"),
   });
 
-  const handleAddToWishList = async (item: DestinyItem) => {
-    if (addingItems.has(item.itemHash)) return;
+  const top = topOf(active);
+  const realBucket =
+    top !== "cosmetics" ? collectionsData?.userCollections?.[top] : undefined;
+  const hasReal = !!realBucket?.missing;
 
-    setAddingItems(prev => new Set(prev).add(item.itemHash));
+  const node = useMemo(
+    () => flattenTree(tree).find((n) => n.id === active) || tree[0],
+    [active]
+  );
 
-    try {
-      await addToWishList({
-        variables: {
-          itemHash: item.itemHash,
-          priority: 'MEDIUM',
-        },
-      });
-    } finally {
-      setAddingItems(prev => {
-        const next = new Set(prev);
-        next.delete(item.itemHash);
-        return next;
-      });
+  const baseItems: GTItem[] = useMemo(() => {
+    if (hasReal) {
+      return (realBucket.missing as DestinyItem[]).map(toGTItem);
+    }
+    return mockCategoryItems(active);
+  }, [hasReal, realBucket, active]);
+
+  const items = useMemo(() => {
+    let list = baseItems.slice();
+    if (missingOnly) list = list.filter((i) => !i.collected);
+    if (rarity) list = list.filter((i) => i.rarity === rarity);
+    if (diff) list = list.filter((i) => i.diff === diff);
+    if (sort === "rarity") list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
+    else if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
+    else if (sort === "difficulty") list.sort((a, b) => DIFF_RANK[a.diff] - DIFF_RANK[b.diff]);
+    else if (sort === "avail")
+      list.sort((a, b) => (b.obtainable ? 1 : 0) - (a.obtainable ? 1 : 0));
+    return list;
+  }, [baseItems, missingOnly, rarity, diff, sort]);
+
+  const clearFilters = () => {
+    setRarity(null);
+    setDiff(null);
+    setMissingOnly(false);
+  };
+  const hasFilters = !!(rarity || diff || missingOnly);
+
+  const onWish = (item: GTItem) => {
+    const adding = !wished.has(item.id);
+    setWished((s) => {
+      const n = new Set(s);
+      if (n.has(item.id)) n.delete(item.id);
+      else n.add(item.id);
+      return n;
+    });
+    showToast(
+      adding ? `${item.name} added to wishlist` : `Removed ${item.name}`,
+      adding ? "success" : "info"
+    );
+    // Best-effort persist when we have a logged-in session and live data.
+    if (adding && hasReal && userData?.currentUser) {
+      addToWishList({ variables: { itemHash: item.id, priority: "MEDIUM" } }).catch(() => {});
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  if (error) {
-    // Parse error for better display
-    const errorCode = error.graphQLErrors?.[0]?.extensions?.code || 'UNKNOWN';
-    const isAuthError = error.message.includes('token') || error.message.includes('auth') || error.message.includes('401');
-    const isBungieError = error.message.includes('Bungie') || errorCode === 'BUNGIE_ERROR';
-
-    return (
-      <div className="space-y-6">
-        <DataSourceBanner
-          collections={null}
-          loading={false}
-          error={error}
-          onRefresh={handleRefresh}
-        />
-        <Card className="max-w-lg mx-auto border-red-500/50">
-          <CardHeader>
-            <CardTitle className="text-red-400 flex items-center gap-2">
-              <span>❌</span>
-              {isAuthError ? 'Authentication Error' : isBungieError ? 'Bungie API Error' : 'Failed to Load Collections'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">{error.message}</p>
-
-            {isAuthError && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3 text-sm">
-                <p className="font-medium text-yellow-400">Session may have expired</p>
-                <p className="text-muted-foreground mt-1">
-                  Try logging out and back in to refresh your Bungie authorization.
-                </p>
-              </div>
-            )}
-
-            {isBungieError && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded p-3 text-sm">
-                <p className="font-medium text-blue-400">Bungie Services Issue</p>
-                <p className="text-muted-foreground mt-1">
-                  Bungie's servers may be under maintenance. Try again in a few minutes.
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <Button onClick={handleRefresh} variant="outline" size="sm">
-                Try Again
-              </Button>
-              {isAuthError && (
-                <Button
-                  onClick={() => window.location.href = '/'}
-                  variant="default"
-                  size="sm"
-                >
-                  Go to Login
-                </Button>
-              )}
-            </div>
-
-            {/* Debug info for development */}
-            {import.meta.env.DEV && (
-              <details className="text-xs text-muted-foreground">
-                <summary className="cursor-pointer hover:text-foreground">Debug Info</summary>
-                <pre className="mt-2 p-2 bg-muted rounded overflow-auto max-h-40">
-                  {JSON.stringify(error, null, 2)}
-                </pre>
-              </details>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const collections = collectionsData?.userCollections;
-  const activeCollection = collections?.[activeTab];
-
-  const filteredItems = difficultyFilter.length > 0
-    ? activeCollection?.missing?.filter((item: DestinyItem) =>
-        difficultyFilter.includes(item.difficulty)
-      ) || []
-    : activeCollection?.missing || [];
-
-  const sortedItems = sortItemsByDifficulty(filteredItems);
-
-  const handleDifficultyFilter = (difficulty: string) => {
-    setDifficultyFilter(prev =>
-      prev.includes(difficulty)
-        ? prev.filter(d => d !== difficulty)
-        : [...prev, difficulty]
-    );
-  };
-
-  const tabs: { key: CollectionTab; label: string; icon: string }[] = [
-    { key: 'weapons', label: 'Weapons', icon: '⚔️' },
-    { key: 'armor', label: 'Armor', icon: '🛡️' },
-    { key: 'exotics', label: 'Exotics', icon: '✨' },
-  ];
+  // Stats — prefer live totals, fall back to the tree node counts.
+  const total = realBucket?.total ?? node.count[1];
+  const collected = realBucket?.collected ?? node.count[0];
+  const missing = total - collected;
 
   return (
-    <div className="space-y-6">
-      {/* Data Source Banner - for testing */}
-      <DataSourceBanner
-        collections={collections}
-        loading={loading}
-        error={error}
-        onRefresh={handleRefresh}
+    <div className="gt-page gt-collections">
+      <PageHead
+        title="Collections"
+        sub={<span className="mono">Track what you're missing across every category</span>}
+        right={<DataFreshnessChip ago="4m" onRefresh={() => refetch()} />}
       />
 
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Collections</h1>
-        <p className="text-muted-foreground">
-          Track your missing items and plan your acquisitions
-        </p>
-      </div>
-
-      {/* Collection Tabs */}
-      <div className="flex space-x-4 border-b">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <span className="mr-2">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Filter items by acquisition difficulty</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {['Easy', 'Moderate', 'Challenging'].map((difficulty) => (
-              <Button
-                key={difficulty}
-                variant={difficultyFilter.includes(difficulty) ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => handleDifficultyFilter(difficulty)}
-                className={getDifficultyColor(difficulty)}
-              >
-                {difficulty}
-              </Button>
-            ))}
-            {difficultyFilter.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setDifficultyFilter([])}
-              >
-                Clear Filters
-              </Button>
-            )}
+      <div className="gt-coll-layout">
+        {/* CATEGORY TREE */}
+        <aside className="gt-coll-aside">
+          <div className="gt-section-title" style={{ marginBottom: "var(--s-3)" }}>
+            Categories
           </div>
-        </CardContent>
-      </Card>
+          <CategoryTree nodes={tree} activeId={active} onSelect={setActive} />
+        </aside>
 
-      {/* Collection Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold">{activeCollection?.total || 0}</div>
-              <p className="text-sm text-muted-foreground">Total Items</p>
+        {/* MAIN */}
+        <div className="gt-coll-main">
+          {/* FILTER BAR */}
+          <div className="gt-coll-toolbar">
+            <div className="gt-filterbar">
+              <FilterChip on={missingOnly} onClick={() => setMissingOnly((v) => !v)}>
+                <Icon name="check" size="0.85rem" /> Missing only
+              </FilterChip>
+              <Dropdown
+                label="Rarity"
+                value={rarity ? RARITY_LABEL[rarity] : null}
+                options={RARITIES.map((r) => ({ v: r, l: RARITY_LABEL[r] }))}
+                onPick={(v) => setRarity(v as Rarity | null)}
+              />
+              <Dropdown
+                label="Difficulty"
+                value={diff ? DIFF_LABEL[diff] : null}
+                options={DIFFS.map((d) => ({ v: d, l: DIFF_LABEL[d] }))}
+                onPick={(v) => setDiff(v as Difficulty | null)}
+                note="estimate"
+              />
+              <Dropdown
+                label="Sort"
+                value={{ rarity: "Rarity", name: "Name", difficulty: "Difficulty", avail: "Availability" }[sort]}
+                options={[
+                  { v: "rarity", l: "Rarity" },
+                  { v: "name", l: "Name" },
+                  { v: "difficulty", l: "Difficulty" },
+                  { v: "avail", l: "Availability" },
+                ]}
+                onPick={(v) => v && setSort(v as SortKey)}
+                noClear
+              />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-400">{activeCollection?.collected || 0}</div>
-              <p className="text-sm text-muted-foreground">Collected</p>
+            <div className="gt-viewtoggle">
+              <button
+                className="gt-iconbtn"
+                data-on={view === "grid"}
+                onClick={() => setView("grid")}
+                aria-label="Grid"
+              >
+                <Icon name="grid" size="1rem" />
+              </button>
+              <button
+                className="gt-iconbtn"
+                data-on={view === "list"}
+                onClick={() => setView("list")}
+                aria-label="List"
+              >
+                <Icon name="list" size="1rem" />
+              </button>
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-red-400">{activeCollection?.missing?.length || 0}</div>
-              <p className="text-sm text-muted-foreground">Missing</p>
+          </div>
+
+          <div className="gt-coll-stats">
+            <StatTile num={total.toLocaleString()} label="Total" mono />
+            <StatTile num={collected.toLocaleString()} label="Collected" mono color="var(--c-complete)" />
+            <StatTile num={missing.toLocaleString()} label="Missing" mono color="var(--c-signal)" />
+            <div className="gt-coll-resultcount mono">{items.length} shown</div>
+          </div>
+
+          {/* GRID / LIST */}
+          {loading && items.length === 0 ? (
+            <div className="gt-itemgrid">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <ItemCardSkeleton key={i} />
+              ))}
             </div>
-          </CardContent>
-        </Card>
+          ) : items.length === 0 ? (
+            <div className="gt-card">
+              <EmptyState
+                icon={hasFilters ? "filter" : "check"}
+                color={hasFilters ? "var(--c-text-3)" : "var(--c-complete)"}
+                title={hasFilters ? "No items match these filters" : "All caught up!"}
+                body={
+                  hasFilters
+                    ? "Try loosening a filter to see more of this category."
+                    : "You've collected everything in this category. Nice work, Guardian."
+                }
+                action={
+                  hasFilters ? (
+                    <Button variant="outline" sm onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  ) : null
+                }
+              />
+            </div>
+          ) : view === "grid" ? (
+            <div className="gt-itemgrid">
+              {items.map((it) => (
+                <ItemCard
+                  key={it.id}
+                  item={it}
+                  density={cardStyle === "compact" ? "compact" : "grid"}
+                  personalize={personalize}
+                  showCollected={!missingOnly}
+                  wished={wished.has(it.id)}
+                  onWish={onWish}
+                  onOpen={setDetail}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="gt-itemlist">
+              {items.map((it) => (
+                <ItemCard
+                  key={it.id}
+                  item={it}
+                  density="list"
+                  personalize={personalize}
+                  showCollected={!missingOnly}
+                  wished={wished.has(it.id)}
+                  onWish={onWish}
+                  onOpen={setDetail}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Items Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {sortedItems.map((item: DestinyItem) => (
-          <Card key={item.itemHash} className={`destiny-card hover:shadow-lg transition-shadow ${
-            item.isExotic ? 'destiny-card-exotic' :
-            item.rarity === 'Legendary' ? 'destiny-card-legendary' :
-            'destiny-card-rare'
-          }`}>
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <img
-                    src={validateImageUrl(item.icon)}
-                    alt={item.name}
-                    className="w-12 h-12 rounded-lg"
-                    loading="lazy"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h3 className={`font-semibold text-sm ${getRarityColor(item.rarity)}`}>
-                      {item.name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">{item.itemType}</p>
-                  </div>
-                </div>
-
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {item.description}
-                </p>
-
-                <div className="flex items-center justify-between text-xs">
-                  <span className={getDifficultyColor(item.difficulty)}>
-                    {item.difficulty}
-                  </span>
-                  <span className={getRarityColor(item.rarity)}>
-                    {item.rarity}
-                  </span>
-                </div>
-
-                {item.sources && item.sources.length > 0 && (
-                  <div className="text-xs text-muted-foreground">
-                    <p className="font-medium">Sources:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      {item.sources.slice(0, 2).map((source, index) => (
-                        <li key={index}>{source}</li>
-                      ))}
-                      {item.sources.length > 2 && (
-                        <li>+{item.sources.length - 2} more</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-
-                <Button
-                  size="sm"
-                  className="w-full"
-                  variant="outline"
-                  onClick={() => handleAddToWishList(item)}
-                  disabled={addingItems.has(item.itemHash)}
-                >
-                  {addingItems.has(item.itemHash) ? (
-                    <>
-                      <LoadingSpinner size="sm" />
-                      <span className="ml-2">Adding...</span>
-                    </>
-                  ) : (
-                    'Add to Wish List'
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {sortedItems.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <div className="text-6xl mb-4">🎉</div>
-            <h3 className="text-lg font-semibold mb-2">All Caught Up!</h3>
-            <p className="text-muted-foreground">
-              {difficultyFilter.length > 0
-                ? 'No items match the current filters.'
-                : 'You have collected all items in this category.'}
-            </p>
-          </CardContent>
-        </Card>
+      {detail && (
+        <ItemDetailDrawer
+          item={detail}
+          onClose={() => setDetail(null)}
+          onWish={onWish}
+          wished={wished.has(detail.id)}
+        />
       )}
     </div>
   );

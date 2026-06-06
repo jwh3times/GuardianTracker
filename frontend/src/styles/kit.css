@@ -1,0 +1,200 @@
+/* ============================================================
+   GUARDIAN TRACKER — COMPONENT KIT STYLES
+   All values via tokens.css. Dynamic numerics passed as
+   inline --custom-props (e.g. --val for progress %).
+   ============================================================ */
+
+/* ---------- ITEM TILE (placeholder "icon") ---------- */
+.gt-tile {
+  position: relative; aspect-ratio: 1; border-radius: var(--r-sm);
+  display: grid; place-items: center; overflow: hidden; flex: none;
+  background:
+    repeating-linear-gradient(135deg, oklch(1 0 0 / 0.03) 0 0.5rem, transparent 0.5rem 1rem),
+    linear-gradient(150deg, var(--rarity-dim), transparent 70%),
+    var(--c-surface-2);
+  border: 0.09rem solid color-mix(in oklch, var(--rarity) 40%, var(--c-line));
+  box-shadow: inset 0 0 1.4rem oklch(0 0 0 / 0.35);
+}
+.gt-tile::before { /* faceted corner cut */
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(135deg, transparent 86%, var(--rarity-dim) 86%);
+  pointer-events: none;
+}
+.gt-tile-glyph {
+  font-family: var(--font-mono); font-weight: var(--w-bold);
+  font-size: clamp(0.7rem, 0.4rem + 1.4vw, 1.05rem);
+  color: color-mix(in oklch, var(--rarity) 80%, var(--c-text));
+  letter-spacing: 0.04em; z-index: 1;
+  text-shadow: 0 0.06rem 0.3rem oklch(0 0 0 / 0.6);
+}
+[data-rarity="exotic"] .gt-tile { box-shadow: inset 0 0 1.4rem oklch(0 0 0 / 0.35), 0 0 0.9rem var(--c-exotic-dim); }
+
+/* ---------- BADGE ---------- */
+.gt-badge {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  font-family: var(--font-mono); font-size: var(--t-2xs); font-weight: var(--w-med);
+  letter-spacing: 0.04em; text-transform: uppercase; line-height: 1;
+  padding: 0.28em 0.55em; border-radius: var(--r-xs); white-space: nowrap;
+  border: 0.07rem solid color-mix(in oklch, var(--bdg, var(--c-line)) 50%, transparent);
+  color: var(--bdg, var(--c-text-2)); background: color-mix(in oklch, var(--bdg, var(--c-surface-3)) 14%, transparent);
+}
+.gt-badge .gt-dot { width: 0.4em; height: 0.4em; border-radius: 50%; background: var(--bdg); flex: none; }
+.gt-badge--solid { color: var(--c-on-accent); background: var(--bdg); border-color: transparent; }
+.gt-badge--lg { font-size: var(--t-xs); padding: 0.34em 0.7em; }
+
+/* ---------- BUTTON ---------- */
+.gt-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s-2);
+  min-height: var(--tap-min); padding: 0 var(--s-4);
+  font-family: var(--font-body); font-size: var(--t-sm); font-weight: var(--w-semi);
+  border-radius: var(--r-sm); transition: all var(--dur) var(--ease);
+  border: 0.08rem solid transparent; white-space: nowrap;
+}
+.gt-btn--primary { background: var(--c-signal); color: var(--c-on-accent); }
+.gt-btn--primary:hover { filter: brightness(1.08); box-shadow: var(--glow-soft) var(--c-signal-dim); }
+.gt-btn--outline { border-color: var(--c-line); color: var(--c-text); background: var(--c-surface); }
+.gt-btn--outline:hover { background: var(--c-surface-2); border-color: var(--c-text-4); }
+.gt-btn--ghost { color: var(--c-text-2); }
+.gt-btn--ghost:hover { background: var(--c-surface-2); color: var(--c-text); }
+.gt-btn--sm { min-height: 2.1rem; padding: 0 var(--s-3); font-size: var(--t-xs); }
+.gt-btn--icon { padding: 0; width: var(--tap-min); }
+.gt-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- PROGRESS BAR ---------- */
+.gt-prog { display: flex; flex-direction: column; gap: var(--s-1); width: 100%; }
+.gt-prog-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-2); }
+.gt-prog-label { font-size: var(--t-xs); color: var(--c-text-2); }
+.gt-prog-val { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--c-text); font-weight: var(--w-med); }
+.gt-prog-track { height: 0.42rem; border-radius: var(--r-pill); background: var(--c-surface-3); overflow: hidden; position: relative; }
+.gt-prog--thin .gt-prog-track { height: 0.3rem; }
+.gt-prog--tall .gt-prog-track { height: 0.6rem; }
+.gt-prog-fill {
+  height: 100%; width: var(--val, 0%); border-radius: var(--r-pill);
+  background: linear-gradient(90deg, color-mix(in oklch, var(--pc, var(--c-signal)) 70%, transparent), var(--pc, var(--c-signal)));
+  transition: width var(--dur-slow) var(--ease);
+}
+.gt-prog-fill[data-complete="true"] { background: linear-gradient(90deg, color-mix(in oklch, var(--c-complete) 70%, transparent), var(--c-complete)); }
+
+/* ---------- RADIAL (HEX) PROGRESS ---------- */
+.gt-radial { position: relative; display: inline-grid; place-items: center; }
+.gt-radial svg { width: 100%; height: 100%; display: block; }
+.gt-radial-track { fill: none; stroke: var(--c-surface-3); stroke-width: 7; }
+.gt-radial-val {
+  fill: none; stroke: var(--rc, var(--c-signal)); stroke-width: 7; stroke-linecap: round;
+  stroke-dasharray: var(--val, 0) 100; transition: stroke-dasharray var(--dur-slow) var(--ease);
+  filter: drop-shadow(0 0 0.3rem color-mix(in oklch, var(--rc, var(--c-signal)) 50%, transparent));
+}
+.gt-radial-center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; line-height: 1; }
+.gt-radial-pct { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--rsize, 1.6rem); color: var(--c-text); }
+.gt-radial-sub { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--c-text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ---------- CARD BASE ---------- */
+.gt-card {
+  background: var(--c-surface); border: 0.08rem solid var(--c-line-soft);
+  border-radius: var(--r-lg); padding: var(--card-pad, var(--s-4));
+}
+.gt-card--pad0 { padding: 0; }
+.gt-section-title {
+  font-family: var(--font-mono); font-size: var(--t-2xs); font-weight: var(--w-semi);
+  text-transform: uppercase; letter-spacing: 0.14em; color: var(--c-text-3);
+  display: flex; align-items: center; gap: var(--s-2);
+}
+
+/* ---------- ITEM CARD ---------- */
+.gt-item {
+  position: relative; background: var(--c-surface); border-radius: var(--r-md);
+  border: 0.08rem solid var(--c-line-soft); overflow: hidden;
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  cursor: pointer; display: flex; flex-direction: column;
+}
+.gt-item::after { /* rarity edge */
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  border: 0.08rem solid color-mix(in oklch, var(--rarity) 55%, transparent);
+  -webkit-mask: linear-gradient(160deg, #000 0 38%, transparent 60%);
+          mask: linear-gradient(160deg, #000 0 38%, transparent 60%);
+}
+.gt-item:hover { transform: translateY(-0.15rem); border-color: color-mix(in oklch, var(--rarity) 40%, var(--c-line)); box-shadow: var(--shadow-md); }
+.gt-item[data-collected="true"] { opacity: 0.62; }
+.gt-item[data-collected="true"]:hover { opacity: 1; }
+
+/* grid variant */
+.gt-item--grid { padding: var(--card-pad, var(--s-4)); gap: var(--s-3); }
+.gt-item--grid .gt-item-top { display: flex; gap: var(--s-3); align-items: flex-start; }
+.gt-item--grid .gt-tile { width: clamp(2.6rem, 2rem + 3vw, 3.4rem); }
+.gt-item-head { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 0.15rem; }
+.gt-item-name { font-family: var(--font-display); font-weight: var(--w-semi); font-size: var(--t-md); color: var(--c-text); line-height: 1.1; }
+.gt-item-type { font-size: var(--t-xs); color: var(--c-text-3); }
+.gt-item-badges { display: flex; flex-wrap: wrap; gap: var(--s-1); }
+.gt-item-src { font-size: var(--t-xs); color: var(--c-text-2); display: flex; align-items: center; gap: var(--s-1); }
+.gt-item-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--s-2); margin-top: auto; padding-top: var(--s-2); border-top: 0.07rem solid var(--c-line-soft); }
+.gt-item-actions { display: flex; gap: var(--s-1); }
+
+/* list variant */
+.gt-item--list { flex-direction: row; align-items: center; gap: var(--s-4); padding: var(--row-gap, var(--s-3)) var(--s-4); }
+.gt-item--list .gt-tile { width: 2.6rem; }
+.gt-item--list .gt-item-head { flex-direction: row; align-items: center; gap: var(--s-4); flex: 1; }
+.gt-item--list .gt-il-main { min-width: 0; flex: 1; }
+
+/* compact variant */
+.gt-item--compact { flex-direction: row; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-3); }
+.gt-item--compact .gt-tile { width: 2rem; }
+.gt-item--compact .gt-item-name { font-size: var(--t-sm); }
+
+/* progress variant (catalysts/crafting) */
+.gt-item--prog { padding: var(--card-pad, var(--s-4)); gap: var(--s-3); }
+.gt-item--prog .gt-tile { width: 2.8rem; }
+
+/* iconbtn inside cards */
+.gt-iconbtn {
+  width: 2.1rem; height: 2.1rem; border-radius: var(--r-sm); display: grid; place-items: center;
+  color: var(--c-text-3); background: var(--c-surface-2); transition: all var(--dur) var(--ease); flex: none;
+}
+.gt-iconbtn:hover { color: var(--c-text); background: var(--c-surface-3); }
+.gt-iconbtn[data-on="true"] { color: var(--c-signal); background: var(--c-signal-dim); }
+
+/* ---------- STAT TILE ---------- */
+.gt-stat { display: flex; flex-direction: column; gap: 0.1rem; padding: var(--s-3) var(--s-4); background: var(--c-surface-2); border-radius: var(--r-md); border: 0.07rem solid var(--c-line-soft); }
+.gt-stat-num { font-family: var(--font-display); font-weight: var(--w-bold); font-size: var(--t-xl); color: var(--c-text); line-height: 1; }
+.gt-stat-num.mono { font-family: var(--font-mono); }
+.gt-stat-label { font-family: var(--font-mono); font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--c-text-3); }
+
+/* ---------- CHIP / COUNTDOWN / FRESHNESS ---------- */
+.gt-chip {
+  display: inline-flex; align-items: center; gap: var(--s-2);
+  padding: 0.3rem var(--s-3); border-radius: var(--r-pill);
+  background: var(--c-surface-2); border: 0.07rem solid var(--c-line);
+  font-family: var(--font-mono); font-size: var(--t-xs); color: var(--c-text-2);
+}
+.gt-chip--count { color: var(--c-text); }
+.gt-chip--count[data-soon="true"] { color: var(--c-expiring); border-color: color-mix(in oklch, var(--c-expiring) 40%, var(--c-line)); background: var(--c-expiring-dim); }
+.gt-chip-time { color: var(--c-text); font-weight: var(--w-med); }
+.gt-fresh { cursor: pointer; transition: all var(--dur) var(--ease); }
+.gt-fresh:hover { background: var(--c-surface-3); color: var(--c-text); }
+.gt-fresh[data-state="refreshing"] .gt-fresh-icon { animation: gt-spin 0.9s linear infinite; }
+@keyframes gt-spin { to { transform: rotate(360deg); } }
+
+/* ---------- FILTER CHIP / BAR ---------- */
+.gt-filterbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.gt-fchip {
+  display: inline-flex; align-items: center; gap: var(--s-2); min-height: 2.2rem;
+  padding: 0 var(--s-3); border-radius: var(--r-sm);
+  background: var(--c-surface-2); border: 0.08rem solid var(--c-line-soft);
+  color: var(--c-text-2); font-size: var(--t-sm); transition: all var(--dur) var(--ease);
+}
+.gt-fchip:hover { border-color: var(--c-line); color: var(--c-text); }
+.gt-fchip[data-on="true"] { background: var(--c-signal-dim); border-color: var(--c-signal-line); color: var(--c-signal); }
+.gt-fchip-x { opacity: 0.6; font-family: var(--font-mono); }
+
+/* ---------- SKELETON ---------- */
+.gt-skel { background: linear-gradient(100deg, var(--c-surface-2) 30%, var(--c-surface-3) 50%, var(--c-surface-2) 70%); background-size: 200% 100%; animation: gt-shimmer 1.3s linear infinite; border-radius: var(--r-sm); }
+@keyframes gt-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .gt-skel { animation: none; } }
+
+/* ---------- EMPTY / ERROR STATE ---------- */
+.gt-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--s-3); padding: var(--s-10) var(--s-5); max-width: 30rem; margin-inline: auto; }
+.gt-empty-mark { width: 4.5rem; height: 4.5rem; display: grid; place-items: center; color: var(--em, var(--c-text-3)); }
+.gt-empty-title { font-family: var(--font-display); font-size: var(--t-xl); color: var(--c-text); }
+.gt-empty-body { font-size: var(--t-sm); color: var(--c-text-3); line-height: 1.5; }
+
+/* ---------- divider ---------- */
+.gt-hr { height: 0.07rem; background: var(--c-line-soft); border: none; }

@@ -1,47 +1,21 @@
-import React, { useState } from "react";
-import { useQuery } from "@apollo/client";
-import { gql } from "@apollo/client";
+import React from "react";
+import { gql, useQuery } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/Card";
-import { LoadingSpinner } from "../components/ui/LoadingSpinner";
-import { Button } from "../components/ui/Button";
-import { useToast } from "../components/ui/Toast";
-
-// Utility functions
-const getTimeUntilReset = (): string => {
-  const now = new Date();
-  const nextTuesday = new Date();
-  nextTuesday.setDate(now.getDate() + ((2 - now.getDay() + 7) % 7));
-  nextTuesday.setHours(17, 0, 0, 0); // 5 PM UTC
-
-  const diff = nextTuesday.getTime() - now.getTime();
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-
-  if (days > 0) {
-    return `${days}d ${hours}h`;
-  }
-  return `${hours}h`;
-};
-
-const calculateCollectionProgress = (
-  total: number,
-  collected: number
-): number => {
-  if (total === 0) return 0;
-  return Math.round((collected / total) * 100);
-};
-
-const formatNumber = (num: number): string => {
-  return new Intl.NumberFormat().format(num);
-};
+  Badge,
+  Button,
+  CountdownChip,
+  DataFreshnessChip,
+  Icon,
+  ItemTile,
+  PageHead,
+  Panel,
+  ProgressBar,
+  RadialProgress,
+} from "../components/kit";
+import { useAuth } from "../contexts/AuthContext";
+import { summary, weekly, wishlist } from "../lib/mockData";
+import type { SummaryCategory } from "../types/design";
 
 const CURRENT_USER_QUERY = gql`
   query CurrentUser {
@@ -55,12 +29,9 @@ const CURRENT_USER_QUERY = gql`
   }
 `;
 
-const USER_COLLECTIONS_QUERY = gql`
-  query UserCollections($membershipType: Int!, $membershipId: String!) {
-    userCollections(
-      membershipType: $membershipType
-      membershipId: $membershipId
-    ) {
+const DASHBOARD_COLLECTIONS_QUERY = gql`
+  query DashboardCollections($membershipType: Int!, $membershipId: String!) {
+    userCollections(membershipType: $membershipType, membershipId: $membershipId) {
       weapons {
         total
         collected
@@ -77,364 +48,207 @@ const USER_COLLECTIONS_QUERY = gql`
   }
 `;
 
-// Future use - wishlist functionality
-// const WISHLIST_QUERY = gql`
-//   query WishList {
-//     wishList {
-//       id
-//       itemHash
-//       name
-//       priority
-//       dateAdded
-//     }
-//   }
-// `;
+interface RealCategory {
+  total: number;
+  collected: number;
+}
 
 export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { showToast } = useToast();
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const go = (path: string) => navigate(path);
 
-  const { data: userData, refetch: refetchUser } = useQuery(CURRENT_USER_QUERY);
-  const { data: collectionsData, loading: collectionsLoading, refetch: refetchCollections } = useQuery(
-    USER_COLLECTIONS_QUERY,
-    {
-      variables: {
-        membershipType:
-          userData?.currentUser?.membershipType || user?.membershipType,
-        membershipId: userData?.currentUser?.membershipId || user?.membershipId,
-      },
-      skip: !userData?.currentUser && !user?.membershipId,
+  const { data: userData } = useQuery(CURRENT_USER_QUERY);
+  const { data: collectionsData } = useQuery(DASHBOARD_COLLECTIONS_QUERY, {
+    variables: {
+      membershipType: userData?.currentUser?.membershipType ?? user?.membershipType,
+      membershipId: userData?.currentUser?.membershipId ?? user?.membershipId,
+    },
+    skip: !userData?.currentUser && !user?.membershipId,
+  });
+
+  const real = collectionsData?.userCollections;
+  const displayName = userData?.currentUser?.displayName || user?.displayName || "Guardian";
+
+  // Merge live weapon/armor/exotic totals with mock fallbacks (cosmetics has
+  // no backend yet, so it always comes from the mock summary).
+  const fromReal = (
+    c: RealCategory | undefined,
+    fallback: SummaryCategory
+  ): SummaryCategory => {
+    if (c && c.total > 0) {
+      return {
+        id: fallback.id,
+        label: fallback.label,
+        pct: Math.round((c.collected / c.total) * 100),
+        count: [c.collected, c.total],
+      };
     }
+    return fallback;
+  };
+
+  const [mWeapons, mArmor, mExotics, mCosmetics] = summary.categories;
+  const categories: SummaryCategory[] = [
+    fromReal(real?.weapons, mWeapons),
+    fromReal(real?.armor, mArmor),
+    fromReal(real?.exotics, mExotics),
+    mCosmetics,
+  ];
+  const overall = Math.round(
+    categories.reduce((sum, c) => sum + c.pct, 0) / categories.length
   );
-  // const { data: wishlistData, loading: wishlistLoading } = useQuery(WISHLIST_QUERY); // Future use
 
-  const handleRefreshData = async () => {
-    if (isRefreshing) return;
-
-    setIsRefreshing(true);
-    try {
-      await Promise.all([
-        refetchUser(),
-        refetchCollections(),
-      ]);
-      showToast('Data refreshed successfully!', 'success');
-    } catch (error) {
-      showToast('Failed to refresh data. Please try again.', 'error');
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  if (collectionsLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  const collections = collectionsData?.userCollections;
-  // const wishlist = wishlistData?.wishList || []; // Future use
-
-  // Mock weekly data - in a real app this would come from a GraphQL query
-  const weekly = {
-    vendors: [
-      {
-        vendorHash: "1",
-        vendorName: "Xur",
-        location: "Tower Hangar",
-        items: [
-          {
-            itemHash: "1",
-            name: "Exotic Engram",
-            cost: "97",
-            currency: "Legendary Shards",
-            icon: "/api/common/destiny2_content/icons/exotic_engram.jpg",
-          },
-          {
-            itemHash: "2",
-            name: "Fated Engram",
-            cost: "97",
-            currency: "Legendary Shards",
-            icon: "/api/common/destiny2_content/icons/fated_engram.jpg",
-          },
-        ],
-      },
-    ],
-    activities: [
-      {
-        activityHash: "1",
-        activityName: "Nightfall: The Ordeal",
-        difficulty: "Legend",
-        rewards: [
-          {
-            itemHash: "1",
-            name: "Ascendant Shard",
-            dropChance: 0.25,
-            icon: "/api/common/destiny2_content/icons/ascendant_shard.jpg",
-          },
-          {
-            itemHash: "2",
-            name: "Enhancement Prism",
-            dropChance: 0.75,
-            icon: "/api/common/destiny2_content/icons/enhancement_prism.jpg",
-          },
-        ],
-      },
-    ],
-  };
+  const availableWishlist = wishlist.filter((i) => i.avail.now);
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {userData?.currentUser?.displayName}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm text-muted-foreground">Weekly Reset in</p>
-          <p className="text-lg font-semibold">{getTimeUntilReset()}</p>
-        </div>
-      </div>
+    <div className="gt-page gt-dash">
+      <PageHead
+        title={`Welcome back, ${displayName}`}
+        sub="Your collection at a glance"
+        right={<CountdownChip prefix="Weekly reset" time={weekly.resetIn} icon="clock" />}
+      />
 
-      {/* Collection Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="destiny-card-legendary">
-          <CardHeader>
-            <CardTitle className="text-lg">Weapons</CardTitle>
-            <CardDescription>Collection Progress</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Collected</span>
-                <span>
-                  {collections?.weapons.collected || 0}/
-                  {collections?.weapons.total || 0}
-                </span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-destiny-legendary h-2 rounded-full"
-                  style={{
-                    width: `${calculateCollectionProgress(
-                      collections?.weapons.total || 0,
-                      collections?.weapons.collected || 0
-                    )}%`,
-                  }}
-                />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {formatNumber(collections?.weapons.missing?.length || 0)}{" "}
-                missing items
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="destiny-card-rare">
-          <CardHeader>
-            <CardTitle className="text-lg">Armor</CardTitle>
-            <CardDescription>Collection Progress</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Collected</span>
-                <span>
-                  {collections?.armor.collected || 0}/
-                  {collections?.armor.total || 0}
-                </span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-destiny-rare h-2 rounded-full"
-                  style={{
-                    width: `${calculateCollectionProgress(
-                      collections?.armor.total || 0,
-                      collections?.armor.collected || 0
-                    )}%`,
-                  }}
-                />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {formatNumber(collections?.armor.missing?.length || 0)} missing
-                items
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="destiny-card-exotic">
-          <CardHeader>
-            <CardTitle className="text-lg glow-exotic">Exotics</CardTitle>
-            <CardDescription>Rare Collection</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Collected</span>
-                <span>
-                  {collections?.exotics.collected || 0}/
-                  {collections?.exotics.total || 0}
-                </span>
-              </div>
-              <div className="w-full bg-muted rounded-full h-2">
-                <div
-                  className="bg-destiny-exotic h-2 rounded-full"
-                  style={{
-                    width: `${calculateCollectionProgress(
-                      collections?.exotics.total || 0,
-                      collections?.exotics.collected || 0
-                    )}%`,
-                  }}
-                />
-              </div>
-              <p className="text-sm text-muted-foreground">
-                {formatNumber(collections?.exotics.missing?.length || 0)}{" "}
-                missing exotics
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Weekly Recommendations */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Weekly Vendors</CardTitle>
-            <CardDescription>
-              Limited-time items available this week
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {weekly?.vendors?.slice(0, 3).map((vendor) => (
-              <div key={vendor.vendorHash} className="border rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold">{vendor.vendorName}</h4>
-                  <span className="text-sm text-muted-foreground">
-                    {vendor.location}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {vendor.items.slice(0, 2).map((item) => (
-                    <div
-                      key={item.itemHash}
-                      className="flex items-center space-x-3"
-                    >
-                      <img
-                        src={`https://www.bungie.net${item.icon}`}
-                        alt={item.name}
-                        className="w-8 h-8 rounded"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.cost} {item.currency}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )) || (
-              <p className="text-sm text-muted-foreground">
-                No vendor data available
-              </p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Featured Activities</CardTitle>
-            <CardDescription>
-              High-value rewards available this week
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {weekly?.activities?.slice(0, 3).map((activity) => (
-              <div
-                key={activity.activityHash}
-                className="border rounded-lg p-4"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="font-semibold">{activity.activityName}</h4>
-                  <span className="text-sm text-muted-foreground">
-                    {activity.difficulty}
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {activity.rewards.slice(0, 2).map((reward) => (
-                    <div
-                      key={reward.itemHash}
-                      className="flex items-center space-x-3"
-                    >
-                      <img
-                        src={`https://www.bungie.net${reward.icon}`}
-                        alt={reward.name}
-                        className="w-8 h-8 rounded"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{reward.name}</p>
-                        {reward.dropChance && (
-                          <p className="text-xs text-muted-foreground">
-                            {Math.round(reward.dropChance * 100)}% drop chance
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )) || (
-              <p className="text-sm text-muted-foreground">
-                No activity data available
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>
-            Manage your collection and wish list
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <Button onClick={() => navigate("/collections")}>
-              View Collections
-            </Button>
-            <Button variant="outline" onClick={() => navigate("/wishlist")}>
-              Manage Wish List
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={handleRefreshData}
-              disabled={isRefreshing}
-            >
-              {isRefreshing ? (
-                <>
-                  <LoadingSpinner size="sm" />
-                  <span className="ml-2">Refreshing...</span>
-                </>
-              ) : (
-                'Refresh Data'
-              )}
-            </Button>
+      {/* HERO COMPLETION */}
+      <Panel pad={false} style={{ padding: "var(--s-5)" }}>
+        <div className="gt-hero">
+          <div className="gt-hero-radial">
+            <RadialProgress
+              value={overall}
+              size="clamp(8rem,9vw,10rem)"
+              color="var(--c-exotic)"
+              sub="overall"
+              pctSize="clamp(2rem,3vw,2.6rem)"
+            />
           </div>
-        </CardContent>
-      </Card>
+          <div className="gt-hero-bars">
+            {categories.map((c) => (
+              <button key={c.id} className="gt-hero-bar" onClick={() => go("/collections")}>
+                <div className="gt-hero-bar-top">
+                  <span className="gt-hero-bar-label">{c.label}</span>
+                  <span className="mono gt-hero-bar-count">
+                    {c.count[0].toLocaleString()}/{c.count[1].toLocaleString()}
+                  </span>
+                </div>
+                <ProgressBar
+                  value={c.pct}
+                  showVal
+                  valText={`${c.pct}%`}
+                  color={c.id === "exotics" ? "var(--c-exotic)" : "var(--c-signal)"}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      </Panel>
+
+      {/* DO THIS TODAY */}
+      <Panel
+        title="Do this today"
+        icon="bolt"
+        accent="var(--c-signal)"
+        right={
+          <button className="gt-link" onClick={() => go("/this-week")}>
+            Full week <Icon name="chevron" size="0.8rem" />
+          </button>
+        }
+      >
+        <div className="gt-today">
+          <button className="gt-today-row" onClick={() => go("/this-week")}>
+            <Icon name="bungie" size="1.2rem" style={{ color: "var(--c-exotic)" }} />
+            <div className="gt-today-main">
+              <div className="gt-today-text">
+                <strong>Xûr is selling Hawkmoon</strong> — a Hand Cannon exotic you're missing.
+              </div>
+              <div className="gt-action-meta mono">The Tower · leaves in 1d 6h</div>
+            </div>
+            <Badge kind="missing" dot icon="bolt" />
+          </button>
+          <button className="gt-today-row" onClick={() => go("/collections")}>
+            <Icon name="collections" size="1.2rem" style={{ color: "var(--c-rare)" }} />
+            <div className="gt-today-main">
+              <div className="gt-today-text">
+                <strong>Featured raid: Vault of Glass</strong> — 2 weapons you don't have yet.
+              </div>
+              <div className="gt-action-meta mono">Pinnacle gear · resets in 2d 14h</div>
+            </div>
+            <Badge kind="completes-set" dot />
+          </button>
+        </div>
+      </Panel>
+
+      <div className="gt-dash-cols">
+        <Panel
+          title="This week — preview"
+          icon="week"
+          right={
+            <button className="gt-link" onClick={() => go("/this-week")}>
+              See all <Icon name="chevron" size="0.8rem" />
+            </button>
+          }
+        >
+          <ul className="gt-vendor-list">
+            {weekly.milestones.slice(0, 2).map((m) => (
+              <li key={m.id} className="gt-milestone">
+                <div className="gt-milestone-l">
+                  <div className="gt-action-meta mono">{m.label}</div>
+                  <div className="gt-item-name">{m.name}</div>
+                  <div className="gt-item-type">Reward: {m.reward}</div>
+                </div>
+                {m.missing > 0 ? (
+                  <Badge kind="missing" dot>
+                    {m.missing} missing
+                  </Badge>
+                ) : (
+                  <Badge kind="complete" dot />
+                )}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+
+        <Panel
+          title="Wishlist available now"
+          icon="wishlist"
+          accent="var(--c-avail)"
+          right={
+            <button className="gt-link" onClick={() => go("/wishlist")}>
+              Manage <Icon name="chevron" size="0.8rem" />
+            </button>
+          }
+        >
+          <div className="gt-avail-head">
+            <span className="gt-avail-num mono">{availableWishlist.length}</span>
+            <span className="gt-avail-text">of your wishlisted items are obtainable right now</span>
+          </div>
+          <div className="gt-avail-list">
+            {availableWishlist.slice(0, 3).map((i) => (
+              <button
+                key={i.id}
+                className="gt-item gt-item--compact"
+                data-rarity={i.rarity}
+                onClick={() => go("/wishlist")}
+              >
+                <ItemTile rarity={i.rarity} type={i.type} style={{ width: "1.9rem" }} />
+                <div className="gt-item-head" style={{ flex: 1 }}>
+                  <div className="gt-item-name">{i.name}</div>
+                  <div className="gt-item-type">{i.avail.where}</div>
+                </div>
+                <Badge kind="avail-now" dot />
+              </button>
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      <div className="gt-dash-actions">
+        <Button variant="outline" icon="collections" onClick={() => go("/collections")}>
+          View Collections
+        </Button>
+        <Button variant="outline" icon="wishlist" onClick={() => go("/wishlist")}>
+          Manage Wishlist
+        </Button>
+        <DataFreshnessChip ago={summary.updatedAgo} />
+      </div>
     </div>
   );
 }

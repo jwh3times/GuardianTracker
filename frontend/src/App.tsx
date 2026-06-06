@@ -1,9 +1,10 @@
 import React, { Suspense, lazy } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { ApolloProvider } from "@apollo/client";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { PreferencesProvider } from "./contexts/PreferencesContext";
 import { apolloClient } from "./lib/apollo";
-import { Navigation } from "./components/Navigation";
+import { AppShell } from "./components/AppShell";
 import { LoadingSpinner } from "./components/ui/LoadingSpinner";
 import { ToastProvider } from "./components/ui/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -18,6 +19,18 @@ const Collections = lazy(() =>
 const WishList = lazy(() =>
   import("./pages/WishList").then((m) => ({ default: m.WishList }))
 );
+const ThisWeek = lazy(() =>
+  import("./pages/ThisWeek").then((m) => ({ default: m.ThisWeek }))
+);
+const Catalysts = lazy(() =>
+  import("./pages/Catalysts").then((m) => ({ default: m.Catalysts }))
+);
+const Triumphs = lazy(() =>
+  import("./pages/Triumphs").then((m) => ({ default: m.Triumphs }))
+);
+const Settings = lazy(() =>
+  import("./pages/Settings").then((m) => ({ default: m.Settings }))
+);
 const Login = lazy(() =>
   import("./pages/Login").then((m) => ({ default: m.Login }))
 );
@@ -25,23 +38,36 @@ const OAuthCallback = lazy(() =>
   import("./pages/OAuthCallback").then((m) => ({ default: m.OAuthCallback }))
 );
 
-// Loading fallback for lazy-loaded components
 const PageLoader: React.FC = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
+  <div
+    style={{
+      minHeight: "100vh",
+      display: "grid",
+      placeItems: "center",
+      background: "var(--c-bg)",
+    }}
+  >
     <LoadingSpinner size="lg" />
   </div>
 );
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const ProtectedLayout: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return <PageLoader />;
   }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" />;
+  }
 
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />;
+  return (
+    <AppShell>
+      <Suspense fallback={<PageLoader />}>
+        <Outlet />
+      </Suspense>
+    </AppShell>
+  );
 };
 
 const AppContent: React.FC = () => {
@@ -52,53 +78,34 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route
-            path="/login"
-            element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />}
-          />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />}
+        />
+        <Route path="/auth/callback" element={<OAuthCallback />} />
 
-          <Route path="/auth/callback" element={<OAuthCallback />} />
+        <Route element={<ProtectedLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/collections" element={<Collections />} />
+          <Route path="/wishlist" element={<WishList />} />
+          <Route path="/this-week" element={<ThisWeek />} />
+          <Route path="/catalysts" element={<Catalysts />} />
+          <Route path="/triumphs" element={<Triumphs />} />
+          <Route path="/settings" element={<Settings />} />
+        </Route>
 
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Navigation />
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/collections"
-            element={
-              <ProtectedRoute>
-                <Navigation />
-                <Collections />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/wishlist"
-            element={
-              <ProtectedRoute>
-                <Navigation />
-                <WishList />
-              </ProtectedRoute>
-            }
-          />
-
-          <Route
-            path="/"
-            element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />}
-          />
-        </Routes>
-      </Suspense>
-    </div>
+        <Route
+          path="/"
+          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />}
+        />
+        <Route
+          path="*"
+          element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />}
+        />
+      </Routes>
+    </Suspense>
   );
 };
 
@@ -107,9 +114,11 @@ function App() {
     <ErrorBoundary>
       <ApolloProvider client={apolloClient}>
         <AuthProvider>
-          <ToastProvider>
-            <AppContent />
-          </ToastProvider>
+          <PreferencesProvider>
+            <ToastProvider>
+              <AppContent />
+            </ToastProvider>
+          </PreferencesProvider>
         </AuthProvider>
       </ApolloProvider>
     </ErrorBoundary>

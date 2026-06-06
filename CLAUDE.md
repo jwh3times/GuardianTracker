@@ -191,19 +191,37 @@ cp .env.example .env.local
 
 ### Frontend (`frontend/src/`)
 
+The UI was fully redesigned (the "Guardian Tracker" design system): a custom dark
+theme built on oklch design tokens and `gt-*` CSS classes (not Tailwind utilities for
+new work). Layout is a persistent sidebar + top bar shell. See `frontend/design/` for
+the source design and `frontend/README.md` for the full component map.
+
 | Path | Purpose |
 | --- | --- |
-| `App.tsx` | Router, lazy-loaded pages, `ProtectedRoute` |
+| `App.tsx` | Router, lazy-loaded pages, `ProtectedLayout` (AppShell + auth gate) |
+| `index.tsx` | App root; imports `styles/{tokens,kit,app}.css` |
 | `contexts/AuthContext.tsx` | Auth state, localStorage persistence, token refresh |
+| `contexts/PreferencesContext.tsx` | User prefs (card style, "for you" badges); localStorage `guardian_prefs` |
 | `lib/apollo.ts` | Apollo Client with auth link |
-| `pages/Login.tsx` | Bungie OAuth initiation |
+| `lib/mockData.ts` | Mock data for backend-less screens + fallbacks (typed port of `design/src/data.js`) |
+| `lib/adapters.ts` | GraphQL `DestinyItem`/`WishListItem` → design `GTItem`/`WishlistEntry` |
+| `styles/{tokens,kit,app}.css` | Design tokens + component/shell styles (plain CSS) |
+| `components/AppShell.tsx` | Sidebar + top bar + mobile nav; global search; character switcher |
+| `components/Brand.tsx` | Logo mark |
+| `components/kit/` | Design component kit: `Icon`, primitives, `ItemCard`, composites (`Panel`, `CategoryTree`, `ItemDetailDrawer`, `SealCard`, …) |
+| `components/ui/` | Legacy primitives still used by shell: `LoadingSpinner`, `Toast`, plus `ErrorBoundary` (Tailwind) |
+| `pages/Login.tsx` | Bungie OAuth initiation (redesigned) |
 | `pages/OAuthCallback.tsx` | Handles `/auth/callback` — exchanges code, stores tokens |
-| `pages/Dashboard.tsx` | Overview page |
-| `pages/Collections.tsx` | Missing items by category with `DataSourceBanner` |
-| `pages/WishList.tsx` | Wish list management |
+| `pages/Dashboard.tsx` | Completion hero + "do this today"; real collection totals, mock weekly |
+| `pages/Collections.tsx` | Category tree + filterable item grid/list + detail drawer; real data, mock fallback |
+| `pages/WishList.tsx` | Wishlist management; real GraphQL with mock fallback |
+| `pages/ThisWeek.tsx` | Weekly recommendations / Xûr / milestones (mock — no backend yet) |
+| `pages/Catalysts.tsx` | Catalysts & crafting patterns (mock — no backend yet) |
+| `pages/Triumphs.tsx` | Triumphs & seals (mock — no backend yet) |
+| `pages/Settings.tsx` | Account info + appearance preferences + sign out |
 | `graphql/queries.ts` | Apollo queries |
 | `graphql/mutations.ts` | Apollo mutations |
-| `components/ui/` | Button, Card, LoadingSpinner, Toast |
+| `types/design.ts` | Design-system domain types (`GTItem`, `Seal`, `Weekly`, …) |
 
 ### Database (`database/init/`)
 
@@ -309,4 +327,6 @@ cd frontend && npm test
 - `updateWishListItem` mutation is a stub
 - PostgreSQL schema exists but is not wired to any running service
 - Redis is configured in graphql-service but not actively used
-- The `DataSourceBanner` in Collections.tsx is a debug component and should be removed or gated before production
+- The debug `DataSourceBanner` was removed in the redesign; Collections now uses the `DataFreshnessChip` instead
+- The This Week, Catalysts & Crafting, and Triumphs & Seals pages render mock data from `lib/mockData.ts` — their backends don't exist yet
+- The character switcher and global search in the app shell operate on mock data (no character/search backend yet)

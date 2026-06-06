@@ -1,0 +1,272 @@
+import React, { useEffect, useRef, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useMutation } from "@apollo/client";
+import { Brand } from "./Brand";
+import { Icon, ItemTile } from "./kit";
+import { useAuth } from "../contexts/AuthContext";
+import { LOGOUT } from "../graphql/mutations";
+import { characters, items } from "../lib/mockData";
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: string;
+  path: string;
+}
+
+const NAV: NavItem[] = [
+  { id: "dashboard", label: "Dashboard", icon: "dashboard", path: "/dashboard" },
+  { id: "week", label: "This Week", icon: "week", path: "/this-week" },
+  { id: "collections", label: "Collections", icon: "collections", path: "/collections" },
+  { id: "catalysts", label: "Catalysts & Crafting", icon: "catalyst", path: "/catalysts" },
+  { id: "triumphs", label: "Triumphs & Seals", icon: "triumph", path: "/triumphs" },
+  { id: "wishlist", label: "Wishlist", icon: "wishlist", path: "/wishlist" },
+];
+const MOBILE_NAV: NavItem[] = [
+  { id: "dashboard", label: "Home", icon: "dashboard", path: "/dashboard" },
+  { id: "week", label: "Week", icon: "week", path: "/this-week" },
+  { id: "collections", label: "Collect", icon: "collections", path: "/collections" },
+  { id: "wishlist", label: "Wishlist", icon: "wishlist", path: "/wishlist" },
+];
+
+/* ---------------- CHARACTER SWITCHER ---------------- */
+function CharacterSwitcher({ displayName }: { displayName?: string }) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(characters[0].id);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("click", h);
+    return () => document.removeEventListener("click", h);
+  }, []);
+  const cur = characters.find((c) => c.id === active) ?? characters[0];
+  return (
+    <div className="gt-charsw" ref={ref}>
+      <button className="gt-charsw-btn" onClick={() => setOpen((v) => !v)}>
+        <span className="gt-avatar" data-cls={cur.cls}>
+          {(displayName || cur.name)[0]}
+        </span>
+        <span className="gt-charsw-name">{displayName || cur.name}</span>
+        <Icon name="chevronDown" size="0.8rem" style={{ color: "var(--c-text-3)" }} />
+      </button>
+      {open && (
+        <div className="gt-charsw-menu">
+          <div className="gt-charsw-head mono">Switch Guardian</div>
+          {characters.map((c) => (
+            <button
+              key={c.id}
+              className="gt-charsw-opt"
+              data-on={c.id === active}
+              onClick={() => {
+                setActive(c.id);
+                setOpen(false);
+              }}
+            >
+              <span className="gt-avatar" data-cls={c.cls}>
+                {c.name[0]}
+              </span>
+              <div className="gt-charsw-opt-main">
+                <span className="gt-charsw-opt-name">
+                  {c.name} — {c.cls}
+                </span>
+                <span className="gt-charsw-opt-sub mono">
+                  {c.race} · {c.power}
+                </span>
+              </div>
+              {c.id === active && <Icon name="check" size="0.9rem" style={{ color: "var(--c-signal)" }} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- GLOBAL SEARCH ---------------- */
+function SearchBar() {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("click", h);
+    return () => document.removeEventListener("click", h);
+  }, []);
+  const results =
+    q.length > 1
+      ? items.filter((i) => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 6)
+      : [];
+  return (
+    <div className="gt-search" ref={ref}>
+      <Icon name="search" size="1rem" style={{ color: "var(--c-text-3)" }} />
+      <input
+        className="gt-search-input"
+        placeholder="Search items…"
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+      />
+      {open && q.length > 1 && (
+        <div className="gt-search-menu">
+          {results.length ? (
+            results.map((i) => (
+              <button
+                key={i.id}
+                className="gt-search-opt"
+                data-rarity={i.rarity}
+                onClick={() => {
+                  setOpen(false);
+                  navigate("/collections");
+                }}
+              >
+                <ItemTile rarity={i.rarity} type={i.type} style={{ width: "1.8rem" }} />
+                <span className="gt-search-opt-name">{i.name}</span>
+                <span className="gt-item-type">{i.type}</span>
+              </button>
+            ))
+          ) : (
+            <div className="gt-search-empty mono">No items match “{q}”</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- APP SHELL ---------------- */
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout: authLogout } = useAuth();
+  const [logout] = useMutation(LOGOUT);
+  const [mobileNav, setMobileNav] = useState(false);
+
+  useEffect(() => {
+    setMobileNav(false);
+  }, [location.pathname]);
+
+  const isActive = (path: string) => location.pathname.startsWith(path);
+
+  const handleSignOut = async () => {
+    try {
+      await logout();
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      authLogout();
+      navigate("/login");
+    }
+  };
+
+  return (
+    <div className="gt-app" data-nav="sidebar">
+      {/* SIDEBAR (desktop) */}
+      <aside className="gt-sidebar">
+        <div className="gt-sidebar-brand">
+          <Brand />
+        </div>
+        <nav className="gt-nav">
+          {NAV.map((n) => (
+            <NavLink
+              key={n.id}
+              to={n.path}
+              className="gt-navitem"
+              data-active={isActive(n.path)}
+            >
+              <Icon name={n.icon} size="1.15rem" />
+              <span>{n.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+        <div className="gt-sidebar-foot">
+          <NavLink to="/settings" className="gt-navitem" data-active={isActive("/settings")}>
+            <Icon name="settings" size="1.15rem" />
+            <span>Settings</span>
+          </NavLink>
+          <button className="gt-navitem" onClick={handleSignOut}>
+            <Icon name="signout" size="1.15rem" />
+            <span>Sign out</span>
+          </button>
+        </div>
+      </aside>
+
+      <div className="gt-shell-main">
+        {/* TOP BAR */}
+        <header className="gt-topbar">
+          <button
+            className="gt-burger gt-iconbtn"
+            onClick={() => setMobileNav(true)}
+            aria-label="Menu"
+          >
+            <Icon name="menu" size="1.2rem" />
+          </button>
+          <div className="gt-topbar-search">
+            <SearchBar />
+          </div>
+          <div className="gt-topbar-right">
+            <CharacterSwitcher displayName={user?.displayName} />
+          </div>
+        </header>
+
+        {/* CONTENT */}
+        <main className="gt-content">
+          <div className="gt-content-inner">{children}</div>
+        </main>
+      </div>
+
+      {/* MOBILE BOTTOM TABS */}
+      <nav className="gt-bottomnav">
+        {MOBILE_NAV.map((n) => (
+          <NavLink key={n.id} to={n.path} className="gt-bottomtab" data-active={isActive(n.path)}>
+            <Icon name={n.icon} size="1.3rem" />
+            <span>{n.label}</span>
+          </NavLink>
+        ))}
+        <button
+          className="gt-bottomtab"
+          data-active={["/catalysts", "/triumphs", "/settings"].some((p) => isActive(p))}
+          onClick={() => setMobileNav(true)}
+        >
+          <Icon name="menu" size="1.3rem" />
+          <span>More</span>
+        </button>
+      </nav>
+
+      {/* MOBILE NAV DRAWER */}
+      {mobileNav && (
+        <div className="gt-mobnav-scrim" onClick={() => setMobileNav(false)}>
+          <div className="gt-mobnav" onClick={(e) => e.stopPropagation()}>
+            <div className="gt-mobnav-head">
+              <Brand />
+              <button className="gt-iconbtn" onClick={() => setMobileNav(false)}>
+                <Icon name="close" size="1.2rem" />
+              </button>
+            </div>
+            {NAV.map((n) => (
+              <NavLink key={n.id} to={n.path} className="gt-navitem" data-active={isActive(n.path)}>
+                <Icon name={n.icon} size="1.15rem" />
+                <span>{n.label}</span>
+              </NavLink>
+            ))}
+            <NavLink to="/settings" className="gt-navitem" data-active={isActive("/settings")}>
+              <Icon name="settings" size="1.15rem" />
+              <span>Settings</span>
+            </NavLink>
+            <button className="gt-navitem" onClick={handleSignOut}>
+              <Icon name="signout" size="1.15rem" />
+              <span>Sign out</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

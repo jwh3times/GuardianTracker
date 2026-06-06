@@ -21,10 +21,11 @@ Frontend (React/TS :3000)
 
 ### Frontend
 
-- **Framework**: React 18 + TypeScript
+- **Framework**: React 18 + TypeScript (Vite)
 - **GraphQL Client**: Apollo Client
-- **UI Toolkit**: Tailwind CSS + Radix UI (shadcn/ui)
+- **UI**: Custom "Guardian Tracker" design system — oklch design tokens + `gt-*` CSS classes (a persistent sidebar shell, rarity-driven theming)
 - **Routing**: React Router v6
+- **Sections**: Dashboard, This Week, Collections, Catalysts & Crafting, Triumphs & Seals, Wishlist, Settings (the three flagship pages render mock data pending their backends)
 
 ### Backend
 
