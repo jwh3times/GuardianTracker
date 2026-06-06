@@ -27,14 +27,40 @@ Frontend (React/TS :3000)
 
 ## Running Services
 
-### Option A: Kubernetes (Minikube)
+Pick the option that matches what you're doing:
+
+- **Docker Compose** (Option A) — one command to run the whole stack. Best default for local dev, onboarding, and integration testing.
+- **Minikube** (Option B) — for validating the Kubernetes manifests / deployment parity. Overkill for everyday work.
+- **Individual services** (Option C) — for actively developing a single service with fast hot reload (Air / Vite / nodemon).
+
+### Option A: Docker Compose (full stack)
+
+Runs all four services plus Postgres and Redis from their production Dockerfiles.
+
+```powershell
+cp .env.example .env      # fill in BUNGIE_* secrets for real OAuth
+docker compose up --build
+```
+
+- Frontend `http://localhost:3000`, GraphQL `http://localhost:4000/graphql`, Auth `:8081`, Bungie `:8082`
+- Postgres `:5432`, Redis `:6379`
+- Backend-to-backend calls use compose DNS (`http://auth-service:8081`, etc.); the frontend's `VITE_` URLs stay on `localhost` because they run in the browser.
+- The Bungie manifest persists in the `manifest-data` named volume, so it isn't re-downloaded on restart.
+- `database/init/01-init.sql` auto-loads into Postgres on first run.
+
+```powershell
+docker compose down        # stop (keeps volumes/data)
+docker compose down -v     # stop and wipe Postgres/Redis/manifest volumes
+```
+
+### Option B: Kubernetes (Minikube)
 
 ```powershell
 cd k8s
 ./startup.ps1
 ```
 
-### Option B: Individual services
+### Option C: Individual services
 
 ```powershell
 # Auth Service

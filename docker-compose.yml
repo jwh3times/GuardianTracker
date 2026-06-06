@@ -1,0 +1,129 @@
+# Guardian Tracker — full local stack (production-style images).
+#
+#   1. cp .env.example .env   and fill in BUNGIE_* secrets
+#   2. docker compose up --build
+#
+# Frontend:  http://localhost:3000   GraphQL: http://localhost:4000/graphql
+# Auth:      http://localhost:8081   Bungie:  http://localhost:8082
+#
+# Service-to-service calls use the compose network DNS (e.g. http://auth-service:8081).
+# The frontend's VITE_ URLs intentionally stay on localhost — they run in the
+# browser on the host, not inside a container.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-guardian_tracker}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18+ images store data under a version-specific subdir, so the
+      # recommended mount point is /var/lib/postgresql (not /var/lib/postgresql/data).
+      - postgres-data:/var/lib/postgresql
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-guardian_tracker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ./backend/auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT:-8081}:8081"
+    environment:
+      PORT: "8081"
+      GO_ENV: ${ENVIRONMENT:-development}
+      BUNGIE_API_KEY: ${BUNGIE_API_KEY:-}
+      BUNGIE_CLIENT_ID: ${BUNGIE_CLIENT_ID:-}
+      BUNGIE_CLIENT_SECRET: ${BUNGIE_CLIENT_SECRET:-}
+      AUTH_REDIRECT_URI: ${AUTH_REDIRECT_URI:-http://localhost:3000/auth/callback}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me_minimum_32_characters_long}
+      JWT_EXPIRY_HOURS: "24"
+      JWT_REFRESH_EXPIRY_DAYS: "30"
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  bungie-service:
+    build:
+      context: ./backend/bungie-service
+    ports:
+      - "${BUNGIE_SERVICE_PORT:-8082}:8082"
+    environment:
+      PORT: "8082"
+      GO_ENV: ${ENVIRONMENT:-development}
+      BUNGIE_API_KEY: ${BUNGIE_API_KEY:-}
+      BUNGIE_API_BASE_URL: https://www.bungie.net/Platform
+      AUTH_SERVICE_URL: http://auth-service:8081
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me_minimum_32_characters_long}
+      MANIFEST_DB_PATH: /app/data/manifest.sqlite
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:4000}
+    volumes:
+      - manifest-data:/app/data
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  graphql-service:
+    build:
+      context: ./backend/graphql-service
+    ports:
+      - "${GRAPHQL_SERVICE_PORT:-4000}:4000"
+    environment:
+      PORT: "4000"
+      NODE_ENV: ${ENVIRONMENT:-development}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      BUNGIE_SERVICE_URL: http://bungie-service:8082
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me_minimum_32_characters_long}
+      REDIS_URL: redis://redis:6379
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      bungie-service:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_PORT:-3000}:8080"
+    depends_on:
+      graphql-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  manifest-data:
