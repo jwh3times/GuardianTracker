@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Guardian Tracker — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="tokens.css" />
+<link rel="stylesheet" href="src/kit.css" />
+<style>
+  body { padding: var(--s-6) clamp(var(--s-4), 4vw, var(--s-10)); background: var(--c-void); }
+  .ds-wrap { max-width: var(--content-max); margin-inline: auto; display: flex; flex-direction: column; gap: var(--s-8); }
+  .ds-hero { display: flex; flex-direction: column; gap: var(--s-2); padding-bottom: var(--s-5); border-bottom: 0.08rem solid var(--c-line-soft); }
+  .ds-kicker { font-family: var(--font-mono); font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.2em; color: var(--c-signal); }
+  .ds-h1 { font-size: var(--t-3xl); }
+  .ds-lead { color: var(--c-text-3); max-width: 48rem; font-size: var(--t-md); }
+  .ds-sec { display: flex; flex-direction: column; gap: var(--s-4); }
+  .ds-sec-h { font-family: var(--font-mono); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.16em; color: var(--c-text-3); display: flex; align-items: center; gap: var(--s-3); }
+  .ds-sec-h::after { content: ""; flex: 1; height: 0.07rem; background: var(--c-line-soft); }
+  .ds-grid { display: grid; gap: var(--s-4); }
+  .ds-row { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; }
+  .ds-panel { background: var(--c-surface); border: 0.08rem solid var(--c-line-soft); border-radius: var(--r-lg); padding: var(--s-5); display: flex; flex-direction: column; gap: var(--s-4); }
+  .ds-label { font-family: var(--font-mono); font-size: var(--t-2xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--c-text-4); }
+  .sw { display: flex; flex-direction: column; gap: var(--s-2); }
+  .sw-chip { height: 3.4rem; border-radius: var(--r-md); border: 0.08rem solid var(--c-line-soft); box-shadow: var(--shadow-sm); }
+  .sw-name { font-size: var(--t-xs); color: var(--c-text-2); }
+  .sw-val { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--c-text-4); }
+  .type-row { display: flex; align-items: baseline; gap: var(--s-4); padding: var(--s-2) 0; border-bottom: 0.07rem solid var(--c-line-soft); }
+  .type-row .meta { font-family: var(--font-mono); font-size: var(--t-2xs); color: var(--c-text-4); width: 7rem; flex: none; }
+</style>
+</head>
+<body>
+<div class="ds-wrap" id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="src/data.js"></script>
+<script type="text/babel" src="src/kit.jsx"></script>
+<script type="text/babel">
+const { useState } = React;
+
+function Swatch({ name, varName }) {
+  return (
+    <div className="sw">
+      <div className="sw-chip" style={{ background: `var(${varName})` }} />
+      <div className="sw-name">{name}</div>
+      <div className="sw-val">{varName}</div>
+    </div>
+  );
+}
+function Group({ title, children, cols = "repeat(auto-fill,minmax(8rem,1fr))" }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+      <div className="ds-label">{title}</div>
+      <div className="ds-grid" style={{ gridTemplateColumns: cols }}>{children}</div>
+    </div>
+  );
+}
+
+function App() {
+  const sample = window.GT.items[0];
+  const sample2 = window.GT.items[1];
+  return (
+    <React.Fragment>
+      <header className="ds-hero">
+        <span className="ds-kicker">Guardian Tracker · Design System</span>
+        <h1 className="ds-h1">Foundations &amp; Component Kit</h1>
+        <p className="ds-lead">A dark-first, rarity-driven system for a Destiny&nbsp;2 companion. Every color is an
+          <span className="mono"> oklch</span> token; every size is fluid <span className="mono">rem/clamp</span>. The kit composes into
+          all seven screens — cards, badges, progress, and states all read from one token layer.</p>
+      </header>
+
+      {/* COLORS */}
+      <section className="ds-sec">
+        <div className="ds-sec-h">01 · Color Tokens</div>
+        <div className="ds-panel">
+          <Group title="Surfaces">
+            <Swatch name="Void" varName="--c-void" /><Swatch name="Background" varName="--c-bg" />
+            <Swatch name="Surface" varName="--c-surface" /><Swatch name="Surface 2" varName="--c-surface-2" />
+            <Swatch name="Surface 3" varName="--c-surface-3" /><Swatch name="Line" varName="--c-line" />
+          </Group>
+          <Group title="Rarity — the brand backbone">
+            <Swatch name="Exotic" varName="--c-exotic" /><Swatch name="Legendary" varName="--c-legendary" />
+            <Swatch name="Rare" varName="--c-rare" /><Swatch name="Uncommon" varName="--c-uncommon" />
+            <Swatch name="Common" varName="--c-common" />
+          </Group>
+          <Group title="Difficulty (acquisition effort)">
+            <Swatch name="Easy" varName="--c-easy" /><Swatch name="Moderate" varName="--c-moderate" />
+            <Swatch name="Challenging" varName="--c-challenging" />
+          </Group>
+          <Group title="Signal & status">
+            <Swatch name="Signal / For-you" varName="--c-signal" /><Swatch name="Available" varName="--c-avail" />
+            <Swatch name="Expiring" varName="--c-expiring" /><Swatch name="Complete" varName="--c-complete" />
+            <Swatch name="Gilded" varName="--c-gild" />
+          </Group>
+        </div>
+      </section>
+
+      {/* TYPE */}
+      <section className="ds-sec">
+        <div className="ds-sec-h">02 · Typography</div>
+        <div className="ds-panel">
+          <div className="ds-label">Rajdhani — display / HUD headings &amp; numbers · Barlow — UI &amp; content · JetBrains Mono — data, timers, counts</div>
+          <div>
+            <div className="type-row"><span className="meta">3xl · display</span><span style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-3xl)", fontWeight: 700 }}>74% Complete</span></div>
+            <div className="type-row"><span className="meta">2xl · display</span><span style={{ fontFamily: "var(--font-display)", fontSize: "var(--t-2xl)", fontWeight: 600 }}>This Week, Guardian</span></div>
+            <div className="type-row"><span className="meta">lg · body</span><span style={{ fontSize: "var(--t-lg)" }}>See what you're missing, chase what matters.</span></div>
+            <div className="type-row"><span className="meta">md · body</span><span style={{ fontSize: "var(--t-md)" }}>Drops from the Vault of Glass raid — Atheon encounter.</span></div>
+            <div className="type-row"><span className="meta">mono · data</span><span className="mono" style={{ fontSize: "var(--t-md)" }}>320 / 500 · 1d 6h · 1,204/1,628</span></div>
+          </div>
+        </div>
+      </section>
+
+      {/* BADGES */}
+      <section className="ds-sec">
+        <div className="ds-sec-h">03 · Badge Vocabulary</div>
+        <div className="ds-panel">
+          <Group title="Rarity (label + dot — never color alone)" cols="none">
+            <div className="ds-row">
+              <Badge kind="exotic" dot /><Badge kind="legendary" dot /><Badge kind="rare" dot /><Badge kind="uncommon" dot /><Badge kind="common" dot />
+            </div>
+          </Group>
+          <Group title="Difficulty" cols="none">
+            <div className="ds-row"><Badge kind="easy">Easy</Badge><Badge kind="moderate">Moderate</Badge><Badge kind="challenging">Challenging</Badge></div>
+          </Group>
+          <Group title="Personalization & availability (the differentiator)" cols="none">
+            <div className="ds-row">
+              <Badge kind="missing" dot icon="bolt" /><Badge kind="avail-now" dot icon="bolt" /><Badge kind="completes-set" dot />
+              <Badge kind="new" dot>New for you</Badge><Badge kind="expiring" dot>Expiring</Badge>
+            </div>
+          </Group>
+          <Group title="Completion & priority" cols="none">
+            <div className="ds-row">
+              <Badge kind="complete" dot /><Badge kind="in-progress" dot /><Badge kind="gilded" dot icon="star" />
+              <Badge kind="urgent" solid>Urgent</Badge><Badge kind="high" solid>High</Badge><Badge kind="medium" solid>Medium</Badge><Badge kind="low" solid>Low</Badge>
+            </div>
+          </Group>
+        </div>
+      </section>
+
+      {/* PROGRESS */}
+      <section className="ds-sec">
+        <div className="ds-sec-h">04 · Progress &amp; Radials (hex motif)</div>
+        <div className="ds-panel">
+          <div className="ds-row" style={{ gap: "var(--s-6)", alignItems: "flex-end" }}>
+            <div style={{ textAlign: "center" }}><RadialProgress value={74} size="7rem" color="var(--c-exotic)" sub="overall" pctSize="2rem" /><div className="ds-label" style={{ marginTop: "var(--s-2)" }}>Dashboard hero</div></div>
+            <div style={{ textAlign: "center" }}><RadialProgress value={92} size="5rem" color="var(--c-complete)" sub="Conqueror" /><div className="ds-label" style={{ marginTop: "var(--s-2)" }}>Seal card</div></div>
+            <div style={{ textAlign: "center" }}><RadialProgress value={40} size="5rem" color="var(--c-progress)" sub="Chronicler" /><div className="ds-label" style={{ marginTop: "var(--s-2)" }}>In progress</div></div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)", maxWidth: "30rem" }}>
+            <ProgressBar value={81} label="Weapons" showVal valText="81%" color="var(--c-exotic)" />
+            <ProgressBar value={320} max={500} label="Sunshot Catalyst — Kills" showVal color="var(--c-progress)" />
+            <ProgressBar value={5} max={5} label="Riptide — Patterns" showVal complete />
+          </div>
+        </div>
+      </section>
+
+      {/* ITEM CARDS */}
+      <section className="ds-sec">
+        <div className="ds-sec-h">05 · Item Cards (grid / list / compact)</div>
+        <div className="ds-panel">
+          <div className="ds-grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(15rem,1fr))" }}>
+            <ItemCard item={sample} />
+            <ItemCard item={sample2} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+            <ItemCard item={sample} density="list" />
+            <ItemCard item={window.GT.items[2]} density="list" />
+          </div>
+          <div className="ds-grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(13rem,1fr))" }}>
+            <ItemCard item={window.GT.items[3]} density="compact" />
+            <ItemCard item={window.GT.items[4]} density="compact" />
+            <ItemCard item={window.GT.items[5]} density="compact" />
+          </div>
+        </div>
+      </section>
+
+      {/* CHIPS / CONTROLS */}
+      <section className="ds-sec">
+        <div className="ds-sec-h">06 · Chips, Controls &amp; Buttons</div>
+        <div className="ds-panel">
+          <div className="ds-row">
+            <DataFreshnessChip ago="4m" />
+            <CountdownChip prefix="Resets" time={{ d: 2, h: 14 }} />
+            <CountdownChip prefix="Leaves" time={{ d: 1, h: 6 }} soon icon="bolt" />
+          </div>
+          <div className="ds-row">
+            <FilterChip on>Missing only</FilterChip>
+            <FilterChip>Rarity ▾</FilterChip>
+            <FilterChip on removable>Exotic</FilterChip>
+            <FilterChip>Source ▾</FilterChip>
+          </div>
+          <div className="ds-row">
+            <Button variant="primary" icon="bolt">Refresh data</Button>
+            <Button variant="outline" icon="wishlist">Add to Wishlist</Button>
+            <Button variant="ghost" icon="external">Where to farm</Button>
+            <Button variant="outline" sm>Small</Button>
+          </div>
+          <div className="ds-row">
+            <StatTile num="1,204" label="Collected" mono />
+            <StatTile num="424" label="Missing" mono color="var(--c-signal)" />
+            <StatTile num="1,628" label="Total" mono />
+          </div>
+        </div>
+      </section>
+
+      {/* STATES */}
+      <section className="ds-sec">
+        <div className="ds-sec-h">07 · States — skeleton, empty, error</div>
+        <div className="ds-panel">
+          <div className="ds-grid" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(15rem,1fr))" }}>
+            <ItemCardSkeleton /><ItemCardSkeleton /><ItemCardSkeleton />
+          </div>
+          <div className="ds-grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(18rem,1fr))" }}>
+            <div className="gt-card"><EmptyState icon="check" color="var(--c-complete)" title="All caught up!" body="You've collected every item in this category. Nothing left to chase here." action={<Button variant="outline" sm>View all</Button>} /></div>
+            <div className="gt-card"><EmptyState icon="bungie" color="var(--c-expiring)" title="This Guardian's data is private" body="Set your Destiny 2 collections to public on Bungie.net to see what's missing." action={<Button variant="primary" sm>How to fix</Button>} /></div>
+            <div className="gt-card"><EmptyState icon="refresh" color="var(--c-signal)" title="Getting the latest game data…" body="Bungie's manifest is warming up after a patch. This usually takes a moment." action={<Button variant="outline" sm icon="refresh">Retry</Button>} /></div>
+          </div>
+        </div>
+      </section>
+
+      <footer style={{ padding: "var(--s-6) 0 var(--s-10)", color: "var(--c-text-4)", fontFamily: "var(--font-mono)", fontSize: "var(--t-2xs)", textAlign: "center", letterSpacing: "0.1em" }}>
+        GUARDIAN TRACKER — DESIGN TOKENS v1 · OKLCH COLOR · FLUID TYPE · ZERO HARDCODED PX
+      </footer>
+    </React.Fragment>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
