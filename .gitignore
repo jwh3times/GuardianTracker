@@ -11,13 +11,17 @@ build/
 */build/
 
 # Environment files (NEVER commit real credentials)
+# Ignores .env and any .env.<suffix> at any depth, but keeps the .env.example templates.
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-**/.env
-**/**.env
+.env.*
+!.env.example
+
+# Secrets & certificates (NEVER commit)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # Kubernetes secrets (NEVER commit)
 k8s/*-secret.yaml
@@ -34,6 +38,9 @@ yarn-error.log*
 # Database
 *.db
 *.sqlite
+
+# Bungie manifest data (large, runtime-downloaded; ~290MB sqlite exceeds GitHub's 100MB limit)
+backend/bungie-service/data/
 
 # IDE files
 .vscode/
@@ -65,9 +72,6 @@ docker-compose.override.yml
 .terraform/
 .terraform.lock.hcl
 
-# Kubernetes secrets
-k8s/secrets/
-
 # AWS
 .aws/
 
@@ -75,6 +79,9 @@ k8s/secrets/
 coverage/
 *.cover
 *.coverprofile
+
+# TypeScript incremental build cache
+*.tsbuildinfo
 
 # Temporary files
 tmp/
