@@ -1,190 +1,130 @@
-# Guardian Tracker Frontend
+# Guardian Tracker — Frontend
 
-A React + TypeScript frontend for the Guardian Tracker application, built with modern UI components and GraphQL integration.
+React + TypeScript SPA for Guardian Tracker, a Destiny 2 collection tracking app.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Framework**: React 18 + TypeScript
-- **Styling**: Tailwind CSS + shadcn/ui components
-- **GraphQL**: Apollo Client
-- **Routing**: React Router
-- **State Management**: Apollo Client cache + React hooks
-- **Build Tool**: Create React App
-- **Development**: Hot reload with Docker
+- **Styling**: Tailwind CSS + Radix UI (shadcn/ui primitives)
+- **GraphQL**: Apollo Client 3
+- **Routing**: React Router v6
+- **Forms**: React Hook Form + Zod
+- **Icons**: Lucide React
+- **Build**: Create React App (react-scripts)
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-
-### Local Development
-
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Set up environment variables**
-   ```bash
-   cp ../.env.example .env.local
-   # Edit .env.local with your configuration
-   ```
-
-3. **Start development server**
-   ```bash
-   npm start
-   ```
-
-4. **Open in browser**
-   ```
-   http://localhost:3000
-   ```
-
-### Docker Development
+## Quick Start
 
 ```bash
-# From project root
-docker-compose up frontend
+npm install
+cp .env.example .env.local   # fill in your values
+npm start
 ```
 
-## 📁 Project Structure
+Open http://localhost:3000.
 
-```
-src/
-├── components/          # Reusable UI components
-│   ├── ui/             # Basic UI components (Button, Card, etc.)
-│   └── Navigation.tsx  # App navigation
-├── pages/              # Route components
-│   ├── Dashboard.tsx   # Main dashboard
-│   ├── Collections.tsx # Collections view
-│   ├── WishList.tsx    # Wish list management
-│   └── Login.tsx       # Authentication
-├── graphql/            # GraphQL queries and mutations
-│   ├── queries.ts      # GraphQL queries
-│   └── mutations.ts    # GraphQL mutations
-├── types/              # TypeScript type definitions
-├── lib/                # Utility functions
-└── App.tsx             # Main app component
-```
+The frontend proxies API calls to `http://localhost:4000` (GraphQL service) by default — see `"proxy"` in `package.json`.
 
-## 🎨 UI Components
-
-The app uses a custom design system built on top of Tailwind CSS with Destiny 2-themed colors:
-
-- **Destiny Colors**: Exotic (gold), Legendary (purple), Rare (blue), etc.
-- **Responsive Design**: Mobile-first approach
-- **Dark Theme**: Custom dark theme optimized for gaming
-- **Animations**: Smooth transitions and hover effects
-
-## 🔌 GraphQL Integration
-
-Apollo Client provides:
-- **Caching**: Intelligent query caching and updates
-- **Optimistic UI**: Immediate UI updates for better UX
-- **Error Handling**: Comprehensive error boundaries
-- **Type Safety**: Generated TypeScript types from schema
-
-## 🏗️ Key Features
-
-### Dashboard
-- Collection progress overview
-- Weekly vendor recommendations
-- Featured activities with rewards
-- Quick action buttons
-
-### Collections
-- Browse missing items by category (weapons, armor, exotics)
-- Filter by acquisition difficulty
-- Visual indicators for rarity and sources
-- Add items to wish list
-
-### Wish List
-- Prioritize desired items
-- Add personal notes
-- Track acquisition progress
-- Sort by priority and date
-
-### Authentication
-- Secure Bungie OAuth integration
-- Token management
-- Profile display
-- Logout functionality
-
-## 🧪 Available Scripts
-
-```bash
-# Development
-npm start              # Start development server
-npm test              # Run tests
-npm run build         # Build for production
-
-# Code Quality
-npm run lint          # Run ESLint
-npm run lint:fix      # Fix ESLint issues
-npm run type-check    # TypeScript type checking
-```
-
-## 🔧 Configuration
-
-### Environment Variables
+## Environment Variables
 
 ```env
 REACT_APP_GRAPHQL_ENDPOINT=http://localhost:4000/graphql
-REACT_APP_AUTH_ENDPOINT=http://localhost:8081
+REACT_APP_AUTH_SERVICE_URL=http://localhost:8081
 ```
 
-### Apollo Client Configuration
+## Project Structure
 
-- **URI**: GraphQL endpoint from environment
-- **Auth Link**: Automatic JWT token injection
-- **Cache**: Custom type policies for optimal caching
-- **Error Policy**: Graceful error handling
+```
+src/
+├── App.tsx                    # Router, lazy page loading, ProtectedRoute
+├── contexts/
+│   └── AuthContext.tsx         # Auth state, localStorage persistence, token refresh
+├── pages/
+│   ├── Login.tsx               # Bungie OAuth initiation
+│   ├── OAuthCallback.tsx        # Handles /auth/callback redirect
+│   ├── Dashboard.tsx           # Collection overview + weekly summary
+│   ├── Collections.tsx         # Missing items browser with filters
+│   └── WishList.tsx            # Wish list management
+├── components/
+│   ├── Navigation.tsx          # App nav bar
+│   ├── ErrorBoundary.tsx       # React error boundary
+│   └── ui/
+│       ├── Button.tsx
+│       ├── Card.tsx
+│       ├── LoadingSpinner.tsx
+│       └── Toast.tsx           # Toast notification system
+├── graphql/
+│   ├── queries.ts              # Apollo useQuery definitions
+│   └── mutations.ts            # Apollo useMutation definitions
+├── lib/
+│   ├── apollo.ts               # Apollo Client setup with auth link
+│   └── utils.ts                # Rarity colors, difficulty helpers, image validation
+└── types/
+    └── index.ts                # Shared TypeScript types
+```
 
-## 🎯 Performance Optimizations
+## Authentication Flow
 
-- **Code Splitting**: Lazy loading of route components
-- **Image Optimization**: Automatic image URL validation
-- **Debounced Search**: Optimized search input handling
-- **Memoization**: React.memo and useMemo for expensive operations
+1. User clicks "Login with Bungie" on `/login`
+2. Frontend calls auth-service `GET /api/auth/bungie` → receives OAuth URL + CSRF state
+3. User is redirected to Bungie.net and authorizes the app
+4. Bungie redirects to `/auth/callback?code=...&state=...`
+5. `OAuthCallback` page posts code + state to auth-service, receives JWT tokens
+6. Tokens stored in `localStorage` (`guardian_token`, `guardian_refresh_token`)
+7. Apollo Client's auth link injects `Authorization: Bearer <token>` on every request
 
-## 🔐 Security
+Token refresh is handled automatically by `AuthContext.refreshAccessToken()`.
 
-- **JWT Storage**: Secure token storage in localStorage
-- **XSS Protection**: Sanitized user inputs
-- **HTTPS**: Production deployment over HTTPS
-- **CSP**: Content Security Policy headers
+## Pages
 
-## 🚀 Deployment
+### Dashboard
+Overview of collection progress, recent activity, and weekly recommendations (placeholder while backend feature is built).
 
-### Production Build
+### Collections
+- Browse missing items by category: Weapons / Armor / Exotics
+- Filter by acquisition difficulty: Easy / Moderate / Challenging
+- Each card shows: name, type, rarity, sources, difficulty
+- "Add to Wish List" button on each missing item
+- `DataSourceBanner` debug component — shows live vs. mock data status
+
+### Wish List
+- View, prioritize, and manage desired items
+- Persisted via GraphQL mutations to auth-service
+
+## Available Scripts
+
+```bash
+npm start           # Development server (port 3000)
+npm test            # Jest tests
+npm run build       # Production build to /build
+npm run lint        # ESLint
+npm run lint:fix    # ESLint with auto-fix
+npm run type-check  # TypeScript compile check (no emit)
+```
+
+## Destiny 2 Theme
+
+The app uses a custom Tailwind theme with Destiny 2 item rarity colors:
+
+| Rarity | Color |
+|---|---|
+| Exotic | Gold / yellow |
+| Legendary | Purple |
+| Rare | Blue |
+| Uncommon | Green |
+| Common | White/gray |
+
+CSS classes `destiny-card`, `destiny-card-exotic`, `destiny-card-legendary`, `destiny-card-rare` apply the themed card styles.
+
+## Production Build
 
 ```bash
 npm run build
 ```
 
-### Docker Production
+The static output in `/build` is served by Nginx in Docker:
 
 ```dockerfile
 FROM nginx:alpine
 COPY build/ /usr/share/nginx/html/
 COPY nginx.conf /etc/nginx/nginx.conf
-EXPOSE 80
 ```
-
-## 🤝 Contributing
-
-1. Follow the existing code style
-2. Add TypeScript types for new features
-3. Include responsive design considerations
-4. Test on mobile devices
-5. Update documentation for new components
-
-## 📊 Monitoring
-
-The frontend includes:
-- Error boundaries for crash recovery
-- Performance monitoring hooks
-- User action analytics
-- GraphQL query performance tracking

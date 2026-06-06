@@ -10,13 +10,15 @@ import { onError } from "@apollo/client/link/error";
 
 // Get configuration from environment
 const GRAPHQL_URL =
-  process.env.REACT_APP_GRAPHQL_URL || "http://localhost:4000/graphql";
+  import.meta.env.VITE_GRAPHQL_URL || "http://localhost:4000/graphql";
 const AUTH_SERVICE_URL =
-  process.env.REACT_APP_AUTH_SERVICE_URL || "http://localhost:8081";
+  import.meta.env.VITE_AUTH_SERVICE_URL || "http://localhost:8081";
 
-console.log("Apollo Client Configuration:");
-console.log("  GraphQL URL:", GRAPHQL_URL);
-console.log("  Auth Service URL:", AUTH_SERVICE_URL);
+if (import.meta.env.DEV) {
+  console.log("Apollo Client Configuration:");
+  console.log("  GraphQL URL:", GRAPHQL_URL);
+  console.log("  Auth Service URL:", AUTH_SERVICE_URL);
+}
 
 // Token refresh helper
 let isRefreshing = false;

@@ -18,7 +18,7 @@ export function Login() {
 
   // Get auth service URL from environment
   const AUTH_SERVICE_URL =
-    process.env.REACT_APP_AUTH_SERVICE_URL || "http://localhost:8081";
+    import.meta.env.VITE_AUTH_SERVICE_URL || "http://localhost:8081";
 
   // Bungie OAuth login
   const handleBungieLogin = async () => {

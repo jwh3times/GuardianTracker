@@ -22,6 +22,7 @@ const createMockItem = (overrides: Partial<DestinyItem> = {}): DestinyItem => ({
   description: 'A test item',
   icon: '/icons/test.png',
   rarity: 'Legendary',
+  tierType: 6,
   itemType: 'Auto Rifle',
   difficulty: 'Moderate',
   isExotic: false,

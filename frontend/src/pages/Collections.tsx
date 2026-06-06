@@ -203,7 +203,7 @@ export function Collections() {
             </div>
 
             {/* Debug info for development */}
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <details className="text-xs text-muted-foreground">
                 <summary className="cursor-pointer hover:text-foreground">Debug Info</summary>
                 <pre className="mt-2 p-2 bg-muted rounded overflow-auto max-h-40">
