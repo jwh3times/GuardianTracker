@@ -8,7 +8,7 @@ on:
 
 env:
   NODE_VERSION: "26"
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.25.11"
 
 jobs:
   test-frontend:
