@@ -1,8 +1,8 @@
-import { Context } from "./context";
+import { Context } from "./context.js";
 import { GraphQLError } from "graphql";
 import axios from "axios";
-import { requireAuth, getAuthenticatedUser } from "./utils/auth";
-import { validateInput, validationSchemas } from "./utils/validation";
+import { requireAuth, getAuthenticatedUser } from "./utils/auth.js";
+import { validateInput, validationSchemas } from "./utils/validation.js";
 
 const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL || "http://localhost:8081";

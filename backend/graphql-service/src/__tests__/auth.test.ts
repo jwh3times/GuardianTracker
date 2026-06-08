@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql';
-import { requireAuth, getAuthenticatedUser, requireOwnership } from '../utils/auth';
-import { Context, AuthUser } from '../context';
+import { requireAuth, getAuthenticatedUser, requireOwnership } from '../utils/auth.js';
+import { Context, AuthUser } from '../context.js';
 import { Request, Response } from 'express';
 
 // Mock request and response
