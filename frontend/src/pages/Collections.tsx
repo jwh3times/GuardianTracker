@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client/react";
 import {
   CategoryTree,
   DataFreshnessChip,
@@ -83,7 +83,7 @@ export function Collections() {
   const membershipId =
     userData?.currentUser?.membershipId ?? user?.membershipId;
   const { data: collectionsData, loading, refetch } = useQuery(GET_USER_COLLECTIONS, {
-    variables: { membershipType, membershipId },
+    variables: { membershipType: membershipType ?? 0, membershipId: membershipId ?? "" },
     skip: membershipType == null || !membershipId,
     fetchPolicy: "cache-and-network",
   });

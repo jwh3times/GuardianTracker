@@ -1,12 +1,15 @@
 import {
   ApolloClient,
   InMemoryCache,
-  createHttpLink,
-  from,
-  fromPromise,
+  HttpLink,
+  ApolloLink,
+  CombinedGraphQLErrors,
+  ServerError,
 } from "@apollo/client";
-import { setContext } from "@apollo/client/link/context";
-import { onError } from "@apollo/client/link/error";
+import { SetContextLink } from "@apollo/client/link/context";
+import { ErrorLink } from "@apollo/client/link/error";
+import { from as observableFrom } from "rxjs";
+import { mergeMap } from "rxjs/operators";
 
 // Get configuration from environment
 const GRAPHQL_URL =
@@ -67,140 +70,108 @@ const resolvePendingRequests = () => {
 };
 
 // HTTP Link to GraphQL endpoint
-const httpLink = createHttpLink({
+const httpLink = new HttpLink({
   uri: GRAPHQL_URL,
 });
 
 // Auth Link - adds authentication headers
-const authLink = setContext((_, { headers }) => {
+const authLink = new SetContextLink((prevContext) => {
   // Get the authentication token from local storage if it exists
   const token = localStorage.getItem("guardian_token");
 
   // Return the headers to the context so httpLink can read them
   return {
     headers: {
-      ...headers,
+      ...prevContext.headers,
       authorization: token ? `Bearer ${token}` : "",
     },
   };
 });
 
-// Error Link - handles GraphQL and network errors with token refresh
-const errorLink = onError(
-  ({ graphQLErrors, networkError, operation, forward }) => {
-    if (graphQLErrors) {
-      for (const err of graphQLErrors) {
-        const { message } = err;
-        console.error(`GraphQL error: ${message}`);
+// Clears stored auth state and bounces the user to the login screen.
+const clearAuthAndRedirect = () => {
+  localStorage.removeItem("guardian_token");
+  localStorage.removeItem("guardian_refresh_token");
+  localStorage.removeItem("guardian_user");
+  window.location.href = "/login";
+};
 
-        // Handle authentication errors - try to refresh token
-        if (
-          message.includes("Authentication required") ||
-          message.includes("Invalid token") ||
-          message.includes("Unauthorized")
-        ) {
-          if (!isRefreshing) {
-            isRefreshing = true;
+// Refreshes the access token (once), retrying the failed operation with the new
+// token. Concurrent failures while a refresh is in flight queue up and retry
+// once the refresh resolves.
+const refreshAndRetry = (operation: ApolloLink.Operation, forward: ApolloLink.ForwardFunction) => {
+  if (!isRefreshing) {
+    isRefreshing = true;
 
-            return fromPromise(
-              refreshAccessToken()
-                .then((newToken) => {
-                  if (!newToken) {
-                    // Refresh failed, logout
-                    localStorage.removeItem("guardian_token");
-                    localStorage.removeItem("guardian_refresh_token");
-                    localStorage.removeItem("guardian_user");
-                    window.location.href = "/login";
-                    return null;
-                  }
-
-                  // Update the operation with new token
-                  const oldHeaders = operation.getContext().headers;
-                  operation.setContext({
-                    headers: {
-                      ...oldHeaders,
-                      authorization: `Bearer ${newToken}`,
-                    },
-                  });
-
-                  // Retry the request
-                  resolvePendingRequests();
-                  return newToken;
-                })
-                .catch(() => {
-                  // Refresh failed
-                  localStorage.removeItem("guardian_token");
-                  localStorage.removeItem("guardian_refresh_token");
-                  localStorage.removeItem("guardian_user");
-                  window.location.href = "/login";
-                  return null;
-                })
-                .finally(() => {
-                  isRefreshing = false;
-                })
-            ).flatMap(() => forward(operation));
-          } else {
-            // Wait for refresh to complete
-            return fromPromise(
-              new Promise<void>((resolve) => {
-                pendingRequests.push(() => resolve());
-              })
-            ).flatMap(() => forward(operation));
+    return observableFrom(
+      refreshAccessToken()
+        .then((newToken) => {
+          if (!newToken) {
+            clearAuthAndRedirect();
+            return null;
           }
-        }
-      }
-    }
 
-    if (networkError) {
-      console.error(`Network error: ${networkError}`);
+          // Update the operation with new token
+          const oldHeaders = operation.getContext().headers;
+          operation.setContext({
+            headers: {
+              ...oldHeaders,
+              authorization: `Bearer ${newToken}`,
+            },
+          });
 
-      // Handle network 401 errors
-      if ("statusCode" in networkError && networkError.statusCode === 401) {
-        if (!isRefreshing) {
-          isRefreshing = true;
-
-          return fromPromise(
-            refreshAccessToken()
-              .then((newToken) => {
-                if (!newToken) {
-                  localStorage.removeItem("guardian_token");
-                  localStorage.removeItem("guardian_refresh_token");
-                  localStorage.removeItem("guardian_user");
-                  window.location.href = "/login";
-                  return null;
-                }
-
-                const oldHeaders = operation.getContext().headers;
-                operation.setContext({
-                  headers: {
-                    ...oldHeaders,
-                    authorization: `Bearer ${newToken}`,
-                  },
-                });
-
-                resolvePendingRequests();
-                return newToken;
-              })
-              .catch(() => {
-                localStorage.removeItem("guardian_token");
-                localStorage.removeItem("guardian_refresh_token");
-                localStorage.removeItem("guardian_user");
-                window.location.href = "/login";
-                return null;
-              })
-              .finally(() => {
-                isRefreshing = false;
-              })
-          ).flatMap(() => forward(operation));
-        }
-      }
-    }
+          // Release any requests that queued while the refresh was in flight
+          resolvePendingRequests();
+          return newToken;
+        })
+        .catch(() => {
+          clearAuthAndRedirect();
+          return null;
+        })
+        .finally(() => {
+          isRefreshing = false;
+        })
+    ).pipe(mergeMap(() => forward(operation)));
   }
-);
+
+  // A refresh is already in flight - wait for it to complete, then retry.
+  return observableFrom(
+    new Promise<void>((resolve) => {
+      pendingRequests.push(() => resolve());
+    })
+  ).pipe(mergeMap(() => forward(operation)));
+};
+
+// Error Link - handles GraphQL and network errors with token refresh
+const errorLink = new ErrorLink(({ error, operation, forward }) => {
+  if (CombinedGraphQLErrors.is(error)) {
+    const isAuthError = error.errors.some(({ message }) =>
+      ["Authentication required", "Invalid token", "Unauthorized"].some((m) =>
+        message.includes(m)
+      )
+    );
+
+    if (isAuthError) {
+      return refreshAndRetry(operation, forward);
+    }
+
+    error.errors.forEach(({ message }) =>
+      console.error(`GraphQL error: ${message}`)
+    );
+    return;
+  }
+
+  // Handle network 401 errors
+  if (ServerError.is(error) && error.statusCode === 401) {
+    return refreshAndRetry(operation, forward);
+  }
+
+  console.error(`Network error: ${error.message}`);
+});
 
 // Create Apollo Client
 export const apolloClient = new ApolloClient({
-  link: from([errorLink, authLink, httpLink]),
+  link: ApolloLink.from([errorLink, authLink, httpLink]),
   cache: new InMemoryCache({
     typePolicies: {
       User: {
@@ -214,14 +185,6 @@ export const apolloClient = new ApolloClient({
       },
     },
   }),
-  defaultOptions: {
-    watchQuery: {
-      errorPolicy: "all",
-    },
-    query: {
-      errorPolicy: "all",
-    },
-  },
 });
 
 export default apolloClient;

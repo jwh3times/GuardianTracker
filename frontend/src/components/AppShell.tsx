@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client/react";
 import { Brand } from "./Brand";
 import { Icon, ItemTile } from "./kit";
 import { useAuth } from "../contexts/AuthContext";

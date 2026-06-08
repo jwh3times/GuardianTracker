@@ -1,6 +1,17 @@
-import { gql } from '@apollo/client';
+import { gql, type TypedDocumentNode } from '@apollo/client';
+import type {
+  DestinyItem,
+  ItemFilters,
+  User,
+  UserCollections,
+  WeeklyRecommendations,
+  WishListItem,
+} from '../types';
+import type { GraphQLCharacter } from '../lib/adapters';
 
-export const GET_CURRENT_USER = gql`
+type MembershipVars = { membershipType: number; membershipId: string };
+
+export const GET_CURRENT_USER: TypedDocumentNode<{ currentUser: User | null }> = gql`
   query GetCurrentUser {
     currentUser {
       id
@@ -14,7 +25,10 @@ export const GET_CURRENT_USER = gql`
   }
 `;
 
-export const GET_CHARACTERS = gql`
+export const GET_CHARACTERS: TypedDocumentNode<
+  { characters: GraphQLCharacter[] },
+  MembershipVars
+> = gql`
   query GetCharacters($membershipType: Int!, $membershipId: String!) {
     characters(membershipType: $membershipType, membershipId: $membershipId) {
       characterId
@@ -29,7 +43,10 @@ export const GET_CHARACTERS = gql`
   }
 `;
 
-export const GET_USER_COLLECTIONS = gql`
+export const GET_USER_COLLECTIONS: TypedDocumentNode<
+  { userCollections: UserCollections | null },
+  MembershipVars
+> = gql`
   query GetUserCollections($membershipType: Int!, $membershipId: String!) {
     userCollections(membershipType: $membershipType, membershipId: $membershipId) {
       weapons {
@@ -84,7 +101,9 @@ export const GET_USER_COLLECTIONS = gql`
   }
 `;
 
-export const GET_WISH_LIST = gql`
+export const GET_WISH_LIST: TypedDocumentNode<{
+  currentUser: { id: string; wishList: WishListItem[] } | null;
+}> = gql`
   query GetWishList {
     currentUser {
       id
@@ -108,7 +127,9 @@ export const GET_WISH_LIST = gql`
   }
 `;
 
-export const GET_WEEKLY_RECOMMENDATIONS = gql`
+export const GET_WEEKLY_RECOMMENDATIONS: TypedDocumentNode<{
+  weeklyRecommendations: WeeklyRecommendations | null;
+}> = gql`
   query GetWeeklyRecommendations {
     weeklyRecommendations {
       vendors {
@@ -164,7 +185,10 @@ export const GET_WEEKLY_RECOMMENDATIONS = gql`
   }
 `;
 
-export const SEARCH_ITEMS = gql`
+export const SEARCH_ITEMS: TypedDocumentNode<
+  { searchItems: DestinyItem[] },
+  { query: string; filters?: ItemFilters }
+> = gql`
   query SearchItems($query: String!, $filters: ItemFilters) {
     searchItems(query: $query, filters: $filters) {
       itemHash
