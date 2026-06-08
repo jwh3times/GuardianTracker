@@ -11,7 +11,7 @@ export default tseslint.config(
     extends: [
       js.configs.recommended,
       ...tseslint.configs.recommended,
-      reactHooks.configs['recommended-latest'],
+      reactHooks.configs.flat['recommended-latest'],
     ],
     languageOptions: {
       ecmaVersion: 2020,
@@ -31,6 +31,11 @@ export default tseslint.config(
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
+      // eslint-plugin-react-hooks v7 promoted the React Compiler rules into the
+      // recommended config at error level. Keep this one as a warning for now so
+      // the dependency bump doesn't change lint pass/fail behavior; adopting the
+      // full compiler ruleset is tracked as follow-up work.
+      'react-hooks/set-state-in-effect': 'warn',
     },
   },
 );
