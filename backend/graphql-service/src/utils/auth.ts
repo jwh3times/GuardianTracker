@@ -1,5 +1,5 @@
 import { GraphQLError } from "graphql";
-import { Context } from "../context";
+import { Context } from "../context.js";
 
 /**
  * Authentication guard - throws error if user is not authenticated

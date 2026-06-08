@@ -2,7 +2,6 @@ import React, {
   createContext,
   useContext,
   useState,
-  useEffect,
   ReactNode,
 } from "react";
 
@@ -31,53 +30,56 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  refreshToken: string | null;
+}
+
+// Reads persisted authentication from localStorage. Runs synchronously as the
+// lazy initializer for the auth state, so the correct value is available on the
+// first render (no loading flash, no setState-in-effect on mount).
+function readStoredAuth(): AuthState {
+  const storedToken = localStorage.getItem("guardian_token");
+  const storedRefreshToken = localStorage.getItem("guardian_refresh_token");
+  const storedUser = localStorage.getItem("guardian_user");
+
+  if (storedToken && storedUser) {
+    try {
+      return {
+        token: storedToken,
+        refreshToken: storedRefreshToken,
+        user: JSON.parse(storedUser) as User,
+      };
+    } catch (error) {
+      console.error("Error parsing stored user data:", error);
+      // Clear invalid data
+      localStorage.removeItem("guardian_token");
+      localStorage.removeItem("guardian_refresh_token");
+      localStorage.removeItem("guardian_user");
+    }
+  }
+
+  return { token: null, refreshToken: null, user: null };
+}
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [refreshToken, setRefreshToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [auth, setAuth] = useState<AuthState>(readStoredAuth);
+  const { user, token, refreshToken } = auth;
 
   // Get auth service URL from environment
   const AUTH_SERVICE_URL =
     import.meta.env.VITE_AUTH_SERVICE_URL || "http://localhost:8081";
 
-  useEffect(() => {
-    // Check for existing authentication on app load
-    const storedToken = localStorage.getItem("guardian_token");
-    const storedRefreshToken = localStorage.getItem("guardian_refresh_token");
-    const storedUser = localStorage.getItem("guardian_user");
-
-    if (storedToken && storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setToken(storedToken);
-        setRefreshToken(storedRefreshToken);
-        setUser(parsedUser);
-      } catch (error) {
-        console.error("Error parsing stored user data:", error);
-        // Clear invalid data
-        localStorage.removeItem("guardian_token");
-        localStorage.removeItem("guardian_refresh_token");
-        localStorage.removeItem("guardian_user");
-      }
-    }
-
-    setIsLoading(false);
-  }, []);
-
   const login = (newToken: string, newRefreshToken: string, newUser: User) => {
-    setToken(newToken);
-    setRefreshToken(newRefreshToken);
-    setUser(newUser);
+    setAuth({ token: newToken, refreshToken: newRefreshToken, user: newUser });
     localStorage.setItem("guardian_token", newToken);
     localStorage.setItem("guardian_refresh_token", newRefreshToken);
     localStorage.setItem("guardian_user", JSON.stringify(newUser));
   };
 
   const logout = () => {
-    setToken(null);
-    setRefreshToken(null);
-    setUser(null);
+    setAuth({ token: null, refreshToken: null, user: null });
     localStorage.removeItem("guardian_token");
     localStorage.removeItem("guardian_refresh_token");
     localStorage.removeItem("guardian_user");
@@ -107,9 +109,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const data = await response.json();
 
       // Update tokens and user data
-      setToken(data.token);
-      setRefreshToken(data.refreshToken);
-      setUser(data.user);
+      setAuth({
+        token: data.token,
+        refreshToken: data.refreshToken,
+        user: data.user,
+      });
       localStorage.setItem("guardian_token", data.token);
       localStorage.setItem("guardian_refresh_token", data.refreshToken);
       localStorage.setItem("guardian_user", JSON.stringify(data.user));
@@ -131,7 +135,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     refreshAccessToken,
     isAuthenticated: !!token && !!user,
-    isLoading,
+    // Auth is hydrated synchronously from localStorage during render, so it is
+    // always resolved by the time consumers read it.
+    isLoading: false,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

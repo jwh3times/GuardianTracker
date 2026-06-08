@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.cjs";
 
 @layer base {
   :root {
@@ -25,12 +24,11 @@
     --ring: 212.7 26.8% 83.9%;
     --radius: 0.5rem;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
@@ -38,53 +36,5 @@
       sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-  }
-}
-
-@layer components {
-  .destiny-card {
-    @apply relative overflow-hidden rounded-lg border bg-card text-card-foreground shadow-sm;
-  }
-  
-  .destiny-card-legendary {
-    @apply border-destiny-legendary bg-gradient-to-br from-destiny-legendary/20 to-destiny-legendary/5;
-  }
-  
-  .destiny-card-exotic {
-    @apply border-destiny-exotic bg-gradient-to-br from-destiny-exotic/20 to-destiny-exotic/5;
-    box-shadow: 0 0 20px theme('colors.destiny.exotic/30');
-  }
-  
-  .destiny-card-rare {
-    @apply border-destiny-rare bg-gradient-to-br from-destiny-rare/20 to-destiny-rare/5;
-  }
-  
-  .glow-exotic {
-    animation: pulse-glow 3s ease-in-out infinite;
-    color: theme('colors.destiny.exotic');
-  }
-  
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: theme('colors.muted') transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: theme('colors.muted');
-    border-radius: 3px;
-  }
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
   }
 }

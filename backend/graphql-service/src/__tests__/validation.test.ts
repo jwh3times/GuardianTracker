@@ -1,5 +1,5 @@
 import { GraphQLError } from 'graphql';
-import { schemas, validationSchemas, validateInput } from '../utils/validation';
+import { schemas, validationSchemas, validateInput } from '../utils/validation.js';
 
 describe('Validation Schemas', () => {
   describe('membershipId', () => {

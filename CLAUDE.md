@@ -31,7 +31,7 @@ Pick the option that matches what you're doing:
 
 - **Docker Compose** (Option A) — one command to run the whole stack. Best default for local dev, onboarding, and integration testing.
 - **Minikube** (Option B) — for validating the Kubernetes manifests / deployment parity. Overkill for everyday work.
-- **Individual services** (Option C) — for actively developing a single service with fast hot reload (Air / Vite / nodemon).
+- **Individual services** (Option C) — for actively developing a single service with fast hot reload (Air / Vite / tsx).
 
 ### Option A: Docker Compose (full stack)
 

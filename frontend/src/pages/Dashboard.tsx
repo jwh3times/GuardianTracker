@@ -1,5 +1,6 @@
 import React from "react";
-import { gql, useQuery } from "@apollo/client";
+import { gql, type TypedDocumentNode } from "@apollo/client";
+import { useQuery } from "@apollo/client/react";
 import { useNavigate } from "react-router-dom";
 import {
   Badge,
@@ -17,7 +18,15 @@ import { useAuth } from "../contexts/AuthContext";
 import { summary, weekly, wishlist } from "../lib/mockData";
 import type { SummaryCategory } from "../types/design";
 
-const CURRENT_USER_QUERY = gql`
+const CURRENT_USER_QUERY: TypedDocumentNode<{
+  currentUser: {
+    id: string;
+    displayName: string;
+    membershipType: number;
+    membershipId: string;
+    platform?: string;
+  } | null;
+}> = gql`
   query CurrentUser {
     currentUser {
       id
@@ -29,7 +38,16 @@ const CURRENT_USER_QUERY = gql`
   }
 `;
 
-const DASHBOARD_COLLECTIONS_QUERY = gql`
+const DASHBOARD_COLLECTIONS_QUERY: TypedDocumentNode<
+  {
+    userCollections: {
+      weapons: RealCategory;
+      armor: RealCategory;
+      exotics: RealCategory;
+    } | null;
+  },
+  { membershipType: number; membershipId: string }
+> = gql`
   query DashboardCollections($membershipType: Int!, $membershipId: String!) {
     userCollections(membershipType: $membershipType, membershipId: $membershipId) {
       weapons {
@@ -61,8 +79,10 @@ export function Dashboard() {
   const { data: userData } = useQuery(CURRENT_USER_QUERY);
   const { data: collectionsData } = useQuery(DASHBOARD_COLLECTIONS_QUERY, {
     variables: {
-      membershipType: userData?.currentUser?.membershipType ?? user?.membershipType,
-      membershipId: userData?.currentUser?.membershipId ?? user?.membershipId,
+      membershipType:
+        userData?.currentUser?.membershipType ?? user?.membershipType ?? 0,
+      membershipId:
+        userData?.currentUser?.membershipId ?? user?.membershipId ?? "",
     },
     skip: !userData?.currentUser && !user?.membershipId,
   });

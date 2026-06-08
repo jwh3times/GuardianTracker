@@ -8,9 +8,9 @@ import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { GraphQLFormattedError } from "graphql";
-import { typeDefs } from "./schema";
-import { resolvers } from "./resolvers";
-import { createContext } from "./context";
+import { typeDefs } from "./schema.js";
+import { resolvers } from "./resolvers.js";
+import { createContext } from "./context.js";
 
 const isProduction = process.env.NODE_ENV === "production";
 

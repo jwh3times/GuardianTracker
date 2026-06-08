@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client/react";
 import { Brand } from "./Brand";
 import { Icon, ItemTile } from "./kit";
 import { useAuth } from "../contexts/AuthContext";
@@ -168,10 +168,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout: authLogout } = useAuth();
   const [logout] = useMutation(LOGOUT);
   const [mobileNav, setMobileNav] = useState(false);
-
-  useEffect(() => {
-    setMobileNav(false);
-  }, [location.pathname]);
+  const closeMobileNav = () => setMobileNav(false);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
@@ -271,12 +268,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             {NAV.map((n) => (
-              <NavLink key={n.id} to={n.path} className="gt-navitem" data-active={isActive(n.path)}>
+              <NavLink
+                key={n.id}
+                to={n.path}
+                className="gt-navitem"
+                data-active={isActive(n.path)}
+                onClick={closeMobileNav}
+              >
                 <Icon name={n.icon} size="1.15rem" />
                 <span>{n.label}</span>
               </NavLink>
             ))}
-            <NavLink to="/settings" className="gt-navitem" data-active={isActive("/settings")}>
+            <NavLink
+              to="/settings"
+              className="gt-navitem"
+              data-active={isActive("/settings")}
+              onClick={closeMobileNav}
+            >
               <Icon name="settings" size="1.15rem" />
               <span>Settings</span>
             </NavLink>

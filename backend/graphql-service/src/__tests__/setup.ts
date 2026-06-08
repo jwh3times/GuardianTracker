@@ -4,8 +4,7 @@
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only';
 
-// Global test timeout
-jest.setTimeout(10000);
+// Global test timeout is configured via `testTimeout` in jest.config.js.
 
 // Mock console.error to reduce noise in tests (optional)
 // Uncomment if you want to suppress expected errors in tests
