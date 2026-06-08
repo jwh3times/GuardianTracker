@@ -14,6 +14,7 @@ import (
 	"guardian-tracker/bungie-service/config"
 	"guardian-tracker/bungie-service/services/auth"
 	"guardian-tracker/bungie-service/services/bungie"
+	"guardian-tracker/bungie-service/services/characters"
 	"guardian-tracker/bungie-service/services/collections"
 	"guardian-tracker/bungie-service/services/manifest"
 
@@ -97,6 +98,13 @@ func main() {
 		)
 	}
 
+	// Initialize characters service (independent of the manifest)
+	charactersService := characters.NewService(
+		bungieClient,
+		appCache,
+		cfg.CacheTTLCollections,
+	)
+
 	// Initialize auth client for fetching Bungie tokens
 	authClient := auth.NewClient(
 		cfg.AuthServiceURL,
@@ -106,6 +114,7 @@ func main() {
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(manifestService)
+	charactersHandler := handlers.NewCharactersHandler(charactersService, authClient)
 	var collectionsHandler *handlers.CollectionsHandler
 	if collectionsService != nil {
 		collectionsHandler = handlers.NewCollectionsHandler(collectionsService, authClient)
@@ -126,6 +135,9 @@ func main() {
 	{
 		// Manifest status
 		api.GET("/manifest/status", healthHandler.ManifestStatus)
+
+		// Characters (does not depend on the manifest)
+		api.GET("/characters/:membershipType/:membershipId", charactersHandler.GetCharacters)
 
 		// Collections endpoints
 		if collectionsHandler != nil {

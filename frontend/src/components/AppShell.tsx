@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useMutation } from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client";
 import { Brand } from "./Brand";
 import { Icon, ItemTile } from "./kit";
 import { useAuth } from "../contexts/AuthContext";
 import { LOGOUT } from "../graphql/mutations";
+import { GET_CHARACTERS } from "../graphql/queries";
+import { toCharacter, type GraphQLCharacter } from "../lib/adapters";
 import { characters, items } from "../lib/mockData";
 
 interface NavItem {
@@ -30,9 +32,27 @@ const MOBILE_NAV: NavItem[] = [
 ];
 
 /* ---------------- CHARACTER SWITCHER ---------------- */
+const emblemStyle = (url?: string): React.CSSProperties | undefined =>
+  url
+    ? { backgroundImage: `url(${url})`, backgroundSize: "cover", backgroundPosition: "center" }
+    : undefined;
+
 function CharacterSwitcher({ displayName }: { displayName?: string }) {
+  const { user } = useAuth();
+  const { data } = useQuery(GET_CHARACTERS, {
+    variables: {
+      membershipType: user?.membershipType ?? 0,
+      membershipId: user?.membershipId ?? "",
+    },
+    skip: !user?.membershipId || user?.membershipType == null,
+  });
+
+  // Real characters when available; otherwise fall back to mock data.
+  const realChars = ((data?.characters ?? []) as GraphQLCharacter[]).map(toCharacter);
+  const list = realChars.length ? realChars : characters;
+
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(characters[0].id);
+  const [active, setActive] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -41,12 +61,12 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
   }, []);
-  const cur = characters.find((c) => c.id === active) ?? characters[0];
+  const cur = list.find((c) => c.id === active) ?? list[0];
   return (
     <div className="gt-charsw" ref={ref}>
       <button className="gt-charsw-btn" onClick={() => setOpen((v) => !v)}>
-        <span className="gt-avatar" data-cls={cur.cls}>
-          {(displayName || cur.name)[0]}
+        <span className="gt-avatar" data-cls={cur.cls} style={emblemStyle(cur.emblemUrl)}>
+          {cur.emblemUrl ? "" : (displayName || cur.name)[0]}
         </span>
         <span className="gt-charsw-name">{displayName || cur.name}</span>
         <Icon name="chevronDown" size="0.8rem" style={{ color: "var(--c-text-3)" }} />
@@ -54,28 +74,28 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
       {open && (
         <div className="gt-charsw-menu">
           <div className="gt-charsw-head mono">Switch Guardian</div>
-          {characters.map((c) => (
+          {list.map((c) => (
             <button
               key={c.id}
               className="gt-charsw-opt"
-              data-on={c.id === active}
+              data-on={c.id === cur.id}
               onClick={() => {
                 setActive(c.id);
                 setOpen(false);
               }}
             >
-              <span className="gt-avatar" data-cls={c.cls}>
-                {c.name[0]}
+              <span className="gt-avatar" data-cls={c.cls} style={emblemStyle(c.emblemUrl)}>
+                {c.emblemUrl ? "" : c.name[0]}
               </span>
               <div className="gt-charsw-opt-main">
                 <span className="gt-charsw-opt-name">
-                  {c.name} — {c.cls}
+                  {c.name === c.cls ? c.cls : `${c.name} — ${c.cls}`}
                 </span>
                 <span className="gt-charsw-opt-sub mono">
                   {c.race} · {c.power}
                 </span>
               </div>
-              {c.id === active && <Icon name="check" size="0.9rem" style={{ color: "var(--c-signal)" }} />}
+              {c.id === cur.id && <Icon name="check" size="0.9rem" style={{ color: "var(--c-signal)" }} />}
             </button>
           ))}
         </div>

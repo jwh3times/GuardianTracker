@@ -1,5 +1,24 @@
 import type { DestinyItem, WishListItem } from "../types";
-import type { Difficulty, GTItem, Priority, Rarity, WishlistEntry } from "../types/design";
+import type {
+  Character,
+  Difficulty,
+  GTItem,
+  Priority,
+  Rarity,
+  WishlistEntry,
+} from "../types/design";
+
+/** Shape of a Character as returned by the GraphQL `characters` query. */
+export interface GraphQLCharacter {
+  characterId: string;
+  classType: number;
+  className: string;
+  raceName: string;
+  light: number;
+  emblemPath: string;
+  emblemBackgroundPath: string;
+  dateLastPlayed: string | null;
+}
 
 const RARITY_MAP: Record<string, Rarity> = {
   Exotic: "exotic",
@@ -19,6 +38,22 @@ const PRIORITY_MAP: Record<string, Priority> = {
   MEDIUM: "medium",
   LOW: "low",
 };
+
+/**
+ * Adapt a GraphQL Character into the design system's Character shape. Destiny
+ * characters have no per-character name, so the class doubles as the label.
+ */
+export function toCharacter(c: GraphQLCharacter): Character {
+  return {
+    id: c.characterId,
+    name: c.className,
+    cls: c.className,
+    race: c.raceName,
+    power: c.light,
+    emblem: 0,
+    emblemUrl: c.emblemPath || undefined,
+  };
+}
 
 /** Adapt a GraphQL DestinyItem into the design system's GTItem shape. */
 export function toGTItem(d: DestinyItem): GTItem {

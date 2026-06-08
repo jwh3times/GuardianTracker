@@ -42,6 +42,34 @@ type ProfileResponse struct {
 	Message     string `json:"Message"`
 }
 
+// CharactersResponse contains a user's characters (component 200)
+type CharactersResponse struct {
+	Response struct {
+		Characters struct {
+			Data map[string]CharacterComponent `json:"data"`
+		} `json:"characters"`
+	} `json:"Response"`
+	ErrorCode   int    `json:"ErrorCode"`
+	ErrorStatus string `json:"ErrorStatus"`
+	Message     string `json:"Message"`
+}
+
+// CharacterComponent represents a single Destiny 2 character (component 200)
+type CharacterComponent struct {
+	CharacterID          string `json:"characterId"`
+	MembershipID         string `json:"membershipId"`
+	MembershipType       int    `json:"membershipType"`
+	ClassType            int    `json:"classType"`
+	RaceType             int    `json:"raceType"`
+	GenderType           int    `json:"genderType"`
+	Light                int    `json:"light"`
+	EmblemPath           string `json:"emblemPath"`
+	EmblemBackgroundPath string `json:"emblemBackgroundPath"`
+	DateLastPlayed       string `json:"dateLastPlayed"`
+	BaseCharacterLevel   int    `json:"baseCharacterLevel"`
+	TitleRecordHash      uint32 `json:"titleRecordHash"`
+}
+
 // CollectibleComponent represents a single collectible's state
 type CollectibleComponent struct {
 	State int `json:"state"`
@@ -151,6 +179,42 @@ const (
 	ClassTypeWarlock = 2
 	ClassTypeUnknown = 3
 )
+
+// Race type constants
+const (
+	RaceTypeHuman   = 0
+	RaceTypeAwoken  = 1
+	RaceTypeExo     = 2
+	RaceTypeUnknown = 3
+)
+
+// GetClassName returns the human-readable class name
+func GetClassName(classType int) string {
+	switch classType {
+	case ClassTypeTitan:
+		return "Titan"
+	case ClassTypeHunter:
+		return "Hunter"
+	case ClassTypeWarlock:
+		return "Warlock"
+	default:
+		return "Guardian"
+	}
+}
+
+// GetRaceName returns the human-readable race name
+func GetRaceName(raceType int) string {
+	switch raceType {
+	case RaceTypeHuman:
+		return "Human"
+	case RaceTypeAwoken:
+		return "Awoken"
+	case RaceTypeExo:
+		return "Exo"
+	default:
+		return "Unknown"
+	}
+}
 
 // Weapon sub-type constants
 const (

@@ -84,6 +84,42 @@ npm start
 
 Both Go services have `.air.toml` configured. Use `air` instead of `go run .` for hot reload during development.
 
+### Exposing via ngrok (public HTTPS)
+
+To test Bungie OAuth against a public HTTPS URL (or share a running instance), tunnel
+the frontend with ngrok. After auth, Bungie redirects back to the ngrok domain, so the
+browser page runs with the ngrok origin (e.g. `https://<sub>.ngrok-free.dev`).
+
+Two things must know about that origin:
+
+1. **CORS** — add the ngrok URL to `CORS_ALLOWED_ORIGINS` in the root `.env` (keep
+   `http://localhost:3000` too), then rebuild graphql-service so the compiled CORS
+   list picks it up. The GraphQL service validates the request `Origin` against this
+   list in all environments:
+
+   ```powershell
+   # root .env
+   CORS_ALLOWED_ORIGINS=http://localhost:3000,https://<sub>.ngrok-free.dev
+
+   docker compose up -d --build graphql-service
+   ```
+
+   (auth-service already allows any origin in dev via a `*` fallback, so only
+   graphql-service needs this.)
+
+2. **OAuth redirect** — set `AUTH_REDIRECT_URI` to the ngrok callback
+   (`https://<sub>.ngrok-free.dev/auth/callback`) and add the same URL to your Bungie
+   app's redirect settings at <https://www.bungie.net/en/Application>.
+
+**Caveats:**
+
+- The frontend calls the backend at the `localhost` URLs baked in at build time, so
+  this only works when the browser runs on the **same machine** as Docker. To use the
+  ngrok URL from another device, tunnel the backend too and rebuild the frontend with
+  `VITE_GRAPHQL_URL` / `VITE_AUTH_SERVICE_URL` pointing at public URLs.
+- Free ngrok subdomains change on each restart — update `CORS_ALLOWED_ORIGINS`,
+  `AUTH_REDIRECT_URI`, and the Bungie app redirect each time, or use a reserved domain.
+
 ## Environment Setup
 
 Every service has a `.env.example`. Copy and fill each one before running:

@@ -128,16 +128,15 @@ async function startServer() {
     : ["http://localhost:3000"];
 
   const corsOptions: cors.CorsOptions = {
-    origin: isProduction
-      ? (origin, callback) => {
-          // In production, validate origin strictly
-          if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error("Not allowed by CORS"));
-          }
-        }
-      : ["http://localhost:3000"],
+    // Validate against CORS_ALLOWED_ORIGINS in all environments. Requests with
+    // no Origin header (curl, server-to-server, same-origin) are always allowed.
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     credentials: true,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],

@@ -60,6 +60,11 @@ export const validationSchemas = {
     membershipId: schemas.membershipId,
   }),
 
+  characters: z.object({
+    membershipType: schemas.membershipType,
+    membershipId: schemas.membershipId,
+  }),
+
   login: z.object({
     membershipType: schemas.membershipType,
     membershipId: schemas.membershipId,

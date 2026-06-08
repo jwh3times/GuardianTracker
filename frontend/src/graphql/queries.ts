@@ -4,13 +4,27 @@ export const GET_CURRENT_USER = gql`
   query GetCurrentUser {
     currentUser {
       id
-      bungieId
       displayName
       membershipType
       membershipId
       profilePicture
       lastLoginAt
       createdAt
+    }
+  }
+`;
+
+export const GET_CHARACTERS = gql`
+  query GetCharacters($membershipType: Int!, $membershipId: String!) {
+    characters(membershipType: $membershipType, membershipId: $membershipId) {
+      characterId
+      classType
+      className
+      raceName
+      light
+      emblemPath
+      emblemBackgroundPath
+      dateLastPlayed
     }
   }
 `;

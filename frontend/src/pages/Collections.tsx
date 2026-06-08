@@ -21,16 +21,12 @@ import {
 } from "../graphql/queries";
 import { ADD_TO_WISH_LIST } from "../graphql/mutations";
 import { useToast } from "../components/ui/Toast";
+import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { toGTItem } from "../lib/adapters";
-import {
-  DIFFS,
-  DIFF_LABEL,
-  items as MOCK_ITEMS,
-  RARITIES,
-  RARITY_LABEL,
-  tree,
-} from "../lib/mockData";
+// Note: only filter vocabulary (rarity/difficulty labels) comes from mockData —
+// no mock collection items or categories are used on this screen anymore.
+import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../lib/mockData";
 import type {
   Difficulty,
   GTItem,
@@ -39,7 +35,7 @@ import type {
 } from "../types/design";
 import type { DestinyItem } from "../types";
 
-type TopCategory = "weapons" | "armor" | "exotics" | "cosmetics";
+type TopCategory = "weapons" | "armor" | "exotics";
 type SortKey = "rarity" | "name" | "difficulty" | "avail";
 
 const RARITY_RANK: Record<Rarity, number> = {
@@ -56,34 +52,16 @@ const DIFF_RANK: Record<Difficulty, number> = {
 };
 
 function topOf(id: string): TopCategory {
-  if (id === "weapons" || id.startsWith("w-")) return "weapons";
   if (id === "armor" || id.startsWith("a-")) return "armor";
   if (id === "exotics" || id.startsWith("e-")) return "exotics";
-  return "cosmetics";
+  return "weapons";
 }
 
-function flattenTree(nodes: TreeNode[]): TreeNode[] {
-  const flat: TreeNode[] = [];
-  nodes.forEach((n) => {
-    flat.push(n);
-    (n.children || []).forEach((c) => flat.push(c));
-  });
-  return flat;
-}
-
-// Mock-fallback category filter (mirrors the design prototype).
-function mockCategoryItems(active: string): GTItem[] {
-  const top = topOf(active);
-  if (top === "exotics") return MOCK_ITEMS.filter((i) => i.rarity === "exotic");
-  if (top === "cosmetics") return MOCK_ITEMS.filter((i) => i.slot === "Cosmetic");
-  if (top === "armor")
-    return MOCK_ITEMS.filter(
-      (i) =>
-        ["Helmet", "Gauntlets", "Chest Armor", "Leg Armor", "Class Item"].includes(i.type) ||
-        i.slot === "Energy"
-    );
-  return MOCK_ITEMS.filter((i) => i.slot !== "Cosmetic");
-}
+const TOP_CATEGORIES: { id: TopCategory; label: string }[] = [
+  { id: "weapons", label: "Weapons" },
+  { id: "armor", label: "Armor" },
+  { id: "exotics", label: "Exotics" },
+];
 
 export function Collections() {
   const { showToast } = useToast();
@@ -98,13 +76,15 @@ export function Collections() {
   const [wished, setWished] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<GTItem | null>(null);
 
+  const { user } = useAuth();
   const { data: userData } = useQuery(GET_CURRENT_USER);
+  const membershipType =
+    userData?.currentUser?.membershipType ?? user?.membershipType;
+  const membershipId =
+    userData?.currentUser?.membershipId ?? user?.membershipId;
   const { data: collectionsData, loading, refetch } = useQuery(GET_USER_COLLECTIONS, {
-    variables: {
-      membershipType: userData?.currentUser?.membershipType,
-      membershipId: userData?.currentUser?.membershipId,
-    },
-    skip: !userData?.currentUser,
+    variables: { membershipType, membershipId },
+    skip: membershipType == null || !membershipId,
     fetchPolicy: "cache-and-network",
   });
 
@@ -114,21 +94,30 @@ export function Collections() {
   });
 
   const top = topOf(active);
-  const realBucket =
-    top !== "cosmetics" ? collectionsData?.userCollections?.[top] : undefined;
-  const hasReal = !!realBucket?.missing;
+  const collections = collectionsData?.userCollections;
+  const realBucket = collections?.[top];
+  const hasReal = !!collections;
 
-  const node = useMemo(
-    () => flattenTree(tree).find((n) => n.id === active) || tree[0],
-    [active]
-  );
+  // Category tree is built entirely from live data — no mock categories.
+  const treeNodes: TreeNode[] = useMemo(() => {
+    if (!collections) return [];
+    return TOP_CATEGORIES.map(({ id, label }) => {
+      const b = collections[id];
+      const total = b?.total ?? 0;
+      const collected = b?.collected ?? 0;
+      return {
+        id,
+        label,
+        pct: total ? Math.round((collected / total) * 100) : 0,
+        count: [collected, total] as [number, number],
+      };
+    });
+  }, [collections]);
 
   const baseItems: GTItem[] = useMemo(() => {
-    if (hasReal) {
-      return (realBucket.missing as DestinyItem[]).map(toGTItem);
-    }
-    return mockCategoryItems(active);
-  }, [hasReal, realBucket, active]);
+    if (!realBucket?.missing) return [];
+    return (realBucket.missing as DestinyItem[]).map(toGTItem);
+  }, [realBucket]);
 
   const items = useMemo(() => {
     let list = baseItems.slice();
@@ -168,10 +157,10 @@ export function Collections() {
     }
   };
 
-  // Stats — prefer live totals, fall back to the tree node counts.
-  const total = realBucket?.total ?? node.count[1];
-  const collected = realBucket?.collected ?? node.count[0];
-  const missing = total - collected;
+  // Stats come straight from live data (zeroed when nothing has loaded).
+  const total = realBucket?.total ?? 0;
+  const collected = realBucket?.collected ?? 0;
+  const missing = Math.max(total - collected, 0);
 
   return (
     <div className="gt-page gt-collections">
@@ -187,7 +176,7 @@ export function Collections() {
           <div className="gt-section-title" style={{ marginBottom: "var(--s-3)" }}>
             Categories
           </div>
-          <CategoryTree nodes={tree} activeId={active} onSelect={setActive} />
+          <CategoryTree nodes={treeNodes} activeId={active} onSelect={setActive} />
         </aside>
 
         {/* MAIN */}
@@ -252,11 +241,25 @@ export function Collections() {
           </div>
 
           {/* GRID / LIST */}
-          {loading && items.length === 0 ? (
+          {loading && !hasReal ? (
             <div className="gt-itemgrid">
               {Array.from({ length: 8 }).map((_, i) => (
                 <ItemCardSkeleton key={i} />
               ))}
+            </div>
+          ) : !hasReal ? (
+            <div className="gt-card">
+              <EmptyState
+                icon="refresh"
+                color="var(--c-text-3)"
+                title="No collection data"
+                body="We couldn't load your collection from Bungie. This can happen if your Destiny privacy is restricted or Bungie is unavailable — try refreshing."
+                action={
+                  <Button variant="outline" sm onClick={() => refetch()}>
+                    Retry
+                  </Button>
+                }
+              />
             </div>
           ) : items.length === 0 ? (
             <div className="gt-card">

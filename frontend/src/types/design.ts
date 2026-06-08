@@ -31,6 +31,8 @@ export interface Character {
   race: string;
   power: number;
   emblem: number;
+  /** Full URL to the character's emblem icon (real data only; mock omits it). */
+  emblemUrl?: string;
 }
 
 export interface TreeNode {

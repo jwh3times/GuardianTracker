@@ -41,6 +41,34 @@ export const resolvers = {
     },
 
     // Protected: Requires authentication + validates input
+    characters: async (
+      _parent: unknown,
+      args: { membershipType: number; membershipId: string },
+      context: Context
+    ) => {
+      requireAuth(context);
+      const validated = validateInput(validationSchemas.characters, args);
+
+      try {
+        const response = await axios.get(
+          `${BUNGIE_SERVICE_URL}/api/characters/${validated.membershipType}/${validated.membershipId}`,
+          { headers: getAuthHeaders(context) }
+        );
+
+        // Coerce the ISO timestamp into a Date so the DateTime scalar serializes it.
+        return (response.data as Record<string, unknown>[]).map((ch) => ({
+          ...ch,
+          dateLastPlayed: ch.dateLastPlayed
+            ? new Date(ch.dateLastPlayed as string)
+            : null,
+        }));
+      } catch (error) {
+        console.error("Error fetching characters:", error);
+        throw new GraphQLError("Failed to fetch characters");
+      }
+    },
+
+    // Protected: Requires authentication + validates input
     userCollections: async (
       _parent: unknown,
       args: { membershipType: number; membershipId: string },

@@ -39,6 +39,17 @@ export const typeDefs = gql`
     wishList: [WishListItem!]!
   }
 
+  type Character {
+    characterId: ID!
+    classType: Int!
+    className: String!
+    raceName: String!
+    light: Int!
+    emblemPath: String!
+    emblemBackgroundPath: String!
+    dateLastPlayed: DateTime
+  }
+
   type DestinyItem {
     itemHash: String!
     name: String!
@@ -173,6 +184,9 @@ export const typeDefs = gql`
   type Query {
     # User queries
     currentUser: User
+
+    # Characters
+    characters(membershipType: Int!, membershipId: String!): [Character!]!
 
     # Collection queries
     userCollections(

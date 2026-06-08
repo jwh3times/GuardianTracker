@@ -188,6 +188,29 @@ func (c *Client) GetProfile(ctx context.Context, membershipType int, membershipI
 	return parseResponse[ProfileResponse](resp)
 }
 
+// GetCharacters retrieves a user's Destiny 2 characters (component 200)
+func (c *Client) GetCharacters(ctx context.Context, membershipType int, membershipID string, accessToken string) (*CharactersResponse, error) {
+	url := fmt.Sprintf("%s/Destiny2/%d/Profile/%s/?components=%d",
+		c.baseURL, membershipType, membershipID, ComponentCharacters)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add OAuth token for user-specific data
+	if accessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+	}
+
+	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	if err != nil {
+		return nil, err
+	}
+
+	return parseResponse[CharactersResponse](resp)
+}
+
 // DownloadFile downloads a file from the given URL to a byte slice
 func (c *Client) DownloadFile(ctx context.Context, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)

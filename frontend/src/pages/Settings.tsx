@@ -1,10 +1,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation } from "@apollo/client";
+import { useMutation, useQuery } from "@apollo/client";
 import { Button, DataFreshnessChip, PageHead, Panel } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { LOGOUT } from "../graphql/mutations";
+import { GET_CHARACTERS } from "../graphql/queries";
+import { toCharacter, type GraphQLCharacter } from "../lib/adapters";
 import { characters } from "../lib/mockData";
 
 const PLATFORM_LABEL: Record<number, string> = {
@@ -48,6 +50,17 @@ export function Settings() {
   const { cardStyle, personalize, setCardStyle, setPersonalize } = usePreferences();
   const [logout] = useMutation(LOGOUT);
   const navigate = useNavigate();
+
+  // Real characters when available; otherwise fall back to mock data.
+  const { data: charData } = useQuery(GET_CHARACTERS, {
+    variables: {
+      membershipType: user?.membershipType ?? 0,
+      membershipId: user?.membershipId ?? "",
+    },
+    skip: !user?.membershipId || user?.membershipType == null,
+  });
+  const realChars = ((charData?.characters ?? []) as GraphQLCharacter[]).map(toCharacter);
+  const characterList = realChars.length ? realChars : characters;
 
   const handleSignOut = async () => {
     try {
@@ -124,10 +137,11 @@ export function Settings() {
         </Panel>
 
         <Panel title="Characters" icon="dashboard">
-          {characters.map((c) => (
+          {characterList.map((c) => (
             <div key={c.id} className="gt-set-row">
               <span className="gt-set-k">
-                {c.name} · {c.cls}
+                {c.name === c.cls ? c.cls : `${c.name} · ${c.cls}`}
+                {c.race ? ` · ${c.race}` : ""}
               </span>
               <span className="gt-set-v mono">{c.power}</span>
             </div>
