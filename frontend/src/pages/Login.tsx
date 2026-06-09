@@ -3,9 +3,6 @@ import { Brand } from "../components/Brand";
 import { Button, Icon } from "../components/kit";
 import type { AuthURLResponse } from "../types/api";
 
-// Storage key for OAuth state (CSRF protection)
-const OAUTH_STATE_KEY = "oauth_state";
-
 export function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,9 +21,7 @@ export function Login() {
       }
 
       const data = (await response.json()) as AuthURLResponse;
-      if (data.authUrl && data.state) {
-        // Store the state in sessionStorage for CSRF validation
-        sessionStorage.setItem(OAUTH_STATE_KEY, data.state);
+      if (data.authUrl) {
         window.location.href = data.authUrl;
       } else {
         throw new Error("No authorization URL received from server");

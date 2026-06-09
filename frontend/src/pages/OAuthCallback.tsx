@@ -5,9 +5,6 @@ import { Brand } from "../components/Brand";
 import { Icon } from "../components/kit";
 import type { AuthTokenResponse } from "../types/api";
 
-// Storage key for OAuth state (must match Login.tsx)
-const OAUTH_STATE_KEY = "oauth_state";
-
 export const OAuthCallback: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -27,7 +24,6 @@ export const OAuthCallback: React.FC = () => {
       if (oauthError) {
         console.error("OAuth error from Bungie:", oauthError, errorDescription);
         setError(`OAuth error: ${oauthError} - ${errorDescription || "Unknown error"}`);
-        sessionStorage.removeItem(OAUTH_STATE_KEY);
         setTimeout(() => navigate("/login?error=oauth_error"), 3000);
         return;
       }
@@ -35,36 +31,15 @@ export const OAuthCallback: React.FC = () => {
       if (!code) {
         console.error("No authorization code received");
         setError("No authorization code received from Bungie.");
-        sessionStorage.removeItem(OAUTH_STATE_KEY);
         setTimeout(() => navigate("/login?error=no_code"), 3000);
         return;
       }
-
-      const storedState = sessionStorage.getItem(OAUTH_STATE_KEY);
-      if (!storedState || !returnedState) {
-        console.error("Missing CSRF state");
-        setError("Security validation failed. Please try logging in again.");
-        sessionStorage.removeItem(OAUTH_STATE_KEY);
-        setTimeout(() => navigate("/login?error=csrf_missing"), 3000);
-        return;
-      }
-
-      if (storedState !== returnedState) {
-        console.error("CSRF state mismatch");
-        setError("Security validation failed (state mismatch). Please try logging in again.");
-        sessionStorage.removeItem(OAUTH_STATE_KEY);
-        setTimeout(() => navigate("/login?error=csrf_mismatch"), 3000);
-        return;
-      }
-
-      // Clear stored state (one-time use)
-      sessionStorage.removeItem(OAUTH_STATE_KEY);
 
       try {
         const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/bungie/callback`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ code, state: returnedState }).toString(),
+          body: new URLSearchParams({ code, state: returnedState ?? "" }).toString(),
         });
 
         if (!response.ok) {
