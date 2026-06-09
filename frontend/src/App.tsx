@@ -1,9 +1,9 @@
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
-import { ApolloProvider } from "@apollo/client/react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { PreferencesProvider } from "./contexts/PreferencesContext";
-import { apolloClient } from "./lib/apollo";
+import { queryClient } from "./lib/api";
 import { AppShell } from "./components/AppShell";
 import { LoadingSpinner } from "./components/ui/LoadingSpinner";
 import { ToastProvider } from "./components/ui/Toast";
@@ -112,7 +112,7 @@ const AppContent: React.FC = () => {
 function App() {
   return (
     <ErrorBoundary>
-      <ApolloProvider client={apolloClient}>
+      <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <PreferencesProvider>
             <ToastProvider>
@@ -120,7 +120,7 @@ function App() {
             </ToastProvider>
           </PreferencesProvider>
         </AuthProvider>
-      </ApolloProvider>
+      </QueryClientProvider>
     </ErrorBoundary>
   );
 }

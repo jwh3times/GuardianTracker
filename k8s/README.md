@@ -1,6 +1,6 @@
-# Guardian Tracker - Deployment Scripts
+# Guardian Tracker - Kubernetes Deployment Scripts
 
-This directory contains scripts to easily start and stop the complete Guardian Tracker application on Minikube.
+This directory contains scripts to start and stop the Guardian Tracker application on Minikube.
 
 ## Quick Start
 
@@ -17,19 +17,17 @@ This directory contains scripts to easily start and stop the complete Guardian T
 ## What the Startup Script Does
 
 1. **Starts Minikube** (if not already running)
-2. **Builds Docker Images** for all services:
-   - auth-service
-   - bungie-service
-   - graphql-service
-   - frontend (with nginx configuration)
-3. **Deploys Kubernetes Services** from manifests
+2. **Builds Docker Images** for both services:
+   - `guardian-tracker/api-service:latest`
+   - `guardian-tracker/frontend:v2`
+3. **Deploys Kubernetes manifests**
 4. **Waits for deployments** to be ready
 5. **Sets up port forwarding** (localhost:3000 → frontend)
 6. **Shows status** and provides next steps
 
 After startup completes:
 
-- Frontend available at: http://localhost:3000
+- Frontend available at: <http://localhost:3000>
 - All services running in Minikube cluster
 - Port forwarding active in background
 
@@ -45,8 +43,8 @@ After startup completes:
 
 ### OAuth Configuration
 
-- Remember to update your ngrok tunnel URL in `auth-service-configmap.yaml` if needed
-- The current OAuth redirect URI is: `https://51467bc2b8ce.ngrok-free.app/auth/callback`
+- Remember to update your ngrok tunnel URL in `api-service-configmap.yaml` if needed
+- The current OAuth redirect URI must match your Bungie.net application settings
 
 ### Prerequisites
 
@@ -57,45 +55,40 @@ After startup completes:
 
 ### Troubleshooting
 
-#### If startup fails:
+#### If startup fails
 
 1. Check if Minikube is running: `minikube status`
 2. Check if Docker is running: `docker version`
 3. Look for error messages in the script output
 4. Try running individual commands manually
 
-#### If port forwarding fails:
+#### If port forwarding fails
 
 1. Check if port 3000 is already in use
 2. Kill existing kubectl processes: `Get-Process kubectl | Stop-Process`
 3. Restart the port forwarding manually: `kubectl port-forward service/frontend 3000:80`
 
-#### If OAuth doesn't work:
+#### If OAuth doesn't work
 
-1. Update the ngrok tunnel URL in auth-service-configmap.yaml
-2. Restart the auth-service: `kubectl rollout restart deployment/auth-service`
+1. Update the ngrok tunnel URL in `api-service-configmap.yaml`
+2. Restart the api-service: `kubectl rollout restart deployment/api-service`
 3. Check that the redirect URI matches in your Bungie.net app settings
 
 ### Manual Commands
-
-If you prefer to run commands manually:
 
 ```powershell
 # Start Minikube
 minikube start
 
 # Build images (from each service directory)
-docker build -t guardian-tracker/auth-service:latest .
-docker build -t guardian-tracker/bungie-service:latest .
-docker build -t guardian-tracker/graphql-service:latest .
-docker build -t guardian-tracker/frontend:v2 .
+docker build -t guardian-tracker/api-service:latest backend/api-service/
+docker build -t guardian-tracker/frontend:v2 frontend/
 
 # Deploy services
-kubectl apply -f auth-service-configmap.yaml
-kubectl apply -f auth-service.yaml
-kubectl apply -f bungie-service.yaml
-kubectl apply -f graphql-service.yaml
-kubectl apply -f frontend.yaml
+kubectl apply -f k8s/api-service-configmap.yaml
+kubectl apply -f k8s/api-service-secret.yaml
+kubectl apply -f k8s/api-service.yaml
+kubectl apply -f k8s/frontend.yaml
 
 # Port forward
 kubectl port-forward service/frontend 3000:80
@@ -107,17 +100,16 @@ kubectl get services
 
 ### File Structure
 
-```
+```text
 k8s/
-├── startup.ps1           # Main startup script
-├── startup.bat           # Batch wrapper for startup
-├── shutdown.ps1          # Main shutdown script
-├── shutdown.bat          # Batch wrapper for shutdown
-├── README.md             # This file
-├── auth-service-configmap.yaml
-├── auth-service.yaml
-├── bungie-service.yaml
-├── graphql-service.yaml
+├── startup.ps1               # Main startup script
+├── startup.bat               # Batch wrapper for startup
+├── shutdown.ps1              # Main shutdown script
+├── shutdown.bat              # Batch wrapper for shutdown
+├── README.md                 # This file
+├── api-service-configmap.yaml
+├── api-service-secret.yaml
+└── api-service.yaml
 └── frontend.yaml
 ```
 

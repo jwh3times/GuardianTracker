@@ -1,93 +1,64 @@
 #!/usr/bin/env pwsh
 # Guardian Tracker - Environment Setup Script
-# This script helps set up environment files for all services
 
-Write-Host "🚀 Guardian Tracker - Environment Setup" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "Guardian Tracker - Environment Setup" -ForegroundColor Cyan
+Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
 
 $ErrorActionPreference = "Stop"
 
-# Function to copy .env.example to .env if it doesn't exist
 function Setup-EnvFile {
     param(
         [string]$Path,
+        [string]$SourceFile,
+        [string]$DestFile,
         [string]$ServiceName
     )
-    
-    $envExample = Join-Path $Path ".env.example"
-    $envFile = Join-Path $Path ".env"
-    
-    if (Test-Path $envExample) {
-        if (Test-Path $envFile) {
-            Write-Host "✓ $ServiceName .env already exists" -ForegroundColor Green
+
+    $src = Join-Path $Path $SourceFile
+    $dst = Join-Path $Path $DestFile
+
+    if (Test-Path $src) {
+        if (Test-Path $dst) {
+            Write-Host "  $ServiceName $DestFile already exists" -ForegroundColor Green
         } else {
-            Copy-Item $envExample $envFile
-            Write-Host "✓ Created $ServiceName .env file" -ForegroundColor Green
+            Copy-Item $src $dst
+            Write-Host "  Created $ServiceName $DestFile" -ForegroundColor Green
         }
     } else {
-        Write-Host "⚠ Warning: $ServiceName .env.example not found at $envExample" -ForegroundColor Yellow
+        Write-Host "  Warning: $ServiceName $SourceFile not found at $src" -ForegroundColor Yellow
     }
 }
 
-# Root directory
+# Root (docker-compose env)
 Write-Host "Setting up root configuration..." -ForegroundColor Yellow
-Setup-EnvFile -Path "." -ServiceName "Root"
+Setup-EnvFile -Path "." -SourceFile ".env.example" -DestFile ".env" -ServiceName "Root"
 
-# Auth Service
-Write-Host "Setting up Auth Service..." -ForegroundColor Yellow
-Setup-EnvFile -Path "backend/auth-service" -ServiceName "Auth Service"
+# API Service
+Write-Host "Setting up API Service..." -ForegroundColor Yellow
+Setup-EnvFile -Path "backend/api-service" -SourceFile ".env.example" -DestFile ".env" -ServiceName "API Service"
 
-# Bungie Service
-Write-Host "Setting up Bungie Service..." -ForegroundColor Yellow
-Setup-EnvFile -Path "backend/bungie-service" -ServiceName "Bungie Service"
-
-# GraphQL Service
-Write-Host "Setting up GraphQL Service..." -ForegroundColor Yellow
-Setup-EnvFile -Path "backend/graphql-service" -ServiceName "GraphQL Service"
-
-# Frontend (use .env.local for React)
+# Frontend
 Write-Host "Setting up Frontend..." -ForegroundColor Yellow
-$frontendEnvExample = "frontend/.env.example"
-$frontendEnvLocal = "frontend/.env.local"
-
-if (Test-Path $frontendEnvExample) {
-    if (Test-Path $frontendEnvLocal) {
-        Write-Host "✓ Frontend .env.local already exists" -ForegroundColor Green
-    } else {
-        Copy-Item $frontendEnvExample $frontendEnvLocal
-        Write-Host "✓ Created Frontend .env.local file" -ForegroundColor Green
-    }
-} else {
-    Write-Host "⚠ Warning: Frontend .env.example not found" -ForegroundColor Yellow
-}
+Setup-EnvFile -Path "frontend" -SourceFile ".env.example" -DestFile ".env.local" -ServiceName "Frontend"
 
 Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "✅ Environment setup complete!" -ForegroundColor Green
+Write-Host "=====================================" -ForegroundColor Cyan
+Write-Host "Environment setup complete!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📝 IMPORTANT NEXT STEPS:" -ForegroundColor Yellow
+Write-Host "NEXT STEPS:" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "1. Get your Bungie API credentials:" -ForegroundColor White
-Write-Host "   → Visit: https://www.bungie.net/en/Application" -ForegroundColor Cyan
-Write-Host "   → Create a new application" -ForegroundColor Cyan
-Write-Host "   → Copy: API Key, Client ID, and Client Secret" -ForegroundColor Cyan
+Write-Host "1. Get Bungie API credentials at https://www.bungie.net/en/Application" -ForegroundColor White
+Write-Host "   Copy: API Key, Client ID, Client Secret" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "2. Update the following .env files with your credentials:" -ForegroundColor White
-Write-Host "   → backend/auth-service/.env" -ForegroundColor Cyan
-Write-Host "   → backend/bungie-service/.env" -ForegroundColor Cyan
-Write-Host "   → backend/graphql-service/.env" -ForegroundColor Cyan
-Write-Host "   → frontend/.env.local" -ForegroundColor Cyan
+Write-Host "2. Fill in credentials in:" -ForegroundColor White
+Write-Host "   -> .env (root, used by docker-compose)" -ForegroundColor Cyan
+Write-Host "   -> backend/api-service/.env (for running the service individually)" -ForegroundColor Cyan
+Write-Host "   -> frontend/.env.local (VITE_API_URL etc.)" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "3. Generate a secure JWT secret (minimum 32 characters)" -ForegroundColor White
-Write-Host "   → Use the same secret in auth-service and graphql-service" -ForegroundColor Cyan
+Write-Host "3. Generate a secure JWT secret (minimum 32 characters):" -ForegroundColor White
+Write-Host "   openssl rand -base64 32" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "4. Review the full setup guide:" -ForegroundColor White
-Write-Host "   → Read: ENVIRONMENT_SETUP.md" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "5. After configuration, start the services:" -ForegroundColor White
-Write-Host "   → Run: docker-compose up" -ForegroundColor Cyan
-Write-Host "   → Or run each service individually" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "Need help? Check ENVIRONMENT_SETUP.md for detailed instructions!" -ForegroundColor Yellow
+Write-Host "4. Start the full stack:" -ForegroundColor White
+Write-Host "   docker compose up --build" -ForegroundColor Cyan
 Write-Host ""

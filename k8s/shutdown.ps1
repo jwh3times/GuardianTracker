@@ -43,10 +43,9 @@ Write-Host "`n2. Deleting Kubernetes resources..." -ForegroundColor Cyan
 
 $manifests = @(
     "frontend.yaml",
-    "graphql-service.yaml", 
-    "bungie-service.yaml",
-    "auth-service.yaml",
-    "auth-service-configmap.yaml"
+    "api-service.yaml",
+    "api-service-configmap.yaml",
+    "api-service-secret.yaml"
 )
 
 foreach ($manifest in $manifests) {
@@ -104,9 +103,7 @@ if ($cleanupChoice -eq 'y' -or $cleanupChoice -eq 'Y') {
     Write-Host "   Removing Guardian Tracker Docker images..." -ForegroundColor Yellow
     
     $images = @(
-        "guardian-tracker/auth-service:latest",
-        "guardian-tracker/bungie-service:latest", 
-        "guardian-tracker/graphql-service:latest",
+        "guardian-tracker/api-service:latest",
         "guardian-tracker/frontend:v2",
         "guardian-tracker/frontend:latest"
     )

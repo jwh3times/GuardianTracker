@@ -1,6 +1,5 @@
 import React from "react";
-import { gql, type TypedDocumentNode } from "@apollo/client";
-import { useQuery } from "@apollo/client/react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Badge,
@@ -15,85 +14,42 @@ import {
   RadialProgress,
 } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
+import { apiFetch } from "../lib/api";
 import { summary, weekly, wishlist } from "../lib/mockData";
 import type { SummaryCategory } from "../types/design";
-
-const CURRENT_USER_QUERY: TypedDocumentNode<{
-  currentUser: {
-    id: string;
-    displayName: string;
-    membershipType: number;
-    membershipId: string;
-    platform?: string;
-  } | null;
-}> = gql`
-  query CurrentUser {
-    currentUser {
-      id
-      displayName
-      membershipType
-      membershipId
-      platform
-    }
-  }
-`;
-
-const DASHBOARD_COLLECTIONS_QUERY: TypedDocumentNode<
-  {
-    userCollections: {
-      weapons: RealCategory;
-      armor: RealCategory;
-      exotics: RealCategory;
-    } | null;
-  },
-  { membershipType: number; membershipId: string }
-> = gql`
-  query DashboardCollections($membershipType: Int!, $membershipId: String!) {
-    userCollections(membershipType: $membershipType, membershipId: $membershipId) {
-      weapons {
-        total
-        collected
-      }
-      armor {
-        total
-        collected
-      }
-      exotics {
-        total
-        collected
-      }
-    }
-  }
-`;
-
-interface RealCategory {
-  total: number;
-  collected: number;
-}
+import type {
+  ProfileResponse,
+  APICollectionSummary,
+  APIUserCollections,
+} from "../types/api";
 
 export function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
 
-  const { data: userData } = useQuery(CURRENT_USER_QUERY);
-  const { data: collectionsData } = useQuery(DASHBOARD_COLLECTIONS_QUERY, {
-    variables: {
-      membershipType:
-        userData?.currentUser?.membershipType ?? user?.membershipType ?? 0,
-      membershipId:
-        userData?.currentUser?.membershipId ?? user?.membershipId ?? "",
-    },
-    skip: !userData?.currentUser && !user?.membershipId,
+  const { data: profileData } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: () => apiFetch<ProfileResponse>("/api/auth/profile"),
   });
 
-  const real = collectionsData?.userCollections;
-  const displayName = userData?.currentUser?.displayName || user?.displayName || "Guardian";
+  const membershipType = profileData?.user.membershipType ?? user?.membershipType;
+  const membershipId = profileData?.user.membershipId ?? user?.membershipId;
 
-  // Merge live weapon/armor/exotic totals with mock fallbacks (cosmetics has
-  // no backend yet, so it always comes from the mock summary).
+  const { data: real } = useQuery({
+    queryKey: ["collections", membershipType, membershipId],
+    queryFn: () =>
+      apiFetch<APIUserCollections>(
+        `/api/collections/${membershipType}/${membershipId}`
+      ),
+    enabled: membershipType != null && !!membershipId,
+  });
+
+  const displayName =
+    profileData?.user.displayName || user?.displayName || "Guardian";
+
   const fromReal = (
-    c: RealCategory | undefined,
+    c: Pick<APICollectionSummary, "total" | "collected"> | undefined,
     fallback: SummaryCategory
   ): SummaryCategory => {
     if (c && c.total > 0) {

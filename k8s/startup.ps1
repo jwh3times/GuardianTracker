@@ -32,9 +32,7 @@ Write-Host "   Setting Docker environment to Minikube..." -ForegroundColor Yello
 & minikube docker-env --shell powershell | Invoke-Expression
 
 $services = @(
-    @{Name="auth-service"; Path="../backend/auth-service"; Tag="guardian-tracker/auth-service:latest"},
-    @{Name="bungie-service"; Path="../backend/bungie-service"; Tag="guardian-tracker/bungie-service:latest"},
-    @{Name="graphql-service"; Path="../backend/graphql-service"; Tag="guardian-tracker/graphql-service:latest"},
+    @{Name="api-service"; Path="../backend/api-service"; Tag="guardian-tracker/api-service:latest"},
     @{Name="frontend"; Path="../frontend"; Tag="guardian-tracker/frontend:v2"}
 )
 
@@ -61,10 +59,9 @@ foreach ($service in $services) {
 Write-Host "`n3. Deploying Kubernetes services..." -ForegroundColor Cyan
 
 $manifests = @(
-    "auth-service-configmap.yaml",
-    "auth-service.yaml",
-    "bungie-service.yaml",
-    "graphql-service.yaml",
+    "api-service-configmap.yaml",
+    "api-service-secret.yaml",
+    "api-service.yaml",
     "frontend.yaml"
 )
 
@@ -82,7 +79,7 @@ Write-Host "   All manifests applied successfully" -ForegroundColor Green
 # Step 4: Wait for deployments to be ready
 Write-Host "`n4. Waiting for deployments to be ready..." -ForegroundColor Cyan
 
-$deployments = @("auth-service", "bungie-service", "graphql-service", "frontend")
+$deployments = @("api-service", "frontend")
 
 foreach ($deployment in $deployments) {
     Write-Host "   Waiting for $deployment..." -ForegroundColor Yellow

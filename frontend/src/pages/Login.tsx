@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Brand } from "../components/Brand";
 import { Button, Icon } from "../components/kit";
+import type { AuthURLResponse } from "../types/api";
 
 // Storage key for OAuth state (CSRF protection)
 const OAUTH_STATE_KEY = "oauth_state";
@@ -10,7 +11,7 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
 
   const AUTH_SERVICE_URL =
-    import.meta.env.VITE_AUTH_SERVICE_URL || "http://localhost:8081";
+    import.meta.env.VITE_API_URL || "http://localhost:8081";
 
   const handleBungieLogin = async () => {
     try {
@@ -22,7 +23,7 @@ export function Login() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as AuthURLResponse;
       if (data.authUrl && data.state) {
         // Store the state in sessionStorage for CSRF validation
         sessionStorage.setItem(OAUTH_STATE_KEY, data.state);

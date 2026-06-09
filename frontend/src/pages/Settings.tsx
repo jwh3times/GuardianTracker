@@ -1,12 +1,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@apollo/client/react";
+import { useQuery } from "@tanstack/react-query";
 import { Button, DataFreshnessChip, PageHead, Panel } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
-import { LOGOUT } from "../graphql/mutations";
-import { GET_CHARACTERS } from "../graphql/queries";
-import { toCharacter, type GraphQLCharacter } from "../lib/adapters";
+import { apiFetch } from "../lib/api";
+import { toCharacter } from "../lib/adapters";
+import type { APICharacter } from "../types/api";
 import { characters } from "../lib/mockData";
 
 const PLATFORM_LABEL: Record<number, string> = {
@@ -48,29 +48,23 @@ function Segmented<T extends string>({
 export function Settings() {
   const { user, logout: authLogout } = useAuth();
   const { cardStyle, personalize, setCardStyle, setPersonalize } = usePreferences();
-  const [logout] = useMutation(LOGOUT);
   const navigate = useNavigate();
 
-  // Real characters when available; otherwise fall back to mock data.
-  const { data: charData } = useQuery(GET_CHARACTERS, {
-    variables: {
-      membershipType: user?.membershipType ?? 0,
-      membershipId: user?.membershipId ?? "",
-    },
-    skip: !user?.membershipId || user?.membershipType == null,
+  const { data: charsData } = useQuery({
+    queryKey: ["characters", user?.membershipType, user?.membershipId],
+    queryFn: () =>
+      apiFetch<APICharacter[]>(
+        `/api/characters/${user!.membershipType}/${user!.membershipId}`
+      ),
+    enabled: !!(user?.membershipId) && user?.membershipType != null,
   });
-  const realChars = ((charData?.characters ?? []) as GraphQLCharacter[]).map(toCharacter);
+
+  const realChars = (charsData ?? []).map(toCharacter);
   const characterList = realChars.length ? realChars : characters;
 
-  const handleSignOut = async () => {
-    try {
-      await logout();
-    } catch (err) {
-      console.error("Logout error:", err);
-    } finally {
-      authLogout();
-      navigate("/login");
-    }
+  const handleSignOut = () => {
+    authLogout();
+    navigate("/login");
   };
 
   const platform =
@@ -102,9 +96,9 @@ export function Settings() {
         </div>
         <div className="gt-set-row" style={{ borderBottom: "none" }}>
           <div>
-            <span className="gt-set-v">“For you” badges</span>
+            <span className="gt-set-v">"For you" badges</span>
             <div className="gt-set-note" style={{ marginTop: "0.15rem" }}>
-              Personalized “Missing” and “Available now” badges across your collection.
+              Personalized "Missing" and "Available now" badges across your collection.
             </div>
           </div>
           <Segmented

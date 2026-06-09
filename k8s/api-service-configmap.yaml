@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-service-config
+  namespace: default
+data:
+  PORT: "8081"
+  GO_ENV: "production"
+  BUNGIE_API_BASE_URL: "https://www.bungie.net/Platform"
+  # Update when using ngrok or a custom domain for OAuth
+  AUTH_REDIRECT_URI: "http://localhost:3000/auth/callback"
+  CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+  MANIFEST_DB_PATH: "/app/data/manifest.sqlite"
+  MANIFEST_CHECK_INTERVAL: "3600"
+  BUNGIE_API_RPS: "10"
+  BUNGIE_API_BURST: "20"
+  CACHE_ENABLED: "true"
+  CACHE_TTL_COLLECTIONS: "300"
+  JWT_EXPIRY_HOURS: "24"
+  JWT_REFRESH_EXPIRY_DAYS: "30"

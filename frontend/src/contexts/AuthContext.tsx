@@ -2,22 +2,16 @@ import React, {
   createContext,
   useContext,
   useState,
+  useEffect,
   ReactNode,
 } from "react";
-
-interface User {
-  id: string;
-  displayName: string;
-  membershipType: number;
-  membershipId: string;
-  platform?: string;
-}
+import type { APIUser, AuthTokenResponse } from "../types/api";
 
 interface AuthContextType {
-  user: User | null;
+  user: APIUser | null;
   token: string | null;
   refreshToken: string | null;
-  login: (token: string, refreshToken: string, user: User) => void;
+  login: (token: string, refreshToken: string, user: APIUser) => void;
   logout: () => void;
   refreshAccessToken: () => Promise<boolean>;
   isAuthenticated: boolean;
@@ -31,7 +25,7 @@ interface AuthProviderProps {
 }
 
 interface AuthState {
-  user: User | null;
+  user: APIUser | null;
   token: string | null;
   refreshToken: string | null;
 }
@@ -49,11 +43,10 @@ function readStoredAuth(): AuthState {
       return {
         token: storedToken,
         refreshToken: storedRefreshToken,
-        user: JSON.parse(storedUser) as User,
+        user: JSON.parse(storedUser) as APIUser,
       };
     } catch (error) {
       console.error("Error parsing stored user data:", error);
-      // Clear invalid data
       localStorage.removeItem("guardian_token");
       localStorage.removeItem("guardian_refresh_token");
       localStorage.removeItem("guardian_user");
@@ -67,11 +60,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [auth, setAuth] = useState<AuthState>(readStoredAuth);
   const { user, token, refreshToken } = auth;
 
-  // Get auth service URL from environment
-  const AUTH_SERVICE_URL =
-    import.meta.env.VITE_AUTH_SERVICE_URL || "http://localhost:8081";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
 
-  const login = (newToken: string, newRefreshToken: string, newUser: User) => {
+  // Sync React state when apiFetch silently refreshes a token via the 401 retry path.
+  // apiFetch writes new tokens to localStorage and fires "guardian_token_refreshed".
+  useEffect(() => {
+    const syncFromStorage = () => {
+      const newState = readStoredAuth();
+      setAuth(newState);
+    };
+    window.addEventListener("guardian_token_refreshed", syncFromStorage);
+    return () => window.removeEventListener("guardian_token_refreshed", syncFromStorage);
+  }, []);
+
+  const login = (newToken: string, newRefreshToken: string, newUser: APIUser) => {
     setAuth({ token: newToken, refreshToken: newRefreshToken, user: newUser });
     localStorage.setItem("guardian_token", newToken);
     localStorage.setItem("guardian_refresh_token", newRefreshToken);
@@ -92,11 +94,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/refresh`, {
+      const response = await fetch(`${API_URL}/api/auth/refresh`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refreshToken }),
       });
 
@@ -106,14 +106,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false;
       }
 
-      const data = await response.json();
-
-      // Update tokens and user data
-      setAuth({
-        token: data.token,
-        refreshToken: data.refreshToken,
-        user: data.user,
-      });
+      const data = (await response.json()) as AuthTokenResponse;
+      setAuth({ token: data.token, refreshToken: data.refreshToken, user: data.user });
       localStorage.setItem("guardian_token", data.token);
       localStorage.setItem("guardian_refresh_token", data.refreshToken);
       localStorage.setItem("guardian_user", JSON.stringify(data.user));

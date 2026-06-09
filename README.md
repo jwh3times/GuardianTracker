@@ -14,59 +14,51 @@ A web-based app for Destiny 2 players that integrates Bungie APIs to analyze col
 
 ```text
 Frontend (React/TS :3000)
-    └─► GraphQL Service (Apollo :4000)
-            ├─► Auth Service (Go :8081)    — OAuth, JWT, Bungie token store
-            └─► Bungie Service (Go :8082)  — manifest, collection analysis
+    └─► API Service (Go/Gin :8081)  — OAuth, JWT, manifest, collections
 ```
 
 ### Frontend
 
-- **Framework**: React 18 + TypeScript (Vite)
-- **GraphQL Client**: Apollo Client
-- **UI**: Custom "Guardian Tracker" design system — oklch design tokens + `gt-*` CSS classes (a persistent sidebar shell, rarity-driven theming)
-- **Routing**: React Router v6
-- **Sections**: Dashboard, This Week, Collections, Catalysts & Crafting, Triumphs & Seals, Wishlist, Settings (the three flagship pages render mock data pending their backends)
+- **Framework**: React 19 + TypeScript (Vite)
+- **Data fetching**: TanStack React Query + `apiFetch` (REST)
+- **UI**: Custom "Guardian Tracker" design system — oklch design tokens + `gt-*` CSS classes (persistent sidebar shell, rarity-driven theming)
+- **Routing**: React Router v7
 
 ### Backend
 
-- **GraphQL Layer**: Apollo Server 4 (Node.js/TypeScript)
-- **Auth Service**: Go + Gin — Bungie OAuth, JWT access/refresh tokens, in-memory Bungie token store
-- **Bungie Service**: Go + Gin — manifest download/caching, collection analysis, rate-limited Bungie API client
+- **API Service**: Go + Gin — Bungie OAuth, JWT access/refresh tokens, in-memory token store, manifest download, collection analysis, rate-limited Bungie API client
 
 ### Data Storage
 
-- **PostgreSQL**: User data schema (defined, not yet wired to services)
+- **PostgreSQL**: User data schema (defined, not yet wired to service)
 - **SQLite**: Bungie Destiny 2 manifest database (downloaded automatically on startup)
 - **In-memory cache**: Collection results with configurable TTL
 
 ### Infrastructure
 
-- **Local**: Kubernetes via Minikube (startup/shutdown scripts included)
-- **CI/CD**: GitHub Actions — lint, test, Docker build, and push on `main`
+- **Local**: Docker Compose (recommended) or Minikube
+- **CI/CD**: GitHub Actions — lint, test, Docker build on every push
 
 ## Project Structure
 
 ```text
 guardian-tracker/
-├── frontend/                        # React + TypeScript SPA
+├── frontend/                    # React + TypeScript SPA
 ├── backend/
-│   ├── graphql-service/             # Apollo Server (Node.js/TypeScript)
-│   ├── auth-service/                # Go — Bungie OAuth + JWT service
-│   └── bungie-service/              # Go — Bungie API + manifest service
+│   └── api-service/             # Go — OAuth, JWT, Bungie API, manifest
 ├── database/
-│   └── init/01-init.sql             # PostgreSQL schema
-├── k8s/                             # Kubernetes manifests + startup scripts
-└── .github/workflows/ci-cd.yml      # CI/CD pipeline
+│   └── init/01-init.sql         # PostgreSQL schema
+├── k8s/                         # Kubernetes manifests + startup scripts
+└── .github/workflows/ci-cd.yml  # CI/CD pipeline
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- Go 1.21+
-- Docker Desktop (for Kubernetes deployment)
-- Minikube (for local Kubernetes)
+- Docker Desktop (for Docker Compose or Minikube deployment)
+- Go 1.21+ and Node.js 20+ (for running services individually)
+- Minikube (for Kubernetes deployment only)
 
 ### 1. Get Bungie API Credentials
 
@@ -76,21 +68,25 @@ Create an application at <https://www.bungie.net/en/Application> to obtain:
 - OAuth Client ID
 - OAuth Client Secret
 
-Set the OAuth redirect URI to `https://<your-ngrok-domain>/auth/callback` (Bungie requires HTTPS).
+Set the OAuth redirect URI to `http://localhost:3000/auth/callback` (or your ngrok HTTPS URL for Bungie's HTTPS requirement).
 
 ### 2. Configure Environment Variables
 
-Each service has a `.env.example`. Copy and fill each:
+Run the setup script to copy all `.env.example` files:
 
-```bash
+```powershell
+./setup.ps1
+```
+
+Or copy manually:
+
+```powershell
 cp .env.example .env
-cp backend/auth-service/.env.example backend/auth-service/.env
-cp backend/bungie-service/.env.example backend/bungie-service/.env
-cp backend/graphql-service/.env.example backend/graphql-service/.env
+cp backend/api-service/.env.example backend/api-service/.env
 cp frontend/.env.example frontend/.env.local
 ```
 
-Required secrets across all services:
+Required secrets:
 
 | Variable | Description |
 | --- | --- |
@@ -98,25 +94,18 @@ Required secrets across all services:
 | `BUNGIE_CLIENT_ID` | OAuth client ID |
 | `BUNGIE_CLIENT_SECRET` | OAuth client secret |
 | `JWT_SECRET` | 32+ char random string (`openssl rand -base64 32`) |
-| `INTERNAL_API_KEY` | Shared key for service-to-service communication |
 
-### 3. Install Dependencies
+### 3. Start Services
 
-```bash
-# Frontend
-cd frontend && npm install && cd ..
+#### Option A: Docker Compose (recommended)
 
-# GraphQL Service
-cd backend/graphql-service && npm install && cd ../..
-
-# Go services
-cd backend/auth-service && go mod download && cd ../..
-cd backend/bungie-service && go mod download && cd ../..
+```powershell
+docker compose up --build
 ```
 
-### 4. Start Services
+Frontend: <http://localhost:3000> — API: <http://localhost:8081>
 
-#### Option A: Kubernetes (Minikube)
+#### Option B: Kubernetes (Minikube)
 
 ```powershell
 cd k8s
@@ -125,32 +114,17 @@ cd k8s
 
 See [k8s/README.md](./k8s/README.md) for details.
 
-#### Option B: Individual services
+#### Option C: Individual services
 
-```bash
-# Terminal 1 — Auth Service
-cd backend/auth-service && go run .
+```powershell
+# Terminal 1 — API Service
+cd backend/api-service && go run .
 
-# Terminal 2 — Bungie Service
-cd backend/bungie-service && go run .
-
-# Terminal 3 — GraphQL Service
-cd backend/graphql-service && npm run dev
-
-# Terminal 4 — Frontend
+# Terminal 2 — Frontend
 cd frontend && npm start
 ```
 
-### 5. Service URLs
-
-| Service | URL |
-| --- | --- |
-| Frontend | <http://localhost:3000> |
-| GraphQL Playground | <http://localhost:4000/graphql> |
-| Auth Service | <http://localhost:8081> |
-| Bungie Service | <http://localhost:8082> |
-
-> **Note:** On first run, the Bungie Service will download the Destiny 2 manifest database (~100MB). The collections endpoint returns 503 until the download completes.
+> **Note:** On first run, the API Service downloads the Destiny 2 manifest database (~100MB). The collections endpoint returns 503 until the download completes.
 
 ## Development
 
@@ -158,12 +132,9 @@ For detailed development guidance, code structure, token flow, and common tasks,
 
 ### Running Tests
 
-```bash
-# Go services (from each service directory)
-go test ./...
-
-# GraphQL service
-cd backend/graphql-service && npm test
+```powershell
+# Go service
+cd backend/api-service && go test ./...
 
 # Frontend
 cd frontend && npm test
@@ -171,12 +142,12 @@ cd frontend && npm test
 
 ### Code Quality
 
-```bash
-# GraphQL + Frontend
+```powershell
+# Frontend
 npm run type-check
 npm run lint
 
-# Go services
+# Go service
 go vet ./...
 ```
 
@@ -185,8 +156,7 @@ go vet ./...
 GitHub Actions runs on every push to `main` and `develop`:
 
 1. Type-check, lint, and test all services
-2. Build Docker images
-3. Push images to Docker Hub on `main` (requires `DOCKER_USERNAME` and `DOCKER_PASSWORD` secrets)
+2. Build Docker images (build validation; push not yet configured)
 
 ## Security
 

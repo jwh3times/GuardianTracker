@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Brand } from "../components/Brand";
 import { Icon } from "../components/kit";
+import type { AuthTokenResponse } from "../types/api";
 
 // Storage key for OAuth state (must match Login.tsx)
 const OAUTH_STATE_KEY = "oauth_state";
@@ -14,7 +15,7 @@ export const OAuthCallback: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const AUTH_SERVICE_URL =
-    import.meta.env.VITE_AUTH_SERVICE_URL || "http://localhost:8081";
+    import.meta.env.VITE_API_URL || "http://localhost:8081";
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -71,9 +72,9 @@ export const OAuthCallback: React.FC = () => {
           throw new Error(errorData.error || `Authentication failed (${response.status})`);
         }
 
-        const data = await response.json();
-        if (data.error) {
-          throw new Error(data.error);
+        const data = (await response.json()) as AuthTokenResponse;
+        if ((data as { error?: string }).error) {
+          throw new Error((data as { error?: string }).error);
         }
 
         login(data.token, data.refreshToken, data.user);

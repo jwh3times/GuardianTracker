@@ -1,4 +1,7 @@
-// Core Destiny 2 Types
+// App-level types for items, wishlist, and future weekly-content features.
+// Raw API wire types live in types/api.ts.
+
+// DestinyItem with typed rarity/difficulty unions — used by lib/utils.ts helpers.
 export interface DestinyItem {
   itemHash: string;
   name: string;
@@ -13,17 +16,7 @@ export interface DestinyItem {
   isCollected?: boolean;
 }
 
-export interface User {
-  id: string;
-  bungieId: string;
-  displayName: string;
-  membershipType: number;
-  membershipId: string;
-  profilePicture: string;
-  lastLoginAt: string;
-  createdAt: string;
-  wishList?: WishListItem[];
-}
+// --- Wishlist (DB persistence layer, not yet wired) ---
 
 export interface WishListItem extends DestinyItem {
   id: string;
@@ -34,19 +27,8 @@ export interface WishListItem extends DestinyItem {
 
 export type WishListPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-export interface CollectionSummary {
-  total: number;
-  collected: number;
-  missing: DestinyItem[];
-}
+// --- Weekly content (backend not yet implemented) ---
 
-export interface UserCollections {
-  weapons: CollectionSummary;
-  armor: CollectionSummary;
-  exotics: CollectionSummary;
-}
-
-// Weekly Reset Content
 export interface VendorItem {
   itemHash: string;
   name: string;
@@ -106,7 +88,8 @@ export interface WeeklyRecommendations {
   pursuits: Pursuit[];
 }
 
-// Search and Filtering
+// --- Search / filtering (search backend not yet implemented) ---
+
 export interface ItemFilters {
   itemType?: string[];
   rarity?: string[];
@@ -114,62 +97,4 @@ export interface ItemFilters {
   isExotic?: boolean;
   isCollected?: boolean;
   sources?: string[];
-}
-
-// API Response Types
-export interface ApiResponse<T> {
-  success: boolean;
-  message: string;
-  data?: T;
-}
-
-export interface RefreshDataResponse {
-  success: boolean;
-  message: string;
-  lastRefresh: string;
-}
-
-// UI Component Props Types
-export interface ButtonProps {
-  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
-  size?: 'default' | 'sm' | 'lg' | 'icon';
-  className?: string;
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  type?: 'button' | 'submit' | 'reset';
-}
-
-export interface CardProps {
-  className?: string;
-  children: React.ReactNode;
-}
-
-export interface LoadingSpinnerProps {
-  size?: 'sm' | 'md' | 'lg';
-  className?: string;
-}
-
-// Form Types
-export interface WishListFormData {
-  priority: WishListPriority;
-  notes?: string;
-}
-
-export interface SearchFormData {
-  query: string;
-  filters: ItemFilters;
-}
-
-// Error Types
-export interface ErrorBoundaryState {
-  hasError: boolean;
-  error?: Error;
-}
-
-// Local Storage Types
-export interface StoredAuthData {
-  token: string;
-  expiresAt: string;
-  user: User;
 }

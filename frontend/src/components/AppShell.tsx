@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useMutation, useQuery } from "@apollo/client/react";
+import { useQuery } from "@tanstack/react-query";
 import { Brand } from "./Brand";
 import { Icon, ItemTile } from "./kit";
 import { useAuth } from "../contexts/AuthContext";
-import { LOGOUT } from "../graphql/mutations";
-import { GET_CHARACTERS } from "../graphql/queries";
-import { toCharacter, type GraphQLCharacter } from "../lib/adapters";
+import { apiFetch } from "../lib/api";
+import { toCharacter } from "../lib/adapters";
+import type { APICharacter } from "../types/api";
 import { characters, items } from "../lib/mockData";
 
 interface NavItem {
@@ -39,16 +39,17 @@ const emblemStyle = (url?: string): React.CSSProperties | undefined =>
 
 function CharacterSwitcher({ displayName }: { displayName?: string }) {
   const { user } = useAuth();
-  const { data } = useQuery(GET_CHARACTERS, {
-    variables: {
-      membershipType: user?.membershipType ?? 0,
-      membershipId: user?.membershipId ?? "",
-    },
-    skip: !user?.membershipId || user?.membershipType == null,
+
+  const { data: charsData } = useQuery({
+    queryKey: ["characters", user?.membershipType, user?.membershipId],
+    queryFn: () =>
+      apiFetch<APICharacter[]>(
+        `/api/characters/${user!.membershipType}/${user!.membershipId}`
+      ),
+    enabled: !!(user?.membershipId) && user?.membershipType != null,
   });
 
-  // Real characters when available; otherwise fall back to mock data.
-  const realChars = ((data?.characters ?? []) as GraphQLCharacter[]).map(toCharacter);
+  const realChars = (charsData ?? []).map(toCharacter);
   const list = realChars.length ? realChars : characters;
 
   const [open, setOpen] = useState(false);
@@ -153,7 +154,7 @@ function SearchBar() {
               </button>
             ))
           ) : (
-            <div className="gt-search-empty mono">No items match “{q}”</div>
+            <div className="gt-search-empty mono">No items match "{q}"</div>
           )}
         </div>
       )}
@@ -166,21 +167,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout: authLogout } = useAuth();
-  const [logout] = useMutation(LOGOUT);
   const [mobileNav, setMobileNav] = useState(false);
   const closeMobileNav = () => setMobileNav(false);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
-  const handleSignOut = async () => {
-    try {
-      await logout();
-    } catch (err) {
-      console.error("Logout error:", err);
-    } finally {
-      authLogout();
-      navigate("/login");
-    }
+  const handleSignOut = () => {
+    authLogout();
+    navigate("/login");
   };
 
   return (

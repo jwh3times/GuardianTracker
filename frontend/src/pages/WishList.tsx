@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@apollo/client/react";
 import {
   Badge,
   Button,
@@ -10,41 +9,19 @@ import {
   PageHead,
 } from "../components/kit";
 import { FilterChip } from "../components/kit";
-import { GET_WISH_LIST } from "../graphql/queries";
-import {
-  REMOVE_FROM_WISH_LIST,
-  UPDATE_WISH_LIST_ITEM,
-} from "../graphql/mutations";
 import { useToast } from "../components/ui/Toast";
-import { toWishlistEntry } from "../lib/adapters";
 import { PRIORITY_LABEL, wishlist as MOCK_WISHLIST } from "../lib/mockData";
 import type { Priority, WishlistEntry } from "../types/design";
-import type { WishListItem } from "../types";
 
 const PRIORITY_ORDER: Priority[] = ["urgent", "high", "medium", "low"];
-const PRIORITY_ENUM: Record<Priority, string> = {
-  urgent: "URGENT",
-  high: "HIGH",
-  medium: "MEDIUM",
-  low: "LOW",
-};
 type SortKey = "availability" | "priority";
 type FilterKey = "all" | Priority;
 
 export function WishList() {
   const { showToast } = useToast();
-  const { data, loading, refetch } = useQuery(GET_WISH_LIST);
-  const [removeFromWishList] = useMutation(REMOVE_FROM_WISH_LIST);
-  const [updateWishListItem] = useMutation(UPDATE_WISH_LIST_ITEM);
-
+  const [list, setList] = useState<WishlistEntry[]>(MOCK_WISHLIST);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("availability");
-  // Local copy used only when falling back to mock data (no live wishlist).
-  const [mockList, setMockList] = useState<WishlistEntry[]>(MOCK_WISHLIST);
-
-  const realRaw = data?.currentUser?.wishList as WishListItem[] | undefined;
-  const usingReal = !!(realRaw && realRaw.length);
-  const list: WishlistEntry[] = usingReal ? realRaw!.map(toWishlistEntry) : mockList;
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: list.length };
@@ -60,46 +37,14 @@ export function WishList() {
     return l;
   }, [list, filter, sort]);
 
-  const setPriority = async (id: string, p: Priority) => {
-    if (usingReal) {
-      try {
-        await updateWishListItem({ variables: { wishListItemId: id, priority: PRIORITY_ENUM[p] } });
-        await refetch();
-      } catch (err) {
-        showToast(`Failed to update priority: ${(err as Error).message}`, "error");
-      }
-    } else {
-      setMockList((l) => l.map((i) => (i.id === id ? { ...i, priority: p } : i)));
-    }
+  const setPriority = (id: string, p: Priority) => {
+    setList((l) => l.map((i) => (i.id === id ? { ...i, priority: p } : i)));
   };
 
-  const remove = async (id: string, name: string) => {
-    if (usingReal) {
-      try {
-        await removeFromWishList({ variables: { wishListItemId: id } });
-        await refetch();
-        showToast(`Removed ${name}`, "info");
-      } catch (err) {
-        showToast(`Failed to remove item: ${(err as Error).message}`, "error");
-      }
-    } else {
-      setMockList((l) => l.filter((i) => i.id !== id));
-      showToast(`Removed ${name}`, "info");
-    }
+  const remove = (id: string, name: string) => {
+    setList((l) => l.filter((i) => i.id !== id));
+    showToast(`Removed ${name}`, "info");
   };
-
-  if (loading && !data) {
-    return (
-      <div className="gt-page">
-        <PageHead title="Wishlist" />
-        <div className="gt-itemlist">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="gt-skel" style={{ height: "5.5rem", borderRadius: "var(--r-lg)" }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   if (list.length === 0) {
     return (
@@ -182,7 +127,7 @@ export function WishList() {
               ) : (
                 <div className="gt-action-meta mono">Source: {i.avail.where}</div>
               )}
-              {i.notes && <div className="gt-wl-notes">“{i.notes}”</div>}
+              {i.notes && <div className="gt-wl-notes">"{i.notes}"</div>}
               <div className="gt-wl-foot">
                 <Dropdown
                   label="Priority"

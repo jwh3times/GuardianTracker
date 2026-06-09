@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@apollo/client/react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   CategoryTree,
   DataFreshnessChip,
@@ -14,18 +14,11 @@ import {
   StatTile,
 } from "../components/kit";
 import { Button } from "../components/kit";
-import {
-  GET_CURRENT_USER,
-  GET_USER_COLLECTIONS,
-  GET_WISH_LIST,
-} from "../graphql/queries";
-import { ADD_TO_WISH_LIST } from "../graphql/mutations";
 import { useToast } from "../components/ui/Toast";
 import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
+import { apiFetch } from "../lib/api";
 import { toGTItem } from "../lib/adapters";
-// Note: only filter vocabulary (rarity/difficulty labels) comes from mockData —
-// no mock collection items or categories are used on this screen anymore.
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../lib/mockData";
 import type {
   Difficulty,
@@ -33,7 +26,11 @@ import type {
   Rarity,
   TreeNode,
 } from "../types/design";
-import type { DestinyItem } from "../types";
+import type {
+  ProfileResponse,
+  APIDestinyItem,
+  APIUserCollections,
+} from "../types/api";
 
 type TopCategory = "weapons" | "armor" | "exotics";
 type SortKey = "rarity" | "name" | "difficulty" | "avail";
@@ -77,28 +74,42 @@ export function Collections() {
   const [detail, setDetail] = useState<GTItem | null>(null);
 
   const { user } = useAuth();
-  const { data: userData } = useQuery(GET_CURRENT_USER);
-  const membershipType =
-    userData?.currentUser?.membershipType ?? user?.membershipType;
-  const membershipId =
-    userData?.currentUser?.membershipId ?? user?.membershipId;
-  const { data: collectionsData, loading, refetch } = useQuery(GET_USER_COLLECTIONS, {
-    variables: { membershipType: membershipType ?? 0, membershipId: membershipId ?? "" },
-    skip: membershipType == null || !membershipId,
-    fetchPolicy: "cache-and-network",
+
+  const { data: profileData } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: () => apiFetch<ProfileResponse>("/api/auth/profile"),
   });
 
-  const [addToWishList] = useMutation(ADD_TO_WISH_LIST, {
-    refetchQueries: [{ query: GET_WISH_LIST }],
-    onError: (err) => showToast(`Failed to add item: ${err.message}`, "error"),
+  const membershipType = profileData?.user.membershipType ?? user?.membershipType;
+  const membershipId = profileData?.user.membershipId ?? user?.membershipId;
+
+  const {
+    data: collections,
+    isLoading: loading,
+    refetch,
+  } = useQuery({
+    queryKey: ["collections", membershipType, membershipId],
+    queryFn: () =>
+      apiFetch<APIUserCollections>(
+        `/api/collections/${membershipType}/${membershipId}`
+      ),
+    enabled: membershipType != null && !!membershipId,
+  });
+
+  const addWishlistMutation = useMutation({
+    mutationFn: (itemHash: string) =>
+      apiFetch("/api/wishlist", {
+        method: "POST",
+        body: JSON.stringify({ itemId: itemHash }),
+      }),
+    onError: (err: Error) =>
+      showToast(`Failed to add item: ${err.message}`, "error"),
   });
 
   const top = topOf(active);
-  const collections = collectionsData?.userCollections;
   const realBucket = collections?.[top];
   const hasReal = !!collections;
 
-  // Category tree is built entirely from live data — no mock categories.
   const treeNodes: TreeNode[] = useMemo(() => {
     if (!collections) return [];
     return TOP_CATEGORIES.map(({ id, label }) => {
@@ -116,12 +127,12 @@ export function Collections() {
 
   const baseItems: GTItem[] = useMemo(() => {
     if (!realBucket?.missing) return [];
-    return (realBucket.missing as DestinyItem[]).map(toGTItem);
+    return realBucket.missing.map(toGTItem);
   }, [realBucket]);
 
   const items = useMemo(() => {
     let list = baseItems.slice();
-    if (missingOnly) list = list.filter((i) => !i.collected);
+    // All items from the backend are already missing (uncollected) — no filter needed.
     if (rarity) list = list.filter((i) => i.rarity === rarity);
     if (diff) list = list.filter((i) => i.diff === diff);
     if (sort === "rarity") list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
@@ -151,13 +162,11 @@ export function Collections() {
       adding ? `${item.name} added to wishlist` : `Removed ${item.name}`,
       adding ? "success" : "info"
     );
-    // Best-effort persist when we have a logged-in session and live data.
-    if (adding && hasReal && userData?.currentUser) {
-      addToWishList({ variables: { itemHash: item.id, priority: "MEDIUM" } }).catch(() => {});
+    if (adding && hasReal && profileData?.user) {
+      addWishlistMutation.mutate(item.id);
     }
   };
 
-  // Stats come straight from live data (zeroed when nothing has loaded).
   const total = realBucket?.total ?? 0;
   const collected = realBucket?.collected ?? 0;
   const missing = Math.max(total - collected, 0);
@@ -167,7 +176,7 @@ export function Collections() {
       <PageHead
         title="Collections"
         sub={<span className="mono">Track what you're missing across every category</span>}
-        right={<DataFreshnessChip ago="4m" onRefresh={() => refetch()} />}
+        right={<DataFreshnessChip ago="4m" onRefresh={() => { void refetch(); }} />}
       />
 
       <div className="gt-coll-layout">
@@ -255,7 +264,7 @@ export function Collections() {
                 title="No collection data"
                 body="We couldn't load your collection from Bungie. This can happen if your Destiny privacy is restricted or Bungie is unavailable — try refreshing."
                 action={
-                  <Button variant="outline" sm onClick={() => refetch()}>
+                  <Button variant="outline" sm onClick={() => { void refetch(); }}>
                     Retry
                   </Button>
                 }

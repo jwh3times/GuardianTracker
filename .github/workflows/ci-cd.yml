@@ -46,41 +46,6 @@ jobs:
         working-directory: ./frontend
         run: npm run build
 
-  test-graphql:
-    name: Test GraphQL Server
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "npm"
-          cache-dependency-path: backend/graphql-service/package-lock.json
-
-      - name: Install dependencies
-        working-directory: ./backend/graphql-service
-        run: npm ci
-
-      - name: Run type check
-        working-directory: ./backend/graphql-service
-        run: npm run type-check
-
-      - name: Run linting
-        working-directory: ./backend/graphql-service
-        run: npm run lint
-
-      - name: Run tests
-        working-directory: ./backend/graphql-service
-        run: npm test
-
-      - name: Build GraphQL server
-        working-directory: ./backend/graphql-service
-        run: npm run build
-
   test-go-services:
     name: Test Go Services
     runs-on: ubuntu-latest
@@ -119,20 +84,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      - name: Test Auth Service
-        working-directory: ./backend/auth-service
+      - name: Test API Service
+        working-directory: ./backend/api-service
         env:
           DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db?sslmode=disable
-          REDIS_URL: redis://localhost:6379
-        run: |
-          go mod tidy
-          go vet ./...
-          go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
-          go test -race -coverprofile=coverage.out ./...
-
-      - name: Test Bungie Service
-        working-directory: ./backend/bungie-service
-        env:
           REDIS_URL: redis://localhost:6379
         run: |
           go mod tidy
@@ -143,7 +98,7 @@ jobs:
   build-docker-images:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    needs: [test-frontend, test-graphql, test-go-services]
+    needs: [test-frontend, test-go-services]
 
     # Build-only validation: confirms every Dockerfile builds on each push/PR.
     # No registry login or push yet — there is no Docker Hub account / deploy
@@ -167,32 +122,12 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build GraphQL image
+      - name: Build API Service image
         uses: docker/build-push-action@v7
         with:
-          context: ./backend/graphql-service
-          file: ./backend/graphql-service/Dockerfile
+          context: ./backend/api-service
+          file: ./backend/api-service/Dockerfile
           push: false
-          tags: guardiantracker/graphql-server:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build Auth Service image
-        uses: docker/build-push-action@v7
-        with:
-          context: ./backend/auth-service
-          file: ./backend/auth-service/Dockerfile
-          push: false
-          tags: guardiantracker/auth-service:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build Bungie Service image
-        uses: docker/build-push-action@v7
-        with:
-          context: ./backend/bungie-service
-          file: ./backend/bungie-service/Dockerfile
-          push: false
-          tags: guardiantracker/bungie-service:latest
+          tags: guardiantracker/api-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

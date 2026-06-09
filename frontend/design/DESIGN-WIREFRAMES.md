@@ -20,8 +20,9 @@ Three breakpoints referenced throughout:
 
 ## 1. App Shell / Global Navigation
 
-**Desktop**
-```
+### Desktop
+
+```text
 ┌──────────────┬──────────────────────────────────────────────────────────────┐
 │  GUARDIAN     │  [🔍 Search items…]        «Updated 4m ago ↻»   [▒ Maya ▾]    │ ← top utility bar
 │  TRACKER      ├──────────────────────────────────────────────────────────────┤
@@ -39,12 +40,14 @@ Three breakpoints referenced throughout:
 │  ⏻ Sign out   │                                                                 │
 └──────────────┴──────────────────────────────────────────────────────────────┘
 ```
+
 - **Search** (global, §Component `SearchBar`) and **data-freshness chip** (`«Updated 4m ago ↻»`) live in the top bar — the freshness chip is the production replacement for the debug `DataSourceBanner`.
 - **Character switcher** is a dropdown off the account menu.
 - Active nav item gets a rarity-gold accent rail.
 
-**Mobile**
-```
+### Mobile
+
+```text
 ┌─────────────────────────────┐
 │ ☰  Guardian Tracker   [▒]   │ ← header: hamburger + account
 │ «Updated 4m ago ↻»          │
@@ -60,7 +63,7 @@ Three breakpoints referenced throughout:
 
 ## 2. Login
 
-```
+```text
 ┌──────────────────────────────────────────────┐
 │                                                │
 │              ✶  GUARDIAN TRACKER               │
@@ -79,6 +82,7 @@ Three breakpoints referenced throughout:
 │   • Track catalysts, patterns & seals          │
 └──────────────────────────────────────────────┘
 ```
+
 **States:** default · `signing-in` (OAuth redirect spinner) · `callback-processing` ("Completing sign-in…") · `error` (auth failed → retry).
 
 ---
@@ -87,7 +91,7 @@ Three breakpoints referenced throughout:
 
 **Goal:** within 5 seconds, "how complete am I?" + "what should I do today?"
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │ Welcome back, Maya                         Weekly reset in  2d 14h   │
 ├────────────────────────────────────────────────────────────────────┤
@@ -110,6 +114,7 @@ Three breakpoints referenced throughout:
 │ [ View Collections ]  [ Manage Wishlist ]  [ ↻ Refresh data ]       │
 └────────────────────────────────────────────────────────────────────┘
 ```
+
 **Replaces:** the current hardcoded vendor/activity mock blocks. Every time-limited element carries a countdown + `«Missing»`/`«New»` personalization badge.
 **States:** loading (skeleton tiles) · partial (weekly data unavailable → hide module, keep completion) · error per-module (degrade gracefully, never blank the whole page).
 
@@ -119,7 +124,7 @@ Three breakpoints referenced throughout:
 
 The most-used screen. Category-tree nav + filter bar + item grid + detail drawer.
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────────┐
 │ Collections                                   74% complete · 1,204/1,628 │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -138,6 +143,7 @@ The most-used screen. Category-tree nav + filter bar + item grid + detail drawer
 │               │ … (responsive grid: 4 ▸ 3 ▸ 2 ▸ 1 cols)                 │
 └───────────────┴────────────────────────────────────────────────────────┘
 ```
+
 - **Category tree** mirrors Bungie presentation nodes, each row showing a completion %. Collapsible. (PRD open question: mirror exactly vs. cleaner taxonomy.)
 - **Item card** (`ItemCard`): rarity frame, icon, name, type, difficulty badge, source, optional `«Avail now»` badge, `[+ Wish]` and detail `ⓘ`.
 - **Filter bar** state persists per category.
@@ -146,7 +152,8 @@ The most-used screen. Category-tree nav + filter bar + item grid + detail drawer
 **States:** loading (card skeleton grid) · empty/all-collected (🎉 "All caught up!") · empty-after-filter ("No items match these filters · Clear") · error variants (auth-expired / Bungie-down / **private profile** / **manifest warming**) — each a distinct `EmptyState` treatment, not a generic spinner.
 
 ### 4b. Item Detail (drawer / sheet)
-```
+
+```text
 ┌─────────────────────────────────────────┐
 │ ✕                                          │
 │ ▒▒▒▒  Vex Mythoclast            «Exotic»  │
@@ -164,13 +171,14 @@ The most-used screen. Category-tree nav + filter bar + item grid + detail drawer
 │ [ + Add to Wishlist ]   [ Where to farm ↗ ]│
 └─────────────────────────────────────────┘
 ```
+
 Desktop = right-side drawer; mobile = full-screen sheet. "why?" expands the difficulty rationale.
 
 ---
 
 ## 5. This Week (new — flagship)
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │ This Week                                  Resets Tue · 2d 14h left  │
 ├────────────────────────────────────────────────────────────────────┤
@@ -192,6 +200,7 @@ Desktop = right-side drawer; mobile = full-screen sheet. "why?" expands the diff
 │ └────────────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────┘
 ```
+
 - Every module joins live weekly data against the player's collection to stamp `«Missing»` / `«Completes set»`.
 - **Xûr module is conditional** (Fri–Tue): when absent → "Xûr returns Friday · 3d 2h."
 - **States:** pre/post-reset, vendor data unavailable (skeleton → "Vendor data refreshing").
@@ -200,7 +209,7 @@ Desktop = right-side drawer; mobile = full-screen sheet. "why?" expands the diff
 
 ## 6. Wishlist
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │ Wishlist                                              12 items        │
 │ [All 12] [Urgent 2] [High 4] [Medium 5] [Low 1]   Sort: [Availability ▾]│
@@ -218,6 +227,7 @@ Desktop = right-side drawer; mobile = full-screen sheet. "why?" expands the diff
 │ └────────────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────────────┘
 ```
+
 - Adds **availability badges** and an **availability sort** on top of the existing priority model.
 - **States:** loading · empty ("Build your wishlist from Collections" → CTA) · empty-after-filter.
 
@@ -225,7 +235,7 @@ Desktop = right-side drawer; mobile = full-screen sheet. "why?" expands the diff
 
 ## 7. Catalysts & Crafting (new)
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │ Catalysts & Crafting        [ Catalysts ]  [ Crafting Patterns ]    │ ← sub-tabs
 ├────────────────────────────────────────────────────────────────────┤
@@ -242,13 +252,14 @@ Desktop = right-side drawer; mobile = full-screen sheet. "why?" expands the diff
 │ │   Farm: seasonal activity / Banshee                              │ │
 └────────────────────────────────────────────────────────────────────┘
 ```
+
 Progress-forward: objective/pattern bars are the primary visual. Shared `ProgressBar` + `ItemCard` (progress variant).
 
 ---
 
 ## 8. Triumphs & Seals (new)
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────────┐
 │ Triumphs & Seals                            Sort: [Closest to done ▾]│
 ├────────────────────────────────────────────────────────────────────┤
@@ -263,6 +274,7 @@ Progress-forward: objective/pattern bars are the primary visual. Shared `Progres
 │    [ ] Flawless Master NF    ▯▯▯▯▯ 0/1                               │
 └────────────────────────────────────────────────────────────────────┘
 ```
+
 Gilded seals show a gild count badge (`x2`). Expand a seal to see its triumph objectives.
 
 ---
@@ -271,17 +283,17 @@ Gilded seals show a gild count badge (`x2`). Expand a seal to see its triumph ob
 
 Design these once as reusable templates; every screen references them:
 
-| State | Trigger | Treatment |
-| --- | --- | --- |
-| **Skeleton loading** | Initial/refetch | Layout-matched gray placeholders (cards, lists, radial) — preferred over spinners except first auth. |
-| **Empty — success** | 100% / nothing missing | Celebratory (🎉), affirming copy. |
-| **Empty — filtered** | Filters exclude all | Neutral + "Clear filters" CTA. |
-| **Empty — wishlist** | No items | Motivational + route to Collections. |
-| **Error — session expired** | Token invalid | Re-auth CTA; preserve location. |
-| **Error — Bungie down** | API 5xx/maintenance | Reassuring "try again shortly" + retry. |
-| **Error — private profile** | Privacy-restricted | Explain how to make collections public + help link. |
-| **State — manifest warming** | Cold start 503 | "Getting the latest game data…" + auto-retry. |
-| **Stale data** | Cache age | `«Updated Xm ago ↻»` chip; manual refresh. |
+| State                        | Trigger                | Treatment                                                                                            |
+| ---------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Skeleton loading**         | Initial/refetch        | Layout-matched gray placeholders (cards, lists, radial) — preferred over spinners except first auth. |
+| **Empty — success**          | 100% / nothing missing | Celebratory (🎉), affirming copy.                                                                    |
+| **Empty — filtered**         | Filters exclude all    | Neutral + "Clear filters" CTA.                                                                       |
+| **Empty — wishlist**         | No items               | Motivational + route to Collections.                                                                 |
+| **Error — session expired**  | Token invalid          | Re-auth CTA; preserve location.                                                                      |
+| **Error — Bungie down**      | API 5xx/maintenance    | Reassuring "try again shortly" + retry.                                                              |
+| **Error — private profile**  | Privacy-restricted     | Explain how to make collections public + help link.                                                  |
+| **State — manifest warming** | Cold start 503         | "Getting the latest game data…" + auto-retry.                                                        |
+| **Stale data**               | Cache age              | `«Updated Xm ago ↻»` chip; manual refresh.                                                           |
 
 ---
 
@@ -289,42 +301,43 @@ Design these once as reusable templates; every screen references them:
 
 ### 10.1 Existing primitives (keep, extend)
 
-| Component | Today | Needed changes |
-| --- | --- | --- |
-| `Button` | variants: default/outline/ghost/secondary/destructive; sizes sm/lg | Add `icon` slot, `loading` state already ad-hoc → formalize. |
-| `Card` (+Header/Content/Title/Description) | rarity classes (`destiny-card-exotic/legendary/rare`), glow | Generalize into `ItemCard` (below); keep base Card for layout. |
-| `LoadingSpinner` | sm/lg | Keep for first-auth only; prefer skeletons elsewhere. |
-| `Toast` (`useToast`) | success/error | Add `info`/`warning`; use for wishlist + availability nudges. |
-| `Navigation` | top nav, 3 links | Rebuild as scalable sidebar + mobile bottom-tabs (§1). |
-| `ErrorBoundary` | app-wide | Keep; pair with per-module error states. |
+| Component                                  | Today                                                              | Needed changes                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------- |
+| `Button`                                   | variants: default/outline/ghost/secondary/destructive; sizes sm/lg | Add `icon` slot, `loading` state already ad-hoc → formalize.   |
+| `Card` (+Header/Content/Title/Description) | rarity classes (`destiny-card-exotic/legendary/rare`), glow        | Generalize into `ItemCard` (below); keep base Card for layout. |
+| `LoadingSpinner`                           | sm/lg                                                              | Keep for first-auth only; prefer skeletons elsewhere.          |
+| `Toast` (`useToast`)                       | success/error                                                      | Add `info`/`warning`; use for wishlist + availability nudges.  |
+| `Navigation`                               | top nav, 3 links                                                   | Rebuild as scalable sidebar + mobile bottom-tabs (§1).         |
+| `ErrorBoundary`                            | app-wide                                                           | Keep; pair with per-module error states.                       |
 
 ### 10.2 New components to design
 
-| Component | Purpose | Variants / Props | States |
-| --- | --- | --- | --- |
-| **`AppShell`** | Sidebar + top bar + content region | desktop / tablet-rail / mobile-tabs | — |
-| **`SearchBar`** | Global item search | inline / overlay (mobile) | idle / typing / results / no-results |
-| **`DataFreshnessChip`** | Replaces debug `DataSourceBanner` | — | fresh / stale / refreshing / error |
-| **`CharacterSwitcher`** | Pick active Guardian | dropdown | loading / multi / single |
-| **`ItemCard`** | The atomic collectible tile | density: grid/list/compact; rarity frame; `progress` variant (catalysts/crafting) | default / missing / available-now / owned / loading-skeleton |
-| **`ItemDetailDrawer`** | Full item info + actions | drawer (desktop) / sheet (mobile) | loading / loaded / error |
-| **`RarityFrame`** | Rarity border/glow wrapper | exotic/legendary/rare/uncommon/common | reduced-motion (no glow) |
-| **`Badge`** | Status vocabulary | rarity / difficulty / availability (avail-now, expiring, new, missing, completes-set) / completion (complete, in-progress, gilded) | — |
-| **`ProgressBar`** | Linear objective/completion | sizes; labeled/unlabeled | 0 / partial / complete |
-| **`RadialProgress`** | Completion % (dashboard, seals) | sizes | — |
-| **`CategoryTree`** | Nested presentation-node nav | expandable rows w/ % | loading / expanded / collapsed |
-| **`FilterBar`** | Filter + sort controls | inline (desktop) / bottom-sheet (mobile) | active-filters / cleared |
-| **`FilterChip`** | Toggle a filter value | selected / unselected | — |
-| **`CountdownChip`** | Time-to-reset / expiry | reset / vendor-leaves / catalyst | live ticking |
-| **`StatTile`** | Headline numbers (Total/Collected/Missing) | — | loading |
-| **`ActionList`** | Checkable "recommended this week" | — | empty / items / completed |
-| **`SealCard`** | Triumph/seal w/ radial % | gilded variant | locked / in-progress / complete / gilded |
-| **`EmptyState`** | Reusable empty/error template | success / filtered / wishlist / error-* / warming | (per §9) |
-| **`Skeleton`** | Layout-matched loaders | card / list-row / radial / detail | shimmer / reduced-motion |
-| **`VendorModule` / `MilestoneModule`** | This-Week sections | Xûr (conditional) / vendor / milestone | present / absent / unavailable |
+| Component                              | Purpose                                    | Variants / Props                                                                                                                   | States                                                       |
+| -------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **`AppShell`**                         | Sidebar + top bar + content region         | desktop / tablet-rail / mobile-tabs                                                                                                | —                                                            |
+| **`SearchBar`**                        | Global item search                         | inline / overlay (mobile)                                                                                                          | idle / typing / results / no-results                         |
+| **`DataFreshnessChip`**                | Replaces debug `DataSourceBanner`          | —                                                                                                                                  | fresh / stale / refreshing / error                           |
+| **`CharacterSwitcher`**                | Pick active Guardian                       | dropdown                                                                                                                           | loading / multi / single                                     |
+| **`ItemCard`**                         | The atomic collectible tile                | density: grid/list/compact; rarity frame; `progress` variant (catalysts/crafting)                                                  | default / missing / available-now / owned / loading-skeleton |
+| **`ItemDetailDrawer`**                 | Full item info + actions                   | drawer (desktop) / sheet (mobile)                                                                                                  | loading / loaded / error                                     |
+| **`RarityFrame`**                      | Rarity border/glow wrapper                 | exotic/legendary/rare/uncommon/common                                                                                              | reduced-motion (no glow)                                     |
+| **`Badge`**                            | Status vocabulary                          | rarity / difficulty / availability (avail-now, expiring, new, missing, completes-set) / completion (complete, in-progress, gilded) | —                                                            |
+| **`ProgressBar`**                      | Linear objective/completion                | sizes; labeled/unlabeled                                                                                                           | 0 / partial / complete                                       |
+| **`RadialProgress`**                   | Completion % (dashboard, seals)            | sizes                                                                                                                              | —                                                            |
+| **`CategoryTree`**                     | Nested presentation-node nav               | expandable rows w/ %                                                                                                               | loading / expanded / collapsed                               |
+| **`FilterBar`**                        | Filter + sort controls                     | inline (desktop) / bottom-sheet (mobile)                                                                                           | active-filters / cleared                                     |
+| **`FilterChip`**                       | Toggle a filter value                      | selected / unselected                                                                                                              | —                                                            |
+| **`CountdownChip`**                    | Time-to-reset / expiry                     | reset / vendor-leaves / catalyst                                                                                                   | live ticking                                                 |
+| **`StatTile`**                         | Headline numbers (Total/Collected/Missing) | —                                                                                                                                  | loading                                                      |
+| **`ActionList`**                       | Checkable "recommended this week"          | —                                                                                                                                  | empty / items / completed                                    |
+| **`SealCard`**                         | Triumph/seal w/ radial %                   | gilded variant                                                                                                                     | locked / in-progress / complete / gilded                     |
+| **`EmptyState`**                       | Reusable empty/error template              | success / filtered / wishlist / error-\* / warming                                                                                 | (per §9)                                                     |
+| **`Skeleton`**                         | Layout-matched loaders                     | card / list-row / radial / detail                                                                                                  | shimmer / reduced-motion                                     |
+| **`VendorModule` / `MilestoneModule`** | This-Week sections                         | Xûr (conditional) / vendor / milestone                                                                                             | present / absent / unavailable                               |
 
 ### 10.3 Component dependency map
-```
+
+```text
 AppShell
 ├─ SearchBar · DataFreshnessChip · CharacterSwitcher
 └─ <page>
@@ -343,9 +356,8 @@ AppShell
 ## 11. Handoff Notes for High-Fidelity
 
 1. **Start with the kit, not the screens** — nail `ItemCard`, `Badge`, `ProgressBar`/`RadialProgress`, and the `EmptyState`/`Skeleton` templates first; every screen composes from them.
-2. **Badge vocabulary is the brand glue** — define the full set (rarity × difficulty × availability × completion) with color *and* label/icon (never color alone — PRD §10).
+2. **Badge vocabulary is the brand glue** — define the full set (rarity × difficulty × availability × completion) with color _and_ label/icon (never color alone — PRD §10).
 3. **Personalization badges (`«Missing»`, `«Completes set»`, `«Avail now»`) are the product's differentiator** — make them prominent and consistent across Dashboard, This Week, Collections, and Wishlist.
 4. **Replace placeholder emoji** (⚔️🛡️✨🎉📝) with a coherent icon set.
 5. **Design the freshness/refresh model visibly** — it replaces the debug banner and sets the (non-live) data expectation.
 6. Validate rarity colors for **WCAG AA on dark** and **color-blind** safety before locking the palette.
-```
