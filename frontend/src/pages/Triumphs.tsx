@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dropdown, PageHead, SealCard } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
@@ -21,13 +21,9 @@ export function Triumphs() {
   });
 
   const [sort, setSort] = useState<Sort>("closest");
-  const [openId, setOpenId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (seals.length > 0 && openId === null) {
-      setOpenId(seals[0].id);
-    }
-  }, [seals, openId]);
+  // undefined = never interacted (auto-open first); null = user explicitly closed
+  const [openId, setOpenId] = useState<string | null | undefined>(undefined);
+  const effectiveOpenId = openId === undefined ? (seals[0]?.id ?? null) : openId;
 
   const sorted = useMemo(() => {
     const l = seals.slice();
@@ -75,8 +71,8 @@ export function Triumphs() {
           <SealCard
             key={s.id}
             seal={s}
-            expanded={openId === s.id}
-            onToggle={() => setOpenId((id) => (id === s.id ? null : s.id))}
+            expanded={effectiveOpenId === s.id}
+            onToggle={() => setOpenId(effectiveOpenId === s.id ? null : s.id)}
           />
         ))}
       </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ActionList,
@@ -24,10 +24,11 @@ export function ThisWeek() {
   });
 
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
+  const [lastW, setLastW] = useState(w);
+  if (w !== lastW) {
+    setLastW(w);
     setDoneIds(new Set());
-  }, [w]);
+  }
 
   const acts = (w?.recommended ?? []).map((x) => ({
     ...x,
@@ -37,7 +38,7 @@ export function ThisWeek() {
   const toggle = (id: string) =>
     setDoneIds((prev) => {
       const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
+      if (n.has(id)) { n.delete(id); } else { n.add(id); }
       return n;
     });
 
