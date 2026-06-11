@@ -5,7 +5,7 @@ import {
   PRIORITY_LABEL,
   RARITY_LABEL,
   TYPE_GLYPH,
-} from "../../lib/mockData";
+} from "../../lib/constants";
 
 /** Allow CSS custom properties in inline styles without fighting the type. */
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;

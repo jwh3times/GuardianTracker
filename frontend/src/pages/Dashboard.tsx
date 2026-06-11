@@ -12,16 +12,24 @@ import {
   Panel,
   ProgressBar,
   RadialProgress,
+  Skeleton,
 } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
-import { summary, weekly, wishlist } from "../lib/mockData";
-import type { SummaryCategory } from "../types/design";
+import type { DailyAction, SummaryCategory, Weekly } from "../types/design";
 import type {
   ProfileResponse,
   APICollectionSummary,
   APIUserCollections,
+  WishListItem,
 } from "../types/api";
+
+function formatDuration(d: import("../types/design").Duration | undefined): string {
+  if (!d) return "";
+  if (d.d && d.d > 0) return `${d.d}d ${d.h ?? 0}h`;
+  if (d.h && d.h > 0) return `${d.h}h ${d.m ?? 0}m`;
+  return `${d.m ?? 0}m`;
+}
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -36,13 +44,25 @@ export function Dashboard() {
   const membershipType = profileData?.user.membershipType ?? user?.membershipType;
   const membershipId = profileData?.user.membershipId ?? user?.membershipId;
 
-  const { data: real } = useQuery({
+  const { data: real, isLoading: collectionsLoading } = useQuery({
     queryKey: ["collections", membershipType, membershipId],
     queryFn: () =>
       apiFetch<APIUserCollections>(
         `/api/collections/${membershipType}/${membershipId}`
       ),
     enabled: membershipType != null && !!membershipId,
+  });
+
+  const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
+    queryKey: ["weekly"],
+    queryFn: () => apiFetch<Weekly>("/api/weekly/recommendations"),
+    enabled: membershipType != null && !!membershipId,
+  });
+
+  const { data: wishlistItems, isLoading: wishlistLoading } = useQuery({
+    queryKey: ["wishlist"],
+    queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
+    enabled: !!user,
   });
 
   const displayName =
@@ -63,56 +83,71 @@ export function Dashboard() {
     return fallback;
   };
 
-  const [mWeapons, mArmor, mExotics, mCosmetics] = summary.categories;
+  const mWeapons: SummaryCategory = { id: "weapons", label: "Weapons", pct: 0, count: [0, 0] };
+  const mArmor: SummaryCategory = { id: "armor", label: "Armor", pct: 0, count: [0, 0] };
+  const mExotics: SummaryCategory = { id: "exotics", label: "Exotics", pct: 0, count: [0, 0] };
+  const mCosmetics: SummaryCategory = { id: "cosmetics", label: "Cosmetics", pct: 0, count: [0, 0] };
   const categories: SummaryCategory[] = [
     fromReal(real?.weapons, mWeapons),
     fromReal(real?.armor, mArmor),
     fromReal(real?.exotics, mExotics),
-    mCosmetics,
+    fromReal(real?.cosmetics, mCosmetics),
   ];
   const overall = Math.round(
     categories.reduce((sum, c) => sum + c.pct, 0) / categories.length
   );
-
-  const availableWishlist = wishlist.filter((i) => i.avail.now);
 
   return (
     <div className="gt-page gt-dash">
       <PageHead
         title={`Welcome back, ${displayName}`}
         sub="Your collection at a glance"
-        right={<CountdownChip prefix="Weekly reset" time={weekly.resetIn} icon="clock" />}
+        right={<CountdownChip prefix="Weekly reset" time={weeklyData?.resetIn ?? { d: 0, h: 0, m: 0 }} icon="clock" />}
       />
 
       {/* HERO COMPLETION */}
       <Panel pad={false} style={{ padding: "var(--s-5)" }}>
         <div className="gt-hero">
           <div className="gt-hero-radial">
-            <RadialProgress
-              value={overall}
-              size="clamp(8rem,9vw,10rem)"
-              color="var(--c-exotic)"
-              sub="overall"
-              pctSize="clamp(2rem,3vw,2.6rem)"
-            />
+            {collectionsLoading ? (
+              <Skeleton w="clamp(8rem,9vw,10rem)" h="clamp(8rem,9vw,10rem)" r="50%" />
+            ) : (
+              <RadialProgress
+                value={overall}
+                size="clamp(8rem,9vw,10rem)"
+                color="var(--c-exotic)"
+                sub="overall"
+                pctSize="clamp(2rem,3vw,2.6rem)"
+              />
+            )}
           </div>
           <div className="gt-hero-bars">
-            {categories.map((c) => (
-              <button key={c.id} className="gt-hero-bar" onClick={() => go("/collections")}>
-                <div className="gt-hero-bar-top">
-                  <span className="gt-hero-bar-label">{c.label}</span>
-                  <span className="mono gt-hero-bar-count">
-                    {c.count[0].toLocaleString()}/{c.count[1].toLocaleString()}
-                  </span>
-                </div>
-                <ProgressBar
-                  value={c.pct}
-                  showVal
-                  valText={`${c.pct}%`}
-                  color={c.id === "exotics" ? "var(--c-exotic)" : "var(--c-signal)"}
-                />
-              </button>
-            ))}
+            {collectionsLoading
+              ? ["weapons", "armor", "exotics", "cosmetics"].map((id) => (
+                  <div key={id} className="gt-hero-bar" style={{ pointerEvents: "none" }}>
+                    <div className="gt-hero-bar-top">
+                      <Skeleton w="5rem" h="0.75rem" />
+                      <Skeleton w="3.5rem" h="0.75rem" />
+                    </div>
+                    <Skeleton w="100%" h="0.5rem" r="var(--r-pill)" style={{ marginTop: "var(--s-2)" }} />
+                  </div>
+                ))
+              : categories.map((c) => (
+                  <button key={c.id} className="gt-hero-bar" onClick={() => go("/collections")}>
+                    <div className="gt-hero-bar-top">
+                      <span className="gt-hero-bar-label">{c.label}</span>
+                      <span className="mono gt-hero-bar-count">
+                        {c.count[0].toLocaleString()}/{c.count[1].toLocaleString()}
+                      </span>
+                    </div>
+                    <ProgressBar
+                      value={c.pct}
+                      showVal
+                      valText={`${c.pct}%`}
+                      color={c.id === "exotics" ? "var(--c-exotic)" : "var(--c-signal)"}
+                    />
+                  </button>
+                ))}
           </div>
         </div>
       </Panel>
@@ -129,26 +164,54 @@ export function Dashboard() {
         }
       >
         <div className="gt-today">
-          <button className="gt-today-row" onClick={() => go("/this-week")}>
-            <Icon name="bungie" size="1.2rem" style={{ color: "var(--c-exotic)" }} />
-            <div className="gt-today-main">
-              <div className="gt-today-text">
-                <strong>Xûr is selling Hawkmoon</strong> — a Hand Cannon exotic you're missing.
+          {weeklyLoading ? (
+            [0, 1, 2].map((i) => (
+              <div key={i} className="gt-today-row" style={{ pointerEvents: "none" }}>
+                <Skeleton w="1.2rem" h="1.2rem" r="50%" />
+                <div className="gt-today-main" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+                  <Skeleton w="70%" h="0.9rem" />
+                  <Skeleton w="45%" h="0.7rem" />
+                </div>
+                <Skeleton w="4rem" h="1.4rem" r="var(--r-sm)" />
               </div>
-              <div className="gt-action-meta mono">The Tower · leaves in 1d 6h</div>
-            </div>
-            <Badge kind="missing" dot icon="bolt" />
-          </button>
-          <button className="gt-today-row" onClick={() => go("/collections")}>
-            <Icon name="collections" size="1.2rem" style={{ color: "var(--c-rare)" }} />
-            <div className="gt-today-main">
-              <div className="gt-today-text">
-                <strong>Featured raid: Vault of Glass</strong> — 2 weapons you don't have yet.
+            ))
+          ) : (weeklyData?.dailyActions ?? []).length === 0 ? (
+            <div className="gt-today-row" style={{ pointerEvents: "none", opacity: 0.6 }}>
+              <Icon name="bolt" size="1.2rem" style={{ color: "var(--c-text-3)" }} />
+              <div className="gt-today-main">
+                <div className="gt-today-text">Nothing urgent today — check back after daily reset.</div>
               </div>
-              <div className="gt-action-meta mono">Pinnacle gear · resets in 2d 14h</div>
             </div>
-            <Badge kind="completes-set" dot />
-          </button>
+          ) : (
+            (weeklyData?.dailyActions ?? []).map((action: DailyAction) => {
+              const iconColor = action.category === "xur"
+                ? "var(--c-exotic)"
+                : action.category === "vendor"
+                ? "var(--c-legendary)"
+                : action.category === "activity"
+                ? "var(--c-rare)"
+                : "var(--c-signal)";
+              const timingLabel = action.category === "xur" ? "leaves in" : "resets in";
+              const timingStr = formatDuration(action.resetsIn);
+              return (
+                <button key={action.id} className="gt-today-row" onClick={() => go("/this-week")}>
+                  <Icon name={action.icon as any} size="1.2rem" style={{ color: iconColor }} />
+                  <div className="gt-today-main">
+                    <div className="gt-today-text">
+                      <strong>{action.text}</strong>
+                      {action.detail && (
+                        <> — <span style={{ fontWeight: "normal" }}>{action.detail}</span></>
+                      )}
+                    </div>
+                    {timingStr && (
+                      <div className="gt-action-meta mono">{timingLabel} {timingStr}</div>
+                    )}
+                  </div>
+                  <Badge kind={action.badge as any} dot />
+                </button>
+              );
+            })
+          )}
         </div>
       </Panel>
 
@@ -163,22 +226,33 @@ export function Dashboard() {
           }
         >
           <ul className="gt-vendor-list">
-            {weekly.milestones.slice(0, 2).map((m) => (
-              <li key={m.id} className="gt-milestone">
-                <div className="gt-milestone-l">
-                  <div className="gt-action-meta mono">{m.label}</div>
-                  <div className="gt-item-name">{m.name}</div>
-                  <div className="gt-item-type">Reward: {m.reward}</div>
-                </div>
-                {m.missing > 0 ? (
-                  <Badge kind="missing" dot>
-                    {m.missing} missing
-                  </Badge>
-                ) : (
-                  <Badge kind="complete" dot />
-                )}
-              </li>
-            ))}
+            {weeklyLoading
+              ? [0, 1].map((i) => (
+                  <li key={i} className="gt-milestone">
+                    <div className="gt-milestone-l" style={{ display: "flex", flexDirection: "column", gap: "var(--s-2)", flex: 1 }}>
+                      <Skeleton w="4rem" h="0.65rem" />
+                      <Skeleton w="70%" h="0.9rem" />
+                      <Skeleton w="55%" h="0.7rem" />
+                    </div>
+                    <Skeleton w="5rem" h="1.5rem" r="var(--r-sm)" />
+                  </li>
+                ))
+              : (weeklyData?.milestones ?? []).slice(0, 2).map((m) => (
+                  <li key={m.id} className="gt-milestone">
+                    <div className="gt-milestone-l">
+                      <div className="gt-action-meta mono">{m.label}</div>
+                      <div className="gt-item-name">{m.name}</div>
+                      <div className="gt-item-type">Reward: {m.reward}</div>
+                    </div>
+                    {m.missing > 0 ? (
+                      <Badge kind="missing" dot>
+                        {m.missing} missing
+                      </Badge>
+                    ) : (
+                      <Badge kind="complete" dot />
+                    )}
+                  </li>
+                ))}
           </ul>
         </Panel>
 
@@ -193,25 +267,40 @@ export function Dashboard() {
           }
         >
           <div className="gt-avail-head">
-            <span className="gt-avail-num mono">{availableWishlist.length}</span>
-            <span className="gt-avail-text">of your wishlisted items are obtainable right now</span>
+            {wishlistLoading ? (
+              <Skeleton w="2.5rem" h="1.2rem" style={{ display: "inline-block" }} />
+            ) : (
+              <span className="gt-avail-num mono">{(wishlistItems ?? []).length}</span>
+            )}
+            <span className="gt-avail-text">items on your wishlist</span>
           </div>
           <div className="gt-avail-list">
-            {availableWishlist.slice(0, 3).map((i) => (
-              <button
-                key={i.id}
-                className="gt-item gt-item--compact"
-                data-rarity={i.rarity}
-                onClick={() => go("/wishlist")}
-              >
-                <ItemTile rarity={i.rarity} type={i.type} style={{ width: "1.9rem" }} />
-                <div className="gt-item-head" style={{ flex: 1 }}>
-                  <div className="gt-item-name">{i.name}</div>
-                  <div className="gt-item-type">{i.avail.where}</div>
-                </div>
-                <Badge kind="avail-now" dot />
-              </button>
-            ))}
+            {wishlistLoading
+              ? [0, 1, 2].map((i) => (
+                  <div key={i} className="gt-item gt-item--compact" style={{ pointerEvents: "none" }}>
+                    <Skeleton w="1.9rem" h="1.9rem" r="var(--r-sm)" />
+                    <div className="gt-item-head" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+                      <Skeleton w="65%" h="0.9rem" />
+                      <Skeleton w="40%" h="0.7rem" />
+                    </div>
+                    <Skeleton w="3.5rem" h="1.2rem" r="var(--r-sm)" />
+                  </div>
+                ))
+              : (wishlistItems ?? []).slice(0, 3).map((item) => (
+                  <button
+                    key={item.id}
+                    className="gt-item gt-item--compact"
+                    data-rarity={item.rarity.toLowerCase()}
+                    onClick={() => go("/wishlist")}
+                  >
+                    <ItemTile rarity={item.rarity.toLowerCase() as any} type={item.itemType} style={{ width: "1.9rem" }} />
+                    <div className="gt-item-head" style={{ flex: 1 }}>
+                      <div className="gt-item-name">{item.name}</div>
+                      <div className="gt-item-type">{item.itemType}</div>
+                    </div>
+                    <Badge kind="avail-now" dot />
+                  </button>
+                ))}
           </div>
         </Panel>
       </div>
@@ -223,7 +312,7 @@ export function Dashboard() {
         <Button variant="outline" icon="wishlist" onClick={() => go("/wishlist")}>
           Manage Wishlist
         </Button>
-        <DataFreshnessChip ago={summary.updatedAgo} />
+        <DataFreshnessChip ago="—" />
       </div>
     </div>
   );

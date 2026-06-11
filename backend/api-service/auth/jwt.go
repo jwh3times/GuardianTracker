@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 // JWTClaims are the claims stored in every app-issued JWT.
@@ -15,7 +16,8 @@ type JWTClaims struct {
 	MembershipID   string `json:"membership_id"`
 	MembershipType int    `json:"membership_type"`
 	Platform       string `json:"platform"`
-	TokenType      string `json:"token_type"` // "access" or "refresh"
+	TokenType      string `json:"token_type"`   // "access" or "refresh"
+	TokenVersion   int    `json:"tver"`          // incremented on logout to revoke all tokens
 	jwt.RegisteredClaims
 }
 
@@ -36,7 +38,7 @@ func NewJWT(secret string, expiryHours, refreshExpiryDays int) *JWT {
 }
 
 // GenerateAccessToken creates a signed JWT access token for the given user.
-func (j *JWT) GenerateAccessToken(user *BungieUserProfile) (string, error) {
+func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int) (string, error) {
 	claims := JWTClaims{
 		UserID:         user.MembershipID,
 		DisplayName:    user.DisplayName,
@@ -44,7 +46,9 @@ func (j *JWT) GenerateAccessToken(user *BungieUserProfile) (string, error) {
 		MembershipType: user.MembershipType,
 		Platform:       GetPlatformName(user.MembershipType),
 		TokenType:      "access",
+		TokenVersion:   tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * time.Duration(j.expiryHours))),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -56,7 +60,7 @@ func (j *JWT) GenerateAccessToken(user *BungieUserProfile) (string, error) {
 }
 
 // GenerateRefreshToken creates a signed JWT refresh token for the given user.
-func (j *JWT) GenerateRefreshToken(user *BungieUserProfile) (string, error) {
+func (j *JWT) GenerateRefreshToken(user *BungieUserProfile, tokenVersion int) (string, error) {
 	claims := JWTClaims{
 		UserID:         user.MembershipID,
 		DisplayName:    user.DisplayName,
@@ -64,7 +68,9 @@ func (j *JWT) GenerateRefreshToken(user *BungieUserProfile) (string, error) {
 		MembershipType: user.MembershipType,
 		Platform:       GetPlatformName(user.MembershipType),
 		TokenType:      "refresh",
+		TokenVersion:   tokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * time.Duration(j.refreshExpiryDays))),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -77,7 +83,7 @@ func (j *JWT) GenerateRefreshToken(user *BungieUserProfile) (string, error) {
 
 // ValidateToken parses and validates a JWT string, returning its claims.
 func (j *JWT) ValidateToken(tokenString string) (*JWTClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(t *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	"guardian-tracker/api-service/services/bungie"
@@ -148,9 +149,19 @@ func (r *Repository) GetAllCollectiblesWithItems() ([]CollectibleWithItem, error
 
 // FilteredCollectibles holds collectibles split into categories.
 type FilteredCollectibles struct {
-	Weapons []CollectibleWithItem
-	Armor   []CollectibleWithItem
-	Exotics []CollectibleWithItem
+	Weapons   []CollectibleWithItem
+	Armor     []CollectibleWithItem
+	Exotics   []CollectibleWithItem
+	Cosmetics []CollectibleWithItem
+}
+
+// cosmeticItemTypes is the set of itemType values bucketed as cosmetics.
+var cosmeticItemTypes = map[int]struct{}{
+	14: {}, // Emblem
+	21: {}, // Ship
+	22: {}, // Sparrow
+	23: {}, // Emote
+	24: {}, // Ghost
 }
 
 func (r *Repository) GetFilteredCollectibles() (*FilteredCollectibles, error) {
@@ -159,12 +170,17 @@ func (r *Repository) GetFilteredCollectibles() (*FilteredCollectibles, error) {
 		return nil, err
 	}
 	result := &FilteredCollectibles{
-		Weapons: make([]CollectibleWithItem, 0),
-		Armor:   make([]CollectibleWithItem, 0),
-		Exotics: make([]CollectibleWithItem, 0),
+		Weapons:   make([]CollectibleWithItem, 0),
+		Armor:     make([]CollectibleWithItem, 0),
+		Exotics:   make([]CollectibleWithItem, 0),
+		Cosmetics: make([]CollectibleWithItem, 0),
 	}
 	for _, cwi := range all {
 		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
+			continue
+		}
+		if _, isCosmetic := cosmeticItemTypes[cwi.Item.ItemType]; isCosmetic {
+			result.Cosmetics = append(result.Cosmetics, cwi)
 			continue
 		}
 		isExotic := cwi.Item.Inventory.TierType == bungie.TierTypeExotic
@@ -184,6 +200,305 @@ func (r *Repository) GetFilteredCollectibles() (*FilteredCollectibles, error) {
 		}
 	}
 	return result, nil
+}
+
+// GetItemsByHashes fetches inventory item definitions for a batch of hashes.
+// Returns a map from hash to definition. Items not found in the manifest are omitted.
+// Hashes are stored as signed int32 in SQLite; the conversion is handled internally.
+func (r *Repository) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*bungie.InventoryItemDefinition{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	placeholders := make([]string, len(hashes))
+	args := make([]any, len(hashes))
+	for i, h := range hashes {
+		placeholders[i] = "?"
+		args[i] = int32(h) // SQLite stores hashes as signed int32
+	}
+	q := "SELECT id, json FROM DestinyInventoryItemDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+	rows, err := r.db.Query(q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("GetItemsByHashes: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[uint32]*bungie.InventoryItemDefinition)
+	for rows.Next() {
+		var dbID int32
+		var blob string
+		if err := rows.Scan(&dbID, &blob); err != nil {
+			continue
+		}
+		var def bungie.InventoryItemDefinition
+		if err := json.Unmarshal([]byte(blob), &def); err != nil {
+			continue
+		}
+		out[uint32(dbID)] = &def
+	}
+	return out, rows.Err()
+}
+
+// GetMilestoneDefinitions fetches milestone definitions for a batch of hashes.
+// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
+func (r *Repository) GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungie.MilestoneDefinition, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*bungie.MilestoneDefinition{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[uint32]*bungie.MilestoneDefinition, len(hashes))
+	const chunkSize = 500
+	for i := 0; i < len(hashes); i += chunkSize {
+		chunk := hashes[i:min(i+chunkSize, len(hashes))]
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for j, h := range chunk {
+			placeholders[j] = "?"
+			args[j] = int32(h)
+		}
+		q := "SELECT json FROM DestinyMilestoneDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+		rows, err := r.db.Query(q, args...)
+		if err != nil {
+			return nil, fmt.Errorf("GetMilestoneDefinitions: %w", err)
+		}
+		for rows.Next() {
+			var blob string
+			if err := rows.Scan(&blob); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			var def bungie.MilestoneDefinition
+			if err := json.Unmarshal([]byte(blob), &def); err != nil {
+				continue
+			}
+			if def.Hash != 0 {
+				out[def.Hash] = &def
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// PresentationNodeDef is a minimal DestinyPresentationNodeDefinition from the manifest.
+type PresentationNodeDef struct {
+	Hash              uint32                    `json:"hash"`
+	DisplayProperties bungie.DisplayProperties  `json:"displayProperties"`
+	Children          struct {
+		PresentationNodes []struct {
+			PresentationNodeHash uint32 `json:"presentationNodeHash"`
+		} `json:"presentationNodes"`
+		Records []struct {
+			RecordHash uint32 `json:"recordHash"`
+		} `json:"records"`
+	} `json:"children"`
+	CompletionRecordHash uint32 `json:"completionRecordHash"`
+}
+
+// RecordDef is a minimal DestinyRecordDefinition from the manifest.
+type RecordDef struct {
+	Hash              uint32                   `json:"hash"`
+	DisplayProperties bungie.DisplayProperties `json:"displayProperties"`
+	Objectives        struct {
+		ObjectiveHashes   []uint32 `json:"objectiveHashes"`
+		PerkObjectiveHash uint32   `json:"perkObjectiveHash"`
+	} `json:"objectives"`
+	IntervalObjectives []struct {
+		IntervalObjectiveHash uint32 `json:"intervalObjectiveHash"`
+	} `json:"intervalObjectives"`
+	ForTitleGilding  bool     `json:"forTitleGilding"`
+	ParentNodeHashes []uint32 `json:"parentNodeHashes"`
+}
+
+// GetPresentationNodeDefinitions fetches a batch of presentation node definitions by hash.
+// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
+func (r *Repository) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32]*PresentationNodeDef, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*PresentationNodeDef{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	results := make(map[uint32]*PresentationNodeDef, len(hashes))
+	const chunkSize = 500
+	for i := 0; i < len(hashes); i += chunkSize {
+		chunk := hashes[i:min(i+chunkSize, len(hashes))]
+
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for j, h := range chunk {
+			placeholders[j] = "?"
+			args[j] = hashToDBKey(h)
+		}
+		query := fmt.Sprintf("SELECT json FROM DestinyPresentationNodeDefinition WHERE id IN (%s)",
+			strings.Join(placeholders, ","))
+		rows, err := r.db.Query(query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("GetPresentationNodeDefinitions: %w", err)
+		}
+		for rows.Next() {
+			var blob string
+			if err := rows.Scan(&blob); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			var def PresentationNodeDef
+			if err := json.Unmarshal([]byte(blob), &def); err != nil {
+				continue
+			}
+			results[def.Hash] = &def
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
+}
+
+// GetRecordDefinitions fetches a batch of record definitions by hash.
+// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
+func (r *Repository) GetRecordDefinitions(hashes []uint32) (map[uint32]*RecordDef, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*RecordDef{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	results := make(map[uint32]*RecordDef, len(hashes))
+	const chunkSize = 500
+	for i := 0; i < len(hashes); i += chunkSize {
+		chunk := hashes[i:min(i+chunkSize, len(hashes))]
+
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for j, h := range chunk {
+			placeholders[j] = "?"
+			args[j] = hashToDBKey(h)
+		}
+		query := fmt.Sprintf("SELECT json FROM DestinyRecordDefinition WHERE id IN (%s)",
+			strings.Join(placeholders, ","))
+		rows, err := r.db.Query(query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("GetRecordDefinitions: %w", err)
+		}
+		for rows.Next() {
+			var blob string
+			if err := rows.Scan(&blob); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			var def RecordDef
+			if err := json.Unmarshal([]byte(blob), &def); err != nil {
+				continue
+			}
+			results[def.Hash] = &def
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return results, nil
+}
+
+// GetActivityDefinitions fetches activity definitions for a batch of hashes.
+// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
+func (r *Repository) GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*bungie.ActivityDefinition{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[uint32]*bungie.ActivityDefinition, len(hashes))
+	const chunkSize = 500
+	for i := 0; i < len(hashes); i += chunkSize {
+		chunk := hashes[i:min(i+chunkSize, len(hashes))]
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for j, h := range chunk {
+			placeholders[j] = "?"
+			args[j] = int32(h)
+		}
+		q := "SELECT json FROM DestinyActivityDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+		rows, err := r.db.Query(q, args...)
+		if err != nil {
+			return nil, fmt.Errorf("GetActivityDefinitions: %w", err)
+		}
+		for rows.Next() {
+			var blob string
+			if err := rows.Scan(&blob); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			var def bungie.ActivityDefinition
+			if err := json.Unmarshal([]byte(blob), &def); err != nil {
+				continue
+			}
+			if def.Hash != 0 {
+				out[def.Hash] = &def
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// GetActivityModifierDefinitions fetches activity modifier definitions for a batch of hashes.
+// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
+func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModifierDefinition, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*bungie.ActivityModifierDefinition{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[uint32]*bungie.ActivityModifierDefinition, len(hashes))
+	const chunkSize = 500
+	for i := 0; i < len(hashes); i += chunkSize {
+		chunk := hashes[i:min(i+chunkSize, len(hashes))]
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for j, h := range chunk {
+			placeholders[j] = "?"
+			args[j] = int32(h)
+		}
+		q := "SELECT json FROM DestinyActivityModifierDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
+		rows, err := r.db.Query(q, args...)
+		if err != nil {
+			return nil, fmt.Errorf("GetActivityModifierDefinitions: %w", err)
+		}
+		for rows.Next() {
+			var blob string
+			if err := rows.Scan(&blob); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			var def bungie.ActivityModifierDefinition
+			if err := json.Unmarshal([]byte(blob), &def); err != nil {
+				continue
+			}
+			if def.Hash != 0 {
+				out[def.Hash] = &def
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // SearchItems does a case-insensitive name search against the manifest.

@@ -6,8 +6,7 @@ import { Icon, ItemTile } from "./kit";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
 import { toCharacter } from "../lib/adapters";
-import type { APICharacter } from "../types/api";
-import { characters, items } from "../lib/mockData";
+import type { APICharacter, APISearchResult } from "../types/api";
 
 interface NavItem {
   id: string;
@@ -49,8 +48,7 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
     enabled: !!(user?.membershipId) && user?.membershipType != null,
   });
 
-  const realChars = (charsData ?? []).map(toCharacter);
-  const list = realChars.length ? realChars : characters;
+  const list = (charsData ?? []).map(toCharacter);
 
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
@@ -62,6 +60,18 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
   }, []);
+
+  if (!list.length) {
+    return (
+      <div className="gt-charsw">
+        <div className="gt-charsw-btn">
+          <span className="gt-avatar">{(displayName || "G")[0]}</span>
+          <span className="gt-charsw-name">{displayName}</span>
+        </div>
+      </div>
+    );
+  }
+
   const cur = list.find((c) => c.id === active) ?? list[0];
   return (
     <div className="gt-charsw" ref={ref}>
@@ -108,9 +118,18 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
 /* ---------------- GLOBAL SEARCH ---------------- */
 function SearchBar() {
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // 250ms debounce
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQ(q), 250);
+    return () => clearTimeout(id);
+  }, [q]);
+
+  // close on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -118,10 +137,17 @@ function SearchBar() {
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
   }, []);
-  const results =
-    q.length > 1
-      ? items.filter((i) => i.name.toLowerCase().includes(q.toLowerCase())).slice(0, 6)
-      : [];
+
+  const { data: results = [], isLoading: searching } = useQuery({
+    queryKey: ["search", debouncedQ],
+    queryFn: () =>
+      apiFetch<APISearchResult[]>(
+        `/api/items/search?q=${encodeURIComponent(debouncedQ)}&limit=20`
+      ),
+    enabled: debouncedQ.length >= 2,
+    staleTime: 30_000,
+  });
+
   return (
     <div className="gt-search" ref={ref}>
       <Icon name="search" size="1rem" style={{ color: "var(--c-text-3)" }} />
@@ -135,20 +161,22 @@ function SearchBar() {
         }}
         onFocus={() => setOpen(true)}
       />
-      {open && q.length > 1 && (
+      {open && q.length >= 2 && (
         <div className="gt-search-menu">
-          {results.length ? (
-            results.map((i) => (
+          {searching ? (
+            <div className="gt-search-empty mono">Searching…</div>
+          ) : results.length ? (
+            results.slice(0, 6).map((i) => (
               <button
-                key={i.id}
+                key={i.hash}
                 className="gt-search-opt"
-                data-rarity={i.rarity}
+                data-rarity={i.rarity.toLowerCase()}
                 onClick={() => {
                   setOpen(false);
                   navigate("/collections");
                 }}
               >
-                <ItemTile rarity={i.rarity} type={i.type} style={{ width: "1.8rem" }} />
+                <ItemTile rarity={i.rarity.toLowerCase() as any} type={i.type} style={{ width: "1.8rem" }} />
                 <span className="gt-search-opt-name">{i.name}</span>
                 <span className="gt-item-type">{i.type}</span>
               </button>

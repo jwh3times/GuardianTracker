@@ -1,12 +1,33 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dropdown, PageHead, SealCard } from "../components/kit";
-import { seals } from "../lib/mockData";
+import { useAuth } from "../contexts/AuthContext";
+import { apiFetch } from "../lib/api";
+import { LoadingSpinner } from "../components/ui/LoadingSpinner";
+import type { Seal } from "../types/design";
 
 type Sort = "closest" | "name";
 
 export function Triumphs() {
+  const { user } = useAuth();
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
+
+  const { data: seals = [], isLoading } = useQuery({
+    queryKey: ["seals", membershipType, membershipId],
+    queryFn: () =>
+      apiFetch<Seal[]>(`/api/seals/${membershipType}/${membershipId}`),
+    enabled: membershipType != null && !!membershipId,
+  });
+
   const [sort, setSort] = useState<Sort>("closest");
-  const [openId, setOpenId] = useState<string | null>(seals[0].id);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (seals.length > 0 && openId === null) {
+      setOpenId(seals[0].id);
+    }
+  }, [seals, openId]);
 
   const sorted = useMemo(() => {
     const l = seals.slice();
@@ -16,9 +37,19 @@ export function Triumphs() {
       l.sort((a, b) => a.name.localeCompare(b.name));
     }
     return l;
-  }, [sort]);
+  }, [seals, sort]);
 
   const gilded = seals.filter((s) => s.gilded > 0).length;
+
+  if (isLoading) {
+    return (
+      <div className="gt-page">
+        <div className="gt-page-loading">
+          <LoadingSpinner size="lg" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="gt-page">

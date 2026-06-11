@@ -115,6 +115,9 @@ Or run `./setup.ps1` to copy all at once.
 - `BUNGIE_CLIENT_ID` — from Bungie app settings
 - `BUNGIE_CLIENT_SECRET` — from Bungie app settings
 - `JWT_SECRET` — 32+ char random string (`openssl rand -base64 32`)
+- `DATABASE_URL` — Postgres connection string (`postgres://guardian_app:...@host:5432/guardian_tracker?sslmode=disable`)
+- `TOKEN_ENCRYPTION_KEY` — 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)
+- `TOKEN_ENCRYPTION_KEY_PREVIOUS` — (optional) previous key for rotation during key migration
 
 ## Key Files
 
@@ -126,19 +129,27 @@ Or run `./setup.ps1` to copy all at once.
 | `config/config.go` | Typed config with env var parsing helpers |
 | `auth/jwt.go` | JWT generation and validation (access 24h, refresh 30d) |
 | `auth/middleware.go` | JWT middleware for protected routes |
-| `auth/tokenstore.go` | In-memory Bungie OAuth token store with auto-refresh |
-| `api/handlers/auth.go` | OAuth flow, token refresh, profile endpoints |
+| `auth/tokenstore.go` | DB-backed encrypted Bungie OAuth token store with auto-refresh |
+| `auth/crypto.go` | AES-256-GCM cipher for Bungie token encryption; key rotation via prev key |
+| `auth/revocation.go` | JWT revocation via token_version column; 60s in-memory cache |
+| `api/handlers/auth.go` | OAuth flow, token refresh, logout, profile endpoints |
 | `api/handlers/characters.go` | HTTP handler for characters |
-| `api/handlers/collections.go` | HTTP handler for collections |
-| `api/handlers/wishlist.go` | Wishlist CRUD stubs |
+| `api/handlers/collections.go` | HTTP handler for collections (incl. cosmetics) |
+| `api/handlers/wishlist.go` | Wishlist CRUD with Postgres persistence and manifest enrichment |
 | `api/handlers/health.go` | Health, ready, manifest status endpoints |
+| `api/handlers/common.go` | Shared handler helpers (parseMembershipParams, ownershipCheck, etc.) |
 | `services/bungie/client.go` | HTTP client with rate limiting + retry |
 | `services/bungie/manifest.go` | Manifest download, version tracking, SQLite extraction |
 | `services/bungie/types.go` | All Bungie API types, constants, helpers |
-| `services/collections/service.go` | Collection analysis + difficulty classification |
+| `services/collections/service.go` | Collection analysis + difficulty classification + cosmetics |
 | `services/characters/service.go` | Character fetching |
 | `services/manifest/repository.go` | SQLite read-only queries against manifest DB |
+| `services/weekly/service.go` | Weekly recommendations; Xûr inventory; milestone data; reset time math |
+| `services/search/service.go` | In-memory manifest item search index; async rebuild on manifest update |
+| `services/records/service.go` | Catalysts, crafting patterns, and seals/triumphs from Bungie records API |
 | `cache/cache.go` | In-memory cache (and no-op cache interface) |
+| `db/db.go`, `db/migrate.go`, `db/migrations/0001_init.sql` | Postgres pool, migration runner, schema DDL |
+| `db/users.go`, `db/tokens.go`, `db/wishlist.go`, `db/prefs.go` | DB stores for users, encrypted Bungie tokens, wishlist, preferences |
 
 **Endpoints:**
 
@@ -147,13 +158,21 @@ Or run `./setup.ps1` to copy all at once.
 - `POST /api/auth/refresh` — rotate access + refresh tokens
 - `GET /api/auth/validate` — validate JWT (protected)
 - `GET /api/auth/profile` — current user profile (protected)
-- `GET/POST/DELETE /api/wishlist` — wish list CRUD (stubs, JWT protected)
+- `POST /api/auth/logout` — invalidate JWT + delete Bungie token (protected)
+- `GET /api/wishlist` — list wishlist items (JWT protected)
+- `POST /api/wishlist` — add wishlist item (JWT protected)
+- `PUT /api/wishlist/:id` — update wishlist item priority/notes (JWT protected)
+- `DELETE /api/wishlist/:id` — remove wishlist item (JWT protected)
+- `GET/PUT /api/preferences` — user preferences: card style, personalize (protected)
 - `GET /api/characters/:membershipType/:membershipId` — user characters (JWT protected)
 - `GET /api/collections/:membershipType/:membershipId` — user collections (JWT protected)
-- `POST /api/collections/:membershipType/:membershipId/refresh` — invalidate cache
+- `POST /api/collections/:membershipType/:membershipId/refresh` — invalidate cache (JWT protected)
 - `GET /api/manifest/status` — manifest version and readiness
-- `GET /api/weekly/recommendations` — placeholder
-- `GET /api/items/search` — placeholder
+- `GET /api/weekly/recommendations` — weekly data, Xûr, milestones, recommended actions (protected)
+- `GET /api/items/search?q=&limit=` — manifest item search; 503 until index ready (protected)
+- `GET /api/catalysts/:membershipType/:membershipId` — exotic catalyst progress (protected)
+- `GET /api/crafting/:membershipType/:membershipId` — crafting pattern progress (protected)
+- `GET /api/seals/:membershipType/:membershipId` — triumph/seal completion (protected)
 - `GET /health` and `GET /ready` — health/readiness probes
 
 **Bungie manifest flow:**
@@ -183,19 +202,19 @@ The UI uses the "Guardian Tracker" design system: a custom dark theme built on o
 | `components/ui/` | Legacy primitives: `LoadingSpinner`, `Toast`, `ErrorBoundary` |
 | `pages/Login.tsx` | Bungie OAuth initiation |
 | `pages/OAuthCallback.tsx` | Handles `/auth/callback` — exchanges code, stores tokens |
-| `pages/Dashboard.tsx` | Completion hero + "do this today"; real collection totals, mock weekly |
-| `pages/Collections.tsx` | Category tree + filterable item grid/list + detail drawer |
-| `pages/WishList.tsx` | Wishlist management; real API with mock fallback |
-| `pages/ThisWeek.tsx` | Weekly recommendations / Xûr / milestones (mock — no backend yet) |
-| `pages/Catalysts.tsx` | Catalysts & crafting patterns (mock — no backend yet) |
-| `pages/Triumphs.tsx` | Triumphs & seals (mock — no backend yet) |
+| `pages/Dashboard.tsx` | Completion hero + "do this today"; real collection totals + cosmetics, real weekly |
+| `pages/Collections.tsx` | Category tree + filterable item grid/list + detail drawer; DataFreshnessChip wired |
+| `pages/WishList.tsx` | Wishlist management; real API with optimistic mutations |
+| `pages/ThisWeek.tsx` | Weekly recommendations / Xûr / milestones (real API) |
+| `pages/Catalysts.tsx` | Catalysts & crafting patterns (real API) |
+| `pages/Triumphs.tsx` | Triumphs & seals (real API) |
 | `pages/Settings.tsx` | Account info + appearance preferences + sign out |
 | `types/api.ts` | API response types (`APIUser`, `AuthTokenResponse`, etc.) |
 | `types/design.ts` | Design-system domain types (`GTItem`, `Seal`, `Weekly`, …) |
 
 ### Database (`database/init/`)
 
-- `01-init.sql` — PostgreSQL schema (defined, not yet wired to running service)
+- `01-init.sql` — `guardian_app` least-privilege role bootstrap (run once after server provisioning; the application schema is in `db/migrations/0001_init.sql`, applied automatically at startup)
 
 ### Kubernetes (`k8s/`)
 
@@ -214,27 +233,22 @@ The Bungie manifest is a ~100MB SQLite file. On first run the API service downlo
 ```text
 1. Frontend → GET /api/auth/bungie → returns authUrl + CSRF state
 2. User → Bungie.net → redirects to /auth/callback?code=...&state=...
-3. Frontend → POST /api/auth/bungie/callback → gets JWT access + refresh tokens
+3. Frontend → POST /api/auth/bungie/callback → gets JWT access + refresh tokens; user upserted in DB
 4. Frontend stores tokens in localStorage (guardian_token, guardian_refresh_token)
 5. lib/api.ts apiFetch injects Authorization: Bearer <token> on every request
 6. React Query hooks call apiFetch for all data fetching
-7. API service validates JWT on protected routes
-8. API service uses stored Bungie OAuth token (auto-refreshed if expired) for Bungie API calls
+7. API service validates JWT on protected routes; RevocationChecker verifies token_version (60s cache)
+8. API service uses stored Bungie OAuth token (AES-256-GCM encrypted in DB, auto-refreshed if expired) for Bungie API calls
+9. Logout: Frontend → POST /api/auth/logout → bumps token_version, evicts Bungie token; client clears localStorage
 ```
 
 ### Authentication Security
 
 - CSRF: state parameter stored server-side with 10-min TTL, consumed on use
-- JWT: HS256, access=24h, refresh=30d, token-type claim prevents refresh tokens being used as access tokens
+- JWT: HS256, access=24h, refresh=30d, token-type claim prevents refresh tokens being used as access tokens; `tver` (token_version) + `jti` claims added
+- JWT revocation: `POST /api/auth/logout` bumps `token_version` in DB; middleware checks via `RevocationChecker` with 60s in-memory cache window
+- Bungie OAuth tokens stored AES-256-GCM encrypted in `bungie_tokens` table; survive scale-to-zero
 - Rate limiting: Bungie API client — 10 req/s, burst 20
-
-### Wishlist (placeholder)
-
-The wishlist endpoints return hardcoded mock data. No database persistence yet.
-
-### Weekly Recommendations (placeholder)
-
-The `/api/weekly/recommendations` endpoint returns empty arrays. Full implementation is planned.
 
 ## CI/CD
 
@@ -280,11 +294,8 @@ cd frontend && npm test
 
 ## Known Limitations / TODOs
 
-- Wishlist has no database persistence (hardcoded mock data)
-- Weekly recommendations endpoint returns empty data
-- `logout` does not blacklist the JWT (token stays valid up to 24h server-side)
-- PostgreSQL schema exists but is not wired to any running service
-- Redis is in docker-compose but not actively used by the API service
-- The This Week, Catalysts & Crafting, and Triumphs & Seals pages render mock data — their backends don't exist yet
-- The character switcher and global search operate on mock data (no search backend yet)
-- Dashboard cosmetics category is hardcoded (no cosmetics analysis in collections service yet)
+- The character switcher falls back to mock data if the API is unavailable (Phase 11 cleanup pending)
+- Redis is in docker-compose but not actively used (JWT revocation and token persistence are Postgres-backed; Redis would be needed for multi-replica distributed caching)
+- Search index is built in-memory — lost on restart; rebuilds automatically once manifest is ready (~30s on first start)
+- Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
+- Wishlist availability (`avail.now`) is always false — Xûr inventory cross-check not yet computed

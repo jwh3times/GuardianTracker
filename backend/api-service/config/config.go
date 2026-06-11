@@ -18,8 +18,8 @@ type Config struct {
 	BungieClientSecret string
 	AuthRedirectURI    string
 
-	JWTSecret           string
-	JWTExpiryHours      int
+	JWTSecret            string
+	JWTExpiryHours       int
 	JWTRefreshExpiryDays int
 
 	ManifestDBPath        string
@@ -30,8 +30,14 @@ type Config struct {
 
 	CacheEnabled        bool
 	CacheTTLCollections time.Duration
+	CacheTTLRecords     time.Duration
 
 	CORSAllowedOrigins []string
+
+	DatabaseURL            string
+	DBMaxConns             int32
+	TokenEncryptionKey     string
+	TokenEncryptionKeyPrev string
 }
 
 func Load() *Config {
@@ -57,11 +63,17 @@ func Load() *Config {
 
 		CacheEnabled:        getBoolEnv("CACHE_ENABLED", true),
 		CacheTTLCollections: getDurationEnv("CACHE_TTL_COLLECTIONS", 5*time.Minute),
+		CacheTTLRecords:     getDurationEnv("CACHE_TTL_RECORDS", 10*time.Minute),
 
 		CORSAllowedOrigins: strings.Split(
 			getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 			",",
 		),
+
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
+		DBMaxConns:             int32(getIntEnv("DB_MAX_CONNS", 4)),
+		TokenEncryptionKey:     os.Getenv("TOKEN_ENCRYPTION_KEY"),
+		TokenEncryptionKeyPrev: os.Getenv("TOKEN_ENCRYPTION_KEY_PREVIOUS"),
 	}
 }
 
@@ -84,6 +96,20 @@ func (c *Config) Validate() {
 	}
 	if c.IsProduction() && len(c.JWTSecret) < 32 {
 		log.Fatal("JWT_SECRET must be at least 32 characters in production")
+	}
+	if c.IsProduction() && c.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL is required in production")
+	}
+	if c.IsProduction() && c.TokenEncryptionKey == "" {
+		log.Fatal("TOKEN_ENCRYPTION_KEY is required in production")
+	}
+	if !c.IsProduction() {
+		if c.DatabaseURL == "" {
+			log.Println("WARNING: DATABASE_URL is not set — running in degraded mode (memory-only token store)")
+		}
+		if c.TokenEncryptionKey == "" {
+			log.Println("WARNING: TOKEN_ENCRYPTION_KEY is not set — Bungie tokens will not be encrypted at rest")
+		}
 	}
 }
 

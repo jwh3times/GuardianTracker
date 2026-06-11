@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Badge,
   Button,
@@ -8,7 +9,9 @@ import {
   PageHead,
   ProgressBar,
 } from "../components/kit";
-import { catalysts, crafting } from "../lib/mockData";
+import { useAuth } from "../contexts/AuthContext";
+import { apiFetch } from "../lib/api";
+import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import type { Catalyst, CraftPattern } from "../types/design";
 
 function CatalystCard({ c }: { c: Catalyst }) {
@@ -86,8 +89,36 @@ type Tab = "catalysts" | "crafting";
 type Filter = "all" | "missing" | "in-progress" | "complete";
 
 export function Catalysts() {
+  const { user } = useAuth();
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
+
+  const { data: catalysts = [], isLoading: catsLoading } = useQuery({
+    queryKey: ["catalysts", membershipType, membershipId],
+    queryFn: () =>
+      apiFetch<Catalyst[]>(`/api/catalysts/${membershipType}/${membershipId}`),
+    enabled: membershipType != null && !!membershipId,
+  });
+
+  const { data: crafting = [], isLoading: craftLoading } = useQuery({
+    queryKey: ["crafting", membershipType, membershipId],
+    queryFn: () =>
+      apiFetch<CraftPattern[]>(`/api/crafting/${membershipType}/${membershipId}`),
+    enabled: membershipType != null && !!membershipId,
+  });
+
   const [tab, setTab] = useState<Tab>("catalysts");
   const [filter, setFilter] = useState<Filter>("all");
+
+  if (catsLoading || craftLoading) {
+    return (
+      <div className="gt-page">
+        <div className="gt-page-loading">
+          <LoadingSpinner size="lg" />
+        </div>
+      </div>
+    );
+  }
 
   const catFiltered = filter === "all" ? catalysts : catalysts.filter((c) => c.status === filter);
   const craftFiltered =

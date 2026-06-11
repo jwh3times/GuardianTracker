@@ -1,17 +1,28 @@
 import React, { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
   Button,
   Dropdown,
   EmptyState,
+  FilterChip,
   Icon,
   ItemTile,
   PageHead,
 } from "../components/kit";
-import { FilterChip } from "../components/kit";
 import { useToast } from "../components/ui/Toast";
-import { PRIORITY_LABEL, wishlist as MOCK_WISHLIST } from "../lib/mockData";
+import { LoadingSpinner } from "../components/ui/LoadingSpinner";
+import { apiFetch } from "../lib/api";
+import { toWishlistEntry } from "../lib/adapters";
+import type { WishListItem } from "../types/api";
 import type { Priority, WishlistEntry } from "../types/design";
+
+const PRIORITY_LABEL: Record<Priority, string> = {
+  urgent: "Urgent",
+  high: "High",
+  medium: "Medium",
+  low: "Low",
+};
 
 const PRIORITY_ORDER: Priority[] = ["urgent", "high", "medium", "low"];
 type SortKey = "availability" | "priority";
@@ -19,9 +30,71 @@ type FilterKey = "all" | Priority;
 
 export function WishList() {
   const { showToast } = useToast();
-  const [list, setList] = useState<WishlistEntry[]>(MOCK_WISHLIST);
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("availability");
+
+  const { data: rawItems = [], isLoading } = useQuery({
+    queryKey: ["wishlist"],
+    queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
+  });
+
+  const list: WishlistEntry[] = useMemo(
+    () => rawItems.map(toWishlistEntry),
+    [rawItems]
+  );
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/api/wishlist/${id}`, { method: "DELETE" }),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
+      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
+      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) =>
+        old?.filter((i) => i.id !== id) ?? []
+      );
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["wishlist"], context.previous);
+      }
+      showToast("Failed to remove item", "error");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, priority }: { id: string; priority: string }) =>
+      apiFetch<WishListItem>(`/api/wishlist/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ priority }),
+      }),
+    onMutate: async ({ id, priority }) => {
+      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
+      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
+      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) =>
+        old?.map((i) => (i.id === id ? { ...i, priority } : i)) ?? []
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["wishlist"], context.previous);
+      }
+      showToast("Failed to update priority", "error");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
+  });
+
+  const setPriority = (id: string, p: Priority) => {
+    updateMutation.mutate({ id, priority: p.toUpperCase() });
+  };
+
+  const remove = (id: string, name: string) => {
+    deleteMutation.mutate(id);
+    showToast(`Removed ${name}`, "info");
+  };
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: list.length };
@@ -31,20 +104,25 @@ export function WishList() {
 
   const shown = useMemo(() => {
     const l = filter === "all" ? list.slice() : list.filter((i) => i.priority === filter);
-    if (sort === "availability") l.sort((a, b) => (b.avail.now ? 1 : 0) - (a.avail.now ? 1 : 0));
+    if (sort === "availability")
+      l.sort((a, b) => (b.avail.now ? 1 : 0) - (a.avail.now ? 1 : 0));
     else if (sort === "priority")
-      l.sort((a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority));
+      l.sort(
+        (a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority)
+      );
     return l;
   }, [list, filter, sort]);
 
-  const setPriority = (id: string, p: Priority) => {
-    setList((l) => l.map((i) => (i.id === id ? { ...i, priority: p } : i)));
-  };
-
-  const remove = (id: string, name: string) => {
-    setList((l) => l.filter((i) => i.id !== id));
-    showToast(`Removed ${name}`, "info");
-  };
+  if (isLoading) {
+    return (
+      <div className="gt-page">
+        <PageHead title="Wishlist" />
+        <div className="gt-card" style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
+          <LoadingSpinner />
+        </div>
+      </div>
+    );
+  }
 
   if (list.length === 0) {
     return (

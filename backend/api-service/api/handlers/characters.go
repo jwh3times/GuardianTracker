@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"log"
 	"net/http"
 
 	"guardian-tracker/api-service/auth"
@@ -28,19 +27,12 @@ func (h *CharactersHandler) GetCharacters(c *gin.Context) {
 		return
 	}
 
-	// Ownership check — middleware already validated the JWT and token type.
-	if c.GetString("membership_id") != membershipID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only access your own character data", "code": "FORBIDDEN"})
+	if !ownershipCheck(c, membershipID) {
 		return
 	}
 
-	bungieToken, err := h.tokenStore.GetValidToken(membershipID)
-	if err != nil {
-		log.Printf("Failed to get Bungie token for user %s: %v", membershipID, err)
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Your Bungie session has expired. Please log in again.",
-			"code":  "BUNGIE_TOKEN_EXPIRED",
-		})
+	bungieToken, ok := getBungieToken(c, membershipID, h.tokenStore)
+	if !ok {
 		return
 	}
 

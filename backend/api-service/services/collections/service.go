@@ -75,9 +75,10 @@ func (s *Service) ensureRepo() (*manifest.Repository, error) {
 
 // UserCollections is the complete collection result for a user.
 type UserCollections struct {
-	Weapons CollectionSummary `json:"weapons"`
-	Armor   CollectionSummary `json:"armor"`
-	Exotics CollectionSummary `json:"exotics"`
+	Weapons   CollectionSummary `json:"weapons"`
+	Armor     CollectionSummary `json:"armor"`
+	Exotics   CollectionSummary `json:"exotics"`
+	Cosmetics CollectionSummary `json:"cosmetics"`
 }
 
 // CollectionSummary holds stats and missing items for one category.
@@ -149,9 +150,10 @@ func (s *Service) GetUserCollections(ctx context.Context, membershipType int, me
 	}
 
 	result := &UserCollections{
-		Weapons: s.buildSummary(filtered.Weapons, collected),
-		Armor:   s.buildSummary(filtered.Armor, collected),
-		Exotics: s.buildSummary(filtered.Exotics, collected),
+		Weapons:   s.buildSummary(filtered.Weapons, collected),
+		Armor:     s.buildSummary(filtered.Armor, collected),
+		Exotics:   s.buildSummary(filtered.Exotics, collected),
+		Cosmetics: s.buildSummary(filtered.Cosmetics, collected),
 	}
 	s.cache.Set(cacheKey, result, s.cacheTTL)
 	return result, nil
@@ -227,6 +229,32 @@ func classifyDifficulty(source string, isExotic bool) string {
 		return "Moderate"
 	}
 	return "Easy"
+}
+
+// GetMissingItemHashes returns the set of item hashes not yet collected by the user.
+// It reuses the cached GetUserCollections result — no extra Bungie call.
+func (s *Service) GetMissingItemHashes(ctx context.Context, membershipType int, membershipID, accessToken string) (map[uint32]struct{}, error) {
+	result, err := s.GetUserCollections(ctx, membershipType, membershipID, accessToken)
+	if err != nil {
+		return nil, err
+	}
+	missing := make(map[uint32]struct{})
+	for _, item := range result.Weapons.Missing {
+		if h, err := strconv.ParseUint(item.ItemHash, 10, 32); err == nil {
+			missing[uint32(h)] = struct{}{}
+		}
+	}
+	for _, item := range result.Armor.Missing {
+		if h, err := strconv.ParseUint(item.ItemHash, 10, 32); err == nil {
+			missing[uint32(h)] = struct{}{}
+		}
+	}
+	for _, item := range result.Exotics.Missing {
+		if h, err := strconv.ParseUint(item.ItemHash, 10, 32); err == nil {
+			missing[uint32(h)] = struct{}{}
+		}
+	}
+	return missing, nil
 }
 
 func (s *Service) InvalidateCache(membershipType int, membershipID string) {

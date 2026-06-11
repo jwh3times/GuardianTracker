@@ -47,6 +47,12 @@ func (m *ManifestService) GetCurrentVersion() string {
 	return m.currentVersion
 }
 
+// Version returns the currently installed manifest version string.
+// Returns empty string if no manifest has been downloaded yet.
+func (m *ManifestService) Version() string {
+	return m.GetCurrentVersion()
+}
+
 func (m *ManifestService) GetDBPath() string { return m.dbPath }
 
 func (m *ManifestService) IsReady() bool {

@@ -1,13 +1,12 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button, DataFreshnessChip, PageHead, Panel } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { apiFetch } from "../lib/api";
 import { toCharacter } from "../lib/adapters";
-import type { APICharacter } from "../types/api";
-import { characters } from "../lib/mockData";
+import type { APICharacter, APICacheRefreshResponse } from "../types/api";
 
 const PLATFORM_LABEL: Record<number, string> = {
   1: "Xbox",
@@ -59,8 +58,25 @@ export function Settings() {
     enabled: !!(user?.membershipId) && user?.membershipType != null,
   });
 
-  const realChars = (charsData ?? []).map(toCharacter);
-  const characterList = realChars.length ? realChars : characters;
+  const characterList = (charsData ?? []).map(toCharacter);
+
+  const queryClient = useQueryClient();
+
+  const refreshMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<APICacheRefreshResponse>(
+        `/api/collections/${user!.membershipType}/${user!.membershipId}/refresh`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["collections"] });
+      void queryClient.invalidateQueries({ queryKey: ["characters"] });
+      void queryClient.invalidateQueries({ queryKey: ["weekly"] });
+      void queryClient.invalidateQueries({ queryKey: ["catalysts"] });
+      void queryClient.invalidateQueries({ queryKey: ["crafting"] });
+      void queryClient.invalidateQueries({ queryKey: ["seals"] });
+    },
+  });
 
   const handleSignOut = () => {
     authLogout();
@@ -131,15 +147,21 @@ export function Settings() {
         </Panel>
 
         <Panel title="Characters" icon="dashboard">
-          {characterList.map((c) => (
-            <div key={c.id} className="gt-set-row">
-              <span className="gt-set-k">
-                {c.name === c.cls ? c.cls : `${c.name} · ${c.cls}`}
-                {c.race ? ` · ${c.race}` : ""}
-              </span>
-              <span className="gt-set-v mono">{c.power}</span>
+          {characterList.length > 0 ? (
+            characterList.map((c) => (
+              <div key={c.id} className="gt-set-row">
+                <span className="gt-set-k">
+                  {c.name === c.cls ? c.cls : `${c.name} · ${c.cls}`}
+                  {c.race ? ` · ${c.race}` : ""}
+                </span>
+                <span className="gt-set-v mono">{c.power}</span>
+              </div>
+            ))
+          ) : (
+            <div className="gt-set-row">
+              <span className="gt-set-note">No characters loaded yet.</span>
             </div>
-          ))}
+          )}
         </Panel>
 
         <Panel title="Data freshness" icon="refresh">
@@ -151,7 +173,14 @@ export function Settings() {
             Guardian Tracker caches your collection and refreshes on demand — it never polls live,
             to respect Bungie's rate limits.
           </p>
-          <DataFreshnessChip ago="4m" />
+          <DataFreshnessChip
+            ago="4m"
+            onRefresh={() => {
+              if (user?.membershipType != null && !!user?.membershipId) {
+                refreshMutation.mutate();
+              }
+            }}
+          />
         </Panel>
 
         <Panel title="Privacy" icon="lock">

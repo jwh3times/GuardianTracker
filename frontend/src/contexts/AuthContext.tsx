@@ -6,6 +6,7 @@ import React, {
   ReactNode,
 } from "react";
 import type { APIUser, AuthTokenResponse } from "../types/api";
+import { apiFetch } from "../lib/api";
 
 interface AuthContextType {
   user: APIUser | null;
@@ -81,6 +82,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const logout = () => {
+    // Fire-and-forget — clear client state regardless of response
+    apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
     setAuth({ token: null, refreshToken: null, user: null });
     localStorage.removeItem("guardian_token");
     localStorage.removeItem("guardian_refresh_token");

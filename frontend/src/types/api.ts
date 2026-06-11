@@ -57,6 +57,7 @@ export interface APIUserCollections {
   weapons: APICollectionSummary;
   armor: APICollectionSummary;
   exotics: APICollectionSummary;
+  cosmetics: APICollectionSummary;
 }
 
 // --- Characters: mirrors services/characters/service.go ---
@@ -80,3 +81,39 @@ export interface APICacheRefreshResponse {
   success: boolean;
   message: string;
 }
+
+// --- Wishlist ---
+
+/** One item returned by GET/POST/PUT /api/wishlist */
+export interface WishListItem {
+  id: string;
+  itemHash: number;
+  name: string;
+  itemType: string;
+  rarity: string;       // "Exotic", "Legendary", "Rare", "Uncommon", "Common"
+  priority: string;     // "LOW", "MEDIUM", "HIGH", "URGENT"
+  notes: string;
+  sources: string[];
+  dateAdded: string;    // RFC3339
+}
+
+/** GET/PUT /api/preferences */
+export interface APIPreferences {
+  cardStyle: "framed" | "compact";
+  personalize: boolean;
+}
+
+/** GET /api/items/search?q=<term>&limit=20 */
+export interface APISearchResult {
+  hash: number;
+  name: string;
+  icon: string;
+  type: string;
+  rarity: string;  // "Exotic", "Legendary", etc.
+}
+
+// --- Catalysts / Crafting / Seals ---
+// Response shapes are identical to the design types; re-export them for use in
+// fetch calls so callers can import from one place.
+
+export type { Catalyst as APICatalyst, CraftPattern as APICraftPattern, Seal as APISeal } from "./design";

@@ -37,30 +37,81 @@ func (t *BungieTokens) isRefreshTokenExpired() bool {
 	return time.Now().After(t.RefreshTokenExpiresAt)
 }
 
-// TokenStore manages Bungie OAuth tokens in memory for all active users.
+// EncryptedTokenRecord is what the DB repo returns / accepts.
+// Defined here (in auth package) to avoid import cycles with the db package.
+type EncryptedTokenRecord struct {
+	AccessTokenEnc   []byte
+	RefreshTokenEnc  []byte
+	AccessExpiresAt  time.Time
+	RefreshExpiresAt time.Time
+	KeyVersion       int16
+	UpdatedAt        time.Time
+}
+
+// TokenRepo is the interface satisfied by db.BungieTokenStore (via an adapter in main.go).
+type TokenRepo interface {
+	Get(ctx context.Context, membershipID string) (*EncryptedTokenRecord, error)
+	Upsert(ctx context.Context, membershipID string, t *EncryptedTokenRecord, prevUpdatedAt time.Time) (bool, error)
+	Delete(ctx context.Context, membershipID string) error
+}
+
+// TokenStore manages Bungie OAuth tokens with optional DB write-through.
 type TokenStore struct {
 	mu           sync.RWMutex
 	tokens       map[string]*BungieTokens
 	refreshLocks sync.Map // map[membershipID]*sync.Mutex — serializes per-user refresh
 	clientID     string
 	clientSecret string
+	repo         TokenRepo    // nil = memory-only (degraded mode)
+	cipher       *TokenCipher // nil = no encryption
 }
 
 // NewTokenStore creates a token store and starts the background cleanup goroutine.
-// The cleanup goroutine exits when ctx is cancelled.
-func NewTokenStore(ctx context.Context, clientID, clientSecret string) *TokenStore {
+// repo and cipher may both be nil for degraded/dev mode (memory-only, no encryption).
+func NewTokenStore(ctx context.Context, clientID, clientSecret string, repo TokenRepo, cipher *TokenCipher) *TokenStore {
 	s := &TokenStore{
 		tokens:       make(map[string]*BungieTokens),
 		clientID:     clientID,
 		clientSecret: clientSecret,
+		repo:         repo,
+		cipher:       cipher,
 	}
 	go s.cleanupLoop(ctx)
 	return s
 }
 
-// Store saves (or replaces) tokens for a user.
+// Store saves (or replaces) tokens for a user, writing through to the DB when available.
 func (s *TokenStore) Store(membershipID string, tokens *BungieTokens) {
 	tokens.MembershipID = membershipID
+
+	// Write to DB first (best-effort — don't fail if DB is down)
+	if s.repo != nil && s.cipher != nil {
+		aad := []byte(membershipID)
+		accEnc, kv, err := s.cipher.Encrypt([]byte(tokens.AccessToken), aad)
+		if err == nil {
+			refEnc, _, err2 := s.cipher.Encrypt([]byte(tokens.RefreshToken), aad)
+			if err2 == nil {
+				rec := &EncryptedTokenRecord{
+					AccessTokenEnc:   accEnc,
+					RefreshTokenEnc:  refEnc,
+					AccessExpiresAt:  tokens.AccessTokenExpiresAt,
+					RefreshExpiresAt: tokens.RefreshTokenExpiresAt,
+					KeyVersion:       kv,
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				if _, err3 := s.repo.Upsert(ctx, membershipID, rec, time.Time{}); err3 != nil {
+					log.Printf("TokenStore.Store: DB upsert failed for %s: %v", membershipID, err3)
+				}
+			} else {
+				log.Printf("TokenStore.Store: encrypt refresh token failed for %s: %v", membershipID, err2)
+			}
+		} else {
+			log.Printf("TokenStore.Store: encrypt access token failed for %s: %v", membershipID, err)
+		}
+	}
+
+	// Always update memory cache
 	s.mu.Lock()
 	s.tokens[membershipID] = tokens
 	s.mu.Unlock()
@@ -74,6 +125,31 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 	s.mu.RLock()
 	tokens, exists := s.tokens[membershipID]
 	s.mu.RUnlock()
+
+	// Memory miss — try DB
+	if !exists && s.repo != nil && s.cipher != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		rec, err := s.repo.Get(ctx, membershipID)
+		if err == nil {
+			aad := []byte(membershipID)
+			accessPlain, err1 := s.cipher.Decrypt(rec.AccessTokenEnc, aad, rec.KeyVersion)
+			refreshPlain, err2 := s.cipher.Decrypt(rec.RefreshTokenEnc, aad, rec.KeyVersion)
+			if err1 == nil && err2 == nil {
+				tokens = &BungieTokens{
+					AccessToken:           string(accessPlain),
+					RefreshToken:          string(refreshPlain),
+					AccessTokenExpiresAt:  rec.AccessExpiresAt,
+					RefreshTokenExpiresAt: rec.RefreshExpiresAt,
+					MembershipID:          membershipID,
+				}
+				s.mu.Lock()
+				s.tokens[membershipID] = tokens
+				s.mu.Unlock()
+				exists = true
+			}
+		}
+	}
 
 	if !exists {
 		return "", fmt.Errorf("no tokens found for user %s", membershipID)
@@ -114,11 +190,18 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 	return newTokens.AccessToken, nil
 }
 
-// Delete removes tokens for a user (e.g., on logout).
+// Delete removes tokens for a user (e.g., on logout) from both memory and DB.
 func (s *TokenStore) Delete(membershipID string) {
 	s.mu.Lock()
 	delete(s.tokens, membershipID)
 	s.mu.Unlock()
+	if s.repo != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := s.repo.Delete(ctx, membershipID); err != nil {
+			log.Printf("TokenStore.Delete: DB delete failed for %s: %v", membershipID, err)
+		}
+	}
 }
 
 func (s *TokenStore) refreshBungieToken(tokens *BungieTokens) (*BungieTokens, error) {

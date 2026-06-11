@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CategoryTree,
   DataFreshnessChip,
   Dropdown,
   EmptyState,
-  FilterChip,
+
   Icon,
   ItemCard,
   ItemCardSkeleton,
@@ -19,7 +19,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { apiFetch } from "../lib/api";
 import { toGTItem } from "../lib/adapters";
-import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../lib/mockData";
+import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../lib/constants";
 import type {
   Difficulty,
   GTItem,
@@ -30,6 +30,7 @@ import type {
   ProfileResponse,
   APIDestinyItem,
   APIUserCollections,
+  APICacheRefreshResponse,
 } from "../types/api";
 
 type TopCategory = "weapons" | "armor" | "exotics";
@@ -65,7 +66,6 @@ export function Collections() {
   const { cardStyle, personalize } = usePreferences();
 
   const [active, setActive] = useState("weapons");
-  const [missingOnly, setMissingOnly] = useState(true);
   const [rarity, setRarity] = useState<Rarity | null>(null);
   const [diff, setDiff] = useState<Difficulty | null>(null);
   const [sort, setSort] = useState<SortKey>("rarity");
@@ -96,6 +96,8 @@ export function Collections() {
     enabled: membershipType != null && !!membershipId,
   });
 
+  const queryClient = useQueryClient();
+
   const addWishlistMutation = useMutation({
     mutationFn: (itemHash: string) =>
       apiFetch("/api/wishlist", {
@@ -104,6 +106,22 @@ export function Collections() {
       }),
     onError: (err: Error) =>
       showToast(`Failed to add item: ${err.message}`, "error"),
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<APICacheRefreshResponse>(
+        `/api/collections/${membershipType}/${membershipId}/refresh`,
+        { method: "POST" }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["collections"] });
+      void queryClient.invalidateQueries({ queryKey: ["characters"] });
+      void queryClient.invalidateQueries({ queryKey: ["weekly"] });
+      void queryClient.invalidateQueries({ queryKey: ["catalysts"] });
+      void queryClient.invalidateQueries({ queryKey: ["crafting"] });
+      void queryClient.invalidateQueries({ queryKey: ["seals"] });
+    },
   });
 
   const top = topOf(active);
@@ -132,7 +150,6 @@ export function Collections() {
 
   const items = useMemo(() => {
     let list = baseItems.slice();
-    // All items from the backend are already missing (uncollected) — no filter needed.
     if (rarity) list = list.filter((i) => i.rarity === rarity);
     if (diff) list = list.filter((i) => i.diff === diff);
     if (sort === "rarity") list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
@@ -141,14 +158,13 @@ export function Collections() {
     else if (sort === "avail")
       list.sort((a, b) => (b.obtainable ? 1 : 0) - (a.obtainable ? 1 : 0));
     return list;
-  }, [baseItems, missingOnly, rarity, diff, sort]);
+  }, [baseItems, rarity, diff, sort]);
 
   const clearFilters = () => {
     setRarity(null);
     setDiff(null);
-    setMissingOnly(false);
   };
-  const hasFilters = !!(rarity || diff || missingOnly);
+  const hasFilters = !!(rarity || diff);
 
   const onWish = (item: GTItem) => {
     const adding = !wished.has(item.id);
@@ -176,7 +192,18 @@ export function Collections() {
       <PageHead
         title="Collections"
         sub={<span className="mono">Track what you're missing across every category</span>}
-        right={<DataFreshnessChip ago="4m" onRefresh={() => { void refetch(); }} />}
+        right={
+          <DataFreshnessChip
+            ago="4m"
+            onRefresh={() => {
+              if (membershipType != null && !!membershipId) {
+                refreshMutation.mutate();
+              } else {
+                void refetch();
+              }
+            }}
+          />
+        }
       />
 
       <div className="gt-coll-layout">
@@ -193,9 +220,6 @@ export function Collections() {
           {/* FILTER BAR */}
           <div className="gt-coll-toolbar">
             <div className="gt-filterbar">
-              <FilterChip on={missingOnly} onClick={() => setMissingOnly((v) => !v)}>
-                <Icon name="check" size="0.85rem" /> Missing only
-              </FilterChip>
               <Dropdown
                 label="Rarity"
                 value={rarity ? RARITY_LABEL[rarity] : null}
@@ -298,7 +322,7 @@ export function Collections() {
                   item={it}
                   density={cardStyle === "compact" ? "compact" : "grid"}
                   personalize={personalize}
-                  showCollected={!missingOnly}
+
                   wished={wished.has(it.id)}
                   onWish={onWish}
                   onOpen={setDetail}
@@ -313,7 +337,7 @@ export function Collections() {
                   item={it}
                   density="list"
                   personalize={personalize}
-                  showCollected={!missingOnly}
+
                   wished={wished.has(it.id)}
                   onWish={onWish}
                   onOpen={setDetail}

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -122,14 +123,11 @@ func (c *Client) GetManifest(ctx context.Context) (*ManifestResponse, error) {
 
 // GetProfile retrieves a user's Destiny 2 profile for the specified components.
 func (c *Client) GetProfile(ctx context.Context, membershipType int, membershipID, accessToken string, components []int) (*ProfileResponse, error) {
-	comps := ""
+	compStrs := make([]string, len(components))
 	for i, comp := range components {
-		if i > 0 {
-			comps += ","
-		}
-		comps += strconv.Itoa(comp)
+		compStrs[i] = strconv.Itoa(comp)
 	}
-	url := fmt.Sprintf("%s/Destiny2/%d/Profile/%s/?components=%s", c.baseURL, membershipType, membershipID, comps)
+	url := fmt.Sprintf("%s/Destiny2/%d/Profile/%s/?components=%s", c.baseURL, membershipType, membershipID, strings.Join(compStrs, ","))
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -159,6 +157,101 @@ func (c *Client) GetCharacters(ctx context.Context, membershipType int, membersh
 		return nil, err
 	}
 	return parseResponse[CharactersResponse](resp)
+}
+
+// GetPublicMilestones fetches current weekly milestone definitions (no auth needed).
+func (c *Client) GetPublicMilestones(ctx context.Context) (map[string]PublicMilestone, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/Destiny2/Milestones/", c.baseURL), nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetPublicMilestones: %w", err)
+	}
+	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	if err != nil {
+		return nil, err
+	}
+	r, err := parseResponse[PublicMilestonesResponse](resp)
+	if err != nil {
+		return nil, err
+	}
+	return r.Response, nil
+}
+
+// GetCharacterVendors fetches vendor inventory for a specific character (requires auth; component 402).
+func (c *Client) GetCharacterVendors(ctx context.Context, membershipType int, membershipID, characterID, accessToken string) (*CharacterVendorsResponse, error) {
+	url := fmt.Sprintf("%s/Destiny2/%d/Profile/%s/Character/%s/Vendors/?components=%d",
+		c.baseURL, membershipType, membershipID, characterID, ComponentVendorSales)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetCharacterVendors: %w", err)
+	}
+	if accessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+	}
+	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	if err != nil {
+		return nil, err
+	}
+	return parseResponse[CharacterVendorsResponse](resp)
+}
+
+// GetPublicVendors fetches the public vendor inventory (no auth needed; components 400+402).
+func (c *Client) GetPublicVendors(ctx context.Context) (*PublicVendorsResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET",
+		fmt.Sprintf("%s/Destiny2/Vendors/?components=400,402", c.baseURL), nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetPublicVendors: %w", err)
+	}
+	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	if err != nil {
+		return nil, err
+	}
+	return parseResponse[PublicVendorsResponse](resp)
+}
+
+// GetRecords fetches profile records (component 900) for a user.
+func (c *Client) GetRecords(ctx context.Context, membershipType int, membershipID, accessToken string) (*RecordsProfileResponse, error) {
+	url := fmt.Sprintf("%s/Destiny2/%d/Profile/%s/?components=%d", c.baseURL, membershipType, membershipID, ComponentRecords)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	if accessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+	}
+	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	if err != nil {
+		return nil, err
+	}
+	return parseResponse[RecordsProfileResponse](resp)
+}
+
+// GetCommonSettings fetches Destiny 2 core settings (API-key only, no auth needed).
+// The settings endpoint lives at /Platform/Settings/ (one level above /Platform/Destiny2/).
+func (c *Client) GetCommonSettings(ctx context.Context) (*CoreSettings, error) {
+	settingsURL := strings.TrimSuffix(c.baseURL, "/Destiny2") + "/Settings/"
+	req, err := http.NewRequestWithContext(ctx, "GET", settingsURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetCommonSettings: %w", err)
+	}
+	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	if err != nil {
+		return nil, fmt.Errorf("GetCommonSettings: %w", err)
+	}
+	defer resp.Body.Close()
+	var r CoreSettingsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return nil, fmt.Errorf("GetCommonSettings decode: %w", err)
+	}
+	if r.ErrorCode != 1 {
+		return nil, &BungieError{ErrorCode: r.ErrorCode, ErrorStatus: r.ErrorStatus, Message: r.Message}
+	}
+	s := r.Response.Destiny2CoreSettings
+	return &CoreSettings{
+		ActiveSealsRootNodeHash:     s.ActiveSealsRootNodeHash,
+		LegacySealsRootNodeHash:     s.LegacySealsRootNodeHash,
+		ExoticCatalystsRootNodeHash: s.ExoticCatalystsRootNodeHash,
+		CraftingRootNodeHash:        s.CraftingRootNodeHash,
+	}, nil
 }
 
 // DownloadFile downloads a file from the given URL into a byte slice.
@@ -195,4 +288,5 @@ const (
 	ComponentCollectibles         = 800
 	ComponentRecords              = 900
 	ComponentMetrics              = 1100
+	ComponentVendorSales          = 402
 )

@@ -2,7 +2,7 @@ package bungie
 
 // BungieResponse is the standard wrapper for all Bungie API responses.
 type BungieResponse struct {
-	Response        interface{} `json:"Response"`
+	Response        any `json:"Response"`
 	ErrorCode       int         `json:"ErrorCode"`
 	ThrottleSeconds int         `json:"ThrottleSeconds"`
 	ErrorStatus     string      `json:"ErrorStatus"`
@@ -108,7 +108,32 @@ type DisplayProperties struct {
 const (
 	ItemTypeWeapon = 3
 	ItemTypeArmor  = 2
+	ItemTypeMod    = 19
 )
+
+// ItemTypeName returns a human-readable item type string, using weapon sub-type for specificity.
+func ItemTypeName(itemType, subType int) string {
+	switch itemType {
+	case ItemTypeWeapon:
+		return GetWeaponTypeName(subType)
+	case ItemTypeArmor:
+		return "Armor"
+	case ItemTypeMod:
+		return "Mod"
+	case 14:
+		return "Emblem"
+	case 21:
+		return "Ship"
+	case 22:
+		return "Sparrow"
+	case 23:
+		return "Emote"
+	case 24:
+		return "Ghost"
+	default:
+		return "Item"
+	}
+}
 
 // Tier type constants.
 const (
@@ -265,4 +290,182 @@ func GetRaceName(raceType int) string {
 	default:
 		return "Unknown"
 	}
+}
+
+// --- Weekly / Milestones / Vendors ---
+
+// Vendor hash constants for well-known Bungie vendors.
+const (
+	XurVendorHash      uint32 = 2190858386
+	Ada1VendorHash     uint32 = 350061650
+	Banshee44VendorHash uint32 = 672118013
+)
+
+// Milestone type constants matching DestinyMilestoneType enum.
+const (
+	MilestoneTypeUnknown = 0
+	MilestoneTypeOneTime = 1
+	MilestoneTypeTutorial = 2
+	MilestoneTypeWeekly  = 3
+	MilestoneTypeDaily   = 4
+	MilestoneTypeSpecial = 5
+)
+
+// PublicMilestonesResponse wraps the Bungie milestone map.
+type PublicMilestonesResponse struct {
+	Response    map[string]PublicMilestone `json:"Response"`
+	ErrorCode   int                        `json:"ErrorCode"`
+	ErrorStatus string                     `json:"ErrorStatus"`
+	Message     string                     `json:"Message"`
+}
+
+// PublicMilestone is one entry from the Bungie Milestones API.
+type PublicMilestone struct {
+	MilestoneHash   uint32              `json:"milestoneHash"`
+	AvailableQuests []MilestoneQuest    `json:"availableQuests"`
+	Activities      []MilestoneActivity `json:"activities"`
+}
+
+// MilestoneQuest is one quest associated with a milestone.
+type MilestoneQuest struct {
+	QuestItemHash uint32 `json:"questItemHash"`
+}
+
+// MilestoneActivity is one activity associated with a milestone.
+type MilestoneActivity struct {
+	ActivityHash   uint32   `json:"activityHash"`
+	ModifierHashes []uint32 `json:"modifierHashes"`
+}
+
+// ActivityModifierDefinition is a DestinyActivityModifierDefinition entry from the manifest.
+type ActivityModifierDefinition struct {
+	Hash              uint32            `json:"hash"`
+	DisplayProperties DisplayProperties `json:"displayProperties"`
+}
+
+// ActivityDefinition is a minimal DestinyActivityDefinition entry from the manifest.
+type ActivityDefinition struct {
+	Hash              uint32            `json:"hash"`
+	DisplayProperties DisplayProperties `json:"displayProperties"`
+	ActivityTypeHash  uint32            `json:"activityTypeHash"`
+}
+
+// CharacterVendorsResponse wraps the per-character vendor API response.
+type CharacterVendorsResponse struct {
+	Response struct {
+		Sales struct {
+			Data map[string]VendorSales `json:"data"`
+		} `json:"sales"`
+	} `json:"Response"`
+	ErrorCode   int    `json:"ErrorCode"`
+	ErrorStatus string `json:"ErrorStatus"`
+	Message     string `json:"Message"`
+}
+
+// PublicVendorsResponse wraps the multi-vendor Bungie response.
+type PublicVendorsResponse struct {
+	Response struct {
+		Sales struct {
+			Data map[string]VendorSales `json:"data"` // key = vendor hash string
+		} `json:"sales"`
+		VendorGroups struct {
+			Data struct{} `json:"data"`
+		} `json:"vendorGroups"`
+	} `json:"Response"`
+	ErrorCode   int    `json:"ErrorCode"`
+	ErrorStatus string `json:"ErrorStatus"`
+	Message     string `json:"Message"`
+}
+
+// VendorSales holds the sale items for one vendor.
+type VendorSales struct {
+	SaleItems map[string]VendorSaleItem `json:"saleItems"` // key = vendorItemIndex string
+}
+
+// VendorSaleItem is one sale item from a vendor.
+type VendorSaleItem struct {
+	ItemHash uint32           `json:"itemHash"`
+	Costs    []VendorItemCost `json:"costs"`
+}
+
+// VendorItemCost is the currency cost for one item.
+type VendorItemCost struct {
+	ItemHash uint32 `json:"itemHash"`
+	Quantity int    `json:"quantity"`
+}
+
+// RecordsProfileResponse contains profile records (component 900).
+type RecordsProfileResponse struct {
+	Response struct {
+		ProfileRecords struct {
+			Data struct {
+				Records map[string]RecordComponent `json:"records"`
+			} `json:"data"`
+		} `json:"profileRecords"`
+		CharacterRecords struct {
+			Data map[string]struct {
+				Records map[string]RecordComponent `json:"records"`
+			} `json:"data"`
+		} `json:"characterRecords"`
+	} `json:"Response"`
+	ErrorCode   int    `json:"ErrorCode"`
+	ErrorStatus string `json:"ErrorStatus"`
+	Message     string `json:"Message"`
+}
+
+// RecordComponent is the state of a single record/triumph from the API.
+type RecordComponent struct {
+	State              int               `json:"state"`
+	Objectives         []RecordObjective `json:"objectives"`
+	IntervalObjectives []RecordObjective `json:"intervalObjectives"`
+}
+
+// RecordObjective is one objective within a record.
+type RecordObjective struct {
+	ObjectiveHash       uint32 `json:"objectiveHash"`
+	Progress            int    `json:"progress"`
+	CompletionValue     int    `json:"completionValue"`
+	Complete            bool   `json:"complete"`
+	Visible             bool   `json:"visible"`
+	ProgressDescription string `json:"progressDescription"`
+}
+
+// CoreSettingsResponse wraps /Platform/Settings/
+type CoreSettingsResponse struct {
+	Response struct {
+		Destiny2CoreSettings struct {
+			ActiveSealsRootNodeHash     uint32 `json:"activeSealsRootNodeHash"`
+			LegacySealsRootNodeHash     uint32 `json:"legacySealsRootNodeHash"`
+			ExoticCatalystsRootNodeHash uint32 `json:"exoticCatalystsRootNodeHash"`
+			CraftingRootNodeHash        uint32 `json:"craftingRootNodeHash"`
+		} `json:"destiny2CoreSettings"`
+	} `json:"Response"`
+	ErrorCode   int    `json:"ErrorCode"`
+	ErrorStatus string `json:"ErrorStatus"`
+	Message     string `json:"Message"`
+}
+
+// CoreSettings holds the root presentation node hashes for key game systems.
+type CoreSettings struct {
+	ActiveSealsRootNodeHash     uint32
+	LegacySealsRootNodeHash     uint32
+	ExoticCatalystsRootNodeHash uint32
+	CraftingRootNodeHash        uint32
+}
+
+// MilestoneDefinition is a DestinyMilestoneDefinition entry from the manifest.
+type MilestoneDefinition struct {
+	Hash              uint32            `json:"hash"`
+	DisplayProperties DisplayProperties `json:"displayProperties"`
+	MilestoneType     int               `json:"milestoneType"`
+	QuestItems        []struct {
+		QuestItemHash uint32 `json:"questItemHash"`
+	} `json:"questItems"`
+	Rewards []struct {
+		RewardEntries map[string]struct {
+			RewardItems []struct {
+				ItemHash uint32 `json:"itemHash"`
+			} `json:"rewardItems"`
+		} `json:"rewardEntries"`
+	} `json:"rewards"`
 }

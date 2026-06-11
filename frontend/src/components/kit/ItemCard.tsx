@@ -1,7 +1,7 @@
 import React from "react";
 import { Icon } from "./Icon";
 import { Badge, Button, ItemTile } from "./primitives";
-import { DIFF_LABEL } from "../../lib/mockData";
+import { DIFF_LABEL } from "../../lib/constants";
 import type { GTItem } from "../../types/design";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;

@@ -105,13 +105,26 @@ export interface RecommendedAction {
   time: string;
 }
 
+export interface DailyAction {
+  id: string;
+  category: "milestone" | "xur" | "vendor" | "activity";
+  icon: string;
+  text: string;
+  detail: string;
+  badge: string;
+  resetsIn: Duration;
+  done: boolean;
+}
+
 export interface Weekly {
   resetLabel: string;
   resetIn: Duration;
-  xur: Xur;
+  dailyResetIn: Duration;
+  xur: Xur | null;  // null when Xûr is not in town
   milestones: Milestone[];
   vendors: VendorRotation[];
   recommended: RecommendedAction[];
+  dailyActions: DailyAction[];
 }
 
 export interface WishlistEntry {

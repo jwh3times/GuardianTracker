@@ -9,7 +9,7 @@ import {
   ProgressBar,
   RadialProgress,
 } from "./primitives";
-import { DIFF_LABEL } from "../../lib/mockData";
+import { DIFF_LABEL } from "../../lib/constants";
 import type {
   GTItem,
   Milestone,
@@ -191,7 +191,7 @@ export function ActionList({
 }
 
 /* ---------------- XÛR MODULE ---------------- */
-export function XurModule({ xur }: { xur: Xur }) {
+export function XurModule({ xur }: { xur: Xur | null | undefined }) {
   if (!xur || !xur.present) {
     return (
       <Panel title="Xûr — Agent of Nine" icon="bungie">

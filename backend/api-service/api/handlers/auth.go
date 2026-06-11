@@ -15,25 +15,38 @@ import (
 	"time"
 
 	"guardian-tracker/api-service/auth"
+	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
 
 	"github.com/gin-gonic/gin"
 )
 
-// AuthHandler handles Bungie OAuth, token refresh, and profile endpoints.
-type AuthHandler struct {
-	jwt        *auth.JWT
-	tokenStore *auth.TokenStore
-	cfg        *config.Config
-	csrf       *csrfStore
+// UserStore is satisfied by db.UserStore (via main.go wiring).
+type UserStore interface {
+	Upsert(ctx context.Context, membershipID string, membershipType int16, displayName string) (id int64, tokenVersion int, err error)
+	BumpTokenVersion(ctx context.Context, membershipID string) error
 }
 
-func NewAuthHandler(ctx context.Context, j *auth.JWT, ts *auth.TokenStore, cfg *config.Config) *AuthHandler {
+// AuthHandler handles Bungie OAuth, token refresh, profile, and logout endpoints.
+type AuthHandler struct {
+	jwt         *auth.JWT
+	tokenStore  *auth.TokenStore
+	cfg         *config.Config
+	csrf        *csrfStore
+	userStore   UserStore             // nil in degraded mode (no DB)
+	revokeCache cache.Cache           // for evicting tver: entries on logout
+	revoker     *auth.RevocationChecker // nil in degraded mode
+}
+
+func NewAuthHandler(ctx context.Context, j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userStore UserStore, revokeCache cache.Cache, revoker *auth.RevocationChecker) *AuthHandler {
 	h := &AuthHandler{
-		jwt:        j,
-		tokenStore: ts,
-		cfg:        cfg,
-		csrf:       newCSRFStore(),
+		jwt:         j,
+		tokenStore:  ts,
+		cfg:         cfg,
+		csrf:        newCSRFStore(),
+		userStore:   userStore,
+		revokeCache: revokeCache,
+		revoker:     revoker,
 	}
 	go h.csrf.cleanupLoop(ctx)
 	return h
@@ -84,6 +97,17 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		return
 	}
 
+	// Upsert user to DB (best-effort — if DB is unavailable, use tokenVersion=1)
+	tokenVersion := 1
+	if h.userStore != nil {
+		_, tv, err := h.userStore.Upsert(c.Request.Context(), profile.MembershipID, int16(profile.MembershipType), profile.DisplayName)
+		if err != nil {
+			log.Printf("user upsert failed for %s: %v", profile.MembershipID, err)
+		} else {
+			tokenVersion = tv
+		}
+	}
+
 	now := time.Now()
 	refreshExpiry := time.Duration(tokenResp.RefreshExpiresIn) * time.Second
 	if refreshExpiry <= 0 {
@@ -97,13 +121,13 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		MembershipID:          profile.MembershipID,
 	})
 
-	accessToken, err := h.jwt.GenerateAccessToken(profile)
+	accessToken, err := h.jwt.GenerateAccessToken(profile, tokenVersion)
 	if err != nil {
 		log.Printf("Error generating access token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
-	refreshToken, err := h.jwt.GenerateRefreshToken(profile)
+	refreshToken, err := h.jwt.GenerateRefreshToken(profile, tokenVersion)
 	if err != nil {
 		log.Printf("Error generating refresh token: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
@@ -139,18 +163,26 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// Reject refresh attempts for revoked sessions (e.g. logout on another device).
+	if h.revoker != nil {
+		if err := h.revoker.Check(c.Request.Context(), claims.MembershipID, claims.TokenVersion); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has been revoked. Please log in again."})
+			return
+		}
+	}
+
 	profile := &auth.BungieUserProfile{
 		MembershipID:   claims.MembershipID,
 		DisplayName:    claims.DisplayName,
 		MembershipType: claims.MembershipType,
 	}
 
-	newAccess, err := h.jwt.GenerateAccessToken(profile)
+	newAccess, err := h.jwt.GenerateAccessToken(profile, claims.TokenVersion)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
 		return
 	}
-	newRefresh, err := h.jwt.GenerateRefreshToken(profile)
+	newRefresh, err := h.jwt.GenerateRefreshToken(profile, claims.TokenVersion)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
 		return
@@ -194,6 +226,28 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 			"platform":       c.GetString("platform"),
 		},
 	})
+}
+
+// Logout handles POST /api/auth/logout (JWT-protected)
+func (h *AuthHandler) Logout(c *gin.Context) {
+	membershipID := c.GetString("membership_id")
+
+	// Bump token_version to invalidate all issued JWTs
+	if h.userStore != nil {
+		if err := h.userStore.BumpTokenVersion(c.Request.Context(), membershipID); err != nil {
+			log.Printf("logout: bump token_version failed for %s: %v", membershipID, err)
+		}
+	}
+
+	// Delete Bungie tokens from memory and DB
+	h.tokenStore.Delete(membershipID)
+
+	// Evict revocation cache key so the next request hits DB immediately
+	if h.revokeCache != nil {
+		h.revokeCache.Delete("tver:" + membershipID)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
 // Bungie OAuth helpers

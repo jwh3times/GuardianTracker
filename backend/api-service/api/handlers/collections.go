@@ -2,12 +2,14 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
-	"strings"
 
 	"guardian-tracker/api-service/auth"
+	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/collections"
 
@@ -18,10 +20,11 @@ import (
 type CollectionsHandler struct {
 	collectionsService *collections.Service
 	tokenStore         *auth.TokenStore
+	cache              cache.Cache
 }
 
-func NewCollectionsHandler(svc *collections.Service, ts *auth.TokenStore) *CollectionsHandler {
-	return &CollectionsHandler{collectionsService: svc, tokenStore: ts}
+func NewCollectionsHandler(svc *collections.Service, ts *auth.TokenStore, c cache.Cache) *CollectionsHandler {
+	return &CollectionsHandler{collectionsService: svc, tokenStore: ts, cache: c}
 }
 
 // GetCollections handles GET /api/collections/:membershipType/:membershipId
@@ -32,11 +35,11 @@ func (h *CollectionsHandler) GetCollections(c *gin.Context) {
 		return
 	}
 
-	if !h.ownershipCheck(c, membershipID) {
+	if !ownershipCheck(c, membershipID) {
 		return
 	}
 
-	bungieToken, ok := h.getBungieToken(c, membershipID)
+	bungieToken, ok := getBungieToken(c, membershipID, h.tokenStore)
 	if !ok {
 		return
 	}
@@ -56,45 +59,17 @@ func (h *CollectionsHandler) RefreshCollections(c *gin.Context) {
 		return
 	}
 
-	if !h.ownershipCheck(c, membershipID) {
+	if !ownershipCheck(c, membershipID) {
 		return
 	}
 
 	h.collectionsService.InvalidateCache(membershipType, membershipID)
+	h.cache.Delete(fmt.Sprintf("characters:%d:%s", membershipType, membershipID))
+	h.cache.Delete(fmt.Sprintf("records:%d:%s", membershipType, membershipID))
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Cache invalidated. Next request will fetch fresh data.",
 	})
-}
-
-// ownershipCheck confirms the authenticated user (set by jwtHelper.Middleware()) owns this resource.
-func (h *CollectionsHandler) ownershipCheck(c *gin.Context, membershipID string) bool {
-	if c.GetString("membership_id") != membershipID {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You can only access your own data", "code": "FORBIDDEN"})
-		return false
-	}
-	return true
-}
-
-// getBungieToken retrieves a valid Bungie OAuth token from the in-process token store.
-func (h *CollectionsHandler) getBungieToken(c *gin.Context, membershipID string) (string, bool) {
-	token, err := h.tokenStore.GetValidToken(membershipID)
-	if err != nil {
-		log.Printf("Failed to get Bungie token for user %s: %v", membershipID, err)
-		if strings.Contains(err.Error(), "re-authentication required") {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Your Bungie session has expired. Please log in again.",
-				"code":  "BUNGIE_TOKEN_EXPIRED",
-			})
-		} else {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error": "Unable to retrieve Bungie authorization. Please try again.",
-				"code":  "TOKEN_ERROR",
-			})
-		}
-		return "", false
-	}
-	return token, true
 }
 
 // parseMembershipParams parses and validates :membershipType and :membershipId path params.
@@ -113,12 +88,7 @@ func parseMembershipParams(c *gin.Context) (int, string, bool) {
 }
 
 func isValidMembershipType(t int) bool {
-	for _, v := range []int{1, 2, 3, 4, 5, 6, 10, 254} {
-		if t == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains([]int{1, 2, 3, 4, 5, 6, 10, 254}, t)
 }
 
 func isValidMembershipID(id string) bool {

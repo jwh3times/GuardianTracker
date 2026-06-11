@@ -6,6 +6,7 @@ import React, {
   useState,
   ReactNode,
 } from "react";
+import { apiFetch } from "../lib/api";
 
 export type CardStyle = "framed" | "compact";
 export type Personalize = "off" | "normal";
@@ -56,14 +57,43 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [prefs]);
 
-  const setCardStyle = useCallback(
-    (cardStyle: CardStyle) => setPrefs((p) => ({ ...p, cardStyle })),
-    []
-  );
-  const setPersonalize = useCallback(
-    (personalize: Personalize) => setPrefs((p) => ({ ...p, personalize })),
-    []
-  );
+  useEffect(() => {
+    // On mount, sync from API if authenticated
+    const token = localStorage.getItem("guardian_token");
+    if (!token) return;
+    apiFetch<{ cardStyle: "framed" | "compact"; personalize: boolean }>("/api/preferences")
+      .then((remote) => {
+        setPrefs({
+          cardStyle: remote.cardStyle,
+          personalize: remote.personalize ? "normal" : "off",
+        });
+      })
+      .catch(() => {
+        // API unavailable — keep localStorage value
+      });
+  }, []); // once on mount
+
+  const setCardStyle = useCallback((cardStyle: CardStyle) => {
+    setPrefs((p) => {
+      const next = { ...p, cardStyle };
+      apiFetch("/api/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ cardStyle }),
+      }).catch(() => {}); // silent
+      return next;
+    });
+  }, []);
+
+  const setPersonalize = useCallback((personalize: Personalize) => {
+    setPrefs((p) => {
+      const next = { ...p, personalize };
+      apiFetch("/api/preferences", {
+        method: "PUT",
+        body: JSON.stringify({ personalize: personalize === "normal" }),
+      }).catch(() => {}); // silent
+      return next;
+    });
+  }, []);
 
   return (
     <PreferencesContext.Provider
