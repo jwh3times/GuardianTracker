@@ -6,12 +6,12 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/collections"
-	"guardian-tracker/api-service/services/manifest"
 )
 
 // Weekly is the assembled weekly recommendations payload sent to the frontend.
@@ -19,6 +19,9 @@ type Weekly struct {
 	ResetLabel   string              `json:"resetLabel"`
 	ResetIn      Duration            `json:"resetIn"`
 	DailyResetIn Duration            `json:"dailyResetIn"`
+	ResetAt      time.Time           `json:"resetAt"`    // next weekly reset (checkmark persistence key)
+	FetchedAt    time.Time           `json:"fetchedAt"`  // when the underlying Bungie data was fetched (B8)
+	Degraded     bool                `json:"degraded,omitempty"` // true when names/labels are placeholders (manifest still downloading)
 	Xur          *Xur                `json:"xur"`
 	Milestones   []Milestone         `json:"milestones"`
 	Vendors      []VendorRotation    `json:"vendors"`
@@ -51,12 +54,14 @@ type XurItem struct {
 }
 
 // Milestone is one active weekly milestone.
+// Missing is nil until per-milestone completion is actually computed (B9) —
+// the frontend hides the badge when absent rather than implying "complete".
 type Milestone struct {
 	ID      string `json:"id"`
 	Label   string `json:"label"`
 	Name    string `json:"name"`
 	Reward  string `json:"reward"`
-	Missing int    `json:"missing"`
+	Missing *int   `json:"missing,omitempty"`
 	Note    string `json:"note"`
 }
 
@@ -104,6 +109,15 @@ type publicWeeklyCache struct {
 	MilestoneRewards map[uint32]string
 	DailyMilestones  []dailyMilestoneItem
 	WeeklyActivities []weeklyActivityItem
+
+	// FetchedAt is when this payload was assembled from Bungie data (B8).
+	FetchedAt time.Time
+
+	// Degraded marks a payload assembled without manifest enrichment (manifest
+	// still downloading). Degraded payloads are cached briefly so the next
+	// request after the download self-heals instead of serving fallback labels
+	// until the weekly reset.
+	Degraded bool
 }
 
 type xurItemEnriched struct {
@@ -138,10 +152,20 @@ type dailyVendorItem struct {
 // Service assembles the weekly recommendations.
 type Service struct {
 	bungie      *bungie.Client
-	manifest    *manifest.Repository
+	manifest    ManifestRepo
 	collections *collections.Service
 	wishlist    WishlistReader
 	cache       cache.Cache
+}
+
+// ManifestRepo is the subset of the manifest repository the weekly service uses.
+// Satisfied by *manifest.Provider; calls error while the manifest is not ready,
+// which callers treat the same as a nil repo (fallback labels, no enrichment).
+type ManifestRepo interface {
+	GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error)
+	GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungie.MilestoneDefinition, error)
+	GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error)
+	GetActivityModifierDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModifierDefinition, error)
 }
 
 // WishlistReader is satisfied by *db.WishlistStore.
@@ -156,7 +180,7 @@ type WishlistItem struct {
 }
 
 // NewService creates a new weekly recommendations service.
-func NewService(b *bungie.Client, m *manifest.Repository, c *collections.Service, w WishlistReader, appCache cache.Cache) *Service {
+func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache) *Service {
 	return &Service{
 		bungie:      b,
 		manifest:    m,
@@ -243,14 +267,30 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		pub = &publicWeeklyCache{}
 	}
 
-	// Per-user missing set
-	var missingHashes map[uint32]struct{}
+	// Per-user missing set and daily vendor items are two independent Bungie
+	// round-trips on a cache miss — fetch them concurrently to halve added latency.
+	var (
+		missingHashes map[uint32]struct{}
+		dailyVendors  []dailyVendorItem
+	)
 	if bungieToken != "" {
-		missingHashes, err = s.collections.GetMissingItemHashes(ctx, membershipType, membershipID, bungieToken)
-		if err != nil {
-			log.Printf("weekly: GetMissingItemHashes for %s: %v", membershipID, err)
-			missingHashes = map[uint32]struct{}{}
-		}
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			mh, mErr := s.collections.GetMissingItemHashes(ctx, membershipType, membershipID, bungieToken)
+			if mErr != nil {
+				log.Printf("weekly: GetMissingItemHashes for %s: %v", membershipID, mErr)
+				mh = map[uint32]struct{}{}
+			}
+			missingHashes = mh
+		}()
+		go func() {
+			defer wg.Done()
+			// Daily vendor items (Ada-1, Banshee-44) — shared cache, populated by first authed request
+			dailyVendors = s.getDailyVendorItems(ctx, membershipType, membershipID, bungieToken, now)
+		}()
+		wg.Wait()
 	}
 	if missingHashes == nil {
 		missingHashes = map[uint32]struct{}{}
@@ -268,12 +308,6 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 				}
 			}
 		}
-	}
-
-	// Daily vendor items (Ada-1, Banshee-44) — shared cache, populated by first authed request
-	var dailyVendors []dailyVendorItem
-	if bungieToken != "" {
-		dailyVendors = s.getDailyVendorItems(ctx, membershipType, membershipID, bungieToken, now)
 	}
 
 	// Assemble Xûr block
@@ -308,12 +342,11 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 			continue
 		}
 		milestones = append(milestones, Milestone{
-			ID:      fmt.Sprintf("m-%d", hash),
-			Label:   "Weekly",
-			Name:    name,
-			Reward:  reward,
-			Missing: 0,
-			Note:    "",
+			ID:     fmt.Sprintf("m-%d", hash),
+			Label:  "Weekly",
+			Name:   name,
+			Reward: reward,
+			Note:   "",
 		})
 	}
 
@@ -340,16 +373,46 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 	recommended := s.buildRecommended(pub, missingHashes, wishlistHashes)
 	dailyActions := s.buildDailyActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
 
+	fetchedAt := pub.FetchedAt
+	if fetchedAt.IsZero() {
+		fetchedAt = now
+	}
 	return &Weekly{
 		ResetLabel:   resetLabel,
 		ResetIn:      resetIn,
 		DailyResetIn: dailyResetIn,
+		ResetAt:      resetAt,
+		FetchedAt:    fetchedAt,
+		Degraded:     pub.Degraded,
 		Xur:          xurBlock,
 		Milestones:   milestones,
 		Vendors:      vendors,
 		Recommended:  recommended,
 		DailyActions: dailyActions,
 	}, nil
+}
+
+// XurItemHashes returns the set of item hashes Xûr currently sells, for
+// wishlist availability checks (B6). Empty when Xûr is absent or the weekly
+// data is unavailable. Served from the shared weekly cache; the first call
+// after a reset fetches public vendors inline.
+func (s *Service) XurItemHashes(ctx context.Context) map[uint32]struct{} {
+	return s.xurItemHashesAt(ctx, time.Now().UTC())
+}
+
+func (s *Service) xurItemHashesAt(ctx context.Context, now time.Time) map[uint32]struct{} {
+	out := map[uint32]struct{}{}
+	if !XurPresent(now) {
+		return out
+	}
+	pub, err := s.getPublicWeekly(ctx, now)
+	if err != nil || pub == nil || !pub.XurPresent {
+		return out
+	}
+	for _, it := range pub.XurItems {
+		out[it.Hash] = struct{}{}
+	}
+	return out
 }
 
 func (s *Service) buildDailyActions(pub *publicWeeklyCache, vendors []dailyVendorItem, missing, wishlist map[uint32]struct{}, now time.Time, dailyResetIn, weeklyResetIn Duration) []DailyAction {
@@ -499,6 +562,7 @@ func (s *Service) getPublicWeekly(ctx context.Context, now time.Time) (*publicWe
 	pub := &publicWeeklyCache{
 		XurPresent: XurPresent(now),
 		ResetAt:    NextWeeklyReset(now),
+		FetchedAt:  now,
 	}
 	if pub.XurPresent {
 		pub.XurLeavesAt = NextWeeklyReset(now)
@@ -521,6 +585,11 @@ func (s *Service) getPublicWeekly(ctx context.Context, now time.Time) (*publicWe
 		ttl = daily
 	}
 	if ttl < 5*time.Minute {
+		ttl = 5 * time.Minute
+	}
+	// A payload built without the manifest must expire quickly so it self-heals
+	// once the manifest download finishes (B4).
+	if pub.Degraded && ttl > 5*time.Minute {
 		ttl = 5 * time.Minute
 	}
 	s.cache.Set(cacheKey, pub, ttl)
@@ -549,26 +618,34 @@ func (s *Service) fetchXurInventory(ctx context.Context, pub *publicWeeklyCache)
 		}
 	}
 
-	var enriched []xurItemEnriched
+	var defs map[uint32]*bungie.InventoryItemDefinition
 	if s.manifest != nil {
-		defs, err := s.manifest.GetItemsByHashes(xurHashes)
-		if err == nil {
-			for _, hash := range xurHashes {
-				def, ok := defs[hash]
-				if !ok || def == nil || def.DisplayProperties.Name == "" {
-					continue
-				}
-				rarity := strings.ToLower(bungie.GetTierName(def.Inventory.TierType))
-				enriched = append(enriched, xurItemEnriched{
-					Hash:   hash,
-					Name:   def.DisplayProperties.Name,
-					Type:   bungie.ItemTypeName(def.ItemType, def.ItemSubType),
-					Rarity: rarity,
-					Cost:   hashToCost[hash],
-				})
+		d, err := s.manifest.GetItemsByHashes(xurHashes)
+		if err != nil {
+			log.Printf("weekly: GetItemsByHashes (Xûr): %v", err)
+		} else {
+			defs = d
+		}
+	}
+
+	var enriched []xurItemEnriched
+	if defs != nil {
+		for _, hash := range xurHashes {
+			def, ok := defs[hash]
+			if !ok || def == nil || def.DisplayProperties.Name == "" {
+				continue
 			}
+			rarity := strings.ToLower(bungie.GetTierName(def.Inventory.TierType))
+			enriched = append(enriched, xurItemEnriched{
+				Hash:   hash,
+				Name:   def.DisplayProperties.Name,
+				Type:   bungie.ItemTypeName(def.ItemType, def.ItemSubType),
+				Rarity: rarity,
+				Cost:   hashToCost[hash],
+			})
 		}
 	} else {
+		pub.Degraded = true
 		for _, hash := range xurHashes {
 			enriched = append(enriched, xurItemEnriched{Hash: hash, Name: "Unknown Item", Cost: hashToCost[hash]})
 		}
@@ -592,17 +669,23 @@ func (s *Service) fetchMilestones(ctx context.Context, pub *publicWeeklyCache) {
 	pub.MilestoneNames = make(map[uint32]string)
 	pub.MilestoneRewards = make(map[uint32]string)
 
-	if s.manifest == nil {
+	// No manifest (nil in degraded mode, or erroring while it downloads) →
+	// fall back to hash labels and mark the payload degraded so it expires fast.
+	var defs map[uint32]*bungie.MilestoneDefinition
+	if s.manifest != nil {
+		d, err := s.manifest.GetMilestoneDefinitions(hashes)
+		if err != nil {
+			log.Printf("weekly: GetMilestoneDefinitions: %v", err)
+		} else {
+			defs = d
+		}
+	}
+	if defs == nil {
+		pub.Degraded = true
 		for _, hash := range hashes {
 			pub.MilestoneHashes = append(pub.MilestoneHashes, hash)
 			pub.MilestoneNames[hash] = fmt.Sprintf("Milestone %d", hash)
 		}
-		return
-	}
-
-	defs, err := s.manifest.GetMilestoneDefinitions(hashes)
-	if err != nil {
-		log.Printf("weekly: GetMilestoneDefinitions: %v", err)
 		return
 	}
 
@@ -818,14 +901,15 @@ func (s *Service) enrichDailyVendorItems(resp *bungie.CharacterVendorsResponse) 
 	for _, p := range pendings {
 		def, hasDef := itemDefs[p.hash]
 		// Only surface actual mods — vendors sell enhancement cores, upgrade modules, etc.
-		// that are not actionable in the "Do This Today" context.
-		if hasDef && def != nil && def.ItemType != bungie.ItemTypeMod {
+		// that are not actionable in the "Do This Today" context. Items with no
+		// manifest definition are dropped too (stale manifest → junk "Unknown Mod" rows).
+		if !hasDef || def == nil || def.ItemType != bungie.ItemTypeMod {
 			continue
 		}
 		meta := vendorMetas[p.vendorKey]
-		name := "Unknown Mod"
-		if hasDef && def != nil && def.DisplayProperties.Name != "" {
-			name = def.DisplayProperties.Name
+		name := def.DisplayProperties.Name
+		if name == "" {
+			continue
 		}
 		items = append(items, dailyVendorItem{
 			VendorName: meta.name,

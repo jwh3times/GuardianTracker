@@ -5,8 +5,12 @@ import { Button, DataFreshnessChip, PageHead, Panel } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { apiFetch } from "../lib/api";
-import { toCharacter } from "../lib/adapters";
-import type { APICharacter, APICacheRefreshResponse } from "../types/api";
+import { collectionsQuery } from "../lib/queries";
+import { relTime, toCharacter } from "../lib/adapters";
+import type {
+  APICharacter,
+  APICacheRefreshResponse,
+} from "../types/api";
 
 const PLATFORM_LABEL: Record<number, string> = {
   1: "Xbox",
@@ -59,6 +63,13 @@ export function Settings() {
   });
 
   const characterList = (charsData ?? []).map(toCharacter);
+
+  // Shared "missing" collections query — react-query dedupes with Dashboard and
+  // the Collections page's missing view, so this is free once any of them has
+  // loaded. Supplies real fetchedAt (B8).
+  const { data: collections } = useQuery(
+    collectionsQuery(user?.membershipType, user?.membershipId, false)
+  );
 
   const queryClient = useQueryClient();
 
@@ -167,14 +178,17 @@ export function Settings() {
         <Panel title="Data freshness" icon="refresh">
           <div className="gt-set-row">
             <span className="gt-set-k">Last updated</span>
-            <span className="gt-set-v mono">4m ago</span>
+            <span className="gt-set-v mono">
+              {collections?.fetchedAt ? relTime(collections.fetchedAt) : "—"}
+            </span>
           </div>
           <p className="gt-set-note">
             Guardian Tracker caches your collection and refreshes on demand — it never polls live,
             to respect Bungie's rate limits.
           </p>
           <DataFreshnessChip
-            ago="4m"
+            updatedAt={collections?.fetchedAt}
+            refreshing={refreshMutation.isPending}
             onRefresh={() => {
               if (user?.membershipType != null && !!user?.membershipId) {
                 refreshMutation.mutate();
@@ -188,9 +202,15 @@ export function Settings() {
             Your collection must be set to public on Bungie.net for Guardian Tracker to read it. We
             never modify your account.
           </p>
-          <Button variant="outline" sm icon="external">
-            Bungie privacy settings
-          </Button>
+          <a
+            href="https://www.bungie.net/7/en/User/Account/Privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" sm icon="external">
+              Bungie privacy settings
+            </Button>
+          </a>
         </Panel>
       </div>
 

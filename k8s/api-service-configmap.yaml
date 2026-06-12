@@ -5,7 +5,11 @@ metadata:
   namespace: default
 data:
   PORT: "8081"
-  GO_ENV: "production"
+  # The Minikube stack is a dev-validation environment only: it has no Postgres,
+  # so the api-service runs in degraded mode (in-memory token store, no persistence).
+  # Production deploys to Azure Container Apps (see InfraTODO.md Phase 10), where
+  # GO_ENV=production requires DATABASE_URL and TOKEN_ENCRYPTION_KEY secrets.
+  GO_ENV: "development"
   BUNGIE_API_BASE_URL: "https://www.bungie.net/Platform"
   # Update when using ngrok or a custom domain for OAuth
   AUTH_REDIRECT_URI: "http://localhost:3000/auth/callback"

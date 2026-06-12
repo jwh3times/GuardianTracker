@@ -50,6 +50,8 @@ export interface APICollectionSummary {
   total: number;
   collected: number;
   missing: APIDestinyItem[];
+  /** Present only when the request used ?include=all */
+  collectedItems?: APIDestinyItem[];
 }
 
 /** GET /api/collections/:membershipType/:membershipId */
@@ -58,6 +60,8 @@ export interface APIUserCollections {
   armor: APICollectionSummary;
   exotics: APICollectionSummary;
   cosmetics: APICollectionSummary;
+  /** When this data was fetched from Bungie (RFC3339, B8) */
+  fetchedAt: string;
 }
 
 // --- Characters: mirrors services/characters/service.go ---
@@ -91,9 +95,12 @@ export interface WishListItem {
   name: string;
   itemType: string;
   rarity: string;       // "Exotic", "Legendary", "Rare", "Uncommon", "Common"
+  icon: string;         // bungie.net icon path, may be ""
   priority: string;     // "LOW", "MEDIUM", "HIGH", "URGENT"
   notes: string;
   sources: string[];
+  availableNow: boolean;   // item is currently sold by Xûr (B6)
+  availableFrom?: string;  // "Xûr" when availableNow
   dateAdded: string;    // RFC3339
 }
 
@@ -113,7 +120,13 @@ export interface APISearchResult {
 }
 
 // --- Catalysts / Crafting / Seals ---
-// Response shapes are identical to the design types; re-export them for use in
+// Item shapes are identical to the design types; re-export them for use in
 // fetch calls so callers can import from one place.
 
 export type { Catalyst as APICatalyst, CraftPattern as APICraftPattern, Seal as APISeal } from "./design";
+
+/** Envelope for GET /api/catalysts|crafting|seals — items + data freshness (B8) */
+export interface APIRecordsEnvelope<T> {
+  items: T[];
+  fetchedAt: string; // RFC3339
+}

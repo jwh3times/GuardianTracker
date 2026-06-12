@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Brand } from "../components/Brand";
 import { Icon } from "../components/kit";
+import { API_URL } from "../lib/api";
 import type { AuthTokenResponse } from "../types/api";
 
 export const OAuthCallback: React.FC = () => {
@@ -10,11 +11,14 @@ export const OAuthCallback: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [error, setError] = useState<string | null>(null);
-
-  const AUTH_SERVICE_URL =
-    import.meta.env.VITE_API_URL || "http://localhost:8081";
+  // The auth code is single-use; React StrictMode double-invokes effects in dev,
+  // so guard against submitting it twice.
+  const submitted = useRef(false);
 
   useEffect(() => {
+    if (submitted.current) return;
+    submitted.current = true;
+
     const handleCallback = async () => {
       const code = searchParams.get("code");
       const returnedState = searchParams.get("state");
@@ -36,7 +40,7 @@ export const OAuthCallback: React.FC = () => {
       }
 
       try {
-        const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/bungie/callback`, {
+        const response = await fetch(`${API_URL}/api/auth/bungie/callback`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({ code, state: returnedState ?? "" }).toString(),
@@ -63,7 +67,7 @@ export const OAuthCallback: React.FC = () => {
     };
 
     handleCallback();
-  }, [searchParams, navigate, login, AUTH_SERVICE_URL]);
+  }, [searchParams, navigate, login]);
 
   return (
     <div className="gt-login">

@@ -247,12 +247,10 @@ export function MilestoneModule({ milestones }: { milestones: Milestone[] }) {
               <div className="gt-item-name">{m.name}</div>
               <div className="gt-item-type">Reward: {m.reward}</div>
             </div>
-            {m.missing > 0 ? (
+            {m.missing != null && m.missing > 0 && (
               <Badge kind="missing" dot>
                 {m.missing} missing
               </Badge>
-            ) : (
-              <Badge kind="complete" dot />
             )}
           </li>
         ))}
@@ -409,7 +407,7 @@ export function ItemDetailDrawer({
           <Icon name="close" size="1.1rem" />
         </button>
         <div className="gt-drawer-hero">
-          <ItemTile rarity={item.rarity} type={item.type} style={{ width: "4.6rem" }} />
+          <ItemTile rarity={item.rarity} type={item.type} icon={item.icon} style={{ width: "4.6rem" }} />
           <div>
             <div className="gt-item-badges" style={{ marginBottom: "var(--s-1)" } as CSS}>
               <Badge kind={item.rarity} dot lg />

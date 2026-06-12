@@ -2,16 +2,16 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"guardian-tracker/api-service/auth"
-	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/characters"
 	"guardian-tracker/api-service/services/collections"
+	"guardian-tracker/api-service/services/records"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,12 +19,18 @@ import (
 // CollectionsHandler handles collection-related endpoints.
 type CollectionsHandler struct {
 	collectionsService *collections.Service
+	charactersService  *characters.Service
+	recordsService     *records.Service
 	tokenStore         *auth.TokenStore
-	cache              cache.Cache
 }
 
-func NewCollectionsHandler(svc *collections.Service, ts *auth.TokenStore, c cache.Cache) *CollectionsHandler {
-	return &CollectionsHandler{collectionsService: svc, tokenStore: ts, cache: c}
+func NewCollectionsHandler(svc *collections.Service, chars *characters.Service, recs *records.Service, ts *auth.TokenStore) *CollectionsHandler {
+	return &CollectionsHandler{
+		collectionsService: svc,
+		charactersService:  chars,
+		recordsService:     recs,
+		tokenStore:         ts,
+	}
 }
 
 // GetCollections handles GET /api/collections/:membershipType/:membershipId
@@ -49,6 +55,13 @@ func (h *CollectionsHandler) GetCollections(c *gin.Context) {
 		handleBungieError(c, err)
 		return
 	}
+
+	// Collected items ride along only when asked for (?include=all). The stripping
+	// copies by value, so the cached *UserCollections is never mutated.
+	if c.Query("include") != "all" {
+		c.JSON(http.StatusOK, result.WithoutCollectedItems())
+		return
+	}
 	c.JSON(http.StatusOK, result)
 }
 
@@ -63,9 +76,11 @@ func (h *CollectionsHandler) RefreshCollections(c *gin.Context) {
 		return
 	}
 
+	// Each service owns its own cache key — invalidate through them so a key
+	// format change can never silently leave a stale entry behind.
 	h.collectionsService.InvalidateCache(membershipType, membershipID)
-	h.cache.Delete(fmt.Sprintf("characters:%d:%s", membershipType, membershipID))
-	h.cache.Delete(fmt.Sprintf("records:%d:%s", membershipType, membershipID))
+	h.charactersService.InvalidateCache(membershipType, membershipID)
+	h.recordsService.InvalidateCache(membershipType, membershipID)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Cache invalidated. Next request will fetch fresh data.",
@@ -104,6 +119,13 @@ func isValidMembershipID(id string) bool {
 }
 
 func handleBungieError(c *gin.Context, err error) {
+	if errors.Is(err, collections.ErrManifestNotReady) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "The item database is still downloading — try again in a moment.",
+			"code":  "MANIFEST_NOT_READY",
+		})
+		return
+	}
 	var bungieErr *bungie.BungieError
 	if errors.As(err, &bungieErr) {
 		switch bungieErr.ErrorCode {

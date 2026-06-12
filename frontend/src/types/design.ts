@@ -83,7 +83,8 @@ export interface Milestone {
   label: string;
   name: string;
   reward: string;
-  missing: number;
+  /** Absent until the backend computes real per-milestone completion (B9). */
+  missing?: number;
   note: string;
 }
 
@@ -120,6 +121,12 @@ export interface Weekly {
   resetLabel: string;
   resetIn: Duration;
   dailyResetIn: Duration;
+  /** Next weekly reset (RFC3339) — keys checkmark persistence. */
+  resetAt: string;
+  /** When the underlying Bungie data was fetched (RFC3339, B8). */
+  fetchedAt: string;
+  /** True when names/labels are placeholders because the manifest is still downloading. */
+  degraded?: boolean;
   xur: Xur | null;  // null when Xûr is not in town
   milestones: Milestone[];
   vendors: VendorRotation[];
@@ -132,6 +139,8 @@ export interface WishlistEntry {
   name: string;
   type: string;
   rarity: Rarity;
+  /** Bungie icon path; absent when the manifest had no definition. */
+  icon?: string;
   priority: Priority;
   avail: { now: boolean; where: string };
   notes: string;
@@ -141,6 +150,10 @@ export interface WishlistEntry {
 export interface Catalyst {
   id: string;
   name: string;
+  /** Weapon type from the manifest (e.g. "Hand Cannon"); "" when unresolvable. */
+  type?: string;
+  /** Record icon path on bungie.net; may be "". */
+  icon?: string;
   status: CatalystStatus;
   obj: { label: string; cur: number; max: number } | null;
   source: string;

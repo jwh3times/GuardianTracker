@@ -66,7 +66,12 @@ export function toGTItem(d: APIDestinyItem): GTItem {
 
 /** Convert a UTC RFC3339 timestamp to a human-readable relative string ("3d ago", "just now"). */
 export function relTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+  const t = new Date(iso).getTime();
+  // Guard against empty/invalid input (NaN) and Go's zero time
+  // ("0001-01-01T00:00:00Z" → a large negative epoch) so we never render
+  // "NaNmo ago" or "24168mo ago".
+  if (!iso || Number.isNaN(t) || t < 1_000_000_000_000) return "unknown";
+  const diff = Date.now() - t;
   const mins = Math.floor(diff / 60_000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -86,8 +91,14 @@ export function toWishlistEntry(w: WishListItem): WishlistEntry {
     name: w.name,
     type: w.itemType,
     rarity: RARITY_MAP[w.rarity] ?? "legendary",
+    icon: w.icon || undefined,
     priority: PRIORITY_MAP[w.priority] ?? "medium",
-    avail: { now: false, where: sources[0] ?? "Unknown source" },
+    avail: {
+      now: w.availableNow ?? false,
+      where: w.availableNow
+        ? (w.availableFrom ?? "Xûr")
+        : (sources[0] ?? "Unknown source"),
+    },
     notes: w.notes ?? "",
     added: relTime(w.dateAdded),
   };

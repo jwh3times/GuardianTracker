@@ -15,12 +15,14 @@ import {
   Skeleton,
 } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
+import { useCharacters } from "../contexts/CharacterContext";
 import { apiFetch } from "../lib/api";
+import { collectionsQuery } from "../lib/queries";
+import { toWishlistEntry } from "../lib/adapters";
 import type { DailyAction, SummaryCategory, Weekly } from "../types/design";
 import type {
   ProfileResponse,
   APICollectionSummary,
-  APIUserCollections,
   WishListItem,
 } from "../types/api";
 
@@ -31,8 +33,14 @@ function formatDuration(d: import("../types/design").Duration | undefined): stri
   return `${d.m ?? 0}m`;
 }
 
+const emblemStyle = (url?: string): React.CSSProperties | undefined =>
+  url
+    ? { backgroundImage: `url(${url})`, backgroundSize: "cover", backgroundPosition: "center" }
+    : undefined;
+
 export function Dashboard() {
   const { user } = useAuth();
+  const { activeCharacter } = useCharacters();
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
 
@@ -44,14 +52,11 @@ export function Dashboard() {
   const membershipType = profileData?.user.membershipType ?? user?.membershipType;
   const membershipId = profileData?.user.membershipId ?? user?.membershipId;
 
-  const { data: real, isLoading: collectionsLoading } = useQuery({
-    queryKey: ["collections", membershipType, membershipId],
-    queryFn: () =>
-      apiFetch<APIUserCollections>(
-        `/api/collections/${membershipType}/${membershipId}`
-      ),
-    enabled: membershipType != null && !!membershipId,
-  });
+  // Shares the "missing" collections cache entry with Settings and the
+  // Collections page (one fetch across all three) via the shared query helper.
+  const { data: real, isLoading: collectionsLoading } = useQuery(
+    collectionsQuery(membershipType, membershipId, false)
+  );
 
   const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
     queryKey: ["weekly"],
@@ -67,6 +72,11 @@ export function Dashboard() {
 
   const displayName =
     profileData?.user.displayName || user?.displayName || "Guardian";
+
+  // Normalize wishlist rows through the adapter so rarity/availability handling
+  // stays in one place (lib/adapters) rather than reading raw API fields here.
+  const wishlistEntries = (wishlistItems ?? []).map(toWishlistEntry);
+  const availableNowCount = wishlistEntries.filter((e) => e.avail.now).length;
 
   const fromReal = (
     c: Pick<APICollectionSummary, "total" | "collected"> | undefined,
@@ -108,6 +118,23 @@ export function Dashboard() {
       {/* HERO COMPLETION */}
       <Panel pad={false} style={{ padding: "var(--s-5)" }}>
         <div className="gt-hero">
+          {activeCharacter && (
+            <div className="gt-hero-char">
+              <span
+                className="gt-avatar"
+                data-cls={activeCharacter.cls}
+                style={emblemStyle(activeCharacter.emblemUrl)}
+              >
+                {activeCharacter.emblemUrl ? "" : activeCharacter.name[0]}
+              </span>
+              <div className="gt-hero-char-main">
+                <span className="gt-hero-char-name">{activeCharacter.cls}</span>
+                <span className="gt-hero-char-sub mono">
+                  {activeCharacter.race} · <Icon name="bolt" size="0.7rem" style={{ color: "var(--c-exotic)" }} /> {activeCharacter.power}
+                </span>
+              </div>
+            </div>
+          )}
           <div className="gt-hero-radial">
             {collectionsLoading ? (
               <Skeleton w="clamp(8rem,9vw,10rem)" h="clamp(8rem,9vw,10rem)" r="50%" />
@@ -244,12 +271,10 @@ export function Dashboard() {
                       <div className="gt-item-name">{m.name}</div>
                       <div className="gt-item-type">Reward: {m.reward}</div>
                     </div>
-                    {m.missing > 0 ? (
+                    {m.missing != null && m.missing > 0 && (
                       <Badge kind="missing" dot>
                         {m.missing} missing
                       </Badge>
-                    ) : (
-                      <Badge kind="complete" dot />
                     )}
                   </li>
                 ))}
@@ -270,9 +295,11 @@ export function Dashboard() {
             {wishlistLoading ? (
               <Skeleton w="2.5rem" h="1.2rem" style={{ display: "inline-block" }} />
             ) : (
-              <span className="gt-avail-num mono">{(wishlistItems ?? []).length}</span>
+              <span className="gt-avail-num mono">{availableNowCount}</span>
             )}
-            <span className="gt-avail-text">items on your wishlist</span>
+            <span className="gt-avail-text">
+              of {wishlistEntries.length} wishlist items available now
+            </span>
           </div>
           <div className="gt-avail-list">
             {wishlistLoading
@@ -286,21 +313,25 @@ export function Dashboard() {
                     <Skeleton w="3.5rem" h="1.2rem" r="var(--r-sm)" />
                   </div>
                 ))
-              : (wishlistItems ?? []).slice(0, 3).map((item) => (
-                  <button
-                    key={item.id}
-                    className="gt-item gt-item--compact"
-                    data-rarity={item.rarity.toLowerCase()}
-                    onClick={() => go("/wishlist")}
-                  >
-                    <ItemTile rarity={item.rarity.toLowerCase() as any} type={item.itemType} style={{ width: "1.9rem" }} />
-                    <div className="gt-item-head" style={{ flex: 1 }}>
-                      <div className="gt-item-name">{item.name}</div>
-                      <div className="gt-item-type">{item.itemType}</div>
-                    </div>
-                    <Badge kind="avail-now" dot />
-                  </button>
-                ))}
+              : wishlistEntries
+                  .slice()
+                  .sort((a, b) => (b.avail.now ? 1 : 0) - (a.avail.now ? 1 : 0))
+                  .slice(0, 3)
+                  .map((entry) => (
+                    <button
+                      key={entry.id}
+                      className="gt-item gt-item--compact"
+                      data-rarity={entry.rarity}
+                      onClick={() => go("/wishlist")}
+                    >
+                      <ItemTile rarity={entry.rarity} type={entry.type} icon={entry.icon} style={{ width: "1.9rem" }} />
+                      <div className="gt-item-head" style={{ flex: 1 }}>
+                        <div className="gt-item-name">{entry.name}</div>
+                        <div className="gt-item-type">{entry.type}</div>
+                      </div>
+                      {entry.avail.now && <Badge kind="avail-now" dot />}
+                    </button>
+                  ))}
           </div>
         </Panel>
       </div>
@@ -312,7 +343,7 @@ export function Dashboard() {
         <Button variant="outline" icon="wishlist" onClick={() => go("/wishlist")}>
           Manage Wishlist
         </Button>
-        <DataFreshnessChip ago="—" />
+        <DataFreshnessChip updatedAt={real?.fetchedAt} />
       </div>
     </div>
   );

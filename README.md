@@ -8,7 +8,8 @@ A web-based app for Destiny 2 players that integrates Bungie APIs to analyze col
 - **Collection Analysis**: Automatically identify missing weapons, armor, and exotics — classified by acquisition difficulty (Easy / Moderate / Challenging)
 - **Wish List Management**: Track and prioritize desired items
 - **Destiny 2 Manifest**: Auto-downloads and updates the full Bungie item manifest (SQLite)
-- **Weekly Reset Notifications**: Placeholder — planned for future releases
+- **This Week**: Real weekly milestones, Xûr inventory with missing/wishlist flags, daily actions, and reset countdowns
+- **Catalysts, Crafting & Seals**: Exotic catalyst progress, crafting pattern unlocks, and triumph/seal completion from the Bungie records API
 
 ## Architecture
 
@@ -26,11 +27,11 @@ Frontend (React/TS :3000)
 
 ### Backend
 
-- **API Service**: Go + Gin — Bungie OAuth, JWT access/refresh tokens, in-memory token store, manifest download, collection analysis, rate-limited Bungie API client
+- **API Service**: Go + Gin — Bungie OAuth, JWT access/refresh tokens with revocation, DB-backed encrypted Bungie token store, manifest download, collection analysis, rate-limited Bungie API client
 
 ### Data Storage
 
-- **PostgreSQL**: User data schema (defined, not yet wired to service)
+- **PostgreSQL**: Users, wishlist, preferences, and AES-256-GCM-encrypted Bungie OAuth tokens (schema applied by the migration runner at startup; runs in degraded in-memory mode when `DATABASE_URL` is unset)
 - **SQLite**: Bungie Destiny 2 manifest database (downloaded automatically on startup)
 - **In-memory cache**: Collection results with configurable TTL
 
@@ -94,6 +95,8 @@ Required secrets:
 | `BUNGIE_CLIENT_ID` | OAuth client ID |
 | `BUNGIE_CLIENT_SECRET` | OAuth client secret |
 | `JWT_SECRET` | 32+ char random string (`openssl rand -base64 32`) |
+| `DATABASE_URL` | Postgres connection string (compose sets it automatically) |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`) |
 
 ### 3. Start Services
 

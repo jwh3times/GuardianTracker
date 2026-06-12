@@ -1,30 +1,51 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Icon } from "./Icon";
 import {
+  BUNGIE_CDN,
   DIFF_LABEL,
   PRIORITY_LABEL,
   RARITY_LABEL,
   TYPE_GLYPH,
 } from "../../lib/constants";
+import { relTime } from "../../lib/adapters";
 
 /** Allow CSS custom properties in inline styles without fighting the type. */
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 
-/* ---------------- ITEM TILE (placeholder icon) ---------------- */
+/* ---------------- ITEM TILE ---------------- */
+/**
+ * Renders the real Bungie item icon when an icon path is provided, with the
+ * type glyph as the loading/error fallback (PRD §8.2 image-forward cards).
+ */
 export function ItemTile({
   rarity,
   type,
+  icon,
   style,
 }: {
   rarity: string;
   type?: string;
+  /** Bungie icon path (e.g. "/common/destiny2_content/icons/…png"). */
+  icon?: string;
   style?: React.CSSProperties;
 }) {
+  const [failed, setFailed] = useState(false);
   const glyph =
     (type && TYPE_GLYPH[type]) || type?.slice(0, 2).toUpperCase() || "??";
+  const showIcon = !!icon && !failed;
   return (
     <div className="gt-tile" data-rarity={rarity} style={style}>
-      <span className="gt-tile-glyph">{glyph}</span>
+      {showIcon ? (
+        <img
+          className="gt-tile-img"
+          loading="lazy"
+          alt=""
+          src={`${BUNGIE_CDN}${icon}`}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span className="gt-tile-glyph">{glyph}</span>
+      )}
     </div>
   );
 }
@@ -243,31 +264,76 @@ export function CountdownChip({
 
 /* ---------------- DATA FRESHNESS CHIP ---------------- */
 export function DataFreshnessChip({
-  ago,
+  updatedAt,
   onRefresh,
+  refreshing,
 }: {
-  ago: string;
+  /** RFC3339 timestamp of when the data was fetched; chip shows "Updated —" when absent. */
+  updatedAt?: string;
   onRefresh?: () => void;
+  /** True while a refresh is actually in flight (e.g. mutation.isPending). */
+  refreshing?: boolean;
 }) {
-  const [state, setState] = useState<"fresh" | "refreshing">("fresh");
-  const refresh = () => {
-    if (state === "refreshing") return;
-    setState("refreshing");
-    setTimeout(() => {
-      setState("fresh");
-      onRefresh?.();
-    }, 1100);
-  };
+  // Re-render periodically so the relative label ("4m ago") stays live.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const label = refreshing
+    ? "Refreshing…"
+    : updatedAt
+      ? `Updated ${relTime(updatedAt)}`
+      : "Updated —";
+
   return (
     <button
       className="gt-chip gt-fresh"
-      data-state={state}
-      onClick={refresh}
-      title="Refresh data"
+      data-state={refreshing ? "refreshing" : "fresh"}
+      onClick={() => {
+        if (!refreshing) onRefresh?.();
+      }}
+      disabled={!onRefresh}
+      aria-label="Refresh data"
+      title={onRefresh ? "Refresh data" : undefined}
+      style={onRefresh ? undefined : { cursor: "default" }}
     >
       <Icon name="refresh" size="0.85rem" className="gt-fresh-icon" />
-      {state === "refreshing" ? "Refreshing…" : `Updated ${ago} ago`}
+      {label}
     </button>
+  );
+}
+
+/* ---------------- TEXTAREA ---------------- */
+export function Textarea({
+  value,
+  onChange,
+  placeholder,
+  maxLength,
+  rows = 2,
+  autoFocus,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  maxLength?: number;
+  rows?: number;
+  autoFocus?: boolean;
+  ariaLabel?: string;
+}) {
+  return (
+    <textarea
+      className="gt-textarea"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      maxLength={maxLength}
+      rows={rows}
+      autoFocus={autoFocus}
+      aria-label={ariaLabel}
+    />
   );
 }
 

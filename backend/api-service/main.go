@@ -2,13 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -36,6 +35,9 @@ type tokenRepoAdapter struct{ s *db.BungieTokenStore }
 func (a *tokenRepoAdapter) Get(ctx context.Context, membershipID string) (*auth.EncryptedTokenRecord, error) {
 	t, err := a.s.Get(ctx, membershipID)
 	if err != nil {
+		if errors.Is(err, db.ErrTokensNotFound) {
+			return nil, auth.ErrTokensNotFound
+		}
 		return nil, err
 	}
 	return &auth.EncryptedTokenRecord{
@@ -48,46 +50,22 @@ func (a *tokenRepoAdapter) Get(ctx context.Context, membershipID string) (*auth.
 	}, nil
 }
 
-func (a *tokenRepoAdapter) Upsert(ctx context.Context, membershipID string, t *auth.EncryptedTokenRecord, prev time.Time) (bool, error) {
-	return a.s.Upsert(ctx, membershipID, &db.EncryptedTokens{
+func (a *tokenRepoAdapter) Upsert(ctx context.Context, membershipID string, t *auth.EncryptedTokenRecord, prev time.Time) (time.Time, bool, error) {
+	at, ok, err := a.s.Upsert(ctx, membershipID, &db.EncryptedTokens{
 		AccessTokenEnc:   t.AccessTokenEnc,
 		RefreshTokenEnc:  t.RefreshTokenEnc,
 		AccessExpiresAt:  t.AccessExpiresAt,
 		RefreshExpiresAt: t.RefreshExpiresAt,
 		KeyVersion:       t.KeyVersion,
 	}, prev)
+	if errors.Is(err, db.ErrNoUserRow) {
+		return at, ok, auth.ErrNoUserRow
+	}
+	return at, ok, err
 }
 
 func (a *tokenRepoAdapter) Delete(ctx context.Context, membershipID string) error {
 	return a.s.Delete(ctx, membershipID)
-}
-
-// lazyManifest satisfies handlers.manifestLookupIface and defers opening the SQLite
-// file until the first call, retrying until the manifest has been downloaded.
-type lazyManifest struct {
-	path string
-	mu   sync.RWMutex
-	repo *manifestrepo.Repository
-}
-
-func (l *lazyManifest) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
-	l.mu.RLock()
-	r := l.repo
-	l.mu.RUnlock()
-	if r == nil {
-		l.mu.Lock()
-		if l.repo == nil {
-			if repo, err := manifestrepo.NewRepository(l.path); err == nil {
-				l.repo = repo
-			}
-		}
-		r = l.repo
-		l.mu.Unlock()
-	}
-	if r == nil {
-		return nil, fmt.Errorf("manifest not ready")
-	}
-	return r.GetItemsByHashes(hashes)
 }
 
 // weeklyWishlistAdapter wraps db.WishlistStore to satisfy weekly.WishlistReader.
@@ -116,7 +94,9 @@ func main() {
 	}
 
 	cfg := config.Load()
-	cfg.Validate()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Configuration invalid: %v", err)
+	}
 
 	if cfg.IsProduction() {
 		gin.SetMode(gin.ReleaseMode)
@@ -158,6 +138,40 @@ func main() {
 	// Manifest — EnsureReady runs in a goroutine so the HTTP server starts immediately.
 	// The collections endpoint returns 503 until the manifest database is available.
 	manifestService := bungie.NewManifestService(bungieClient, cfg.ManifestDBPath, cfg.ManifestCheckInterval)
+
+	// Single manifest repository shared by all consumers: opens lazily once the
+	// manifest file exists (no restart needed after a cold-start download) and
+	// reconnects across the hourly manifest swap via the hooks below.
+	manifestProvider := manifestrepo.NewProvider(cfg.ManifestDBPath)
+
+	// Search service — builds its index asynchronously after the manifest is available
+	searchService := search.NewService(manifestService, cfg.ManifestDBPath)
+
+	// Cache — created before the swap hooks so the after-swap hook can evict
+	// manifest-derived cache entries.
+	var appCache cache.Cache
+	if cfg.CacheEnabled {
+		appCache = cache.NewMemoryCache(cfg.CacheTTLCollections, 10*time.Minute)
+	} else {
+		appCache = cache.NewNoOpCache()
+	}
+
+	// Hooks must be registered before EnsureReady can trigger a download: close
+	// SQLite handles before the file swap (the rename fails on Windows otherwise),
+	// reopen + rebuild the search index after the new version is installed, and
+	// evict manifest-derived caches (e.g. weapon types) so they don't serve stale
+	// labels until their TTL expires (B10).
+	manifestService.RegisterSwapHooks(
+		manifestProvider.CloseForSwap,
+		func(version string) {
+			if err := manifestProvider.Reopen(); err != nil {
+				log.Printf("Warning: manifest provider reopen failed: %v", err)
+			}
+			appCache.Delete(records.WeaponTypesCacheKey)
+			go searchService.BuildIndex()
+		},
+	)
+
 	go func() {
 		log.Println("Checking manifest status...")
 		if err := manifestService.EnsureReady(ctx); err != nil {
@@ -167,61 +181,38 @@ func main() {
 	}()
 	manifestService.StartBackgroundUpdater(ctx)
 
-	// Cache
-	var appCache cache.Cache
-	if cfg.CacheEnabled {
-		appCache = cache.NewMemoryCache(cfg.CacheTTLCollections, 10*time.Minute)
-	} else {
-		appCache = cache.NewNoOpCache()
-	}
-
 	// Revocation checker — nil store = skip version check (degraded mode)
 	var revoker *auth.RevocationChecker
 	if stores.Users != nil {
 		revoker = auth.NewRevocationChecker(stores.Users, appCache)
 	}
 
-	// Services
+	// Services — all manifest consumers share manifestProvider (lazy open,
+	// reconnects across manifest swaps).
 	charactersService := characters.NewService(bungieClient, appCache, cfg.CacheTTLCollections)
-	collectionsService := collections.NewService(bungieClient, manifestService, cfg.ManifestDBPath, appCache, cfg.CacheTTLCollections)
-
-	// Shared manifest repository for weekly/records services (nil on first run until manifest downloads).
-	// The wishlist uses a lazy variant that auto-connects once the manifest file appears.
-	var sharedManifestRepo *manifestrepo.Repository
-	if _, statErr := os.Stat(cfg.ManifestDBPath); statErr == nil {
-		if repo, repoErr := manifestrepo.NewRepository(cfg.ManifestDBPath); repoErr == nil {
-			sharedManifestRepo = repo
-		} else {
-			log.Printf("Warning: could not open manifest repository: %v", repoErr)
-		}
-	}
-	weeklyManifestRepo := sharedManifestRepo
+	collectionsService := collections.NewService(bungieClient, manifestService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
 	// Weekly service
 	var weeklyWishlist weekly.WishlistReader
 	if stores.Wishlist != nil {
 		weeklyWishlist = &weeklyWishlistAdapter{s: stores.Wishlist}
 	}
-	weeklyService := weekly.NewService(bungieClient, weeklyManifestRepo, collectionsService, weeklyWishlist, appCache)
+	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache)
 	weeklyHandler := handlers.NewWeeklyHandler(weeklyService, tokenStore)
 
-	// Search service — builds index asynchronously after manifest is available
-	searchService := search.NewService(manifestService, cfg.ManifestDBPath)
 	go searchService.BuildIndex()
 	searchHandler := handlers.NewSearchHandler(searchService)
 
-	// Records service (catalysts, crafting, seals) — shares manifest repo with weekly service
-	recordsService := records.NewService(bungieClient, sharedManifestRepo, appCache, cfg.CacheTTLRecords)
+	// Records service (catalysts, crafting, seals)
+	recordsService := records.NewService(bungieClient, manifestProvider, appCache, cfg.CacheTTLRecords)
 	recordsHandler := handlers.NewRecordsHandler(recordsService, tokenStore)
 
 	// Handlers
-	authHandler := handlers.NewAuthHandler(ctx, jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker)
-	// Wishlist uses a lazy manifest that auto-connects once the manifest file is available,
-	// so items are enriched even when the manifest downloads after the service starts.
-	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, &lazyManifest{path: cfg.ManifestDBPath}, stores.Prefs)
+	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker)
+	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService)
 	healthHandler := handlers.NewHealthHandler(manifestService)
 	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
-	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, tokenStore, appCache)
+	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore)
 
 	// Router
 	router := gin.Default()
@@ -300,7 +291,9 @@ func main() {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
-	collectionsService.Close()
+	if err := manifestProvider.Close(); err != nil {
+		log.Printf("Warning: error closing manifest provider: %v", err)
+	}
 	log.Println("Server exited gracefully")
 }
 

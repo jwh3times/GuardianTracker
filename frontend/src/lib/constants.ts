@@ -1,5 +1,8 @@
 import type { Difficulty, Priority, Rarity } from "../types/design";
 
+/** Base URL for Bungie CDN assets — item icon paths are relative to this. */
+export const BUNGIE_CDN = "https://www.bungie.net";
+
 export const RARITIES: Rarity[] = ["exotic", "legendary", "rare", "uncommon", "common"];
 export const DIFFS: Difficulty[] = ["easy", "moderate", "challenging"];
 

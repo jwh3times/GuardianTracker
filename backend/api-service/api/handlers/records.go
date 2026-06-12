@@ -33,12 +33,12 @@ func (h *RecordsHandler) GetCatalysts(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.svc.GetCatalysts(c.Request.Context(), membershipType, membershipID, bungieToken)
+	result, fetchedAt, err := h.svc.GetCatalysts(c.Request.Context(), membershipType, membershipID, bungieToken)
 	if err != nil {
 		handleBungieError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"items": result, "fetchedAt": fetchedAt})
 }
 
 // GetCrafting handles GET /api/crafting/:membershipType/:membershipId
@@ -54,12 +54,12 @@ func (h *RecordsHandler) GetCrafting(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.svc.GetCrafting(c.Request.Context(), membershipType, membershipID, bungieToken)
+	result, fetchedAt, err := h.svc.GetCrafting(c.Request.Context(), membershipType, membershipID, bungieToken)
 	if err != nil {
 		handleBungieError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"items": result, "fetchedAt": fetchedAt})
 }
 
 // GetSeals handles GET /api/seals/:membershipType/:membershipId
@@ -75,10 +75,10 @@ func (h *RecordsHandler) GetSeals(c *gin.Context) {
 	if !ok {
 		return
 	}
-	result, err := h.svc.GetSeals(c.Request.Context(), membershipType, membershipID, bungieToken)
+	result, fetchedAt, err := h.svc.GetSeals(c.Request.Context(), membershipType, membershipID, bungieToken)
 	if err != nil {
 		handleBungieError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	c.JSON(http.StatusOK, gin.H{"items": result, "fetchedAt": fetchedAt})
 }

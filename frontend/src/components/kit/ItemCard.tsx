@@ -40,7 +40,7 @@ export function ItemCard({
         data-collected={showCollected && item.collected}
         onClick={() => onOpen?.(item)}
       >
-        <ItemTile rarity={r} type={item.type} />
+        <ItemTile rarity={r} type={item.type} icon={item.icon} />
         <div className="gt-item-head">
           <div className="gt-il-main">
             <div className="gt-item-name">{item.name}</div>
@@ -59,6 +59,7 @@ export function ItemCard({
             className="gt-iconbtn"
             data-on={wished}
             title="Wishlist"
+            aria-label={wished ? `Remove ${item.name} from wishlist` : `Add ${item.name} to wishlist`}
             onClick={(e) => {
               e.stopPropagation();
               onWish?.(item);
@@ -69,6 +70,7 @@ export function ItemCard({
           <button
             className="gt-iconbtn"
             title="Details"
+            aria-label={`${item.name} details`}
             onClick={(e) => {
               e.stopPropagation();
               onOpen?.(item);
@@ -89,7 +91,7 @@ export function ItemCard({
         data-collected={showCollected && item.collected}
         onClick={() => onOpen?.(item)}
       >
-        <ItemTile rarity={r} type={item.type} />
+        <ItemTile rarity={r} type={item.type} icon={item.icon} />
         <div className="gt-item-head" style={{ flex: 1 }}>
           <div className="gt-item-name">{item.name}</div>
           <div className="gt-item-type">{item.type}</div>
@@ -98,6 +100,7 @@ export function ItemCard({
         <button
           className="gt-iconbtn"
           data-on={wished}
+          aria-label={wished ? `Remove ${item.name} from wishlist` : `Add ${item.name} to wishlist`}
           onClick={(e) => {
             e.stopPropagation();
             onWish?.(item);
@@ -123,7 +126,7 @@ export function ItemCard({
       onClick={() => onOpen?.(item)}
     >
       <div className="gt-item-top">
-        <ItemTile rarity={r} type={item.type} />
+        <ItemTile rarity={r} type={item.type} icon={item.icon} />
         <div className="gt-item-head">
           <div className="gt-item-name">{item.name}</div>
           <div className="gt-item-type">
@@ -155,6 +158,7 @@ export function ItemCard({
           className="gt-iconbtn"
           data-on={wished}
           title="Add to wishlist"
+          aria-label={wished ? `Remove ${item.name} from wishlist` : `Add ${item.name} to wishlist`}
           onClick={(e) => {
             e.stopPropagation();
             onWish?.(item);

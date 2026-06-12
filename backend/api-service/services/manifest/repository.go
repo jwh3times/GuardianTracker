@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 	"sync"
 
@@ -99,6 +100,11 @@ func (r *Repository) GetInventoryItemDefinition(hash uint32) (*bungie.InventoryI
 func (r *Repository) GetAllCollectibles() ([]bungie.CollectibleDefinition, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.getAllCollectiblesLocked()
+}
+
+// getAllCollectiblesLocked is GetAllCollectibles assuming r.mu is already held.
+func (r *Repository) getAllCollectiblesLocked() ([]bungie.CollectibleDefinition, error) {
 	rows, err := r.db.Query("SELECT json FROM DestinyCollectibleDefinition")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query collectibles: %w", err)
@@ -108,7 +114,7 @@ func (r *Repository) GetAllCollectibles() ([]bungie.CollectibleDefinition, error
 	for rows.Next() {
 		var blob string
 		if err := rows.Scan(&blob); err != nil {
-			continue
+			return nil, fmt.Errorf("GetAllCollectibles scan: %w", err)
 		}
 		var def bungie.CollectibleDefinition
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
@@ -129,22 +135,54 @@ type CollectibleWithItem struct {
 }
 
 func (r *Repository) GetAllCollectiblesWithItems() ([]CollectibleWithItem, error) {
-	collectibles, err := r.GetAllCollectibles()
+	// Hold the read lock across both the collectibles query and the item lookups
+	// so a manifest swap cannot replace the database between them (which would
+	// match collectibles from one manifest against items from another). Repository
+	// close/reconnect take the write lock and will wait for this read to finish.
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	collectibles, err := r.getAllCollectiblesLocked()
 	if err != nil {
 		return nil, err
 	}
-	var results []CollectibleWithItem
+	// Batch the item lookups (chunked IN-queries) instead of one query per
+	// collectible — a cold collections fetch covers thousands of collectibles.
+	hashes := make([]uint32, 0, len(collectibles))
+	for _, col := range collectibles {
+		if col.ItemHash != 0 {
+			hashes = append(hashes, col.ItemHash)
+		}
+	}
+	items, err := r.getItemsByHashesChunkedLocked(hashes)
+	if err != nil {
+		return nil, err
+	}
+	results := make([]CollectibleWithItem, 0, len(collectibles))
 	for _, col := range collectibles {
 		cwi := CollectibleWithItem{Collectible: col}
 		if col.ItemHash != 0 {
-			item, err := r.GetInventoryItemDefinition(col.ItemHash)
-			if err == nil && item != nil {
-				cwi.Item = item
-			}
+			cwi.Item = items[col.ItemHash]
 		}
 		results = append(results, cwi)
 	}
 	return results, nil
+}
+
+// getItemsByHashesChunkedLocked fetches item definitions in IN-clause chunks of
+// 500 (SQLite parameter limits) assuming r.mu is already held by the caller.
+func (r *Repository) getItemsByHashesChunkedLocked(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
+	out := make(map[uint32]*bungie.InventoryItemDefinition, len(hashes))
+	const chunkSize = 500
+	for i := 0; i < len(hashes); i += chunkSize {
+		chunk := hashes[i:min(i+chunkSize, len(hashes))]
+		defs, err := r.getItemsByHashesLocked(chunk)
+		if err != nil {
+			return nil, err
+		}
+		maps.Copy(out, defs)
+	}
+	return out, nil
 }
 
 // FilteredCollectibles holds collectibles split into categories.
@@ -211,7 +249,14 @@ func (r *Repository) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.Inven
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.getItemsByHashesLocked(hashes)
+}
 
+// getItemsByHashesLocked is GetItemsByHashes assuming r.mu is already held.
+func (r *Repository) getItemsByHashesLocked(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*bungie.InventoryItemDefinition{}, nil
+	}
 	placeholders := make([]string, len(hashes))
 	args := make([]any, len(hashes))
 	for i, h := range hashes {
@@ -230,7 +275,7 @@ func (r *Repository) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.Inven
 		var dbID int32
 		var blob string
 		if err := rows.Scan(&dbID, &blob); err != nil {
-			continue
+			return nil, fmt.Errorf("GetItemsByHashes scan: %w", err)
 		}
 		var def bungie.InventoryItemDefinition
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
@@ -501,32 +546,89 @@ func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32
 	return out, nil
 }
 
-// SearchItems does a case-insensitive name search against the manifest.
-func (r *Repository) SearchItems(query string, limit int) ([]bungie.InventoryItemDefinition, error) {
+// GetCollectiblesByItemHashes returns collectible definitions keyed by their
+// itemHash for a batch of inventory item hashes (e.g. to read sourceString for
+// wishlist items). Hashes are chunked at 500 to avoid SQLite IN-clause limits.
+func (r *Repository) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*bungie.CollectibleDefinition{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[uint32]*bungie.CollectibleDefinition, len(hashes))
+	const chunkSize = 500
+	for i := 0; i < len(hashes); i += chunkSize {
+		chunk := hashes[i:min(i+chunkSize, len(hashes))]
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for j, h := range chunk {
+			placeholders[j] = "?"
+			args[j] = int64(h) // itemHash is stored unsigned inside the JSON blob
+		}
+		q := "SELECT json FROM DestinyCollectibleDefinition WHERE json_extract(json, '$.itemHash') IN (" +
+			strings.Join(placeholders, ",") + ")"
+		rows, err := r.db.Query(q, args...)
+		if err != nil {
+			return nil, fmt.Errorf("GetCollectiblesByItemHashes: %w", err)
+		}
+		for rows.Next() {
+			var blob string
+			if err := rows.Scan(&blob); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("GetCollectiblesByItemHashes scan: %w", err)
+			}
+			var def bungie.CollectibleDefinition
+			if err := json.Unmarshal([]byte(blob), &def); err != nil {
+				continue
+			}
+			if def.ItemHash != 0 {
+				out[def.ItemHash] = &def
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// GetWeaponTypesByName returns a lowercased weapon display name → weapon type
+// display name map (e.g. "ace of spades" → "Hand Cannon") covering every weapon
+// definition in the manifest. One table scan — callers should cache the result.
+func (r *Repository) GetWeaponTypesByName() (map[string]string, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	rows, err := r.db.Query(
-		"SELECT json FROM DestinyInventoryItemDefinition WHERE json LIKE ? LIMIT ?",
-		"%"+query+"%", limit,
+		"SELECT json FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = ?",
+		bungie.ItemTypeWeapon,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to search items: %w", err)
+		return nil, fmt.Errorf("GetWeaponTypesByName: %w", err)
 	}
 	defer rows.Close()
-	var items []bungie.InventoryItemDefinition
+
+	out := make(map[string]string)
 	for rows.Next() {
 		var blob string
 		if err := rows.Scan(&blob); err != nil {
 			continue
 		}
-		var def bungie.InventoryItemDefinition
+		var def struct {
+			DisplayProperties struct {
+				Name string `json:"name"`
+			} `json:"displayProperties"`
+			ItemSubType int `json:"itemSubType"`
+		}
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
 			continue
 		}
-		if def.DisplayProperties.Name != "" &&
-			(def.ItemType == bungie.ItemTypeWeapon || def.ItemType == bungie.ItemTypeArmor) {
-			items = append(items, def)
+		if def.DisplayProperties.Name == "" {
+			continue
 		}
+		out[strings.ToLower(def.DisplayProperties.Name)] = bungie.GetWeaponTypeName(def.ItemSubType)
 	}
-	return items, rows.Err()
+	return out, rows.Err()
 }
+

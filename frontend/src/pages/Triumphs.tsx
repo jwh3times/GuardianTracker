@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Dropdown, PageHead, SealCard } from "../components/kit";
+import { Button, Dropdown, EmptyState, PageHead, SealCard } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
+import { errorState } from "../lib/errorState";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import type { Seal } from "../types/design";
+import type { APIRecordsEnvelope } from "../types/api";
 
 type Sort = "closest" | "name";
 
@@ -13,12 +15,19 @@ export function Triumphs() {
   const membershipType = user?.membershipType;
   const membershipId = user?.membershipId;
 
-  const { data: seals = [], isLoading } = useQuery({
+  const {
+    data: sealsData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["seals", membershipType, membershipId],
     queryFn: () =>
-      apiFetch<Seal[]>(`/api/seals/${membershipType}/${membershipId}`),
+      apiFetch<APIRecordsEnvelope<Seal>>(`/api/seals/${membershipType}/${membershipId}`),
     enabled: membershipType != null && !!membershipId,
   });
+  const seals = useMemo(() => sealsData?.items ?? [], [sealsData]);
 
   const [sort, setSort] = useState<Sort>("closest");
   // undefined = never interacted (auto-open first); null = user explicitly closed
@@ -42,6 +51,41 @@ export function Triumphs() {
       <div className="gt-page">
         <div className="gt-page-loading">
           <LoadingSpinner size="lg" />
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    const es = errorState(error);
+    return (
+      <div className="gt-page">
+        <PageHead title="Triumphs & Seals" sub={<span className="mono">Seal completion</span>} />
+        <div className="gt-card">
+          <EmptyState
+            icon={es.icon}
+            color="var(--c-text-3)"
+            title={es.title}
+            body={es.body}
+            action={
+              <div style={{ display: "flex", gap: "var(--s-2)" }}>
+                {es.privacyLink && (
+                  <a
+                    href="https://www.bungie.net/7/en/User/Account/Privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline" sm icon="external">
+                      Bungie privacy settings
+                    </Button>
+                  </a>
+                )}
+                <Button variant="outline" sm onClick={() => { void refetch(); }}>
+                  Retry
+                </Button>
+              </div>
+            }
+          />
         </div>
       </div>
     );

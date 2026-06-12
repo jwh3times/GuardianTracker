@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
-import { Button } from "./ui/Button";
+import { Button } from "./kit";
 
 interface Props {
   children: ReactNode;
@@ -72,7 +72,9 @@ export class ErrorBoundary extends Component<Props, State> {
               <Button variant="outline" onClick={this.handleReset}>
                 Try Again
               </Button>
-              <Button onClick={this.handleReload}>Reload Page</Button>
+              <Button variant="primary" onClick={this.handleReload}>
+                Reload Page
+              </Button>
             </div>
           </div>
         </div>

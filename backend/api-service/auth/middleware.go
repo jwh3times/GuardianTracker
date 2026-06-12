@@ -40,27 +40,3 @@ func (j *JWT) Middleware(revoker *RevocationChecker) gin.HandlerFunc {
 		c.Next()
 	}
 }
-
-// OptionalMiddleware is like Middleware but does not abort on missing/invalid tokens.
-// Revocation is not checked — this path is for unauthenticated access with optional personalization.
-func (j *JWT) OptionalMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token := ExtractBearerToken(c.GetHeader("Authorization"))
-		if token == "" {
-			c.Next()
-			return
-		}
-		claims, err := j.ValidateToken(token)
-		if err != nil || claims.TokenType != "access" {
-			c.Next()
-			return
-		}
-		c.Set("user_id", claims.UserID)
-		c.Set("membership_id", claims.MembershipID)
-		c.Set("membership_type", claims.MembershipType)
-		c.Set("display_name", claims.DisplayName)
-		c.Set("platform", claims.Platform)
-		c.Set("token_version", claims.TokenVersion)
-		c.Next()
-	}
-}

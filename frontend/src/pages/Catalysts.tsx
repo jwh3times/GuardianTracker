@@ -11,8 +11,10 @@ import {
 } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
+import { errorState } from "../lib/errorState";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import type { Catalyst, CraftPattern } from "../types/design";
+import type { APIRecordsEnvelope } from "../types/api";
 
 function CatalystCard({ c }: { c: Catalyst }) {
   const color =
@@ -24,10 +26,10 @@ function CatalystCard({ c }: { c: Catalyst }) {
   return (
     <div className="gt-item gt-item--prog" data-rarity="exotic">
       <div className="gt-item-top">
-        <ItemTile rarity="exotic" type="Auto Rifle" />
+        <ItemTile rarity="exotic" type={c.type || "Weapon"} icon={c.icon} />
         <div className="gt-item-head">
           <div className="gt-item-name">{c.name}</div>
-          <div className="gt-item-type">Catalyst</div>
+          <div className="gt-item-type">{c.type ? `${c.type} Catalyst` : "Catalyst"}</div>
           <div className="gt-item-badges" style={{ marginTop: "var(--s-1)" }}>
             <Badge kind={c.status} dot />
           </div>
@@ -93,19 +95,33 @@ export function Catalysts() {
   const membershipType = user?.membershipType;
   const membershipId = user?.membershipId;
 
-  const { data: catalysts = [], isLoading: catsLoading } = useQuery({
+  const {
+    data: catalystsData,
+    isLoading: catsLoading,
+    isError: catsError,
+    error: catsErr,
+    refetch: refetchCats,
+  } = useQuery({
     queryKey: ["catalysts", membershipType, membershipId],
     queryFn: () =>
-      apiFetch<Catalyst[]>(`/api/catalysts/${membershipType}/${membershipId}`),
+      apiFetch<APIRecordsEnvelope<Catalyst>>(`/api/catalysts/${membershipType}/${membershipId}`),
     enabled: membershipType != null && !!membershipId,
   });
+  const catalysts = catalystsData?.items ?? [];
 
-  const { data: crafting = [], isLoading: craftLoading } = useQuery({
+  const {
+    data: craftingData,
+    isLoading: craftLoading,
+    isError: craftError,
+    error: craftErr,
+    refetch: refetchCraft,
+  } = useQuery({
     queryKey: ["crafting", membershipType, membershipId],
     queryFn: () =>
-      apiFetch<CraftPattern[]>(`/api/crafting/${membershipType}/${membershipId}`),
+      apiFetch<APIRecordsEnvelope<CraftPattern>>(`/api/crafting/${membershipType}/${membershipId}`),
     enabled: membershipType != null && !!membershipId,
   });
+  const crafting = craftingData?.items ?? [];
 
   const [tab, setTab] = useState<Tab>("catalysts");
   const [filter, setFilter] = useState<Filter>("all");
@@ -115,6 +131,50 @@ export function Catalysts() {
       <div className="gt-page">
         <div className="gt-page-loading">
           <LoadingSpinner size="lg" />
+        </div>
+      </div>
+    );
+  }
+
+  // Surface real failures (private profile, manifest warming up, Bungie down)
+  // instead of rendering an empty grid that looks like "you have nothing".
+  if (catsError || craftError) {
+    const es = errorState(catsErr ?? craftErr);
+    return (
+      <div className="gt-page">
+        <PageHead title="Catalysts & Crafting" sub="Long-grind progress, all in one place" />
+        <div className="gt-card">
+          <EmptyState
+            icon={es.icon}
+            color="var(--c-text-3)"
+            title={es.title}
+            body={es.body}
+            action={
+              <div style={{ display: "flex", gap: "var(--s-2)" }}>
+                {es.privacyLink && (
+                  <a
+                    href="https://www.bungie.net/7/en/User/Account/Privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline" sm icon="external">
+                      Bungie privacy settings
+                    </Button>
+                  </a>
+                )}
+                <Button
+                  variant="outline"
+                  sm
+                  onClick={() => {
+                    void refetchCats();
+                    void refetchCraft();
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            }
+          />
         </div>
       </div>
     );

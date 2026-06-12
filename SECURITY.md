@@ -50,8 +50,11 @@ If you have previously committed credentials to this repository, you **must**:
 | `BUNGIE_API_KEY`       | Bungie API access key         | [Bungie Applications](https://www.bungie.net/en/Application) |
 | `BUNGIE_CLIENT_ID`     | OAuth client ID               | Bungie application settings                                  |
 | `BUNGIE_CLIENT_SECRET` | OAuth client secret           | Bungie application settings                                  |
-| `JWT_SECRET`           | Token signing key (32+ chars) | `openssl rand -base64 32`                                    |
+| `JWT_SECRET`           | Token signing key (32+ chars); also derives the OAuth state HMAC key | `openssl rand -base64 32`             |
 | `POSTGRES_PASSWORD`    | Database password             | Generate a strong random password                            |
+| `DATABASE_URL`         | Postgres connection string (contains credentials) | Compose your provider's connection string  |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 key — AES-256-GCM encryption of stored Bungie tokens | `openssl rand -base64 32`  |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous encryption key, kept readable during key rotation | the key being rotated out |
 
 ### Local Development
 
@@ -82,10 +85,12 @@ rm .env.secrets
 
 ### Authentication & Authorization
 
-- **Bungie OAuth 2.0** with CSRF protection — cryptographically random state parameter, stored server-side with 10-minute TTL, consumed on first use (one-time)
-- **JWT tokens** — HS256 signed, access token (24h) + refresh token (30d) with rotation
-- **Token-type claims** — refresh tokens cannot be used as access tokens (enforced in JWT validation)
-- **Bungie token auto-refresh** — stored Bungie OAuth tokens are refreshed automatically before expiry (5-min buffer), with cleanup of fully expired tokens
+- **Bungie OAuth 2.0** with CSRF protection — stateless HMAC-SHA256-signed state parameter (`v1.<ts>.<nonce>.<sig>`, key derived from `JWT_SECRET` with domain separation), verified with a 10-minute TTL. Stateless by design: login survives restarts and works across replicas. Tradeoff: a state token is replayable within its TTL (the previous in-memory store was not browser-bound either, and the Bungie authorization code it accompanies is single-use)
+- **JWT tokens** — HS256 signed, access token (24h) + refresh token (30d) with rotation; `tver` (token_version) and `jti` claims
+- **JWT revocation** — logout bumps `token_version` in Postgres; middleware verifies via `RevocationChecker` with a 60-second cache window. The check **fails open** on DB errors (availability over strict revocation — logout is not guaranteed during a DB outage)
+- **Token-type claims** — refresh tokens cannot be used as access tokens (enforced in middleware)
+- **Bungie tokens encrypted at rest** — AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and key-version rotation support
+- **Bungie token auto-refresh** — stored Bungie OAuth tokens are refreshed automatically before expiry (5-min buffer); refresh writes are compare-and-swap on `updated_at`, and a replica that loses the race adopts the winner's tokens instead of clobbering them
 
 ### Input Validation
 
@@ -123,15 +128,16 @@ rm .env.secrets
 - [ ] Logging does not include tokens, secrets, or full OAuth codes
 - [ ] Docker images built from pinned base image versions
 - [ ] Kubernetes secrets not stored in version control
-- [ ] Wishlist endpoints backed by a real database (currently return stub data)
+- [ ] `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` set (the service refuses to start in production without them)
 
 ---
 
 ## Known Security Limitations
 
-These are tracked as TODOs — **do not deploy to production until resolved**:
+Documented tradeoffs in the current design:
 
-1. **JWT logout is not blacklisted** — `logout` clears client-side tokens but the server-side JWT remains valid until expiry. Implement a token blacklist (Redis) before production.
-2. **Wishlist has no database persistence** — data is hardcoded mock responses; no authorization checks on actual data retrieval.
-3. **In-memory CSRF state and Bungie token store** — these are lost on service restart. Acceptable for development; use Redis for production persistence.
+1. **OAuth state is replayable within its 10-minute TTL** — the stateless HMAC design cannot enforce one-time use. Mitigated by Bungie's single-use authorization code; accepted in exchange for multi-replica and scale-to-zero correctness.
+2. **Revocation fails open** — a DB outage during the `token_version` check allows the request, so logout is not guaranteed while the database is down. Chosen for availability; the window closes when the DB returns.
+3. **Refresh-token rotation does not invalidate the previous refresh token** — `jti` is minted but not tracked, so a stolen refresh token stays usable until expiry (30d) or logout (token_version bump). A `last_refresh_jti` column would close this cheaply.
 4. **No audit logging** — authentication events (login, token refresh, failed attempts) are not logged to a persistent audit trail.
+5. **The Minikube stack runs in development mode** — no Postgres, in-memory token store, no persistence. It is a dev-validation environment, not a deployment template (production targets Azure Container Apps; see `InfraTODO.md`).

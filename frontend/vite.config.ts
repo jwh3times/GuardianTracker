@@ -34,6 +34,26 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: 'jsdom',
       setupFiles: ['./src/__tests__/setup.ts'],
+      coverage: {
+        provider: 'v8',
+        // Count every source file, not just files imported by tests — otherwise
+        // the number is flattered by whatever happens to be untested.
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/__tests__/**',
+          'src/vite-env.d.ts',
+          'src/main.tsx',
+          'src/index.tsx',
+          'src/types/**', // type-only modules have no executable statements
+        ],
+        // Floor for the current suite — ratchet upward as tests grow. Branch
+        // coverage sits at ~74% and lines at ~83%; the gates leave headroom so
+        // an incidental change doesn't redden CI while still catching regressions.
+        thresholds: {
+          lines: 70,
+          branches: 65,
+        },
+      },
     },
   }
 })

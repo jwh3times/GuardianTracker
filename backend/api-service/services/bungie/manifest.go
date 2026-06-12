@@ -24,6 +24,10 @@ type ManifestService struct {
 	mu             sync.RWMutex
 	currentVersion string
 	lastCheck      time.Time
+
+	hooksMu    sync.Mutex
+	beforeSwap []func()
+	afterSwap  []func(version string)
 }
 
 // NewManifestService creates a new manifest service.
@@ -39,6 +43,41 @@ func NewManifestService(client *Client, dbPath string, checkInterval time.Durati
 		ms.currentVersion = strings.TrimSpace(string(data))
 	}
 	return ms
+}
+
+// RegisterSwapHooks registers callbacks around the manifest file swap.
+// before hooks run synchronously immediately before the downloaded database is
+// renamed over the live file — open SQLite handles must be closed there or the
+// rename fails on Windows (and Linux readers keep serving the deleted inode).
+// after hooks run once the new version is installed (reopen connections, rebuild
+// indexes). Hooks must be registered before the first download can fire.
+func (m *ManifestService) RegisterSwapHooks(before func(), after func(version string)) {
+	m.hooksMu.Lock()
+	defer m.hooksMu.Unlock()
+	if before != nil {
+		m.beforeSwap = append(m.beforeSwap, before)
+	}
+	if after != nil {
+		m.afterSwap = append(m.afterSwap, after)
+	}
+}
+
+func (m *ManifestService) runBeforeSwapHooks() {
+	m.hooksMu.Lock()
+	hooks := append([]func(){}, m.beforeSwap...)
+	m.hooksMu.Unlock()
+	for _, h := range hooks {
+		h()
+	}
+}
+
+func (m *ManifestService) runAfterSwapHooks(version string) {
+	m.hooksMu.Lock()
+	hooks := append([]func(string){}, m.afterSwap...)
+	m.hooksMu.Unlock()
+	for _, h := range hooks {
+		h(version)
+	}
 }
 
 func (m *ManifestService) GetCurrentVersion() string {
@@ -101,6 +140,7 @@ func (m *ManifestService) Download(ctx context.Context) error {
 		log.Printf("Warning: failed to save version file: %v", err)
 	}
 	log.Printf("Manifest version %s installed successfully", newVersion)
+	m.runAfterSwapHooks(newVersion)
 	return nil
 }
 
@@ -138,8 +178,14 @@ func (m *ManifestService) extractManifest(zipData []byte) error {
 		os.Remove(tmpPath)
 		return fmt.Errorf("failed to write database: %w", err)
 	}
+	// Close open SQLite handles before replacing the file: on Windows the rename
+	// fails under open handles; on Linux readers would keep the deleted inode.
+	m.runBeforeSwapHooks()
 	if err := os.Rename(tmpPath, m.dbPath); err != nil {
 		os.Remove(tmpPath)
+		// The before hooks already closed connections — reopen them against the
+		// still-present old database so serving continues on the previous version.
+		m.runAfterSwapHooks(m.GetCurrentVersion())
 		return fmt.Errorf("failed to move database: %w", err)
 	}
 	return nil

@@ -11,6 +11,7 @@ export {
   CountdownChip,
   DataFreshnessChip,
   FilterChip,
+  Textarea,
   Skeleton,
   ItemCardSkeleton,
   EmptyState,

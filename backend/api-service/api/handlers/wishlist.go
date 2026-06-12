@@ -33,6 +33,13 @@ type wishlistStoreIface interface {
 
 type manifestLookupIface interface {
 	GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error)
+	GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error)
+}
+
+// xurInventoryIface is satisfied by *weekly.Service — used to flag wishlist
+// items Xûr currently sells (B6).
+type xurInventoryIface interface {
+	XurItemHashes(ctx context.Context) map[uint32]struct{}
 }
 
 type prefsStoreIface interface {
@@ -45,24 +52,28 @@ type WishlistHandler struct {
 	store    wishlistStoreIface  // nil = degraded mode
 	manifest manifestLookupIface // nil = no enrichment
 	prefs    prefsStoreIface     // nil = degraded mode
+	xur      xurInventoryIface   // nil = availability always false
 }
 
 // NewWishlistHandler creates a handler. Any argument may be nil for degraded-mode operation.
-func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, prefs prefsStoreIface) *WishlistHandler {
-	return &WishlistHandler{store: store, manifest: manifest, prefs: prefs}
+func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, prefs prefsStoreIface, xur xurInventoryIface) *WishlistHandler {
+	return &WishlistHandler{store: store, manifest: manifest, prefs: prefs, xur: xur}
 }
 
 // wishlistResponse is the JSON shape returned to clients.
 type wishlistResponse struct {
-	ID        string   `json:"id"`
-	ItemHash  uint32   `json:"itemHash"`
-	Name      string   `json:"name"`
-	ItemType  string   `json:"itemType"`
-	Rarity    string   `json:"rarity"`
-	Priority  string   `json:"priority"`
-	Notes     string   `json:"notes"`
-	Sources   []string `json:"sources"`
-	DateAdded string   `json:"dateAdded"`
+	ID            string   `json:"id"`
+	ItemHash      uint32   `json:"itemHash"`
+	Name          string   `json:"name"`
+	ItemType      string   `json:"itemType"`
+	Rarity        string   `json:"rarity"`
+	Icon          string   `json:"icon"`
+	Priority      string   `json:"priority"`
+	Notes         string   `json:"notes"`
+	Sources       []string `json:"sources"`
+	AvailableNow  bool     `json:"availableNow"`
+	AvailableFrom string   `json:"availableFrom,omitempty"`
+	DateAdded     string   `json:"dateAdded"`
 }
 
 // GetWishlist handles GET /api/wishlist
@@ -84,7 +95,7 @@ func (h *WishlistHandler) GetWishlist(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, h.enrichItems(items))
+	c.JSON(http.StatusOK, h.enrichItems(c.Request.Context(), items))
 }
 
 // AddToWishlist handles POST /api/wishlist
@@ -144,7 +155,7 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusCreated, h.enrichOne(*item))
+	c.JSON(http.StatusCreated, h.enrichOne(c.Request.Context(), *item))
 }
 
 // UpdateWishlistItem handles PUT /api/wishlist/:id
@@ -196,7 +207,7 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, h.enrichOne(*item))
+	c.JSON(http.StatusOK, h.enrichOne(c.Request.Context(), *item))
 }
 
 // RemoveFromWishlist handles DELETE /api/wishlist/:id
@@ -312,7 +323,7 @@ func (h *WishlistHandler) getUserID(ctx context.Context, membershipID string) (i
 	return 0, fmt.Errorf("no store available")
 }
 
-func (h *WishlistHandler) enrichItems(items []db.WishlistItem) []wishlistResponse {
+func (h *WishlistHandler) enrichItems(ctx context.Context, items []db.WishlistItem) []wishlistResponse {
 	if len(items) == 0 {
 		return []wishlistResponse{}
 	}
@@ -321,47 +332,78 @@ func (h *WishlistHandler) enrichItems(items []db.WishlistItem) []wishlistRespons
 		hashes[i] = it.ItemHash
 	}
 	defs := map[uint32]*bungie.InventoryItemDefinition{}
+	cols := map[uint32]*bungie.CollectibleDefinition{}
 	if h.manifest != nil {
 		if m, err := h.manifest.GetItemsByHashes(hashes); err == nil {
 			defs = m
 		}
+		if cs, err := h.manifest.GetCollectiblesByItemHashes(hashes); err == nil {
+			cols = cs
+		}
 	}
+	xur := h.xurHashes(ctx)
 	resp := make([]wishlistResponse, len(items))
 	for i, it := range items {
-		resp[i] = buildResponse(it, defs[it.ItemHash])
+		_, atXur := xur[it.ItemHash]
+		resp[i] = buildResponse(it, defs[it.ItemHash], cols[it.ItemHash], atXur)
 	}
 	return resp
 }
 
-func (h *WishlistHandler) enrichOne(it db.WishlistItem) wishlistResponse {
+func (h *WishlistHandler) enrichOne(ctx context.Context, it db.WishlistItem) wishlistResponse {
 	var def *bungie.InventoryItemDefinition
+	var col *bungie.CollectibleDefinition
 	if h.manifest != nil {
 		if m, err := h.manifest.GetItemsByHashes([]uint32{it.ItemHash}); err == nil {
 			def = m[it.ItemHash]
 		}
+		if cs, err := h.manifest.GetCollectiblesByItemHashes([]uint32{it.ItemHash}); err == nil {
+			col = cs[it.ItemHash]
+		}
 	}
-	return buildResponse(it, def)
+	_, atXur := h.xurHashes(ctx)[it.ItemHash]
+	return buildResponse(it, def, col, atXur)
 }
 
-func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition) wishlistResponse {
-	name, itemTypeStr, rarity := "Unknown Item", "Item", "Common"
+// xurHashes returns Xûr's current inventory hashes, or empty in degraded mode.
+// Served from the weekly service's reset-aligned cache; the first call after a
+// reset fetches public vendors inline (bounded by Bungie's response time).
+func (h *WishlistHandler) xurHashes(ctx context.Context) map[uint32]struct{} {
+	if h.xur == nil {
+		return map[uint32]struct{}{}
+	}
+	return h.xur.XurItemHashes(ctx)
+}
+
+func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, col *bungie.CollectibleDefinition, atXur bool) wishlistResponse {
+	name, itemTypeStr, rarity, icon := "Unknown Item", "Item", "Common", ""
 	sources := []string{}
 	if def != nil {
 		name = def.DisplayProperties.Name
 		itemTypeStr = bungie.ItemTypeName(def.ItemType, def.ItemSubType)
 		rarity = bungie.GetTierName(def.Inventory.TierType)
+		icon = def.DisplayProperties.Icon
 	}
-	return wishlistResponse{
-		ID:        strconv.FormatInt(it.ID, 10),
-		ItemHash:  it.ItemHash,
-		Name:      name,
-		ItemType:  itemTypeStr,
-		Rarity:    rarity,
-		Priority:  priorityToStr[it.Priority],
-		Notes:     it.Notes,
-		Sources:   sources,
-		DateAdded: it.CreatedAt.UTC().Format(time.RFC3339),
+	if col != nil && col.SourceString != "" {
+		sources = append(sources, col.SourceString)
 	}
+	resp := wishlistResponse{
+		ID:           strconv.FormatInt(it.ID, 10),
+		ItemHash:     it.ItemHash,
+		Name:         name,
+		ItemType:     itemTypeStr,
+		Rarity:       rarity,
+		Icon:         icon,
+		Priority:     priorityToStr[it.Priority],
+		Notes:        it.Notes,
+		Sources:      sources,
+		AvailableNow: atXur,
+		DateAdded:    it.CreatedAt.UTC().Format(time.RFC3339),
+	}
+	if atXur {
+		resp.AvailableFrom = "Xûr"
+	}
+	return resp
 }
 
 

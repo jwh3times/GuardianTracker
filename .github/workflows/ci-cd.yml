@@ -38,9 +38,18 @@ jobs:
         working-directory: ./frontend
         run: npm run lint
 
-      - name: Run tests
+      # Coverage thresholds are enforced by vitest (vite.config.ts
+      # test.coverage.thresholds) — the run fails if they regress.
+      - name: Run tests with coverage gate
         working-directory: ./frontend
         run: npm test -- --coverage
+
+      - name: Upload frontend coverage
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 14
 
       - name: Build frontend
         working-directory: ./frontend
@@ -65,16 +74,6 @@ jobs:
         ports:
           - 5432:5432
 
-      redis:
-        image: redis:8-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 6379:6379
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -84,16 +83,37 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      # TEST_DATABASE_URL (not DATABASE_URL) gates the db integration tests.
+      # DATABASE_URL stays unset on purpose: unit tests must exercise the
+      # degraded (no-DB) code paths, not silently connect to Postgres.
       - name: Test API Service
         working-directory: ./backend/api-service
         env:
-          DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db?sslmode=disable
-          REDIS_URL: redis://localhost:6379
+          TEST_DATABASE_URL: postgres://test_user:test_password@localhost:5432/test_db?sslmode=disable
         run: |
           go mod tidy
           go vet ./...
           go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
           go test -race -coverprofile=coverage.out ./...
+
+      # Floor for the current suite. CI runs with cgo (race) + Postgres, so the
+      # sqlite manifest/search and db integration tests count here — total lands
+      # ~63% (vs ~52% locally where those packages are skipped; reproduce the CI
+      # number with backend/api-service/test-local.ps1). Gate is set a few points
+      # under the CI actual for headroom; ratchet upward as it grows.
+      - name: Enforce Go coverage gate
+        working-directory: ./backend/api-service
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print $3}')
+          echo "Total statement coverage: ${total}%"
+          awk -v t="$total" 'BEGIN { if (t+0 < 60.0) { print "FAIL: coverage " t "% is below the 60% gate"; exit 1 } }'
+
+      - name: Upload Go coverage
+        uses: actions/upload-artifact@v6
+        with:
+          name: go-coverage
+          path: backend/api-service/coverage.out
+          retention-days: 14
 
   build-docker-images:
     name: Build Docker Images

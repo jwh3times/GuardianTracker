@@ -27,7 +27,22 @@
   letter-spacing: 0.04em; z-index: 1;
   text-shadow: 0 0.06rem 0.3rem oklch(0 0 0 / 0.6);
 }
+.gt-tile-img { /* real Bungie item icon — fills the tile, rarity frame stays */
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; z-index: 1;
+}
 [data-rarity="exotic"] .gt-tile { box-shadow: inset 0 0 1.4rem oklch(0 0 0 / 0.35), 0 0 0.9rem var(--c-exotic-dim); }
+
+/* ---------- TEXTAREA ---------- */
+.gt-textarea {
+  width: 100%; resize: vertical; min-height: 3.2rem;
+  font-family: var(--font-body); font-size: var(--t-sm); color: var(--c-text);
+  background: var(--c-surface-2); border: 0.08rem solid var(--c-line);
+  border-radius: var(--r-sm); padding: var(--s-2) var(--s-3); outline: none;
+  transition: border-color var(--dur) var(--ease);
+}
+.gt-textarea:focus-visible { border-color: var(--c-signal); }
+.gt-textarea::placeholder { color: var(--c-text-4); }
 
 /* ---------- BADGE ---------- */
 .gt-badge {

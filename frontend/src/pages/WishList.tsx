@@ -9,6 +9,7 @@ import {
   Icon,
   ItemTile,
   PageHead,
+  Textarea,
 } from "../components/kit";
 import { useToast } from "../components/ui/Toast";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
@@ -33,6 +34,9 @@ export function WishList() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("availability");
+  // Inline notes editor: id of the row being edited + its draft text.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftNotes, setDraftNotes] = useState("");
 
   const { data: rawItems = [], isLoading } = useQuery({
     queryKey: ["wishlist"],
@@ -86,6 +90,39 @@ export function WishList() {
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
   });
+
+  const notesMutation = useMutation({
+    mutationFn: ({ id, notes }: { id: string; notes: string }) =>
+      apiFetch<WishListItem>(`/api/wishlist/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ notes }),
+      }),
+    onMutate: async ({ id, notes }) => {
+      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
+      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
+      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) =>
+        old?.map((i) => (i.id === id ? { ...i, notes } : i)) ?? []
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["wishlist"], context.previous);
+      }
+      showToast("Failed to save notes", "error");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
+  });
+
+  const startEditNotes = (id: string, current: string) => {
+    setEditingId(id);
+    setDraftNotes(current);
+  };
+  const saveNotes = () => {
+    if (editingId == null) return;
+    notesMutation.mutate({ id: editingId, notes: draftNotes.trim() });
+    setEditingId(null);
+  };
 
   const setPriority = (id: string, p: Priority) => {
     updateMutation.mutate({ id, priority: p.toUpperCase() });
@@ -184,7 +221,7 @@ export function WishList() {
       <div className="gt-wl-list">
         {shown.map((i) => (
           <div key={i.id} className="gt-wl-item gt-card" data-rarity={i.rarity}>
-            <ItemTile rarity={i.rarity} type={i.type} style={{ width: "3rem" }} />
+            <ItemTile rarity={i.rarity} type={i.type} icon={i.icon} style={{ width: "3rem" }} />
             <div className="gt-wl-body">
               <div className="gt-wl-top">
                 <div>
@@ -205,7 +242,28 @@ export function WishList() {
               ) : (
                 <div className="gt-action-meta mono">Source: {i.avail.where}</div>
               )}
-              {i.notes && <div className="gt-wl-notes">"{i.notes}"</div>}
+              {editingId === i.id ? (
+                <div className="gt-wl-notes-edit">
+                  <Textarea
+                    value={draftNotes}
+                    onChange={setDraftNotes}
+                    placeholder="Roll you're chasing, why you want it…"
+                    maxLength={500}
+                    autoFocus
+                    ariaLabel={`Notes for ${i.name}`}
+                  />
+                  <div style={{ display: "flex", gap: "var(--s-2)", marginTop: "var(--s-1)" }}>
+                    <Button variant="primary" sm onClick={saveNotes}>
+                      Save
+                    </Button>
+                    <Button variant="ghost" sm onClick={() => setEditingId(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                i.notes && <div className="gt-wl-notes">"{i.notes}"</div>
+              )}
               <div className="gt-wl-foot">
                 <Dropdown
                   label="Priority"
@@ -215,6 +273,9 @@ export function WishList() {
                   onPick={(p) => p && setPriority(i.id, p as Priority)}
                 />
                 <span className="gt-action-meta mono">Added {i.added}</span>
+                <button className="gt-link" onClick={() => startEditNotes(i.id, i.notes)}>
+                  <Icon name="settings" size="0.8rem" /> {i.notes ? "Edit notes" : "Add notes"}
+                </button>
                 <button className="gt-link gt-link--danger" onClick={() => remove(i.id, i.name)}>
                   <Icon name="close" size="0.8rem" /> Remove
                 </button>

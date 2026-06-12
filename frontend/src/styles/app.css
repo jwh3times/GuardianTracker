@@ -96,6 +96,8 @@
 .gt-charsw-opt-main { flex: 1; display: flex; flex-direction: column; }
 .gt-charsw-opt-name { font-size: var(--t-sm); font-weight: var(--w-med); }
 .gt-charsw-opt-sub { font-size: var(--t-2xs); color: var(--c-text-3); }
+.gt-charsw-note { padding: var(--s-2); font-size: var(--t-2xs); color: var(--c-text-4);
+  border-top: 0.07rem solid var(--c-line-soft); margin-top: var(--s-1); }
 
 /* ---------------- CONTENT ---------------- */
 .gt-content { flex: 1; padding: clamp(var(--s-4), 2.5vw, var(--s-7)); }
@@ -109,6 +111,11 @@
 /* ---------------- DASHBOARD ---------------- */
 .gt-hero { display: flex; align-items: center; gap: clamp(var(--s-5), 4vw, var(--s-8)); flex-wrap: wrap; }
 .gt-hero-radial { flex: none; }
+.gt-hero-char { flex: none; display: flex; align-items: center; gap: var(--s-3); }
+.gt-hero-char .gt-avatar { width: 2.8rem; height: 2.8rem; font-size: var(--t-lg); }
+.gt-hero-char-main { display: flex; flex-direction: column; gap: 0.1rem; }
+.gt-hero-char-name { font-family: var(--font-display); font-weight: var(--w-semi); font-size: var(--t-md); color: var(--c-text); }
+.gt-hero-char-sub { font-size: var(--t-2xs); color: var(--c-text-3); display: flex; align-items: center; gap: var(--s-1); }
 .gt-hero-bars { flex: 1; min-width: 16rem; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-4) var(--s-6); }
 .gt-hero-bar { display: flex; flex-direction: column; gap: var(--s-2); text-align: left; }
 .gt-hero-bar:hover .gt-hero-bar-label { color: var(--c-text); }

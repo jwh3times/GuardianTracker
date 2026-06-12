@@ -59,7 +59,9 @@ func (c *Client) doRequestWithRetry(ctx context.Context, req *http.Request, maxR
 		resp, err := c.doRequest(ctx, reqClone)
 		if err != nil {
 			lastErr = err
-			time.Sleep(time.Duration(attempt+1) * time.Second)
+			if err := sleepCtx(ctx, time.Duration(attempt+1)*time.Second); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if resp.StatusCode == http.StatusTooManyRequests {
@@ -68,19 +70,34 @@ func (c *Client) doRequestWithRetry(ctx context.Context, req *http.Request, maxR
 			if s, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil {
 				waitTime = time.Duration(s) * time.Second
 			}
-			time.Sleep(waitTime)
 			lastErr = fmt.Errorf("rate limited by Bungie API")
+			if err := sleepCtx(ctx, waitTime); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		if resp.StatusCode >= 500 {
 			resp.Body.Close()
 			lastErr = fmt.Errorf("server error: %d", resp.StatusCode)
-			time.Sleep(time.Duration(attempt+1) * time.Second)
+			if err := sleepCtx(ctx, time.Duration(attempt+1)*time.Second); err != nil {
+				return nil, err
+			}
 			continue
 		}
 		return resp, nil
 	}
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+}
+
+// sleepCtx waits for d, aborting early when the request context is cancelled
+// (a disconnected client must not pin a handler in a retry backoff).
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
 }
 
 func parseResponse[T any](resp *http.Response) (*T, error) {

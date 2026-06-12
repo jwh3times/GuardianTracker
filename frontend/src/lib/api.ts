@@ -1,10 +1,29 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { AuthTokenResponse } from "../types/api";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
+/** Base URL of the Go API service. Exported so pre-auth flows (e.g. the OAuth
+ *  callback) that can't use apiFetch still derive the host from one place. */
+export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
 
 if (import.meta.env.DEV) {
   console.log("API URL:", API_URL);
+}
+
+/**
+ * ApiError carries the HTTP status and the backend's machine-readable `code`
+ * (e.g. PRIVACY_RESTRICTION, MANIFEST_NOT_READY, BUNGIE_ERROR) so callers can
+ * branch their error UI instead of showing one generic failure state.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+    public retryAfter?: number
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 
 // Single in-flight refresh — concurrent 401s share one refresh call.
@@ -64,9 +83,16 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   if (!res.ok) {
-    const errorBody = await res.json().catch(() => ({}));
-    throw new Error(
-      (errorBody as { error?: string }).error || `API error ${res.status}`
+    const errorBody = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      code?: string;
+      retryAfter?: number;
+    };
+    throw new ApiError(
+      errorBody.error || `API error ${res.status}`,
+      res.status,
+      errorBody.code,
+      errorBody.retryAfter
     );
   }
 

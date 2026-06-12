@@ -54,6 +54,10 @@ cd k8s
 ./startup.ps1
 ```
 
+Dev-validation only: runs `GO_ENV: development` with no Postgres, so the api-service is
+in degraded mode (in-memory tokens, no persistence). Production parity lives in the Azure
+Container Apps deployment (InfraTODO.md Phase 10), not these manifests.
+
 ### Option C: Individual services
 
 ```powershell
@@ -129,7 +133,8 @@ Or run `./setup.ps1` to copy all at once.
 | `config/config.go` | Typed config with env var parsing helpers |
 | `auth/jwt.go` | JWT generation and validation (access 24h, refresh 30d) |
 | `auth/middleware.go` | JWT middleware for protected routes |
-| `auth/tokenstore.go` | DB-backed encrypted Bungie OAuth token store with auto-refresh |
+| `auth/state.go` | Stateless HMAC-signed OAuth state parameter (CSRF, multi-replica safe) |
+| `auth/tokenstore.go` | DB-backed encrypted Bungie OAuth token store with auto-refresh + CAS write |
 | `auth/crypto.go` | AES-256-GCM cipher for Bungie token encryption; key rotation via prev key |
 | `auth/revocation.go` | JWT revocation via token_version column; 60s in-memory cache |
 | `api/handlers/auth.go` | OAuth flow, token refresh, logout, profile endpoints |
@@ -144,6 +149,7 @@ Or run `./setup.ps1` to copy all at once.
 | `services/collections/service.go` | Collection analysis + difficulty classification + cosmetics |
 | `services/characters/service.go` | Character fetching |
 | `services/manifest/repository.go` | SQLite read-only queries against manifest DB |
+| `services/manifest/provider.go` | Shared lazy-opening repository provider; reconnects across manifest swaps |
 | `services/weekly/service.go` | Weekly recommendations; Xûr inventory; milestone data; reset time math |
 | `services/search/service.go` | In-memory manifest item search index; async rebuild on manifest update |
 | `services/records/service.go` | Catalysts, crafting patterns, and seals/triumphs from Bungie records API |
@@ -159,21 +165,23 @@ Or run `./setup.ps1` to copy all at once.
 - `GET /api/auth/validate` — validate JWT (protected)
 - `GET /api/auth/profile` — current user profile (protected)
 - `POST /api/auth/logout` — invalidate JWT + delete Bungie token (protected)
-- `GET /api/wishlist` — list wishlist items (JWT protected)
+- `GET /api/wishlist` — list wishlist items with `availableNow` (Xûr cross-check), `sources`, `icon` (JWT protected)
 - `POST /api/wishlist` — add wishlist item (JWT protected)
 - `PUT /api/wishlist/:id` — update wishlist item priority/notes (JWT protected)
 - `DELETE /api/wishlist/:id` — remove wishlist item (JWT protected)
 - `GET/PUT /api/preferences` — user preferences: card style, personalize (protected)
 - `GET /api/characters/:membershipType/:membershipId` — user characters (JWT protected)
-- `GET /api/collections/:membershipType/:membershipId` — user collections (JWT protected)
+- `GET /api/collections/:membershipType/:membershipId` — user collections + `fetchedAt`; `?include=all` adds `collectedItems` per category (JWT protected)
 - `POST /api/collections/:membershipType/:membershipId/refresh` — invalidate cache (JWT protected)
 - `GET /api/manifest/status` — manifest version and readiness
-- `GET /api/weekly/recommendations` — weekly data, Xûr, milestones, recommended actions (protected)
+- `GET /api/weekly/recommendations` — weekly data, Xûr, milestones, recommended actions + `fetchedAt`/`resetAt` (protected)
 - `GET /api/items/search?q=&limit=` — manifest item search; 503 until index ready (protected)
-- `GET /api/catalysts/:membershipType/:membershipId` — exotic catalyst progress (protected)
-- `GET /api/crafting/:membershipType/:membershipId` — crafting pattern progress (protected)
-- `GET /api/seals/:membershipType/:membershipId` — triumph/seal completion (protected)
+- `GET /api/catalysts/:membershipType/:membershipId` — `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon (protected)
+- `GET /api/crafting/:membershipType/:membershipId` — `{ items, fetchedAt }` crafting pattern progress (protected)
+- `GET /api/seals/:membershipType/:membershipId` — `{ items, fetchedAt }` triumph/seal completion (protected)
 - `GET /health` and `GET /ready` — health/readiness probes
+
+Error responses carry a machine-readable `code` (`PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`) that the frontend branches its error states on.
 
 **Bungie manifest flow:**
 
@@ -192,14 +200,17 @@ The UI uses the "Guardian Tracker" design system: a custom dark theme built on o
 | `index.tsx` | App root; imports `styles/{tokens,kit,app}.css` |
 | `contexts/AuthContext.tsx` | Auth state, localStorage persistence, token refresh |
 | `contexts/PreferencesContext.tsx` | User prefs (card style, "for you" badges); localStorage `guardian_prefs` |
-| `lib/api.ts` | `apiFetch` helper + `QueryClient` — all REST calls go through here |
-| `lib/mockData.ts` | Mock data for backend-less screens + fallbacks |
-| `lib/adapters.ts` | API response types → design `GTItem`/`WishlistEntry` |
+| `contexts/CharacterContext.tsx` | Characters query + persisted active-character pick (display-only; data is account-wide) |
+| `lib/api.ts` | `apiFetch` helper + `ApiError` (status/code) + `QueryClient` — all REST calls go through here |
+| `lib/adapters.ts` | API response types → design `GTItem`/`WishlistEntry`; `relTime` |
+| `lib/constants.ts` | Label constants (`RARITIES`, glyphs) + `BUNGIE_CDN` base URL |
+| `lib/errorState.ts` | `errorState(error)` → UI copy; branches on `ApiError.code` (`PRIVACY_RESTRICTION`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`) |
+| `lib/queries.ts` | `collectionsQuery()` — shared React Query definition used by Dashboard, Collections, and Settings |
 | `styles/{tokens,kit,app}.css` | Design tokens + component/shell styles (plain CSS) |
 | `components/AppShell.tsx` | Sidebar + top bar + mobile nav; global search; character switcher |
 | `components/Brand.tsx` | Logo mark |
 | `components/kit/` | Design component kit: `Icon`, primitives, `ItemCard`, composites |
-| `components/ui/` | Legacy primitives: `LoadingSpinner`, `Toast`, `ErrorBoundary` |
+| `components/ui/` | Legacy primitives: `LoadingSpinner`, `Toast` (`ErrorBoundary` lives in `components/`) |
 | `pages/Login.tsx` | Bungie OAuth initiation |
 | `pages/OAuthCallback.tsx` | Handles `/auth/callback` — exchanges code, stores tokens |
 | `pages/Dashboard.tsx` | Completion hero + "do this today"; real collection totals + cosmetics, real weekly |
@@ -244,18 +255,18 @@ The Bungie manifest is a ~100MB SQLite file. On first run the API service downlo
 
 ### Authentication Security
 
-- CSRF: state parameter stored server-side with 10-min TTL, consumed on use
+- CSRF: stateless HMAC-signed OAuth state (`auth/state.go`, key derived from `JWT_SECRET`), 10-min TTL — survives restarts and works across replicas; not single-use (replay bounded by the TTL and Bungie's single-use auth code)
 - JWT: HS256, access=24h, refresh=30d, token-type claim prevents refresh tokens being used as access tokens; `tver` (token_version) + `jti` claims added
 - JWT revocation: `POST /api/auth/logout` bumps `token_version` in DB; middleware checks via `RevocationChecker` with 60s in-memory cache window
-- Bungie OAuth tokens stored AES-256-GCM encrypted in `bungie_tokens` table; survive scale-to-zero
+- Bungie OAuth tokens stored AES-256-GCM encrypted in `bungie_tokens` table; survive scale-to-zero. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the race adopts the winner's tokens
 - Rate limiting: Bungie API client — 10 req/s, burst 20
 
 ## CI/CD
 
 GitHub Actions (`.github/workflows/ci-cd.yml`):
 
-1. **test-frontend** — type-check, lint, test, build
-2. **test-go-services** — go vet, govulncheck, go test with race detector
+1. **test-frontend** — type-check, lint, test with vitest coverage thresholds (lines ≥70%, branches ≥65%), build
+2. **test-go-services** — go vet, govulncheck, go test with race detector; db integration tests run against the Postgres service container via `TEST_DATABASE_URL`; statement-coverage gate ≥60% (ratcheting up — CI lands ~63% with cgo+Postgres; ~52% locally where the sqlite/db packages are skipped — see [Full Go coverage locally](#full-go-coverage-locally-matches-ci))
 3. **build-docker-images** — builds both Docker images; build validation only (no push configured yet)
 
 ## Common Tasks
@@ -292,10 +303,53 @@ go test ./...
 cd frontend && npm test
 ```
 
+#### Full Go coverage locally (matches CI)
+
+A plain `go test ./...` on a fresh Windows checkout reports **~52%** because two
+groups of tests self-skip. CI hits **~63%** because it satisfies both gates:
+
+| Gate | Skipped tests | Why it skips locally |
+| --- | --- | --- |
+| **cgo / SQLite** | `services/manifest`, `services/search` `BuildIndex` | `mattn/go-sqlite3` needs cgo; with no C compiler Go sets `CGO_ENABLED=0` and the driver becomes a stub. A runtime `requireSQLite(t)` probe then calls `t.Skip`. (`-race` also needs cgo.) |
+| **Postgres** | `db` package integration tests | Gated on `TEST_DATABASE_URL`; `pgx` is pure Go (no compiler needed), so this gate is independent of the cgo one. |
+
+To close both gaps locally:
+
+1. **Install a C toolchain** (one-time) — e.g. mingw-w64 via `scoop install mingw`,
+   `choco install mingw`, or MSYS2 — and confirm `gcc --version` resolves on PATH.
+2. **Run the helper script** (from `backend/api-service/`):
+
+   ```powershell
+   ./test-local.ps1          # start a throwaway Postgres, run all tests, print total coverage
+   ./test-local.ps1 -Html    # also open the per-line HTML report
+   ./test-local.ps1 -Fresh   # recreate the Postgres container from scratch
+   ./test-local.ps1 -NoRace  # skip the race detector (faster; CI uses -race)
+   ./test-local.ps1 -Down    # stop & remove the test Postgres container
+   ```
+
+`test-local.ps1` (`backend/api-service/`):
+
+- Spins up `postgres:18-alpine` as a named container `gt-test-pg` on host port
+  **5433** (override with `-Port`) so it never collides with the docker-compose
+  Postgres on 5432. The container is idempotent and left running between invocations
+  for fast re-runs (`-Down` removes it).
+- Exports `CGO_ENABLED=1` and `TEST_DATABASE_URL=postgres://test_user:test_password@localhost:5433/test_db?sslmode=disable`,
+  then runs `go test -race -coverprofile=coverage.out ./...` and prints the total.
+- The test DB needs **no manual setup**: the container creates `test_db`, and the
+  schema is applied automatically by the tests (`db.Migrate` runs the embedded
+  migrations in `testPool`); each test creates and cleans its own rows.
+
+PowerShell note: pass `-flag=value` args to `go.exe` quoted — `go tool cover "-func=coverage.out"`
+(or the space form `-func coverage.out`). Bare `-func=coverage.out` trips a
+"too many arguments" error because PowerShell mangles the token.
+
+To do it by hand instead of the script: start any Postgres, set the two env vars
+above, then `go test -race -coverprofile=coverage.out ./...`.
+
 ## Known Limitations / TODOs
 
-- The character switcher falls back to mock data if the API is unavailable (Phase 11 cleanup pending)
+- The character switcher persists a per-account pick and drives the top-bar avatar and Dashboard hero, but data stays account-wide (Destiny collections are account-scoped); character-scoped surfaces arrive with P2 loadouts
 - Redis is in docker-compose but not actively used (JWT revocation and token persistence are Postgres-backed; Redis would be needed for multi-replica distributed caching)
-- Search index is built in-memory — lost on restart; rebuilds automatically once manifest is ready (~30s on first start)
+- Search index is built in-memory — lost on restart; rebuilds automatically once manifest is ready (~30s on first start) and after each manifest update
 - Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
-- Wishlist availability (`avail.now`) is always false — Xûr inventory cross-check not yet computed
+- Milestone `missing` counts are not computed yet — the field is omitted from the weekly payload and the UI hides the badge rather than implying completion

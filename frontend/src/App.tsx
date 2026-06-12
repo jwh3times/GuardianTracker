@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { CharacterProvider } from "./contexts/CharacterContext";
 import { PreferencesProvider } from "./contexts/PreferencesContext";
 import { queryClient } from "./lib/api";
 import { AppShell } from "./components/AppShell";
@@ -62,11 +63,13 @@ const ProtectedLayout: React.FC = () => {
   }
 
   return (
-    <AppShell>
-      <Suspense fallback={<PageLoader />}>
-        <Outlet />
-      </Suspense>
-    </AppShell>
+    <CharacterProvider>
+      <AppShell>
+        <Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
+      </AppShell>
+    </CharacterProvider>
   );
 };
 

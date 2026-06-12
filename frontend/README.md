@@ -40,45 +40,52 @@ NGROK_HOST=
 
 ```text
 src/
-├── App.tsx                     # Router, lazy pages, ProtectedLayout (AppShell + auth gate)
+├── App.tsx                     # Router, lazy pages, ProtectedLayout (CharacterProvider + AppShell + auth gate)
 ├── index.tsx                   # Root; imports styles/{tokens,kit,app}.css
 ├── contexts/
 │   ├── AuthContext.tsx          # Auth state, localStorage persistence, token refresh
-│   └── PreferencesContext.tsx   # Card style + "for you" badge prefs (localStorage)
+│   ├── PreferencesContext.tsx   # Card style + "for you" badge prefs (localStorage)
+│   └── CharacterContext.tsx     # Characters query + persisted active-character pick (display-only)
 ├── styles/
 │   ├── tokens.css               # Design tokens (colors, type, spacing, rarity maps)
 │   ├── kit.css                  # Component styles
 │   └── app.css                  # App shell + page styles
 ├── components/
-│   ├── AppShell.tsx             # Sidebar + top bar + mobile nav, search, character switcher
+│   ├── AppShell.tsx             # Sidebar + top bar + mobile nav; global search (deep-links to
+│   │                            #   /collections?item=<hash>); character switcher (CharacterContext)
 │   ├── Brand.tsx                # Logo mark
 │   ├── ErrorBoundary.tsx        # React error boundary
 │   ├── kit/                     # Design component kit
 │   │   ├── Icon.tsx
-│   │   ├── primitives.tsx       # Badge, Button, ProgressBar, RadialProgress, StatTile,
+│   │   ├── primitives.tsx       # Badge, Button, Textarea, ProgressBar, RadialProgress, StatTile,
 │   │   │                        #   CountdownChip, DataFreshnessChip, FilterChip, EmptyState…
 │   │   ├── ItemCard.tsx
 │   │   ├── composite.tsx        # Panel, CategoryTree, ItemDetailDrawer, SealCard, Dropdown…
 │   │   └── index.ts             # Barrel export
-│   └── ui/                      # Legacy primitives still in use (LoadingSpinner, Toast)
+│   └── ui/                      # Legacy primitives (LoadingSpinner, Toast); Button.tsx and Card.tsx deleted
 ├── pages/
 │   ├── Login.tsx                # Bungie OAuth initiation
 │   ├── OAuthCallback.tsx        # Handles /auth/callback redirect
-│   ├── Dashboard.tsx            # Completion hero + "do this today" (real totals, mock weekly)
-│   ├── Collections.tsx          # Category tree + filterable grid/list + detail drawer
-│   ├── WishList.tsx             # Wishlist management
-│   ├── ThisWeek.tsx             # Weekly recs / Xûr / milestones (mock)
-│   ├── Catalysts.tsx            # Catalysts & crafting patterns (mock)
-│   ├── Triumphs.tsx             # Triumphs & seals (mock)
+│   ├── Dashboard.tsx            # Completion hero + "do this today" (real totals, real weekly)
+│   ├── Collections.tsx          # Category tree + filterable grid/list + detail drawer;
+│   │                            #   ?include=all for collected items; ?item=<hash> deep-link
+│   ├── WishList.tsx             # Wishlist management; inline notes editor; Xûr availability
+│   ├── ThisWeek.tsx             # Weekly recs / Xûr / milestones (real API)
+│   ├── Catalysts.tsx            # Catalysts & crafting patterns (real API)
+│   ├── Triumphs.tsx             # Triumphs & seals (real API)
 │   └── Settings.tsx             # Account + appearance preferences + sign out
 ├── lib/
-│   ├── api.ts                   # apiFetch helper + QueryClient (all REST calls go here)
-│   ├── mockData.ts              # Mock data for backend-less screens + fallbacks
-│   ├── adapters.ts              # API response types → design GTItem/WishlistEntry
-│   └── utils.ts                 # Date/number/rarity helpers, image validation
+│   ├── api.ts                   # apiFetch helper + ApiError (status/code) + QueryClient;
+│   │                            #   API_URL exported; all REST calls go through apiFetch
+│   ├── adapters.ts              # API response types → design GTItem/WishlistEntry; relTime
+│   ├── constants.ts             # RARITIES, glyphs, BUNGIE_CDN base URL
+│   ├── utils.ts                 # cn() Tailwind class merger (legacy ui/ only)
+│   ├── errorState.ts            # errorState(error) → ErrorStateCopy; branches on ApiError.code
+│   └── queries.ts               # collectionsQuery() — shared React Query definition
 └── types/
-    ├── api.ts                   # API response types (APIUser, AuthTokenResponse, etc.)
-    └── design.ts                # Design-system domain types (GTItem, Seal, Weekly…)
+    ├── api.ts                   # API response types (WishListItem + icon/availableNow,
+    │                            #   APIUserCollections + fetchedAt, APIRecordsEnvelope<T>, etc.)
+    └── design.ts                # Design-system domain types (GTItem, Seal, Weekly + resetAt/fetchedAt…)
 ```
 
 ## Authentication Flow
@@ -104,10 +111,11 @@ Triumphs & Seals, Wishlist, Settings.
 
 | Page                             | Data                                                                                  |
 | -------------------------------- | ------------------------------------------------------------------------------------- |
-| Dashboard                        | Real collection totals (weapons/armor/exotics); weekly/wishlist modules use mock data |
-| Collections                      | Real missing items via `GET /api/collections`; mock fallback when unavailable         |
-| Wishlist                         | Real `GET/POST/DELETE /api/wishlist`; mock fallback                                   |
-| This Week / Catalysts / Triumphs | Mock data (`lib/mockData.ts`) — no backend yet                                        |
+| Dashboard                        | Real collection totals (weapons/armor/exotics/cosmetics); real weekly recommendations |
+| Collections                      | Real data via `GET /api/collections?include=all`; supports ?item=<hash> deep-link     |
+| Wishlist                         | Real `GET/POST/PUT/DELETE /api/wishlist`; icon + Xûr availability cross-check         |
+| This Week                        | Real weekly data via `GET /api/weekly/recommendations` (Xûr, milestones, actions)     |
+| Catalysts / Triumphs             | Real data via `GET /api/catalysts`, `/api/crafting`, `/api/seals`                     |
 | Settings                         | Real account info from `useAuth`; appearance prefs via `PreferencesContext`           |
 
 ## User Preferences
@@ -152,7 +160,7 @@ npm run build
 The static output in `/dist` is served by Nginx in Docker:
 
 ```dockerfile
-FROM nginx:alpine
+FROM nginxinc/nginx-unprivileged:1.25-alpine
 COPY dist/ /usr/share/nginx/html/
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 ```

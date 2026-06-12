@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -77,7 +78,10 @@ func Load() *Config {
 	}
 }
 
-func (c *Config) Validate() {
+// Validate checks the configuration. In production, missing required settings
+// are returned as errors (the caller fatals); in development they only warn,
+// and the service runs in degraded mode.
+func (c *Config) Validate() error {
 	missing := []string{}
 	if c.BungieAPIKey == "" {
 		missing = append(missing, "BUNGIE_API_KEY")
@@ -91,17 +95,17 @@ func (c *Config) Validate() {
 	if len(missing) > 0 {
 		log.Printf("WARNING: Missing required environment variables: %v", missing)
 		if c.IsProduction() {
-			log.Fatalf("Cannot start in production without required environment variables")
+			return fmt.Errorf("cannot start in production without required environment variables: %v", missing)
 		}
 	}
 	if c.IsProduction() && len(c.JWTSecret) < 32 {
-		log.Fatal("JWT_SECRET must be at least 32 characters in production")
+		return fmt.Errorf("JWT_SECRET must be at least 32 characters in production")
 	}
 	if c.IsProduction() && c.DatabaseURL == "" {
-		log.Fatal("DATABASE_URL is required in production")
+		return fmt.Errorf("DATABASE_URL is required in production")
 	}
 	if c.IsProduction() && c.TokenEncryptionKey == "" {
-		log.Fatal("TOKEN_ENCRYPTION_KEY is required in production")
+		return fmt.Errorf("TOKEN_ENCRYPTION_KEY is required in production")
 	}
 	if !c.IsProduction() {
 		if c.DatabaseURL == "" {
@@ -111,6 +115,7 @@ func (c *Config) Validate() {
 			log.Println("WARNING: TOKEN_ENCRYPTION_KEY is not set — Bungie tokens will not be encrypted at rest")
 		}
 	}
+	return nil
 }
 
 func (c *Config) IsProduction() bool {

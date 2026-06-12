@@ -28,7 +28,8 @@
 
   /* ---- RARITY (the brand backbone) ---- */
   --c-exotic:      oklch(0.83 0.155 88);    /* gold */
-  --c-legendary:   oklch(0.64 0.150 305);   /* purple */
+  /* legendary lifted from L 0.64 → 0.68 so small badge text clears WCAG AA on dark surfaces */
+  --c-legendary:   oklch(0.68 0.150 305);   /* purple */
   --c-rare:        oklch(0.70 0.120 240);   /* blue */
   --c-uncommon:    oklch(0.74 0.150 150);   /* green */
   --c-common:      oklch(0.72 0.010 252);   /* gray */

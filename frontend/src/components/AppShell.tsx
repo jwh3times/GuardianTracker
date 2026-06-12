@@ -4,9 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Brand } from "./Brand";
 import { Icon, ItemTile } from "./kit";
 import { useAuth } from "../contexts/AuthContext";
+import { useCharacters } from "../contexts/CharacterContext";
 import { apiFetch } from "../lib/api";
-import { toCharacter } from "../lib/adapters";
-import type { APICharacter, APISearchResult } from "../types/api";
+import type { APISearchResult } from "../types/api";
 
 interface NavItem {
   id: string;
@@ -37,21 +37,9 @@ const emblemStyle = (url?: string): React.CSSProperties | undefined =>
     : undefined;
 
 function CharacterSwitcher({ displayName }: { displayName?: string }) {
-  const { user } = useAuth();
-
-  const { data: charsData } = useQuery({
-    queryKey: ["characters", user?.membershipType, user?.membershipId],
-    queryFn: () =>
-      apiFetch<APICharacter[]>(
-        `/api/characters/${user!.membershipType}/${user!.membershipId}`
-      ),
-    enabled: !!(user?.membershipId) && user?.membershipType != null,
-  });
-
-  const list = (charsData ?? []).map(toCharacter);
+  const { characters: list, activeCharacter, setActiveCharacter } = useCharacters();
 
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => {
@@ -61,7 +49,7 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
     return () => document.removeEventListener("click", h);
   }, []);
 
-  if (!list.length) {
+  if (!list.length || !activeCharacter) {
     return (
       <div className="gt-charsw">
         <div className="gt-charsw-btn">
@@ -72,7 +60,7 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
     );
   }
 
-  const cur = list.find((c) => c.id === active) ?? list[0];
+  const cur = activeCharacter;
   return (
     <div className="gt-charsw" ref={ref}>
       <button className="gt-charsw-btn" onClick={() => setOpen((v) => !v)}>
@@ -91,7 +79,7 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
               className="gt-charsw-opt"
               data-on={c.id === cur.id}
               onClick={() => {
-                setActive(c.id);
+                setActiveCharacter(c.id);
                 setOpen(false);
               }}
             >
@@ -109,6 +97,7 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
               {c.id === cur.id && <Icon name="check" size="0.9rem" style={{ color: "var(--c-signal)" }} />}
             </button>
           ))}
+          <div className="gt-charsw-note mono">Collections are account-wide</div>
         </div>
       )}
     </div>
@@ -173,7 +162,8 @@ function SearchBar() {
                 data-rarity={i.rarity.toLowerCase()}
                 onClick={() => {
                   setOpen(false);
-                  navigate("/collections");
+                  setQ("");
+                  navigate(`/collections?item=${i.hash}`);
                 }}
               >
                 <ItemTile rarity={i.rarity.toLowerCase() as any} type={i.type} style={{ width: "1.8rem" }} />

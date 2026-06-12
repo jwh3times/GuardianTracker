@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   CategoryTree,
   DataFreshnessChip,
   Dropdown,
   EmptyState,
-
+  FilterChip,
   Icon,
   ItemCard,
   ItemCardSkeleton,
@@ -18,6 +19,8 @@ import { useToast } from "../components/ui/Toast";
 import { useAuth } from "../contexts/AuthContext";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { apiFetch } from "../lib/api";
+import { errorState } from "../lib/errorState";
+import { collectionsQuery } from "../lib/queries";
 import { toGTItem } from "../lib/adapters";
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../lib/constants";
 import type {
@@ -28,12 +31,12 @@ import type {
 } from "../types/design";
 import type {
   ProfileResponse,
-  APIDestinyItem,
-  APIUserCollections,
+  APICollectionSummary,
   APICacheRefreshResponse,
+  WishListItem,
 } from "../types/api";
 
-type TopCategory = "weapons" | "armor" | "exotics";
+type TopCategory = "weapons" | "armor" | "exotics" | "cosmetics";
 type SortKey = "rarity" | "name" | "difficulty" | "avail";
 
 const RARITY_RANK: Record<Rarity, number> = {
@@ -52,6 +55,7 @@ const DIFF_RANK: Record<Difficulty, number> = {
 function topOf(id: string): TopCategory {
   if (id === "armor" || id.startsWith("a-")) return "armor";
   if (id === "exotics" || id.startsWith("e-")) return "exotics";
+  if (id === "cosmetics" || id.startsWith("c-")) return "cosmetics";
   return "weapons";
 }
 
@@ -59,6 +63,7 @@ const TOP_CATEGORIES: { id: TopCategory; label: string }[] = [
   { id: "weapons", label: "Weapons" },
   { id: "armor", label: "Armor" },
   { id: "exotics", label: "Exotics" },
+  { id: "cosmetics", label: "Cosmetics" },
 ];
 
 export function Collections() {
@@ -70,10 +75,12 @@ export function Collections() {
   const [diff, setDiff] = useState<Difficulty | null>(null);
   const [sort, setSort] = useState<SortKey>("rarity");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const [wished, setWished] = useState<Set<string>>(new Set());
+  const [missingOnly, setMissingOnly] = useState(true);
   const [detail, setDetail] = useState<GTItem | null>(null);
 
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const itemParam = searchParams.get("item");
 
   const { data: profileData } = useQuery({
     queryKey: ["currentUser"],
@@ -83,29 +90,67 @@ export function Collections() {
   const membershipType = profileData?.user.membershipType ?? user?.membershipType;
   const membershipId = profileData?.user.membershipId ?? user?.membershipId;
 
+  // The collections browser always loads the full dataset (collected + missing)
+  // and filters the display client-side via `missingOnly`. Using one stable
+  // query key avoids re-fetching when toggling the filter or following a
+  // deep-link to a collected item.
   const {
     data: collections,
     isLoading: loading,
+    isError,
+    error,
     refetch,
-  } = useQuery({
-    queryKey: ["collections", membershipType, membershipId],
-    queryFn: () =>
-      apiFetch<APIUserCollections>(
-        `/api/collections/${membershipType}/${membershipId}`
-      ),
-    enabled: membershipType != null && !!membershipId,
-  });
+  } = useQuery(collectionsQuery(membershipType, membershipId, true));
 
   const queryClient = useQueryClient();
 
+  const { data: wishlistData } = useQuery({
+    queryKey: ["wishlist"],
+    queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
+  });
+
+  const wished = useMemo(
+    () => new Set(wishlistData?.map((w) => String(w.itemHash)) ?? []),
+    [wishlistData]
+  );
+
+  // Items with an add/remove mutation in flight. Guards against a rapid second
+  // click acting on the pre-mutation `wished` snapshot (double-add, or a silent
+  // no-op remove before the wishlist query has refetched).
+  const [pendingWish, setPendingWish] = useState<Set<string>>(() => new Set());
+  const markPending = (id: string, on: boolean) =>
+    setPendingWish((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
   const addWishlistMutation = useMutation({
-    mutationFn: (itemHash: string) =>
+    mutationFn: (item: GTItem) =>
       apiFetch("/api/wishlist", {
         method: "POST",
-        body: JSON.stringify({ itemId: itemHash }),
+        body: JSON.stringify({ itemHash: Number(item.id) }),
       }),
+    onSuccess: (_data, item) => {
+      void queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      showToast(`${item.name} added to wishlist`, "success");
+    },
     onError: (err: Error) =>
       showToast(`Failed to add item: ${err.message}`, "error"),
+    onSettled: (_data, _err, item) => markPending(item.id, false),
+  });
+
+  const removeWishlistMutation = useMutation({
+    mutationFn: ({ rowId }: { rowId: string; name: string; itemId: string }) =>
+      apiFetch<void>(`/api/wishlist/${rowId}`, { method: "DELETE" }),
+    onSuccess: (_data, { name }) => {
+      void queryClient.invalidateQueries({ queryKey: ["wishlist"] });
+      showToast(`Removed ${name}`, "info");
+    },
+    onError: (err: Error) =>
+      showToast(`Failed to remove item: ${err.message}`, "error"),
+    onSettled: (_data, _err, { itemId }) => markPending(itemId, false),
   });
 
   const refreshMutation = useMutation({
@@ -123,6 +168,47 @@ export function Collections() {
       void queryClient.invalidateQueries({ queryKey: ["seals"] });
     },
   });
+
+  // Search deep-link (?item=<hash>): once data is loaded, locate the item in
+  // any bucket (missing or collected), open its drawer, and clear the param.
+  // The URL is the external system being synchronized here; the one-off
+  // cascading render on deep-link navigation is intentional.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!itemParam || !collections) return;
+    const buckets: { id: TopCategory; b: APICollectionSummary }[] = [
+      { id: "weapons", b: collections.weapons },
+      { id: "armor", b: collections.armor },
+      { id: "exotics", b: collections.exotics },
+      { id: "cosmetics", b: collections.cosmetics },
+    ];
+    let found: GTItem | null = null;
+    let bucketId: TopCategory | null = null;
+    for (const { id, b } of buckets) {
+      const miss = b?.missing?.find((d) => d.itemHash === itemParam);
+      if (miss) {
+        found = toGTItem(miss);
+        bucketId = id;
+        break;
+      }
+      const coll = b?.collectedItems?.find((d) => d.itemHash === itemParam);
+      if (coll) {
+        found = { ...toGTItem(coll), collected: true };
+        bucketId = id;
+        break;
+      }
+    }
+    if (found && bucketId) {
+      setActive(bucketId);
+      if (found.collected) setMissingOnly(false);
+      setDetail(found);
+    } else {
+      showToast("That item isn't in your trackable collections", "info");
+    }
+    setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemParam, collections]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const top = topOf(active);
   const realBucket = collections?.[top];
@@ -144,9 +230,15 @@ export function Collections() {
   }, [collections]);
 
   const baseItems: GTItem[] = useMemo(() => {
-    if (!realBucket?.missing) return [];
-    return realBucket.missing.map(toGTItem);
-  }, [realBucket]);
+    if (!realBucket) return [];
+    const missing = (realBucket.missing ?? []).map(toGTItem);
+    if (missingOnly) return missing;
+    const collected = (realBucket.collectedItems ?? []).map((d) => ({
+      ...toGTItem(d),
+      collected: true,
+    }));
+    return [...missing, ...collected];
+  }, [realBucket, missingOnly]);
 
   const items = useMemo(() => {
     let list = baseItems.slice();
@@ -167,25 +259,26 @@ export function Collections() {
   const hasFilters = !!(rarity || diff);
 
   const onWish = (item: GTItem) => {
-    const adding = !wished.has(item.id);
-    setWished((s) => {
-      const n = new Set(s);
-      if (n.has(item.id)) n.delete(item.id);
-      else n.add(item.id);
-      return n;
-    });
-    showToast(
-      adding ? `${item.name} added to wishlist` : `Removed ${item.name}`,
-      adding ? "success" : "info"
-    );
-    if (adding && hasReal && profileData?.user) {
-      addWishlistMutation.mutate(item.id);
+    // Ignore clicks while a mutation for this item is still settling — `wished`
+    // and `wishlistData` haven't caught up yet, so acting now would double-add
+    // or silently skip the remove.
+    if (pendingWish.has(item.id)) return;
+    if (!wished.has(item.id)) {
+      markPending(item.id, true);
+      addWishlistMutation.mutate(item);
+      return;
     }
+    const row = wishlistData?.find((w) => String(w.itemHash) === item.id);
+    if (!row) return; // wishlist cache not refreshed yet; wait for it
+    markPending(item.id, true);
+    removeWishlistMutation.mutate({ rowId: row.id, name: item.name, itemId: item.id });
   };
 
   const total = realBucket?.total ?? 0;
   const collected = realBucket?.collected ?? 0;
   const missing = Math.max(total - collected, 0);
+
+  const errState = errorState(error);
 
   return (
     <div className="gt-page gt-collections">
@@ -194,7 +287,8 @@ export function Collections() {
         sub={<span className="mono">Track what you're missing across every category</span>}
         right={
           <DataFreshnessChip
-            ago="4m"
+            updatedAt={collections?.fetchedAt}
+            refreshing={refreshMutation.isPending}
             onRefresh={() => {
               if (membershipType != null && !!membershipId) {
                 refreshMutation.mutate();
@@ -220,6 +314,9 @@ export function Collections() {
           {/* FILTER BAR */}
           <div className="gt-coll-toolbar">
             <div className="gt-filterbar">
+              <FilterChip on={missingOnly} onClick={() => setMissingOnly((v) => !v)}>
+                Missing only
+              </FilterChip>
               <Dropdown
                 label="Rarity"
                 value={rarity ? RARITY_LABEL[rarity] : null}
@@ -283,14 +380,27 @@ export function Collections() {
           ) : !hasReal ? (
             <div className="gt-card">
               <EmptyState
-                icon="refresh"
+                icon={errState.icon}
                 color="var(--c-text-3)"
-                title="No collection data"
-                body="We couldn't load your collection from Bungie. This can happen if your Destiny privacy is restricted or Bungie is unavailable — try refreshing."
+                title={errState.title}
+                body={errState.body}
                 action={
-                  <Button variant="outline" sm onClick={() => { void refetch(); }}>
-                    Retry
-                  </Button>
+                  <div style={{ display: "flex", gap: "var(--s-2)" }}>
+                    {isError && errState.privacyLink && (
+                      <a
+                        href="https://www.bungie.net/7/en/User/Account/Privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button variant="outline" sm icon="external">
+                          Bungie privacy settings
+                        </Button>
+                      </a>
+                    )}
+                    <Button variant="outline" sm onClick={() => { void refetch(); }}>
+                      Retry
+                    </Button>
+                  </div>
                 }
               />
             </div>
@@ -322,7 +432,7 @@ export function Collections() {
                   item={it}
                   density={cardStyle === "compact" ? "compact" : "grid"}
                   personalize={personalize}
-
+                  showCollected={!missingOnly}
                   wished={wished.has(it.id)}
                   onWish={onWish}
                   onOpen={setDetail}
@@ -337,7 +447,7 @@ export function Collections() {
                   item={it}
                   density="list"
                   personalize={personalize}
-
+                  showCollected={!missingOnly}
                   wished={wished.has(it.id)}
                   onWish={onWish}
                   onOpen={setDetail}

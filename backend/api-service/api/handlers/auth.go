@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 
 	"guardian-tracker/api-service/auth"
@@ -27,34 +24,35 @@ type UserStore interface {
 	BumpTokenVersion(ctx context.Context, membershipID string) error
 }
 
+// oauthStateTTL is how long an issued OAuth state parameter stays valid.
+const oauthStateTTL = 10 * time.Minute
+
 // AuthHandler handles Bungie OAuth, token refresh, profile, and logout endpoints.
 type AuthHandler struct {
 	jwt         *auth.JWT
 	tokenStore  *auth.TokenStore
 	cfg         *config.Config
-	csrf        *csrfStore
-	userStore   UserStore             // nil in degraded mode (no DB)
-	revokeCache cache.Cache           // for evicting tver: entries on logout
+	state       *auth.StateSigner
+	userStore   UserStore               // nil in degraded mode (no DB)
+	revokeCache cache.Cache             // for evicting tver: entries on logout
 	revoker     *auth.RevocationChecker // nil in degraded mode
 }
 
-func NewAuthHandler(ctx context.Context, j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userStore UserStore, revokeCache cache.Cache, revoker *auth.RevocationChecker) *AuthHandler {
-	h := &AuthHandler{
+func NewAuthHandler(j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userStore UserStore, revokeCache cache.Cache, revoker *auth.RevocationChecker) *AuthHandler {
+	return &AuthHandler{
 		jwt:         j,
 		tokenStore:  ts,
 		cfg:         cfg,
-		csrf:        newCSRFStore(),
+		state:       auth.NewStateSigner(cfg.JWTSecret),
 		userStore:   userStore,
 		revokeCache: revokeCache,
 		revoker:     revoker,
 	}
-	go h.csrf.cleanupLoop(ctx)
-	return h
 }
 
 // GetBungieAuthURL handles GET /api/auth/bungie
 func (h *AuthHandler) GetBungieAuthURL(c *gin.Context) {
-	state, err := h.csrf.generate()
+	state, err := h.state.Generate()
 	if err != nil {
 		log.Printf("Error generating CSRF state: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize authentication"})
@@ -78,7 +76,7 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid authorization code"})
 		return
 	}
-	if state == "" || !h.csrf.validateAndConsume(state) {
+	if state == "" || !h.state.Verify(state, time.Now(), oauthStateTTL) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired state. Please try logging in again."})
 		return
 	}
@@ -344,55 +342,3 @@ func (h *AuthHandler) getBungieProfile(accessToken string) (*auth.BungieUserProf
 	}, nil
 }
 
-// csrfStore is a small in-process CSRF state machine.
-type csrfStore struct {
-	mu     sync.RWMutex
-	states map[string]time.Time
-}
-
-func newCSRFStore() *csrfStore {
-	return &csrfStore{states: make(map[string]time.Time)}
-}
-
-func (s *csrfStore) generate() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	state := base64.URLEncoding.EncodeToString(b)
-	s.mu.Lock()
-	s.states[state] = time.Now().Add(10 * time.Minute)
-	s.mu.Unlock()
-	return state, nil
-}
-
-func (s *csrfStore) validateAndConsume(state string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	expiry, ok := s.states[state]
-	if !ok {
-		return false
-	}
-	delete(s.states, state)
-	return time.Now().Before(expiry)
-}
-
-func (s *csrfStore) cleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Minute)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.mu.Lock()
-			now := time.Now()
-			for state, expiry := range s.states {
-				if now.After(expiry) {
-					delete(s.states, state)
-				}
-			}
-			s.mu.Unlock()
-		}
-	}
-}

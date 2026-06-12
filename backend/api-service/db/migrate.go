@@ -72,11 +72,22 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		if err != nil {
 			return fmt.Errorf("migrate: read %s: %w", e.Name(), err)
 		}
-		if _, err := conn.Exec(ctx, string(sql)); err != nil {
+		// Each migration applies atomically: a failed multi-statement file must not
+		// leave a half-applied schema (and must not be recorded as applied).
+		tx, err := conn.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("migrate: begin tx for %s: %w", e.Name(), err)
+		}
+		if _, err := tx.Exec(ctx, string(sql)); err != nil {
+			tx.Rollback(ctx) //nolint:errcheck
 			return fmt.Errorf("migrate: apply %s: %w", e.Name(), err)
 		}
-		if _, err := conn.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES($1)", ver); err != nil {
+		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations(version) VALUES($1)", ver); err != nil {
+			tx.Rollback(ctx) //nolint:errcheck
 			return fmt.Errorf("migrate: record %s: %w", e.Name(), err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("migrate: commit %s: %w", e.Name(), err)
 		}
 	}
 	return nil
