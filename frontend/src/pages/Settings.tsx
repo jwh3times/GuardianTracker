@@ -1,16 +1,22 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, DataFreshnessChip, PageHead, Panel } from "../components/kit";
+import { Button, DataFreshnessChip, Icon, PageHead, Panel, RoleBadge } from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
+import { useFlags } from "../contexts/FlagsContext";
 import { usePreferences } from "../contexts/PreferencesContext";
-import { apiFetch } from "../lib/api";
+import { useToast } from "../components/ui/Toast";
+import { apiFetch, ApiError } from "../lib/api";
 import { collectionsQuery } from "../lib/queries";
 import { relTime, toCharacter } from "../lib/adapters";
+import { MIN_TIERS, ROLE_LABEL, roleColor, type Tier } from "../lib/roles";
 import type {
   APICharacter,
   APICacheRefreshResponse,
+  APIRoleResponse,
 } from "../types/api";
+
+type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 
 const PLATFORM_LABEL: Record<number, string> = {
   1: "Xbox",
@@ -49,8 +55,10 @@ function Segmented<T extends string>({
 }
 
 export function Settings() {
-  const { user, logout: authLogout } = useAuth();
+  const { user, logout: authLogout, logoutAll: authLogoutAll } = useAuth();
+  const { role, isAdmin, refresh: refreshFlags } = useFlags();
   const { cardStyle, personalize, setCardStyle, setPersonalize } = usePreferences();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const { data: charsData } = useQuery({
@@ -73,6 +81,23 @@ export function Settings() {
 
   const queryClient = useQueryClient();
 
+  // Self-service early-access opt-in (standard / beta / alpha). The server keeps
+  // the session (no token churn) and the new tier propagates on the next request;
+  // we refresh resolved flags so gated nav/pages update immediately.
+  const roleMutation = useMutation({
+    mutationFn: (tier: Tier) =>
+      apiFetch<APIRoleResponse>("/api/account/role", {
+        method: "PUT",
+        body: JSON.stringify({ role: tier }),
+      }),
+    onSuccess: () => {
+      refreshFlags();
+      void queryClient.invalidateQueries({ queryKey: ["flags"] });
+    },
+    onError: (e) =>
+      showToast(e instanceof ApiError ? e.message : "Couldn't change access tier", "error"),
+  });
+
   const refreshMutation = useMutation({
     mutationFn: () =>
       apiFetch<APICacheRefreshResponse>(
@@ -94,6 +119,11 @@ export function Settings() {
     navigate("/login");
   };
 
+  const handleSignOutAll = () => {
+    authLogoutAll();
+    navigate("/login");
+  };
+
   const platform =
     user?.platform ||
     (user?.membershipType != null ? PLATFORM_LABEL[user.membershipType] : undefined) ||
@@ -101,7 +131,57 @@ export function Settings() {
 
   return (
     <div className="gt-page">
-      <PageHead title="Settings" sub="Account, preferences & data" />
+      <PageHead title="Settings" sub="Account, access & data" />
+
+      {/* MEMBERSHIP & ACCESS */}
+      <Panel
+        title="Membership & access"
+        icon="shield"
+        accent={roleColor(role)}
+        right={<RoleBadge role={role} lg />}
+      >
+        <p className="gt-set-note">
+          Guardian Tracker rolls features out in waves. Opt into an early-access tier to try
+          features before they reach everyone — <strong>Beta</strong> for upcoming features,{" "}
+          <strong>Alpha</strong> for the bleeding edge.
+        </p>
+        <div className="gt-access-switch">
+          <span className="gt-set-k">Access tier</span>
+          <div
+            className="gt-tierpick"
+            role="radiogroup"
+            aria-label="Access tier"
+            data-disabled={isAdmin}
+          >
+            {MIN_TIERS.map((r) => (
+              <button
+                key={r}
+                className="gt-tierpick-opt"
+                role="radio"
+                aria-checked={role === r}
+                data-on={role === r}
+                disabled={isAdmin || roleMutation.isPending}
+                style={{ "--bdg": roleColor(r) } as CSS}
+                onClick={() => roleMutation.mutate(r)}
+              >
+                {r === "alpha" ? <Icon name="bolt" size="0.9em" /> : <span className="gt-dot" />}
+                {ROLE_LABEL[r]}
+              </button>
+            ))}
+          </div>
+        </div>
+        {isAdmin && (
+          <>
+            <p className="gt-set-note" style={{ color: "var(--c-admin)" }}>
+              You have <strong>Admin</strong> access — full visibility of every feature. Manage
+              member roles and feature flags in the Admin Console.
+            </p>
+            <Button variant="primary" icon="shield" onClick={() => navigate("/admin")}>
+              Open Admin Console
+            </Button>
+          </>
+        )}
+      </Panel>
 
       {/* PREFERENCES */}
       <Panel title="Appearance" icon="settings">
@@ -217,6 +297,9 @@ export function Settings() {
       <div className="gt-dash-actions">
         <Button variant="outline" icon="signout" onClick={handleSignOut}>
           Sign out
+        </Button>
+        <Button variant="ghost" sm icon="signout" onClick={handleSignOutAll}>
+          Sign out all devices
         </Button>
       </div>
     </div>

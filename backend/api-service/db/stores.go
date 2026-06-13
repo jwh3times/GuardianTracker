@@ -8,6 +8,7 @@ type Stores struct {
 	Tokens   *BungieTokenStore
 	Wishlist *WishlistStore
 	Prefs    *PrefsStore
+	Flags    *FlagStore
 }
 
 func NewStores(pool *pgxpool.Pool) *Stores {
@@ -19,5 +20,6 @@ func NewStores(pool *pgxpool.Pool) *Stores {
 		Tokens:   NewBungieTokenStore(pool),
 		Wishlist: NewWishlistStore(pool),
 		Prefs:    NewPrefsStore(pool),
+		Flags:    NewFlagStore(pool),
 	}
 }

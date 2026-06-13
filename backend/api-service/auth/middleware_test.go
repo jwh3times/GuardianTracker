@@ -14,14 +14,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// fakeVersionStore satisfies UserVersionStore.
+// fakeVersionStore satisfies UserAuthStore.
 type fakeVersionStore struct {
-	version int
-	err     error
+	version    int
+	role       int16
+	err        error
+	sessionOK  bool // returned by SessionExists
+	sessionErr error
 }
 
-func (f *fakeVersionStore) GetTokenVersion(_ context.Context, _ string) (int, error) {
-	return f.version, f.err
+func (f *fakeVersionStore) GetAuthInfo(_ context.Context, _ string) (int, int16, error) {
+	return f.version, f.role, f.err
+}
+
+func (f *fakeVersionStore) SessionExists(_ context.Context, _ string) (bool, error) {
+	return f.sessionOK, f.sessionErr
 }
 
 func newMiddlewareRouter(j *JWT, revoker *RevocationChecker) *gin.Engine {
@@ -68,7 +75,7 @@ func TestMiddleware_GarbageToken_401(t *testing.T) {
 func TestMiddleware_RefreshTokenAsAccess_401(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	r := newMiddlewareRouter(j, nil)
-	refresh, _ := j.GenerateRefreshToken(testProfile(), 1)
+	refresh, _, _ := j.GenerateRefreshToken(testProfile(), 1, "")
 	if w := doProtected(r, "Bearer "+refresh); w.Code != http.StatusUnauthorized {
 		t.Fatalf("refresh-as-access: expected 401, got %d", w.Code)
 	}
@@ -77,7 +84,7 @@ func TestMiddleware_RefreshTokenAsAccess_401(t *testing.T) {
 func TestMiddleware_ValidAccess_SetsContext(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	r := newMiddlewareRouter(j, nil)
-	tok, _ := j.GenerateAccessToken(testProfile(), 7)
+	tok, _ := j.GenerateAccessToken(testProfile(), 7, "")
 	w := doProtected(r, "Bearer "+tok)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -95,7 +102,7 @@ func TestMiddleware_TverMismatch_401(t *testing.T) {
 	// DB says version 2; the JWT carries version 1 (issued before a logout).
 	revoker := NewRevocationChecker(&fakeVersionStore{version: 2}, cache.NewMemoryCache(time.Minute, time.Minute))
 	r := newMiddlewareRouter(j, revoker)
-	tok, _ := j.GenerateAccessToken(testProfile(), 1)
+	tok, _ := j.GenerateAccessToken(testProfile(), 1, "")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusUnauthorized {
 		t.Fatalf("stale token_version: expected 401, got %d", w.Code)
 	}
@@ -105,9 +112,33 @@ func TestMiddleware_TverMatch_200(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	revoker := NewRevocationChecker(&fakeVersionStore{version: 3}, cache.NewMemoryCache(time.Minute, time.Minute))
 	r := newMiddlewareRouter(j, revoker)
-	tok, _ := j.GenerateAccessToken(testProfile(), 3)
+	tok, _ := j.GenerateAccessToken(testProfile(), 3, "")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+// TestMiddleware_SessionRevoked_401 pins this-device logout: a token whose
+// token_version still matches must be rejected once its session no longer exists.
+func TestMiddleware_SessionRevoked_401(t *testing.T) {
+	j := NewJWT(jwtTestSecret, 24, 30)
+	// token_version matches (3), but the session is gone (sessionOK=false).
+	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: false}, cache.NewMemoryCache(time.Minute, time.Minute))
+	r := newMiddlewareRouter(j, revoker)
+	tok, _ := j.GenerateAccessToken(testProfile(), 3, "sess-gone")
+	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked session: expected 401, got %d", w.Code)
+	}
+}
+
+// TestMiddleware_SessionValid_200 confirms a live session passes the session check.
+func TestMiddleware_SessionValid_200(t *testing.T) {
+	j := NewJWT(jwtTestSecret, 24, 30)
+	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: true}, cache.NewMemoryCache(time.Minute, time.Minute))
+	r := newMiddlewareRouter(j, revoker)
+	tok, _ := j.GenerateAccessToken(testProfile(), 3, "sess-live")
+	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusOK {
+		t.Fatalf("live session: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

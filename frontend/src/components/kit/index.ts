@@ -32,3 +32,12 @@ export {
   Dropdown,
 } from "./composite";
 export type { DropdownOption } from "./composite";
+export {
+  RoleBadge,
+  Switch,
+  RoleSelect,
+  TierSegment,
+  FlagCard,
+  UserRow,
+  LockedFeature,
+} from "./admin";

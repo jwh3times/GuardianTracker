@@ -16,8 +16,9 @@ type JWTClaims struct {
 	MembershipID   string `json:"membership_id"`
 	MembershipType int    `json:"membership_type"`
 	Platform       string `json:"platform"`
-	TokenType      string `json:"token_type"`   // "access" or "refresh"
-	TokenVersion   int    `json:"tver"`          // incremented on logout to revoke all tokens
+	TokenType      string `json:"token_type"`    // "access" or "refresh"
+	TokenVersion   int    `json:"tver"`          // bumped on sign-out-everywhere to revoke all tokens
+	SessionID      string `json:"sid,omitempty"` // per-device refresh session id (empty for pre-session tokens)
 	jwt.RegisteredClaims
 }
 
@@ -37,8 +38,9 @@ func NewJWT(secret string, expiryHours, refreshExpiryDays int) *JWT {
 	}
 }
 
-// GenerateAccessToken creates a signed JWT access token for the given user.
-func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int) (string, error) {
+// GenerateAccessToken creates a signed JWT access token for the given user. sessionID
+// binds the token to a per-device session so this-device logout can revoke it.
+func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int, sessionID string) (string, error) {
 	claims := JWTClaims{
 		UserID:         user.MembershipID,
 		DisplayName:    user.DisplayName,
@@ -47,6 +49,7 @@ func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int) (st
 		Platform:       GetPlatformName(user.MembershipType),
 		TokenType:      "access",
 		TokenVersion:   tokenVersion,
+		SessionID:      sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * time.Duration(j.expiryHours))),
@@ -59,8 +62,12 @@ func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int) (st
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(j.secret))
 }
 
-// GenerateRefreshToken creates a signed JWT refresh token for the given user.
-func (j *JWT) GenerateRefreshToken(user *BungieUserProfile, tokenVersion int) (string, error) {
+// GenerateRefreshToken creates a signed JWT refresh token for the given user, bound
+// to sessionID. It also returns the token's jti so the caller can record it as the
+// session's current refresh jti for reuse detection (compare-and-swap on rotation;
+// see db.UserStore.RotateSession).
+func (j *JWT) GenerateRefreshToken(user *BungieUserProfile, tokenVersion int, sessionID string) (token string, jti string, err error) {
+	jti = uuid.NewString()
 	claims := JWTClaims{
 		UserID:         user.MembershipID,
 		DisplayName:    user.DisplayName,
@@ -69,8 +76,9 @@ func (j *JWT) GenerateRefreshToken(user *BungieUserProfile, tokenVersion int) (s
 		Platform:       GetPlatformName(user.MembershipType),
 		TokenType:      "refresh",
 		TokenVersion:   tokenVersion,
+		SessionID:      sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        uuid.NewString(),
+			ID:        jti,
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24 * time.Duration(j.refreshExpiryDays))),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -78,7 +86,14 @@ func (j *JWT) GenerateRefreshToken(user *BungieUserProfile, tokenVersion int) (s
 			Subject:   user.MembershipID,
 		},
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(j.secret))
+	token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(j.secret))
+	return token, jti, err
+}
+
+// RefreshTokenTTL is the lifetime of issued refresh tokens, used to set a session's
+// expiry to match the refresh token it tracks.
+func (j *JWT) RefreshTokenTTL() time.Duration {
+	return time.Hour * 24 * time.Duration(j.refreshExpiryDays)
 }
 
 // ValidateToken parses and validates a JWT string, returning its claims.

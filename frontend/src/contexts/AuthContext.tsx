@@ -14,6 +14,7 @@ interface AuthContextType {
   refreshToken: string | null;
   login: (token: string, refreshToken: string, user: APIUser) => void;
   logout: () => void;
+  logoutAll: () => void;
   refreshAccessToken: () => Promise<boolean>;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -81,13 +82,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.setItem("guardian_user", JSON.stringify(newUser));
   };
 
-  const logout = () => {
-    // Fire-and-forget — clear client state regardless of response
-    apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  const clearStoredAuth = () => {
     setAuth({ token: null, refreshToken: null, user: null });
     localStorage.removeItem("guardian_token");
     localStorage.removeItem("guardian_refresh_token");
     localStorage.removeItem("guardian_user");
+  };
+
+  // Ends only this device's session; other devices stay signed in.
+  const logout = () => {
+    // Fire-and-forget — clear client state regardless of response
+    apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    clearStoredAuth();
+  };
+
+  // Signs out every device for the account (bumps token_version server-side).
+  const logoutAll = () => {
+    apiFetch("/api/auth/logout/all", { method: "POST" }).catch(() => {});
+    clearStoredAuth();
   };
 
   const refreshAccessToken = async (): Promise<boolean> => {
@@ -130,6 +142,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken,
     login,
     logout,
+    logoutAll,
     refreshAccessToken,
     isAuthenticated: !!token && !!user,
     // Auth is hydrated synchronously from localStorage during render, so it is

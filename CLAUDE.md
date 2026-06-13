@@ -56,7 +56,7 @@ cd k8s
 
 Dev-validation only: runs `GO_ENV: development` with no Postgres, so the api-service is
 in degraded mode (in-memory tokens, no persistence). Production parity lives in the Azure
-Container Apps deployment (InfraTODO.md Phase 10), not these manifests.
+Container Apps deployment, not these manifests.
 
 ### Option C: Individual services
 
@@ -122,6 +122,7 @@ Or run `./setup.ps1` to copy all at once.
 - `DATABASE_URL` — Postgres connection string (`postgres://guardian_app:...@host:5432/guardian_tracker?sslmode=disable`)
 - `TOKEN_ENCRYPTION_KEY` — 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)
 - `TOKEN_ENCRYPTION_KEY_PREVIOUS` — (optional) previous key for rotation during key migration
+- `ADMIN_MEMBERSHIP_IDS` — (optional) comma-separated Bungie membership IDs pinned to the admin role at every login; the only way to bootstrap the first admin (additional admins are then granted from the Admin Console)
 
 ## Key Files
 
@@ -136,11 +137,14 @@ Or run `./setup.ps1` to copy all at once.
 | `auth/state.go` | Stateless HMAC-signed OAuth state parameter (CSRF, multi-replica safe) |
 | `auth/tokenstore.go` | DB-backed encrypted Bungie OAuth token store with auto-refresh + CAS write |
 | `auth/crypto.go` | AES-256-GCM cipher for Bungie token encryption; key rotation via prev key |
-| `auth/revocation.go` | JWT revocation via token_version column; 60s in-memory cache |
+| `auth/revocation.go` | JWT revocation (account-wide token_version + per-device session existence) + role resolution; 60s in-memory cache |
+| `auth/roles.go` | Role tiers (standard/beta/alpha/admin) + `RequireAdmin`/`RequireTier` tier-gating middleware |
 | `api/handlers/auth.go` | OAuth flow, token refresh, logout, profile endpoints |
 | `api/handlers/characters.go` | HTTP handler for characters |
 | `api/handlers/collections.go` | HTTP handler for collections (incl. cosmetics) |
 | `api/handlers/wishlist.go` | Wishlist CRUD with Postgres persistence and manifest enrichment |
+| `api/handlers/account.go` | Self-service role opt-in + resolved feature-flag state (`GET /api/flags`) |
+| `api/handlers/admin.go` | Admin console: user role management + feature-flag config |
 | `api/handlers/health.go` | Health, ready, manifest status endpoints |
 | `api/handlers/common.go` | Shared handler helpers (parseMembershipParams, ownershipCheck, etc.) |
 | `services/bungie/client.go` | HTTP client with rate limiting + retry |
@@ -154,22 +158,29 @@ Or run `./setup.ps1` to copy all at once.
 | `services/search/service.go` | In-memory manifest item search index; async rebuild on manifest update |
 | `services/records/service.go` | Catalysts, crafting patterns, and seals/triumphs from Bungie records API |
 | `cache/cache.go` | In-memory cache (and no-op cache interface) |
-| `db/db.go`, `db/migrate.go`, `db/migrations/0001_init.sql` | Postgres pool, migration runner, schema DDL |
-| `db/users.go`, `db/tokens.go`, `db/wishlist.go`, `db/prefs.go` | DB stores for users, encrypted Bungie tokens, wishlist, preferences |
+| `db/db.go`, `db/migrate.go`, `db/migrations/{0001_init,0002_roles_flags,0003_refresh_sessions}.sql` | Postgres pool, migration runner, schema DDL (0002 adds roles, feature_flags, role_audit; 0003 adds refresh_sessions for per-device sessions + refresh-token reuse detection) |
+| `db/users.go`, `db/tokens.go`, `db/wishlist.go`, `db/prefs.go`, `db/flags.go` | DB stores for users (+roles/audit + per-device refresh_sessions), encrypted Bungie tokens, wishlist, preferences, feature flags |
 
 **Endpoints:**
 
 - `GET /api/auth/bungie` — initiate OAuth, returns auth URL + CSRF state
 - `POST /api/auth/bungie/callback` — exchange code for JWT tokens
-- `POST /api/auth/refresh` — rotate access + refresh tokens
+- `POST /api/auth/refresh` — rotate access + refresh tokens (per-session, with reuse detection)
 - `GET /api/auth/validate` — validate JWT (protected)
 - `GET /api/auth/profile` — current user profile (protected)
-- `POST /api/auth/logout` — invalidate JWT + delete Bungie token (protected)
+- `POST /api/auth/logout` — end the current device's session; other devices stay signed in (protected)
+- `POST /api/auth/logout/all` — sign out everywhere: bump token_version + delete all sessions + Bungie token (protected)
 - `GET /api/wishlist` — list wishlist items with `availableNow` (Xûr cross-check), `sources`, `icon` (JWT protected)
 - `POST /api/wishlist` — add wishlist item (JWT protected)
 - `PUT /api/wishlist/:id` — update wishlist item priority/notes (JWT protected)
 - `DELETE /api/wishlist/:id` — remove wishlist item (JWT protected)
 - `GET/PUT /api/preferences` — user preferences: card style, personalize (protected)
+- `PUT /api/account/role` — self-service opt-in to standard/beta/alpha; `admin` rejected, admin callers rejected (protected)
+- `GET /api/flags` — resolved feature-flag state for the caller (`enabled`/`accessible`/`locked` + role) (protected)
+- `GET /api/admin/users?q=` — admin only: user roster (id, displayName, platform, role, lastActive)
+- `PUT /api/admin/users/:id/role` — admin only: set any role; last-admin protected; bumps target token_version + audits
+- `GET /api/admin/flags` — admin only: full feature-flag config
+- `PUT /api/admin/flags/:key` — admin only: toggle `enabled` / set `minTier`
 - `GET /api/characters/:membershipType/:membershipId` — user characters (JWT protected)
 - `GET /api/collections/:membershipType/:membershipId` — user collections + `fetchedAt`; `?include=all` adds `collectedItems` per category (JWT protected)
 - `POST /api/collections/:membershipType/:membershipId/refresh` — invalidate cache (JWT protected)
@@ -181,7 +192,7 @@ Or run `./setup.ps1` to copy all at once.
 - `GET /api/seals/:membershipType/:membershipId` — `{ items, fetchedAt }` triumph/seal completion (protected)
 - `GET /health` and `GET /ready` — health/readiness probes
 
-Error responses carry a machine-readable `code` (`PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`) that the frontend branches its error states on.
+Error responses carry a machine-readable `code` (`PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`) that the frontend branches its error states on. Role/flag endpoints add `FORBIDDEN`, `TIER_LOCKED`, `DB_UNAVAILABLE` (degraded mode), `LAST_ADMIN`, `ROLE_NOT_ALLOWED`, and `ADMIN_OPT_IN`.
 
 **Bungie manifest flow:**
 
@@ -197,19 +208,21 @@ The UI uses the "Guardian Tracker" design system: a custom dark theme built on o
 | Path | Purpose |
 | --- | --- |
 | `App.tsx` | Router, lazy-loaded pages, `ProtectedLayout` (AppShell + auth gate) |
-| `index.tsx` | App root; imports `styles/{tokens,kit,app}.css` |
-| `contexts/AuthContext.tsx` | Auth state, localStorage persistence, token refresh |
+| `index.tsx` | App root; imports `styles/{tokens,kit,app,admin}.css` |
+| `contexts/AuthContext.tsx` | Auth state, localStorage persistence, token refresh; `logout` (this device) + `logoutAll` (everywhere) |
 | `contexts/PreferencesContext.tsx` | User prefs (card style, "for you" badges); localStorage `guardian_prefs` |
 | `contexts/CharacterContext.tsx` | Characters query + persisted active-character pick (display-only; data is account-wide) |
+| `contexts/FlagsContext.tsx` | `GET /api/flags` query; `useFlag(key)` / `useFlags()` resolved gating state + role (port of design `useGT`) |
+| `lib/roles.ts` | Role/tier constants, labels, colors (port of design `admin-data.js`) |
 | `lib/api.ts` | `apiFetch` helper + `ApiError` (status/code) + `QueryClient` — all REST calls go through here |
 | `lib/adapters.ts` | API response types → design `GTItem`/`WishlistEntry`; `relTime` |
 | `lib/constants.ts` | Label constants (`RARITIES`, glyphs) + `BUNGIE_CDN` base URL |
 | `lib/errorState.ts` | `errorState(error)` → UI copy; branches on `ApiError.code` (`PRIVACY_RESTRICTION`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`) |
 | `lib/queries.ts` | `collectionsQuery()` — shared React Query definition used by Dashboard, Collections, and Settings |
-| `styles/{tokens,kit,app}.css` | Design tokens + component/shell styles (plain CSS) |
-| `components/AppShell.tsx` | Sidebar + top bar + mobile nav; global search; character switcher |
+| `styles/{tokens,kit,app,admin}.css` | Design tokens + component/shell/admin styles (plain CSS) |
+| `components/AppShell.tsx` | Sidebar + top bar + mobile nav; global search; character switcher; flag-gated nav + admin nav |
 | `components/Brand.tsx` | Logo mark |
-| `components/kit/` | Design component kit: `Icon`, primitives, `ItemCard`, composites |
+| `components/kit/` | Design component kit: `Icon`, primitives, `ItemCard`, composites, `admin` (RoleBadge/Switch/RoleSelect/TierSegment/FlagCard/UserRow/LockedFeature) |
 | `components/ui/` | Legacy primitives: `LoadingSpinner`, `Toast` (`ErrorBoundary` lives in `components/`) |
 | `pages/Login.tsx` | Bungie OAuth initiation |
 | `pages/OAuthCallback.tsx` | Handles `/auth/callback` — exchanges code, stores tokens |
@@ -219,7 +232,8 @@ The UI uses the "Guardian Tracker" design system: a custom dark theme built on o
 | `pages/ThisWeek.tsx` | Weekly recommendations / Xûr / milestones (real API) |
 | `pages/Catalysts.tsx` | Catalysts & crafting patterns (real API) |
 | `pages/Triumphs.tsx` | Triumphs & seals (real API) |
-| `pages/Settings.tsx` | Account info + appearance preferences + sign out |
+| `pages/Settings.tsx` | Account info + early-access tier opt-in + appearance preferences + sign out |
+| `pages/Admin.tsx` | Admin console: user roster + role management, feature-flag config (admin-gated route) |
 | `types/api.ts` | API response types (`APIUser`, `AuthTokenResponse`, etc.) |
 | `types/design.ts` | Design-system domain types (`GTItem`, `Seal`, `Weekly`, …) |
 
@@ -244,22 +258,24 @@ The Bungie manifest is a ~100MB SQLite file. On first run the API service downlo
 ```text
 1. Frontend → GET /api/auth/bungie → returns authUrl + CSRF state
 2. User → Bungie.net → redirects to /auth/callback?code=...&state=...
-3. Frontend → POST /api/auth/bungie/callback → gets JWT access + refresh tokens; user upserted in DB
+3. Frontend → POST /api/auth/bungie/callback → gets JWT access + refresh tokens (bound to a new refresh_sessions row); user upserted in DB
 4. Frontend stores tokens in localStorage (guardian_token, guardian_refresh_token)
 5. lib/api.ts apiFetch injects Authorization: Bearer <token> on every request
 6. React Query hooks call apiFetch for all data fetching
-7. API service validates JWT on protected routes; RevocationChecker verifies token_version (60s cache)
+7. API service validates JWT on protected routes; RevocationChecker verifies token_version + session existence (60s cache)
 8. API service uses stored Bungie OAuth token (AES-256-GCM encrypted in DB, auto-refreshed if expired) for Bungie API calls
-9. Logout: Frontend → POST /api/auth/logout → bumps token_version, evicts Bungie token; client clears localStorage
+9. Logout: POST /api/auth/logout ends the current session only; POST /api/auth/logout/all bumps token_version + deletes all sessions + evicts the Bungie token. Client clears localStorage either way
 ```
 
 ### Authentication Security
 
 - CSRF: stateless HMAC-signed OAuth state (`auth/state.go`, key derived from `JWT_SECRET`), 10-min TTL — survives restarts and works across replicas; not single-use (replay bounded by the TTL and Bungie's single-use auth code)
-- JWT: HS256, access=24h, refresh=30d, token-type claim prevents refresh tokens being used as access tokens; `tver` (token_version) + `jti` claims added
-- JWT revocation: `POST /api/auth/logout` bumps `token_version` in DB; middleware checks via `RevocationChecker` with 60s in-memory cache window
+- JWT: HS256, access=24h, refresh=30d, token-type claim prevents refresh tokens being used as access tokens; `tver` (token_version), `jti`, and `sid` (session id) claims
+- Per-device refresh sessions with reuse detection: each login opens a `refresh_sessions` row (the `sid` claim) holding the current refresh `jti`; `POST /api/auth/refresh` compare-and-swaps it (`UserStore.RotateSession`). A replayed (already-rotated) token is detected as reuse and **revokes the whole session** (401, even if the revoking commit errors). Sessions are independent → fully multi-device; CAS fails open on genuine DB error. `expires_at` slides forward on each rotation (active sessions don't hard-expire at creation+TTL); sessions are capped per user (`maxSessionsPerUser`) and an hourly `startSessionPruner` deletes expired rows. A failed `CreateSession` fails the login/refresh (the session is load-bearing for the access token). Pre-`0003` tokens (no `sid`) are adopted into a fresh session on first refresh
+- Two logout scopes: `POST /api/auth/logout` ends only the current session (others stay; Bungie token preserved); `POST /api/auth/logout/all` bumps `token_version` + deletes all sessions + evicts the Bungie token. The middleware checks both `token_version` (account-wide) and session existence (per-device) via `RevocationChecker` with a 60s in-memory cache window
 - Bungie OAuth tokens stored AES-256-GCM encrypted in `bungie_tokens` table; survive scale-to-zero. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the race adopts the winner's tokens
 - Rate limiting: Bungie API client — 10 req/s, burst 20
+- Roles & feature flags (item 13): tiers `standard(0) < beta(1) < alpha(2) < admin(3)` in `users.role`. Authorization always reads the role from the DB-backed `RevocationChecker` cache (now `{token_version, role}`), never from the JWT — so role changes propagate within the 60s window. Admin is bootstrapped only via `ADMIN_MEMBERSHIP_IDS` (pinned at login) or granted by an existing admin; there is no self-service path to admin. Self opt-in (`PUT /api/account/role`, standard/beta/alpha only) evicts the cache entry with **no** token_version bump (session preserved); admin-driven changes (`PUT /api/admin/users/:id/role`) **do** bump token_version + evict the target's cache (forced re-sync) and write a `role_audit` row, with last-admin protection enforced inside the transaction. `RequireAdmin`/`RequireTier` gate server-side; UI flag hiding is not enforcement.
 
 ## CI/CD
 

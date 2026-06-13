@@ -94,10 +94,5 @@ temp/
 # Claude Code (user-specific settings)
 .claude/
 
-# TODO files
-InfraTODO.md
-TODO.md
-PLAN.md
-
-# Repo Analysis
-repo-analysis.md
+# Private files
+private/

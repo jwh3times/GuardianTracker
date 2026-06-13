@@ -185,7 +185,12 @@ func main() {
 	var revoker *auth.RevocationChecker
 	if stores.Users != nil {
 		revoker = auth.NewRevocationChecker(stores.Users, appCache)
+		startSessionPruner(ctx, stores.Users)
 	}
+
+	// Tier gating — enabled only when a DB-backed user store is available; in
+	// degraded mode role-gated endpoints return 503 (roles are unavailable).
+	authz := auth.NewAuthz(stores.Users != nil)
 
 	// Services — all manifest consumers share manifestProvider (lazy open,
 	// reconnects across manifest swaps).
@@ -214,6 +219,18 @@ func main() {
 	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
 	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore)
 
+	// Roles, feature flags & admin console. In degraded mode pass true-nil stores
+	// so the handlers' nil-guards engage (vs. a typed-nil interface).
+	var accountHandler *handlers.AccountHandler
+	var adminHandler *handlers.AdminHandler
+	if stores.Users != nil {
+		accountHandler = handlers.NewAccountHandler(stores.Users, stores.Flags, appCache)
+		adminHandler = handlers.NewAdminHandler(stores.Users, stores.Flags, appCache)
+	} else {
+		accountHandler = handlers.NewAccountHandler(nil, nil, appCache)
+		adminHandler = handlers.NewAdminHandler(nil, nil, appCache)
+	}
+
 	// Router
 	router := gin.Default()
 	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
@@ -232,6 +249,7 @@ func main() {
 		api.GET("/auth/validate", jwtHelper.Middleware(revoker), authHandler.ValidateToken)
 		api.GET("/auth/profile", jwtHelper.Middleware(revoker), authHandler.GetProfile)
 		api.POST("/auth/logout", jwtHelper.Middleware(revoker), authHandler.Logout)
+		api.POST("/auth/logout/all", jwtHelper.Middleware(revoker), authHandler.LogoutAll)
 
 		// Wishlist
 		api.GET("/wishlist", jwtHelper.Middleware(revoker), wishlistHandler.GetWishlist)
@@ -242,6 +260,19 @@ func main() {
 		// Preferences
 		api.GET("/preferences", jwtHelper.Middleware(revoker), wishlistHandler.GetPreferences)
 		api.PUT("/preferences", jwtHelper.Middleware(revoker), wishlistHandler.UpdatePreferences)
+
+		// Account self-service role opt-in + resolved feature-flag state
+		api.PUT("/account/role", jwtHelper.Middleware(revoker), accountHandler.SetRole)
+		api.GET("/flags", jwtHelper.Middleware(revoker), accountHandler.GetFlags)
+
+		// Admin console — JWT + RequireAdmin (503 in degraded mode)
+		admin := api.Group("/admin", jwtHelper.Middleware(revoker), authz.RequireAdmin())
+		{
+			admin.GET("/users", adminHandler.ListUsers)
+			admin.PUT("/users/:id/role", adminHandler.SetUserRole)
+			admin.GET("/flags", adminHandler.ListFlags)
+			admin.PUT("/flags/:key", adminHandler.UpdateFlag)
+		}
 
 		// Characters
 		api.GET("/characters/:membershipType/:membershipId", jwtHelper.Middleware(revoker), charactersHandler.GetCharacters)
@@ -295,6 +326,30 @@ func main() {
 		log.Printf("Warning: error closing manifest provider: %v", err)
 	}
 	log.Println("Server exited gracefully")
+}
+
+// startSessionPruner periodically deletes expired refresh sessions so abandoned
+// sessions (never rotated, never logged out) don't accumulate. It runs until ctx is
+// cancelled at shutdown.
+func startSessionPruner(ctx context.Context, users *db.UserStore) {
+	const interval = time.Hour
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				n, err := users.DeleteExpiredSessions(ctx)
+				if err != nil {
+					log.Printf("session pruner: %v", err)
+				} else if n > 0 {
+					log.Printf("session pruner: removed %d expired session(s)", n)
+				}
+			}
+		}
+	}()
 }
 
 func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {

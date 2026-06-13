@@ -1,0 +1,196 @@
+package handlers
+
+import (
+	"context"
+	"errors"
+	"log"
+	"net/http"
+	"strconv"
+	"time"
+
+	"guardian-tracker/api-service/auth"
+	"guardian-tracker/api-service/cache"
+	"guardian-tracker/api-service/db"
+
+	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+)
+
+// adminUserStore is the admin slice of db.UserStore.
+type adminUserStore interface {
+	ListUsers(ctx context.Context, q string, limit int) ([]db.AdminUser, error)
+	SetRoleByID(ctx context.Context, actorMembershipID string, targetUserID int64, newRole int16) (*db.RoleChange, error)
+}
+
+// adminFlagStore is the admin slice of db.FlagStore.
+type adminFlagStore interface {
+	List(ctx context.Context) ([]db.FeatureFlag, error)
+	Update(ctx context.Context, key string, enabled *bool, minTier *int16) (*db.FeatureFlag, error)
+}
+
+// AdminHandler serves the admin console: user roster + role management and the
+// feature-flag config. All routes are mounted behind Authz.RequireAdmin.
+type AdminHandler struct {
+	users adminUserStore
+	flags adminFlagStore
+	cache cache.Cache
+}
+
+func NewAdminHandler(users adminUserStore, flags adminFlagStore, c cache.Cache) *AdminHandler {
+	return &AdminHandler{users: users, flags: flags, cache: c}
+}
+
+type adminUserResponse struct {
+	ID           string `json:"id"`
+	DisplayName  string `json:"displayName"`
+	MembershipID string `json:"membershipId"`
+	Platform     string `json:"platform"`
+	Role         string `json:"role"`
+	LastActive   string `json:"lastActive"`
+}
+
+// ListUsers handles GET /api/admin/users?q=
+func (h *AdminHandler) ListUsers(c *gin.Context) {
+	users, err := h.users.ListUsers(c.Request.Context(), c.Query("q"), 200)
+	if err != nil {
+		log.Printf("admin ListUsers: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	out := make([]adminUserResponse, len(users))
+	for i, u := range users {
+		out[i] = adminUserResponse{
+			ID:           strconv.FormatInt(u.ID, 10),
+			DisplayName:  u.DisplayName,
+			MembershipID: u.MembershipID,
+			Platform:     auth.GetPlatformName(int(u.MembershipType)),
+			Role:         auth.RoleName(int(u.Role)),
+			LastActive:   u.LastLoginAt.UTC().Format(time.RFC3339),
+		}
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// SetUserRole handles PUT /api/admin/users/:id/role — any role incl. admin, with
+// last-admin protection. Bumps the target's token_version and evicts its
+// revocation cache entry so stale sessions re-sync; writes a role_audit row.
+func (h *AdminHandler) SetUserRole(c *gin.Context) {
+	targetID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	var body struct {
+		Role string `json:"role"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role is required"})
+		return
+	}
+	newRole, ok := auth.ParseRole(body.Role)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "role must be standard, beta, alpha, or admin"})
+		return
+	}
+	actor := c.GetString("membership_id")
+	change, err := h.users.SetRoleByID(c.Request.Context(), actor, targetID, int16(newRole))
+	if err != nil {
+		switch {
+		case errors.Is(err, db.ErrUserNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		case errors.Is(err, db.ErrLastAdmin):
+			c.JSON(http.StatusConflict, gin.H{"error": "Can't remove the last admin. Promote another admin first.", "code": "LAST_ADMIN"})
+		default:
+			log.Printf("admin SetRoleByID(%d): %v", targetID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		}
+		return
+	}
+	if h.cache != nil {
+		h.cache.Delete("tver:" + change.TargetMembershipID)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"id":           strconv.FormatInt(change.TargetUserID, 10),
+		"role":         auth.RoleName(int(change.NewRole)),
+		"previousRole": auth.RoleName(int(change.OldRole)),
+	})
+}
+
+type adminFlagResponse struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Category    string `json:"category"`
+	MinTier     string `json:"minTier"`
+	Enabled     bool   `json:"enabled"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+func toAdminFlag(f *db.FeatureFlag) adminFlagResponse {
+	return adminFlagResponse{
+		Key:         f.Key,
+		Name:        f.Name,
+		Description: f.Description,
+		Category:    f.Category,
+		MinTier:     auth.RoleName(int(f.MinTier)),
+		Enabled:     f.Enabled,
+		UpdatedAt:   f.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+// ListFlags handles GET /api/admin/flags
+func (h *AdminHandler) ListFlags(c *gin.Context) {
+	flags, err := h.flags.List(c.Request.Context())
+	if err != nil {
+		log.Printf("admin ListFlags: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	out := make([]adminFlagResponse, len(flags))
+	for i := range flags {
+		out[i] = toAdminFlag(&flags[i])
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// UpdateFlag handles PUT /api/admin/flags/:key — toggle enabled and/or set minTier.
+func (h *AdminHandler) UpdateFlag(c *gin.Context) {
+	key := c.Param("key")
+	var body struct {
+		Enabled *bool   `json:"enabled"`
+		MinTier *string `json:"minTier"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	var minTier *int16
+	if body.MinTier != nil {
+		t, ok := auth.ParseRole(*body.MinTier)
+		if !ok || t > auth.RoleAlpha {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "minTier must be standard, beta, or alpha"})
+			return
+		}
+		mt := int16(t)
+		minTier = &mt
+	}
+	if body.Enabled == nil && minTier == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
+		return
+	}
+	flag, err := h.flags.Update(c.Request.Context(), key, body.Enabled, minTier)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "unknown flag"})
+			return
+		}
+		log.Printf("admin UpdateFlag(%s): %v", key, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	// Evict the cached flag list so GET /api/flags reflects the change immediately.
+	if h.cache != nil {
+		h.cache.Delete(flagsCacheKey)
+	}
+	c.JSON(http.StatusOK, toAdminFlag(flag))
+}

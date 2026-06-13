@@ -86,11 +86,21 @@ rm .env.secrets
 ### Authentication & Authorization
 
 - **Bungie OAuth 2.0** with CSRF protection — stateless HMAC-SHA256-signed state parameter (`v1.<ts>.<nonce>.<sig>`, key derived from `JWT_SECRET` with domain separation), verified with a 10-minute TTL. Stateless by design: login survives restarts and works across replicas. Tradeoff: a state token is replayable within its TTL (the previous in-memory store was not browser-bound either, and the Bungie authorization code it accompanies is single-use)
-- **JWT tokens** — HS256 signed, access token (24h) + refresh token (30d) with rotation; `tver` (token_version) and `jti` claims
-- **JWT revocation** — logout bumps `token_version` in Postgres; middleware verifies via `RevocationChecker` with a 60-second cache window. The check **fails open** on DB errors (availability over strict revocation — logout is not guaranteed during a DB outage)
+- **JWT tokens** — HS256 signed, access token (24h) + refresh token (30d) with rotation; `tver` (token_version), `jti`, and `sid` (session id) claims
+- **Per-device refresh sessions + reuse detection** — each login opens a row in `refresh_sessions` (the `sid` claim) holding the current refresh `jti`. `POST /api/auth/refresh` compare-and-swaps it (`RotateSession`); a replayed (already-rotated) refresh token is detected as reuse and the **whole session is revoked** with 401, rather than staying valid to expiry. Sessions are independent, so this is fully multi-device. The CAS **fails open** on DB errors, consistent with revocation below — except a definitive reuse always 401s. Session `expires_at` slides forward on each rotation to match the freshly issued refresh token, so an active session is not force-expired at its original creation time. Sessions are capped per user (oldest-by-use evicted) and a background pruner deletes expired rows, so the table can't grow unbounded. If a session row can't be persisted at login, the login itself fails (the session is load-bearing — the access token is checked against it on every request)
+- **Two logout scopes** — `POST /api/auth/logout` ends only the current device's session (others stay signed in; the access token is rejected within the cache window via the session check, and the account-wide Bungie token is preserved). `POST /api/auth/logout/all` bumps `token_version`, deletes every session, and evicts the Bungie token (sign out everywhere)
+- **JWT revocation** — sign-out-everywhere bumps `token_version` in Postgres; the access-token middleware verifies both `token_version` (account-wide) and session existence (per-device) via `RevocationChecker` with a 60-second cache window. The checks **fail open** on DB errors (availability over strict revocation — logout is not guaranteed during a DB outage)
 - **Token-type claims** — refresh tokens cannot be used as access tokens (enforced in middleware)
 - **Bungie tokens encrypted at rest** — AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and key-version rotation support
 - **Bungie token auto-refresh** — stored Bungie OAuth tokens are refreshed automatically before expiry (5-min buffer); refresh writes are compare-and-swap on `updated_at`, and a replica that loses the race adopts the winner's tokens instead of clobbering them
+
+### Roles, Feature Flags & Admin Console
+
+- **Role tiers** — `standard(0) < beta(1) < alpha(2) < admin(3)` stored in `users.role`. Authorization **always reads the role from the DB** (the `RevocationChecker` cache now holds `{token_version, role}`), never from the JWT — the JWT carries role only as a display hint. Role changes therefore take effect within the 60-second cache window with no token churn.
+- **Admin bootstrap** — admin can only be minted via `ADMIN_MEMBERSHIP_IDS` (comma-separated Bungie membership IDs pinned to admin on every login upsert) or granted by an existing admin. There is **no self-service path to admin**: `PUT /api/account/role` accepts only standard/beta/alpha and rejects admin callers. `ADMIN_MEMBERSHIP_IDS` is non-secret config (membership IDs), but treat it as sensitive — it controls who holds admin.
+- **Server-side enforcement** — `RequireAdmin`/`RequireTier` gate admin and tier-locked endpoints; UI flag hiding is convenience, not enforcement. In degraded mode (no DB) roles resolve to standard and admin/tier endpoints return 503.
+- **Last-admin protection** — demoting the final admin is refused inside the same transaction (all admin rows are `SELECT … FOR UPDATE`-locked so concurrent demotions can't race the system to zero admins).
+- **Audit trail** — every admin-driven role change writes a `role_audit` row (actor, target, old/new role, timestamp). Admin role changes also bump the target's `token_version` and evict its revocation cache entry, forcing stale sessions to re-sync.
 
 ### Input Validation
 
@@ -129,15 +139,3 @@ rm .env.secrets
 - [ ] Docker images built from pinned base image versions
 - [ ] Kubernetes secrets not stored in version control
 - [ ] `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` set (the service refuses to start in production without them)
-
----
-
-## Known Security Limitations
-
-Documented tradeoffs in the current design:
-
-1. **OAuth state is replayable within its 10-minute TTL** — the stateless HMAC design cannot enforce one-time use. Mitigated by Bungie's single-use authorization code; accepted in exchange for multi-replica and scale-to-zero correctness.
-2. **Revocation fails open** — a DB outage during the `token_version` check allows the request, so logout is not guaranteed while the database is down. Chosen for availability; the window closes when the DB returns.
-3. **Refresh-token rotation does not invalidate the previous refresh token** — `jti` is minted but not tracked, so a stolen refresh token stays usable until expiry (30d) or logout (token_version bump). A `last_refresh_jti` column would close this cheaply.
-4. **No audit logging** — authentication events (login, token refresh, failed attempts) are not logged to a persistent audit trail.
-5. **The Minikube stack runs in development mode** — no Postgres, in-memory token store, no persistence. It is a dev-validation environment, not a deployment template (production targets Azure Container Apps; see `InfraTODO.md`).

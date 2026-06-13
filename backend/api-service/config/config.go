@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,11 @@ type Config struct {
 	DBMaxConns             int32
 	TokenEncryptionKey     string
 	TokenEncryptionKeyPrev string
+
+	// AdminMembershipIDs are Bungie membership IDs pinned to the admin role on
+	// every login upsert. Bootstraps admin to the owner without manual SQL and
+	// survives DB resets; additional admins are granted via the console.
+	AdminMembershipIDs []string
 }
 
 func Load() *Config {
@@ -75,7 +81,30 @@ func Load() *Config {
 		DBMaxConns:             int32(getIntEnv("DB_MAX_CONNS", 4)),
 		TokenEncryptionKey:     os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		TokenEncryptionKeyPrev: os.Getenv("TOKEN_ENCRYPTION_KEY_PREVIOUS"),
+
+		AdminMembershipIDs: parseCSV(os.Getenv("ADMIN_MEMBERSHIP_IDS")),
 	}
+}
+
+// IsBootstrapAdmin reports whether a membership ID is pinned to admin via
+// ADMIN_MEMBERSHIP_IDS. Called on every login upsert.
+func (c *Config) IsBootstrapAdmin(membershipID string) bool {
+	return slices.Contains(c.AdminMembershipIDs, membershipID)
+}
+
+// parseCSV splits a comma-separated env value into trimmed, non-empty entries.
+func parseCSV(v string) []string {
+	if v == "" {
+		return nil
+	}
+	parts := strings.Split(v, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // Validate checks the configuration. In production, missing required settings

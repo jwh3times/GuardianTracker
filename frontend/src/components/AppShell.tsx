@@ -5,6 +5,7 @@ import { Brand } from "./Brand";
 import { Icon, ItemTile } from "./kit";
 import { useAuth } from "../contexts/AuthContext";
 import { useCharacters } from "../contexts/CharacterContext";
+import { useFlags } from "../contexts/FlagsContext";
 import { apiFetch } from "../lib/api";
 import type { APISearchResult } from "../types/api";
 
@@ -23,6 +24,14 @@ const NAV: NavItem[] = [
   { id: "triumphs", label: "Triumphs & Seals", icon: "triumph", path: "/triumphs" },
   { id: "wishlist", label: "Wishlist", icon: "wishlist", path: "/wishlist" },
 ];
+
+// Nav items gated by a feature flag: hidden when the flag is disabled, marked
+// with a lock when the user's tier is below the flag's minimum (the route then
+// renders the upsell). Mirrors NAV_FLAG in the design's app.jsx.
+const NAV_FLAG: Record<string, string> = {
+  catalysts: "catalysts-crafting",
+  triumphs: "triumphs-seals",
+};
 const MOBILE_NAV: NavItem[] = [
   { id: "dashboard", label: "Home", icon: "dashboard", path: "/dashboard" },
   { id: "week", label: "Week", icon: "week", path: "/this-week" },
@@ -185,10 +194,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout: authLogout } = useAuth();
+  const { flagState, isAdmin } = useFlags();
   const [mobileNav, setMobileNav] = useState(false);
   const closeMobileNav = () => setMobileNav(false);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
+
+  // Drop nav items whose flag is disabled; flag locked items so they render a lock.
+  const visibleNav = NAV.filter((n) => {
+    const fk = NAV_FLAG[n.id];
+    return !fk || flagState(fk).enabled;
+  }).map((n) => {
+    const fk = NAV_FLAG[n.id];
+    return { ...n, locked: fk ? flagState(fk).locked : false };
+  });
 
   const handleSignOut = () => {
     authLogout();
@@ -203,19 +222,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Brand />
         </div>
         <nav className="gt-nav">
-          {NAV.map((n) => (
+          {visibleNav.map((n) => (
             <NavLink
               key={n.id}
               to={n.path}
               className="gt-navitem"
               data-active={isActive(n.path)}
+              data-locked={n.locked}
             >
               <Icon name={n.icon} size="1.15rem" />
               <span>{n.label}</span>
+              {n.locked && (
+                <Icon
+                  name="lock"
+                  size="0.85rem"
+                  style={{ marginLeft: "auto", color: "var(--c-text-4)" }}
+                />
+              )}
             </NavLink>
           ))}
         </nav>
         <div className="gt-sidebar-foot">
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className="gt-navitem gt-navitem--admin"
+              data-active={isActive("/admin")}
+            >
+              <Icon name="shield" size="1.15rem" />
+              <span>Admin Console</span>
+            </NavLink>
+          )}
           <NavLink to="/settings" className="gt-navitem" data-active={isActive("/settings")}>
             <Icon name="settings" size="1.15rem" />
             <span>Settings</span>
@@ -261,7 +298,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ))}
         <button
           className="gt-bottomtab"
-          data-active={["/catalysts", "/triumphs", "/settings"].some((p) => isActive(p))}
+          data-active={["/catalysts", "/triumphs", "/settings", "/admin"].some((p) => isActive(p))}
           onClick={() => setMobileNav(true)}
         >
           <Icon name="menu" size="1.3rem" />
@@ -279,18 +316,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Icon name="close" size="1.2rem" />
               </button>
             </div>
-            {NAV.map((n) => (
+            {visibleNav.map((n) => (
               <NavLink
                 key={n.id}
                 to={n.path}
                 className="gt-navitem"
                 data-active={isActive(n.path)}
+                data-locked={n.locked}
                 onClick={closeMobileNav}
               >
                 <Icon name={n.icon} size="1.15rem" />
                 <span>{n.label}</span>
+                {n.locked && (
+                  <Icon
+                    name="lock"
+                    size="0.85rem"
+                    style={{ marginLeft: "auto", color: "var(--c-text-4)" }}
+                  />
+                )}
               </NavLink>
             ))}
+            {isAdmin && (
+              <NavLink
+                to="/admin"
+                className="gt-navitem gt-navitem--admin"
+                data-active={isActive("/admin")}
+                onClick={closeMobileNav}
+              >
+                <Icon name="shield" size="1.15rem" />
+                <span>Admin Console</span>
+              </NavLink>
+            )}
             <NavLink
               to="/settings"
               className="gt-navitem"

@@ -41,7 +41,7 @@ func createTestUser(t *testing.T, pool *pgxpool.Pool) (membershipID string, user
 	t.Helper()
 	membershipID = fmt.Sprintf("test-%d-%d", time.Now().UnixNano(), testUserSeq.Add(1))
 	users := NewUserStore(pool)
-	userID, _, err := users.Upsert(context.Background(), membershipID, 3, "Test Guardian")
+	userID, _, _, err := users.Upsert(context.Background(), membershipID, 3, "Test Guardian", false)
 	if err != nil {
 		t.Fatalf("create test user: %v", err)
 	}

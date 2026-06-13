@@ -6,8 +6,8 @@ This directory contains scripts to start and stop the Guardian Tracker applicati
 > **no Postgres**, so the api-service runs in degraded mode: in-memory Bungie token store,
 > no wishlist/preferences persistence, no JWT revocation. It exists to validate the
 > Kubernetes manifests and container builds — it is **not** a production deployment
-> template. Production deploys to Azure Container Apps (see `InfraTODO.md` Phase 10),
-> where `GO_ENV=production` requires the `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` secrets.
+> template. Production deploys to Azure Container Apps, where `GO_ENV=production`
+> requires the `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` secrets.
 
 ## Quick Start
 

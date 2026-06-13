@@ -7,6 +7,7 @@ import { http, HttpResponse } from "msw";
 import { API, sampleUser, sampleWishlist, server } from "./testServer";
 import { AuthProvider } from "../contexts/AuthContext";
 import { PreferencesProvider } from "../contexts/PreferencesContext";
+import { FlagsProvider } from "../contexts/FlagsContext";
 import { ToastProvider } from "../components/ui/Toast";
 import { WishList } from "../pages/WishList";
 import { Settings } from "../pages/Settings";
@@ -183,14 +184,17 @@ describe("Settings page", () => {
       <QueryClientProvider client={qc}>
         <AuthProvider>
           <PreferencesProvider>
-            <ToastProvider>
-              <MemoryRouter initialEntries={[route]}>
-                <Routes>
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/login" element={<div>login-stub</div>} />
-                </Routes>
-              </MemoryRouter>
-            </ToastProvider>
+            <FlagsProvider>
+              <ToastProvider>
+                <MemoryRouter initialEntries={[route]}>
+                  <Routes>
+                    <Route path="/settings" element={<Settings />} />
+                    <Route path="/admin" element={<div>admin-stub</div>} />
+                    <Route path="/login" element={<div>login-stub</div>} />
+                  </Routes>
+                </MemoryRouter>
+              </ToastProvider>
+            </FlagsProvider>
           </PreferencesProvider>
         </AuthProvider>
       </QueryClientProvider>
@@ -259,9 +263,44 @@ describe("Settings page", () => {
   it("signs out and navigates to login", async () => {
     renderSettings();
     await screen.findByText("Settings");
-    fireEvent.click(screen.getByRole("button", { name: /Sign out/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     expect(await screen.findByText("login-stub")).toBeInTheDocument();
     expect(localStorage.getItem("guardian_token")).toBeNull();
+  });
+
+  it("signs out of all devices and navigates to login", async () => {
+    let calledAll = false;
+    server.use(
+      http.post(`${API}/api/auth/logout/all`, () => {
+        calledAll = true;
+        return HttpResponse.json({ message: "Signed out of all devices" });
+      })
+    );
+    renderSettings();
+    await screen.findByText("Settings");
+    fireEvent.click(screen.getByRole("button", { name: "Sign out all devices" }));
+    expect(await screen.findByText("login-stub")).toBeInTheDocument();
+    expect(localStorage.getItem("guardian_token")).toBeNull();
+    await waitFor(() => expect(calledAll).toBe(true));
+  });
+
+  it("opts into an early-access tier", async () => {
+    // A standard-tier user can self-select Beta; the picker is interactive
+    // (it's disabled only for admins, which the default flags handler returns).
+    server.use(
+      http.get(`${API}/api/flags`, () => HttpResponse.json({ role: "standard", flags: [] }))
+    );
+    let optInBody: unknown = null;
+    server.use(
+      http.put(`${API}/api/account/role`, async ({ request }) => {
+        optInBody = await request.json();
+        return HttpResponse.json({ role: "beta" });
+      })
+    );
+    renderSettings();
+    await screen.findByText("Membership & access");
+    fireEvent.click(screen.getByRole("radio", { name: /Beta/ }));
+    await waitFor(() => expect(optInBody).toEqual({ role: "beta" }));
   });
 });
 

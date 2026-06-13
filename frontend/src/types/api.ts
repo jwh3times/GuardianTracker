@@ -9,6 +9,8 @@ export interface APIUser {
   membershipId: string;
   membershipType: number;
   platform?: string;
+  /** Role tier as a display hint; authoritative role comes from GET /api/flags. */
+  role?: "standard" | "beta" | "alpha" | "admin";
 }
 
 /** GET /api/auth/bungie */
@@ -129,4 +131,52 @@ export type { Catalyst as APICatalyst, CraftPattern as APICraftPattern, Seal as 
 export interface APIRecordsEnvelope<T> {
   items: T[];
   fetchedAt: string; // RFC3339
+}
+
+// --- Roles & feature flags (item 13) ---
+
+import type { Role } from "../lib/roles";
+
+/** One resolved flag from GET /api/flags — the design's flagState shape. */
+export interface APIResolvedFlag {
+  key: string;
+  name: string;
+  desc: string;
+  category: string;
+  minTier: string; // "standard" | "beta" | "alpha"
+  enabled: boolean;
+  accessible: boolean;
+  locked: boolean;
+}
+
+/** GET /api/flags */
+export interface APIFlagsResponse {
+  role: Role;
+  flags: APIResolvedFlag[];
+}
+
+/** PUT /api/account/role */
+export interface APIRoleResponse {
+  role: Role;
+}
+
+/** GET /api/admin/users */
+export interface APIAdminUser {
+  id: string;
+  displayName: string;
+  membershipId: string;
+  platform: string;
+  role: Role;
+  lastActive: string; // RFC3339
+}
+
+/** GET/PUT /api/admin/flags */
+export interface APIAdminFlag {
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  minTier: string; // "standard" | "beta" | "alpha"
+  enabled: boolean;
+  updatedAt: string;
 }

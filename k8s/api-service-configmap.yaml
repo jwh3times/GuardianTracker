@@ -7,8 +7,8 @@ data:
   PORT: "8081"
   # The Minikube stack is a dev-validation environment only: it has no Postgres,
   # so the api-service runs in degraded mode (in-memory token store, no persistence).
-  # Production deploys to Azure Container Apps (see InfraTODO.md Phase 10), where
-  # GO_ENV=production requires DATABASE_URL and TOKEN_ENCRYPTION_KEY secrets.
+  # Production deploys to Azure Container Apps, where GO_ENV=production requires
+  # DATABASE_URL and TOKEN_ENCRYPTION_KEY secrets.
   GO_ENV: "development"
   BUNGIE_API_BASE_URL: "https://www.bungie.net/Platform"
   # Update when using ngrok or a custom domain for OAuth
@@ -22,3 +22,7 @@ data:
   CACHE_TTL_COLLECTIONS: "300"
   JWT_EXPIRY_HOURS: "24"
   JWT_REFRESH_EXPIRY_DAYS: "30"
+  # Comma-separated Bungie membership IDs pinned to the admin role at login.
+  # Inert in this dev-validation stack (no Postgres → roles run degraded as
+  # standard and admin endpoints return 503); set for real in the Azure deploy.
+  ADMIN_MEMBERSHIP_IDS: ""

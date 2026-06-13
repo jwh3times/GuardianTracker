@@ -154,8 +154,86 @@ export const sampleSeals = {
   fetchedAt: new Date().toISOString(),
 };
 
+// Resolved feature flags for the signed-in (admin) test user. Shipped features
+// are accessible; an alpha-gated, enabled feature is locked for lower tiers.
+export const sampleFlags = {
+  role: "admin" as const,
+  flags: [
+    {
+      key: "catalysts-crafting",
+      name: "Catalyst & Crafting tracker",
+      desc: "Exotic catalyst progress and weapon crafting patterns.",
+      category: "Completion",
+      minTier: "standard",
+      enabled: true,
+      accessible: true,
+      locked: false,
+    },
+    {
+      key: "triumphs-seals",
+      name: "Triumphs & Seals",
+      desc: "Seal galleries with completion %, gilding and triumph breakdowns.",
+      category: "Completion",
+      minTier: "standard",
+      enabled: true,
+      accessible: true,
+      locked: false,
+    },
+  ],
+};
+
+export const sampleAdminUsers = [
+  {
+    id: "1",
+    displayName: "TestGuardian",
+    membershipId: "4611686018467260757",
+    platform: "steam",
+    role: "admin" as const,
+    lastActive: new Date().toISOString(),
+  },
+  {
+    id: "2",
+    displayName: "Vega",
+    membershipId: "200",
+    platform: "psn",
+    role: "beta" as const,
+    lastActive: new Date().toISOString(),
+  },
+];
+
+export const sampleAdminFlags = [
+  {
+    key: "catalysts-crafting",
+    name: "Catalyst & Crafting tracker",
+    description: "Exotic catalyst progress and weapon crafting patterns.",
+    category: "Completion",
+    minTier: "standard",
+    enabled: true,
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    key: "god-roll",
+    name: "God-roll insights",
+    description: "Per-weapon owned rolls and god-roll matching.",
+    category: "Power",
+    minTier: "alpha",
+    enabled: false,
+    updatedAt: new Date().toISOString(),
+  },
+];
+
 export const defaultHandlers = [
   http.get(`${API}/api/auth/profile`, () => HttpResponse.json({ user: sampleUser })),
+  http.get(`${API}/api/flags`, () => HttpResponse.json(sampleFlags)),
+  http.put(`${API}/api/account/role`, () => HttpResponse.json({ role: "beta" })),
+  http.get(`${API}/api/admin/users`, () => HttpResponse.json(sampleAdminUsers)),
+  http.put(`${API}/api/admin/users/:id/role`, () =>
+    HttpResponse.json({ id: "2", role: "alpha", previousRole: "beta" })
+  ),
+  http.get(`${API}/api/admin/flags`, () => HttpResponse.json(sampleAdminFlags)),
+  http.put(`${API}/api/admin/flags/:key`, ({ params }) =>
+    HttpResponse.json({ ...sampleAdminFlags[0], key: params.key as string, enabled: true })
+  ),
   http.get(`${API}/api/preferences`, () =>
     HttpResponse.json({ cardStyle: "framed", personalize: true })
   ),

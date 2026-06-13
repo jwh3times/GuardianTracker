@@ -25,11 +25,18 @@ func (j *JWT) Middleware(revoker *RevocationChecker) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Access token required"})
 			return
 		}
+		// Resolve role from the DB-backed cache (authoritative), not from the JWT.
+		// This also enforces account-wide revocation (token_version) and per-device
+		// session validity (sid). In degraded mode (revoker nil) every user is
+		// treated as standard and neither check runs.
+		role := RoleStandard
 		if revoker != nil {
-			if err := revoker.Check(c.Request.Context(), claims.MembershipID, claims.TokenVersion); err != nil {
+			r, err := revoker.Resolve(c.Request.Context(), claims.MembershipID, claims.TokenVersion, claims.SessionID)
+			if err != nil {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Token has been revoked"})
 				return
 			}
+			role = r
 		}
 		c.Set("user_id", claims.UserID)
 		c.Set("membership_id", claims.MembershipID)
@@ -37,6 +44,8 @@ func (j *JWT) Middleware(revoker *RevocationChecker) gin.HandlerFunc {
 		c.Set("display_name", claims.DisplayName)
 		c.Set("platform", claims.Platform)
 		c.Set("token_version", claims.TokenVersion)
+		c.Set("session_id", claims.SessionID)
+		c.Set("role", role)
 		c.Next()
 	}
 }

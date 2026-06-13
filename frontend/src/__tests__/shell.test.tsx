@@ -10,6 +10,7 @@ import { AppShell } from "../components/AppShell";
 import { AuthProvider } from "../contexts/AuthContext";
 import { CharacterProvider } from "../contexts/CharacterContext";
 import { PreferencesProvider } from "../contexts/PreferencesContext";
+import { FlagsProvider } from "../contexts/FlagsContext";
 import { ToastProvider } from "../components/ui/Toast";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
@@ -72,22 +73,24 @@ describe("AppShell interactions", () => {
         <AuthProvider>
           <PreferencesProvider>
             <MemoryRouter initialEntries={[route]}>
-              <CharacterProvider>
-                <ToastProvider>
-                  <Routes>
-                    <Route
-                      path="/dashboard"
-                      element={
-                        <AppShell>
-                          <div>shell-child</div>
-                        </AppShell>
-                      }
-                    />
-                    <Route path="/login" element={<div>login-stub</div>} />
-                    <Route path="/collections" element={<div>collections-stub</div>} />
-                  </Routes>
-                </ToastProvider>
-              </CharacterProvider>
+              <FlagsProvider>
+                <CharacterProvider>
+                  <ToastProvider>
+                    <Routes>
+                      <Route
+                        path="/dashboard"
+                        element={
+                          <AppShell>
+                            <div>shell-child</div>
+                          </AppShell>
+                        }
+                      />
+                      <Route path="/login" element={<div>login-stub</div>} />
+                      <Route path="/collections" element={<div>collections-stub</div>} />
+                    </Routes>
+                  </ToastProvider>
+                </CharacterProvider>
+              </FlagsProvider>
             </MemoryRouter>
           </PreferencesProvider>
         </AuthProvider>
