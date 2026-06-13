@@ -15,10 +15,9 @@ Frontend (React/TS :3000)
 
 ### Service Ports
 
-| Service | Port | Language |
-| --- | --- | --- |
-| Frontend | 3000 | React + TypeScript |
-| API Service | 8081 | Go + Gin |
+Frontend on `3000`, API Service on `8081`. For the full port map — core services,
+Docker Compose mappings, Kubernetes, and dev/cross-service wiring — see
+**[Ports in the README](./README.md#ports)**, which is the single source of truth.
 
 ## Running Services
 
@@ -345,10 +344,14 @@ To close both gaps locally:
 
 `test-local.ps1` (`backend/api-service/`):
 
-- Spins up `postgres:18-alpine` as a named container `gt-test-pg` on host port
-  **5433** (override with `-Port`) so it never collides with the docker-compose
-  Postgres on 5432. The container is idempotent and left running between invocations
-  for fast re-runs (`-Down` removes it).
+- Starts the `test-postgres` service from the root `docker-compose.yml` (a
+  `test`-profiled service, container `gt-test-pg`) on host port **5433** (override
+  with `-Port`) so it never collides with the docker-compose Postgres on 5432.
+  Because it's a Compose service, Docker Desktop groups it under the same
+  `guardiantracker` project as the rest of the stack (a plain `docker compose up`
+  never starts it — the `test` profile gates it). The container is idempotent and
+  left running between invocations for fast re-runs (`-Down` removes it; a one-time
+  check also clears any legacy standalone `gt-test-pg` left by older script versions).
 - Exports `CGO_ENABLED=1` and `TEST_DATABASE_URL=postgres://test_user:test_password@localhost:5433/test_db?sslmode=disable`,
   then runs `go test -race -coverprofile=coverage.out ./...` and prints the total.
 - The test DB needs **no manual setup**: the container creates `test_db`, and the

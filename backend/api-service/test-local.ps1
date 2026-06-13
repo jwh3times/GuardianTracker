@@ -12,11 +12,13 @@
     * the db package integration tests need a reachable Postgres — gated on the
       TEST_DATABASE_URL env var.
 
-  This script closes both gaps: it spins up a throwaway Postgres container on a
-  non-default port (5433, so it won't collide with the docker-compose Postgres on
-  5432), exports CGO_ENABLED=1 + TEST_DATABASE_URL, then runs
-  `go test -race -coverprofile`. The container is left running for fast re-runs;
-  pass -Down to remove it.
+  This script closes both gaps: it starts the `test-postgres` service from the
+  root docker-compose.yml (a "test"-profiled, throwaway Postgres on a non-default
+  port — 5433, so it won't collide with the docker-compose Postgres on 5432),
+  exports CGO_ENABLED=1 + TEST_DATABASE_URL, then runs `go test -race
+  -coverprofile`. Driving it through Compose means Docker Desktop groups it with
+  the rest of the "guardiantracker" stack. The container is left running for fast
+  re-runs; pass -Down to remove it.
 
   The test DB needs no manual setup — the migrations are embedded in the binary
   and applied automatically by the test harness (db.Migrate), and each test
@@ -45,11 +47,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$Container = 'gt-test-pg'
+$Container = 'gt-test-pg'        # container_name of the test-postgres service
+$Service   = 'test-postgres'     # service name in the root docker-compose.yml
 $DbUser    = 'test_user'
 $DbPass    = 'test_password'
 $DbName    = 'test_db'
-$Image     = 'postgres:18-alpine'   # already pulled by docker-compose
+
+# Manage the test DB through the root docker-compose.yml (rather than a bare
+# `docker run`) so Docker Desktop groups it under the same "guardiantracker"
+# project as the rest of the stack. The service is gated behind the "test"
+# profile, so it never starts on a plain `docker compose up`.
+$RepoRoot    = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+$ComposeFile = Join-Path $RepoRoot 'docker-compose.yml'
+$Compose     = @('compose', '-f', $ComposeFile, '--profile', 'test')
 
 function Assert-Docker {
   # A missing `docker` executable throws (catchable); a stopped daemon only
@@ -62,31 +72,36 @@ function Assert-Docker {
   }
 }
 
+Assert-Docker
+
+# One-time migration: older versions of this script started a standalone
+# `gt-test-pg` via `docker run` (no Compose labels). Compose can't adopt that
+# name, so remove such a leftover before handing the name to the Compose service.
+$existing = (docker ps -a --format '{{.Names}}') -contains $Container
+if ($existing) {
+  $managed = (docker ps -a --filter "name=^/$Container$" --filter 'label=com.docker.compose.project' --format '{{.Names}}') -contains $Container
+  if (-not $managed) {
+    Write-Host "Removing legacy standalone '$Container' so Compose can manage it..." -ForegroundColor Yellow
+    docker rm -f $Container *> $null
+  }
+}
+
 # --- teardown ---------------------------------------------------------------
 if ($Down) {
-  docker rm -f $Container *> $null
-  Write-Host "Removed container '$Container'." -ForegroundColor Yellow
+  docker @Compose rm -fsv $Service *> $null
+  Write-Host "Removed test Postgres (service '$Service')." -ForegroundColor Yellow
   return
 }
 
-Assert-Docker
-if ($Fresh) { docker rm -f $Container *> $null }
+if ($Fresh) { docker @Compose rm -fsv $Service *> $null }
 
-# --- ensure the container is up (idempotent) --------------------------------
-$running = (docker ps    --format '{{.Names}}') -contains $Container
-$exists  = (docker ps -a --format '{{.Names}}') -contains $Container
-
-if (-not $exists) {
-  Write-Host "Starting Postgres ($Image) on localhost:$Port ..." -ForegroundColor Cyan
-  docker run -d --name $Container `
-    -e POSTGRES_USER=$DbUser -e POSTGRES_PASSWORD=$DbPass -e POSTGRES_DB=$DbName `
-    -p "${Port}:5432" $Image | Out-Null
-} elseif (-not $running) {
-  Write-Host "Starting existing container '$Container' ..." -ForegroundColor Cyan
-  docker start $Container | Out-Null
-} else {
-  Write-Host "Reusing running container '$Container'." -ForegroundColor DarkGray
-}
+# --- ensure the service is up (idempotent) ----------------------------------
+# `up -d` is a no-op if it's already running with this config, starts it if
+# stopped, and recreates it (e.g. with a new -Port mapping) when config changes.
+$env:TEST_POSTGRES_PORT = "$Port"
+Write-Host "Starting Postgres service '$Service' on localhost:$Port (profile: test) ..." -ForegroundColor Cyan
+docker @Compose up -d $Service
+if ($LASTEXITCODE -ne 0) { throw "Failed to start the '$Service' Compose service." }
 
 # --- wait for readiness -----------------------------------------------------
 Write-Host 'Waiting for Postgres to accept connections' -NoNewline

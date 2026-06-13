@@ -40,6 +40,49 @@ Frontend (React/TS :3000)
 - **Local**: Docker Compose (recommended) or Minikube
 - **CI/CD**: GitHub Actions — lint, test, Docker build on every push
 
+### Ports
+
+Every port across the config files, by environment. This is the single source of
+truth for the project's ports (CLAUDE.md links here).
+
+**Core services**
+
+| Service | Internal (container/process) | Host / exposed | Defined in |
+| --- | --- | --- | --- |
+| Frontend (dev — Vite) | `3000` | `3000` | `frontend/vite.config.ts`, `frontend/Dockerfile.dev` |
+| Frontend (prod — nginx) | `8080` | `3000` (mapped) | `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml` |
+| API Service (Go/Gin) | `8081` | `8081` | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
+| Postgres | `5432` | `5432` | `docker-compose.yml`, `.env.example` |
+| Redis | `6379` | `6379` | `docker-compose.yml`, `.env.example` |
+
+**Docker Compose mappings** (`HOST:CONTAINER`)
+
+```text
+postgres        ${POSTGRES_PORT:-5432}      -> 5432
+redis           ${REDIS_PORT:-6379}         -> 6379
+api-service     ${API_SERVICE_PORT:-8081}   -> 8081   (PORT env = 8081)
+frontend        ${FRONTEND_PORT:-3000}      -> 8080   # host 3000 hits nginx:8080
+test-postgres   ${TEST_POSTGRES_PORT:-5433} -> 5432   # "test" profile only; not started by a plain `up`
+```
+
+**Kubernetes (Minikube — `k8s/`)**
+
+| Object | Port | Notes |
+| --- | --- | --- |
+| api-service Deployment | `containerPort 8081` | liveness `/health`, readiness `/ready` on 8081 |
+| api-service Service | `8081 → 8081` | `ClusterIP` |
+| frontend Deployment | `containerPort 8080` | `NGINX_PORT=8080` env |
+| frontend Service | `80 → 8080` | `NodePort` |
+| `startup.ps1` port-forward | `localhost:3000 → frontend:80` | dev access |
+
+**Dev / cross-service wiring**
+
+- Vite proxy → `http://localhost:8081` (`vite.config.ts`)
+- `VITE_API_URL` → `http://localhost:8081` (`frontend/.env.example`)
+- OAuth redirect / CORS → `http://localhost:3000/auth/callback`
+- nginx CSP `connect-src` allows `http://localhost:8081` (+ Bungie, ngrok)
+- Test Postgres (`backend/api-service/test-local.ps1`) → host `5433 → 5432`; a `test`-profiled Compose service grouped under the `guardiantracker` project in Docker Desktop
+
 ## Project Structure
 
 ```text
