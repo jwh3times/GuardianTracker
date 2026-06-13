@@ -20,7 +20,7 @@ The design source (a self-contained prototype) lives in `frontend/design/`.
 ```bash
 npm install
 cp .env.example .env.local   # fill in your values
-npm start                    # Vite dev server on http://localhost:3000
+npm start                    # Vite dev server on http://localhost:5273
 ```
 
 The dev server proxies `/api` to the API service (`http://localhost:8081`) — see `vite.config.ts`.
@@ -31,7 +31,7 @@ Vite exposes only `VITE_`-prefixed vars to the client:
 
 ```env
 VITE_API_URL=http://localhost:8081
-VITE_AUTH_REDIRECT_URI=http://localhost:3000/auth/callback
+VITE_AUTH_REDIRECT_URI=http://localhost:5273/auth/callback
 # Optional dev tunnel host for OAuth over HTTPS (ngrok, Cloudflare Tunnel)
 NGROK_HOST=
 ```

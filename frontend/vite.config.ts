@@ -14,7 +14,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      port: 3000,
+      // 5273 is GuardianTracker's fleet lane for the frontend (was 3000). This
+      // port is also the OAuth redirect origin — keep it in sync with the API's
+      // AUTH_REDIRECT_URI/CORS and the redirect registered in the Bungie app.
+      port: 5273,
       allowedHosts: tunnelHost ? [tunnelHost] : [],
       proxy: {
         '/api': {
@@ -24,7 +27,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
-      port: 3000,
+      port: 5273,
     },
     build: {
       outDir: 'dist',

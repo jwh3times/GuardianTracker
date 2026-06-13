@@ -29,12 +29,12 @@ This directory contains scripts to start and stop the Guardian Tracker applicati
    - `guardian-tracker/frontend:v2`
 3. **Deploys Kubernetes manifests**
 4. **Waits for deployments** to be ready
-5. **Sets up port forwarding** (localhost:3000 → frontend)
+5. **Sets up port forwarding** (localhost:5273 → frontend)
 6. **Shows status** and provides next steps
 
 After startup completes:
 
-- Frontend available at: <http://localhost:3000>
+- Frontend available at: <http://localhost:5273>
 - All services running in Minikube cluster
 - Port forwarding active in background
 

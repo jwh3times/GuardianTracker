@@ -94,7 +94,7 @@ foreach ($deployment in $deployments) {
 # Step 5: Set up port forwarding
 Write-Host "`n5. Setting up port forwarding..." -ForegroundColor Cyan
 
-# Kill any existing port forwarding on port 3000
+# Kill any existing port forwarding on port 5273
 Write-Host "   Cleaning up existing port forwards..." -ForegroundColor Yellow
 Get-Process | Where-Object {$_.ProcessName -eq "kubectl" -and $_.CommandLine -like "*port-forward*"} | Stop-Process -Force -ErrorAction SilentlyContinue
 
@@ -102,9 +102,9 @@ Get-Process | Where-Object {$_.ProcessName -eq "kubectl" -and $_.CommandLine -li
 Start-Sleep -Seconds 2
 
 # Start new port forwarding in background
-Write-Host "   Starting port forward to frontend (localhost:3000 -> frontend:80)..." -ForegroundColor Yellow
+Write-Host "   Starting port forward to frontend (localhost:5273 -> frontend:80)..." -ForegroundColor Yellow
 $portForwardJob = Start-Job -ScriptBlock {
-    kubectl port-forward service/frontend 3000:80
+    kubectl port-forward service/frontend 5273:80
 }
 
 # Wait a moment for port forwarding to establish
@@ -112,7 +112,7 @@ Start-Sleep -Seconds 3
 
 # Test if port forwarding is working
 try {
-    $response = Invoke-WebRequest -Uri "http://localhost:3000" -Method Head -TimeoutSec 5 -ErrorAction Stop
+    $response = Invoke-WebRequest -Uri "http://localhost:5273" -Method Head -TimeoutSec 5 -ErrorAction Stop
     Write-Host "   Port forwarding established successfully" -ForegroundColor Green
 } catch {
     Write-Host "   WARNING: Port forwarding may not be ready yet. You can test manually." -ForegroundColor Yellow
@@ -127,11 +127,11 @@ Write-Host "Services Status:" -ForegroundColor Cyan
 kubectl get pods
 
 Write-Host "`nService URLs:" -ForegroundColor Cyan
-Write-Host "  Frontend: http://localhost:3000" -ForegroundColor White
+Write-Host "  Frontend: http://localhost:5273" -ForegroundColor White
 Write-Host "  (Port forwarding job ID: $($portForwardJob.Id))" -ForegroundColor Gray
 
 Write-Host "`nNext Steps:" -ForegroundColor Cyan
-Write-Host "  1. Open http://localhost:3000 in your browser" -ForegroundColor White
+Write-Host "  1. Open http://localhost:5273 in your browser" -ForegroundColor White
 Write-Host "  2. Update your ngrok tunnel if needed for OAuth" -ForegroundColor White
 Write-Host "  3. Use shutdown.ps1 to stop all services when done" -ForegroundColor White
 

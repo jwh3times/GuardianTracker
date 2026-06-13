@@ -14,7 +14,7 @@ A web-based app for Destiny 2 players that integrates Bungie APIs to analyze col
 ## Architecture
 
 ```text
-Frontend (React/TS :3000)
+Frontend (React/TS :5273)
     └─► API Service (Go/Gin :8081)  — OAuth, JWT, manifest, collections
 ```
 
@@ -47,22 +47,29 @@ truth for the project's ports (CLAUDE.md links here).
 
 **Core services**
 
+Host ports are GuardianTracker's **fleet lane** so its stack runs alongside other
+local projects (ApexRacers owns the canonical `5432`/`5050`/`8080`; LeaseBook uses
+the `5632`/`8082`/`5373` lane). Only the host side moves — container ports never
+change. Each is overridable via the env var shown in the Compose mappings below.
+
 | Service | Internal (container/process) | Host / exposed | Defined in |
 | --- | --- | --- | --- |
-| Frontend (dev — Vite) | `3000` | `3000` | `frontend/vite.config.ts`, `frontend/Dockerfile.dev` |
-| Frontend (prod — nginx) | `8080` | `3000` (mapped) | `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml` |
+| Frontend (dev — Vite) | `5273` | `5273` | `frontend/vite.config.ts`, `frontend/Dockerfile.dev` |
+| Frontend (prod — nginx) | `8080` | `5273` (mapped) | `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml` |
 | API Service (Go/Gin) | `8081` | `8081` | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
-| Postgres | `5432` | `5432` | `docker-compose.yml`, `.env.example` |
+| Postgres | `5432` | `5532` | `docker-compose.yml`, `.env.example` |
+| pgAdmin | `80` | `5150` | `docker-compose.yml`, `.env.example` |
 | Redis | `6379` | `6379` | `docker-compose.yml`, `.env.example` |
 
 **Docker Compose mappings** (`HOST:CONTAINER`)
 
 ```text
-postgres        ${POSTGRES_PORT:-5432}      -> 5432
+postgres        ${POSTGRES_PORT:-5532}      -> 5432
+pgadmin         ${PGADMIN_PORT:-5150}       -> 80
 redis           ${REDIS_PORT:-6379}         -> 6379
 api-service     ${API_SERVICE_PORT:-8081}   -> 8081   (PORT env = 8081)
-frontend        ${FRONTEND_PORT:-3000}      -> 8080   # host 3000 hits nginx:8080
-test-postgres   ${TEST_POSTGRES_PORT:-5433} -> 5432   # "test" profile only; not started by a plain `up`
+frontend        ${FRONTEND_PORT:-5273}      -> 8080   # host 5273 hits nginx:8080
+test-postgres   ${TEST_POSTGRES_PORT:-5533} -> 5432   # "test" profile only; not started by a plain `up`
 ```
 
 **Kubernetes (Minikube — `k8s/`)**
@@ -73,15 +80,15 @@ test-postgres   ${TEST_POSTGRES_PORT:-5433} -> 5432   # "test" profile only; not
 | api-service Service | `8081 → 8081` | `ClusterIP` |
 | frontend Deployment | `containerPort 8080` | `NGINX_PORT=8080` env |
 | frontend Service | `80 → 8080` | `NodePort` |
-| `startup.ps1` port-forward | `localhost:3000 → frontend:80` | dev access |
+| `startup.ps1` port-forward | `localhost:5273 → frontend:80` | dev access (matches the docker frontend port) |
 
 **Dev / cross-service wiring**
 
 - Vite proxy → `http://localhost:8081` (`vite.config.ts`)
 - `VITE_API_URL` → `http://localhost:8081` (`frontend/.env.example`)
-- OAuth redirect / CORS → `http://localhost:3000/auth/callback`
+- OAuth redirect / CORS → `http://localhost:5273/auth/callback` — this host port doubles as the Bungie OAuth redirect origin, so the same URI must be registered in your [Bungie application settings](https://www.bungie.net/en/Application)
 - nginx CSP `connect-src` allows `http://localhost:8081` (+ Bungie, ngrok)
-- Test Postgres (`backend/api-service/test-local.ps1`) → host `5433 → 5432`; a `test`-profiled Compose service grouped under the `guardiantracker` project in Docker Desktop
+- Test Postgres (`backend/api-service/test-local.ps1`) → host `5533 → 5432`; a `test`-profiled Compose service grouped under the `guardiantracker` project in Docker Desktop
 
 ## Project Structure
 
@@ -112,7 +119,7 @@ Create an application at <https://www.bungie.net/en/Application> to obtain:
 - OAuth Client ID
 - OAuth Client Secret
 
-Set the OAuth redirect URI to `http://localhost:3000/auth/callback` (or your ngrok HTTPS URL for Bungie's HTTPS requirement).
+Set the OAuth redirect URI to `http://localhost:5273/auth/callback` (or your ngrok HTTPS URL for Bungie's HTTPS requirement).
 
 ### 2. Configure Environment Variables
 
@@ -149,7 +156,7 @@ Required secrets:
 docker compose up --build
 ```
 
-Frontend: <http://localhost:3000> — API: <http://localhost:8081>
+Frontend: <http://localhost:5273> — API: <http://localhost:8081>
 
 #### Option B: Kubernetes (Minikube)
 

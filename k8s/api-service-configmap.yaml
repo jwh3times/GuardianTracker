@@ -11,9 +11,10 @@ data:
   # DATABASE_URL and TOKEN_ENCRYPTION_KEY secrets.
   GO_ENV: "development"
   BUNGIE_API_BASE_URL: "https://www.bungie.net/Platform"
-  # Update when using ngrok or a custom domain for OAuth
-  AUTH_REDIRECT_URI: "http://localhost:3000/auth/callback"
-  CORS_ALLOWED_ORIGINS: "http://localhost:3000"
+  # Update when using ngrok or a custom domain for OAuth. 5273 matches the frontend
+  # port-forward in startup.ps1 so a single Bungie redirect URI covers docker + k8s.
+  AUTH_REDIRECT_URI: "http://localhost:5273/auth/callback"
+  CORS_ALLOWED_ORIGINS: "http://localhost:5273"
   MANIFEST_DB_PATH: "/app/data/manifest.sqlite"
   MANIFEST_CHECK_INTERVAL: "3600"
   BUNGIE_API_RPS: "10"

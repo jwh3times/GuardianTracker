@@ -3,7 +3,7 @@
 #   1. cp .env.example .env   and fill in BUNGIE_* secrets
 #   2. docker compose up --build
 #
-# Frontend:  http://localhost:3000   API: http://localhost:8081
+# Frontend:  http://localhost:5273   API: http://localhost:8081   pgAdmin: http://localhost:5150
 #
 # The frontend's VITE_ URLs intentionally stay on localhost — they run in the
 # browser on the host, not inside a container.
@@ -16,7 +16,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Default host port 5532 is GuardianTracker's fleet lane (ApexRacers owns the
+      # canonical 5432). Override with POSTGRES_PORT. Container always listens on 5432.
+      - "${POSTGRES_PORT:-5532}:5432"
     volumes:
       # PostgreSQL 18+ images store data under a version-specific subdir, so the
       # recommended mount point is /var/lib/postgresql (not /var/lib/postgresql/data).
@@ -27,6 +29,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@guardiantracker.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      # Skip the email-format / master-password prompts for local dev.
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      # Fleet lane 5150 (ApexRacers pgAdmin owns 5050). Override with PGADMIN_PORT.
+      - "${PGADMIN_PORT:-5150}:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   redis:
@@ -54,7 +71,7 @@ services:
       BUNGIE_API_BASE_URL: https://www.bungie.net/Platform
       BUNGIE_CLIENT_ID: ${BUNGIE_CLIENT_ID:-}
       BUNGIE_CLIENT_SECRET: ${BUNGIE_CLIENT_SECRET:-}
-      AUTH_REDIRECT_URI: ${AUTH_REDIRECT_URI:-http://localhost:3000/auth/callback}
+      AUTH_REDIRECT_URI: ${AUTH_REDIRECT_URI:-http://localhost:5273/auth/callback}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me_minimum_32_characters_long}
       JWT_EXPIRY_HOURS: "24"
       JWT_REFRESH_EXPIRY_DAYS: "30"
@@ -63,7 +80,7 @@ services:
       BUNGIE_API_BURST: "20"
       CACHE_ENABLED: "true"
       CACHE_TTL_COLLECTIONS: "300"
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5273}
       DATABASE_URL: postgres://guardian_app:guardian_dev_password@postgres:5432/guardian_tracker?sslmode=disable
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
       ADMIN_MEMBERSHIP_IDS: ${ADMIN_MEMBERSHIP_IDS:-}
@@ -81,7 +98,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "${FRONTEND_PORT:-3000}:8080"
+      # Fleet lane 5273 (was 3000). This host port doubles as the OAuth redirect
+      # origin — keep it in sync with AUTH_REDIRECT_URI / CORS and the Bungie app.
+      - "${FRONTEND_PORT:-5273}:8080"
     depends_on:
       api-service:
         condition: service_healthy
@@ -93,9 +112,9 @@ services:
   # it — it runs only when explicitly targeted:
   #     docker compose --profile test up -d test-postgres
   # Defining it here (rather than a bare `docker run`) gives it the Compose project
-  # label, so Docker Desktop groups it with the rest of the stack. Mapped to 5433
-  # to avoid colliding with the dev `postgres` service on 5432. No volume: removing
-  # the container wipes the data — it's disposable (tests recreate schema + rows).
+  # label, so Docker Desktop groups it with the rest of the stack. Mapped to 5533
+  # (sits next to the dev `postgres` lane at 5532) so it never collides. No volume:
+  # removing the container wipes the data — it's disposable (tests recreate schema + rows).
   test-postgres:
     image: postgres:18-alpine
     profiles: ["test"]
@@ -106,7 +125,7 @@ services:
       POSTGRES_PASSWORD: test_password
       POSTGRES_DB: test_db
     ports:
-      - "${TEST_POSTGRES_PORT:-5433}:5432"
+      - "${TEST_POSTGRES_PORT:-5533}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
       interval: 5s
