@@ -14,7 +14,7 @@
 
   This script closes both gaps: it starts the `test-postgres` service from the
   root docker-compose.yml (a "test"-profiled, throwaway Postgres on a non-default
-  port — 5433, so it won't collide with the docker-compose Postgres on 5432),
+  port — 5533, so it won't collide with the docker-compose Postgres on 5532),
   exports CGO_ENABLED=1 + TEST_DATABASE_URL, then runs `go test -race
   -coverprofile`. Driving it through Compose means Docker Desktop groups it with
   the rest of the "guardiantracker" stack. The container is left running for fast
@@ -24,7 +24,7 @@
   and applied automatically by the test harness (db.Migrate), and each test
   creates/cleans its own rows.
 
-.PARAMETER Port      Host port to map Postgres to (default 5433).
+.PARAMETER Port      Host port to map Postgres to (default 5533).
 .PARAMETER Down      Stop and remove the test Postgres container, then exit.
 .PARAMETER Fresh     Recreate the container from scratch (drops its data first).
 .PARAMETER Html      Open the per-line HTML coverage report after the run.
@@ -38,7 +38,7 @@
   ./test-local.ps1 -Down      # tear down the test Postgres container
 #>
 param(
-  [int]$Port = 5433,
+  [int]$Port = 5533,
   [switch]$Down,
   [switch]$Fresh,
   [switch]$Html,

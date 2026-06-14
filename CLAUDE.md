@@ -9,13 +9,13 @@ Guardian Tracker is a Destiny 2 collection tracker web app. Players log in via B
 Two services: a Go API backend and a React frontend that calls it directly over REST.
 
 ```text
-Frontend (React/TS :3000)
+Frontend (React/TS :5273)
     └─► API Service (Go/Gin :8081)  — OAuth, JWT, manifest, collections
 ```
 
 ### Service Ports
 
-Frontend on `3000`, API Service on `8081`. For the full port map — core services,
+Frontend on `5273`, API Service on `8081`. For the full port map — core services,
 Docker Compose mappings, Kubernetes, and dev/cross-service wiring — see
 **[Ports in the README](./README.md#ports)**, which is the single source of truth.
 
@@ -36,8 +36,8 @@ cp .env.example .env      # fill in BUNGIE_* secrets for real OAuth
 docker compose up --build
 ```
 
-- Frontend `http://localhost:3000`, API `http://localhost:8081`
-- Postgres `:5432`, Redis `:6379`
+- Frontend `http://localhost:5273`, API `http://localhost:8081`, pgAdmin `http://localhost:5150`
+- Postgres `:5532`, Redis `:6379`
 - The Bungie manifest persists in the `manifest-data` named volume, so it isn't re-downloaded on restart.
 - `database/init/01-init.sql` auto-loads into Postgres on first run.
 
@@ -81,7 +81,7 @@ To test Bungie OAuth against a public HTTPS URL, tunnel the frontend with ngrok.
 
    ```powershell
    # root .env
-   CORS_ALLOWED_ORIGINS=http://localhost:3000,https://<sub>.ngrok-free.dev
+   CORS_ALLOWED_ORIGINS=http://localhost:5273,https://<sub>.ngrok-free.dev
 
    docker compose up -d --build api-service
    ```
@@ -345,14 +345,14 @@ To close both gaps locally:
 `test-local.ps1` (`backend/api-service/`):
 
 - Starts the `test-postgres` service from the root `docker-compose.yml` (a
-  `test`-profiled service, container `gt-test-pg`) on host port **5433** (override
-  with `-Port`) so it never collides with the docker-compose Postgres on 5432.
+  `test`-profiled service, container `gt-test-pg`) on host port **5533** (override
+  with `-Port`) so it never collides with the docker-compose Postgres on 5532.
   Because it's a Compose service, Docker Desktop groups it under the same
   `guardiantracker` project as the rest of the stack (a plain `docker compose up`
   never starts it — the `test` profile gates it). The container is idempotent and
   left running between invocations for fast re-runs (`-Down` removes it; a one-time
   check also clears any legacy standalone `gt-test-pg` left by older script versions).
-- Exports `CGO_ENABLED=1` and `TEST_DATABASE_URL=postgres://test_user:test_password@localhost:5433/test_db?sslmode=disable`,
+- Exports `CGO_ENABLED=1` and `TEST_DATABASE_URL=postgres://test_user:test_password@localhost:5533/test_db?sslmode=disable`,
   then runs `go test -race -coverprofile=coverage.out ./...` and prints the total.
 - The test DB needs **no manual setup**: the container creates `test_db`, and the
   schema is applied automatically by the tests (`db.Migrate` runs the embedded

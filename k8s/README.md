@@ -29,12 +29,12 @@ This directory contains scripts to start and stop the Guardian Tracker applicati
    - `guardian-tracker/frontend:v2`
 3. **Deploys Kubernetes manifests**
 4. **Waits for deployments** to be ready
-5. **Sets up port forwarding** (localhost:3000 → frontend)
+5. **Sets up port forwarding** (localhost:5273 → frontend)
 6. **Shows status** and provides next steps
 
 After startup completes:
 
-- Frontend available at: <http://localhost:3000>
+- Frontend available at: <http://localhost:5273>
 - All services running in Minikube cluster
 - Port forwarding active in background
 
@@ -71,9 +71,9 @@ After startup completes:
 
 #### If port forwarding fails
 
-1. Check if port 3000 is already in use
+1. Check if port 5273 is already in use
 2. Kill existing kubectl processes: `Get-Process kubectl | Stop-Process`
-3. Restart the port forwarding manually: `kubectl port-forward service/frontend 3000:80`
+3. Restart the port forwarding manually: `kubectl port-forward service/frontend 5273:80`
 
 #### If OAuth doesn't work
 
@@ -98,7 +98,7 @@ kubectl apply -f k8s/api-service.yaml
 kubectl apply -f k8s/frontend.yaml
 
 # Port forward
-kubectl port-forward service/frontend 3000:80
+kubectl port-forward service/frontend 5273:80
 
 # Check status
 kubectl get pods
