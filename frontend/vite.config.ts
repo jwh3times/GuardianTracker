@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      // 5273 is GuardianTracker's fleet lane for the frontend (was 3000). This
+      // 5273 is the frontend host port (was 3000). This
       // port is also the OAuth redirect origin — keep it in sync with the API's
       // AUTH_REDIRECT_URI/CORS and the redirect registered in the Bungie app.
       port: 5273,

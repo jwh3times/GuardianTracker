@@ -16,8 +16,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
-      # Default host port 5532 is GuardianTracker's fleet lane (ApexRacers owns the
-      # canonical 5432). Override with POSTGRES_PORT. Container always listens on 5432.
+      # Default host port 5532 is offset from the canonical 5432 to avoid colliding
+      # with other local projects. Override with POSTGRES_PORT. Container always listens on 5432.
       - "${POSTGRES_PORT:-5532}:5432"
     volumes:
       # PostgreSQL 18+ images store data under a version-specific subdir, so the
@@ -39,7 +39,7 @@ services:
       # Skip the email-format / master-password prompts for local dev.
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
-      # Fleet lane 5150 (ApexRacers pgAdmin owns 5050). Override with PGADMIN_PORT.
+      # Host port 5150 is offset from the canonical 5050 to avoid collisions. Override with PGADMIN_PORT.
       - "${PGADMIN_PORT:-5150}:80"
     depends_on:
       postgres:
@@ -98,7 +98,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      # Fleet lane 5273 (was 3000). This host port doubles as the OAuth redirect
+      # Host port 5273 (was 3000). This host port doubles as the OAuth redirect
       # origin — keep it in sync with AUTH_REDIRECT_URI / CORS and the Bungie app.
       - "${FRONTEND_PORT:-5273}:8080"
     depends_on:
@@ -113,7 +113,7 @@ services:
   #     docker compose --profile test up -d test-postgres
   # Defining it here (rather than a bare `docker run`) gives it the Compose project
   # label, so Docker Desktop groups it with the rest of the stack. Mapped to 5533
-  # (sits next to the dev `postgres` lane at 5532) so it never collides. No volume:
+  # (sits next to the dev `postgres` port at 5532) so it never collides. No volume:
   # removing the container wipes the data — it's disposable (tests recreate schema + rows).
   test-postgres:
     image: postgres:18-alpine

@@ -47,10 +47,10 @@ truth for the project's ports (CLAUDE.md links here).
 
 **Core services**
 
-Host ports are GuardianTracker's **fleet lane** so its stack runs alongside other
-local projects (ApexRacers owns the canonical `5432`/`5050`/`8080`; LeaseBook uses
-the `5632`/`8082`/`5373` lane). Only the host side moves — container ports never
-change. Each is overridable via the env var shown in the Compose mappings below.
+Host ports are deliberately offset from the defaults so the stack can run alongside
+other local projects without colliding on the canonical ports (`5432`/`5050`/`8080`).
+Only the host side moves — container ports never change. Each is overridable via the
+env var shown in the Compose mappings below.
 
 | Service | Internal (container/process) | Host / exposed | Defined in |
 | --- | --- | --- | --- |
