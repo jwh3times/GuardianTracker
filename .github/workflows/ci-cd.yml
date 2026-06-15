@@ -45,7 +45,7 @@ jobs:
         run: npm test -- --coverage
 
       - name: Upload frontend coverage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage
           path: frontend/coverage/
@@ -109,7 +109,7 @@ jobs:
           awk -v t="$total" 'BEGIN { if (t+0 < 60.0) { print "FAIL: coverage " t "% is below the 60% gate"; exit 1 } }'
 
       - name: Upload Go coverage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: go-coverage
           path: backend/api-service/coverage.out
