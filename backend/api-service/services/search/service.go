@@ -91,9 +91,10 @@ func (s *Service) Search(q string, limit int) []Entry {
 	sort.SliceStable(matches, func(i, j int) bool {
 		return matches[i].score < matches[j].score
 	})
-	// Cap allocation by the actual number of matches; limit is already
-	// clamped to [1, maxSearchLimit] above, so this never over-allocates.
-	out := make([]Entry, 0, min(limit, len(matches)))
+	// Pre-size by the constant max and the actual match count — neither depends
+	// on the caller's limit, so the allocation size can't be driven by user
+	// input. The loop below still trims the result to `limit`.
+	out := make([]Entry, 0, min(maxSearchLimit, len(matches)))
 	for i := range matches {
 		if i >= limit {
 			break
