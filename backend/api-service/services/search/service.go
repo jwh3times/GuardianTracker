@@ -33,6 +33,13 @@ type Service struct {
 	building        bool
 }
 
+// Search result limit bounds. A caller-supplied limit is clamped into
+// [1, maxSearchLimit]; out-of-range values fall back to defaultSearchLimit.
+const (
+	defaultSearchLimit = 20
+	maxSearchLimit     = 50
+)
+
 // includedItemTypes is the set of Bungie itemType values we index for search.
 // 2=Armor, 3=Weapon, 14=Emblem, 21=Ship, 22=Sparrow, 23=Emote, 24=Ghost
 var includedItemTypes = map[int]struct{}{
@@ -55,8 +62,8 @@ func (s *Service) IsReady() bool {
 // Prefix matches are ranked before mid-name matches.
 // Returns nil slice (not error) when index not yet built.
 func (s *Service) Search(q string, limit int) []Entry {
-	if limit <= 0 || limit > 50 {
-		limit = 20
+	if limit <= 0 || limit > maxSearchLimit {
+		limit = defaultSearchLimit
 	}
 	s.ensureIndex()
 	s.mu.RLock()
@@ -84,7 +91,9 @@ func (s *Service) Search(q string, limit int) []Entry {
 	sort.SliceStable(matches, func(i, j int) bool {
 		return matches[i].score < matches[j].score
 	})
-	out := make([]Entry, 0, limit)
+	// Cap allocation by the actual number of matches; limit is already
+	// clamped to [1, maxSearchLimit] above, so this never over-allocates.
+	out := make([]Entry, 0, min(limit, len(matches)))
 	for i := range matches {
 		if i >= limit {
 			break

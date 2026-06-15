@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# Minimal default token scope for every job: these jobs only read the repo
+# (checkout), run tests, and build images locally — none push or write back.
+permissions:
+  contents: read
+
 env:
   NODE_VERSION: "26"
   GO_VERSION: "1.25.11"

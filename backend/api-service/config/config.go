@@ -78,7 +78,7 @@ func Load() *Config {
 		),
 
 		DatabaseURL:            os.Getenv("DATABASE_URL"),
-		DBMaxConns:             int32(getIntEnv("DB_MAX_CONNS", 4)),
+		DBMaxConns:             getInt32Env("DB_MAX_CONNS", 4),
 		TokenEncryptionKey:     os.Getenv("TOKEN_ENCRYPTION_KEY"),
 		TokenEncryptionKeyPrev: os.Getenv("TOKEN_ENCRYPTION_KEY_PREVIOUS"),
 
@@ -162,6 +162,18 @@ func getIntEnv(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+// getInt32Env parses an int32 env var. ParseInt with bitSize 32 rejects values
+// outside the int32 range (returning an error), so the conversion can't silently
+// truncate — out-of-range or unparseable values fall back to the default.
+func getInt32Env(key string, fallback int32) int32 {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
+			return int32(n)
 		}
 	}
 	return fallback
