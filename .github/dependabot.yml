@@ -1,0 +1,129 @@
+# Dependabot configuration for Guardian Tracker.
+#
+# Replaces the two Claude Code scheduled routines that previously handled
+# dependency updates for this repo:
+#   - "GuardianTracker Package Updater (minor/patch)"  → opened PRs for minor/patch bumps
+#   - "GuardianTracker Major Version Checker"          → surfaced major bumps for human review
+#
+# Behaviour mapping:
+#   - Minor + patch updates are grouped into one PR per ecosystem (low-noise, the
+#     routine bundled these too). CI (.github/workflows/ci-cd.yml) runs on every PR,
+#     replacing the routine's local build/test verification step.
+#   - Major updates arrive as individual PRs so each can be reviewed for breaking
+#     changes before merging — the equivalent of the old "major version checker"
+#     issue, but directly actionable. To suppress major PRs entirely and only ever
+#     get minor/patch, add an `ignore` block with
+#     `update-types: ["version-update:semver-major"]` to that ecosystem.
+#
+# Covers the three ecosystems the routines did (Go modules, npm, GitHub Actions),
+# plus Docker base images and Docker Compose images — new coverage the routines
+# never had. Note: `docker` (Dockerfiles) and `docker-compose` (docker-compose.yml)
+# are distinct ecosystems and each needs its own block.
+version: 2
+updates:
+  # ── Go modules (backend/api-service — Go 1.25.x) ──
+  - package-ecosystem: "gomod"
+    directory: "/backend/api-service"
+    schedule:
+      interval: "daily"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+    open-pull-requests-limit: 10
+    groups:
+      go-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── npm (frontend — Vite/React) ──
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "daily"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── GitHub Actions (.github/workflows/) ──
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+    open-pull-requests-limit: 10
+    groups:
+      actions-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── Docker base images (frontend/Dockerfile, frontend/Dockerfile.dev,
+  #    backend/api-service/Dockerfile) ──
+  - package-ecosystem: "docker"
+    directories:
+      - "/frontend"
+      - "/backend/api-service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+    open-pull-requests-limit: 10
+    groups:
+      docker-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── Docker Compose images (docker-compose.yml — postgres, redis, pgadmin) ──
+  # Separate ecosystem from `docker`; the docker scanner only reads Dockerfiles.
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+    open-pull-requests-limit: 10
+    groups:
+      compose-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
