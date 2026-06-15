@@ -25,7 +25,11 @@ services:
       - postgres-data:/var/lib/postgresql
       - ./database/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-guardian_tracker}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-guardian_tracker}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,7 +38,7 @@ services:
   pgadmin:
     image: dpage/pgadmin4:9.15
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@guardiantracker.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@guardiantracker.gg}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       # Skip the email-format / master-password prompts for local dev.
       PGADMIN_CONFIG_SERVER_MODE: "False"
