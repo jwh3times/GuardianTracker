@@ -334,8 +334,8 @@ func (r *Repository) GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungi
 
 // PresentationNodeDef is a minimal DestinyPresentationNodeDefinition from the manifest.
 type PresentationNodeDef struct {
-	Hash              uint32                    `json:"hash"`
-	DisplayProperties bungie.DisplayProperties  `json:"displayProperties"`
+	Hash              uint32                   `json:"hash"`
+	DisplayProperties bungie.DisplayProperties `json:"displayProperties"`
 	Children          struct {
 		PresentationNodes []struct {
 			PresentationNodeHash uint32 `json:"presentationNodeHash"`
@@ -631,4 +631,3 @@ func (r *Repository) GetWeaponTypesByName() (map[string]string, error) {
 	}
 	return out, rows.Err()
 }
-

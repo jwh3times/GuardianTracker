@@ -1,5 +1,13 @@
 import React from "react";
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -37,7 +45,7 @@ function renderPage(ui: React.ReactNode, route = "/") {
           </ToastProvider>
         </PreferencesProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -60,8 +68,8 @@ describe("WishList page", () => {
             availableNow: false,
             dateAdded: new Date().toISOString(),
           },
-        ])
-      )
+        ]),
+      ),
     );
     renderPage(<WishList />);
     expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
@@ -76,7 +84,9 @@ describe("WishList page", () => {
   it("shows the empty state when the wishlist has no items", async () => {
     server.use(http.get(`${API}/api/wishlist`, () => HttpResponse.json([])));
     renderPage(<WishList />);
-    expect(await screen.findByText("Your wishlist is empty")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Your wishlist is empty"),
+    ).toBeInTheDocument();
   });
 
   it("renders the loading state before data arrives", async () => {
@@ -106,25 +116,29 @@ describe("WishList page", () => {
         items = items.filter((i) => i.id !== params.id);
         deleted = true;
         return new HttpResponse(null, { status: 204 });
-      })
+      }),
     );
     renderPage(<WishList />);
     await screen.findByText("Gjallarhorn");
     fireEvent.click(screen.getByRole("button", { name: /Remove/ }));
-    await waitFor(() => expect(screen.queryByText("Gjallarhorn")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByText("Gjallarhorn")).not.toBeInTheDocument(),
+    );
     expect(deleted).toBe(true);
   });
 
   it("rolls back and toasts when a delete fails", async () => {
     server.use(
       http.delete(`${API}/api/wishlist/:id`, () =>
-        HttpResponse.json({ error: "boom" }, { status: 500 })
-      )
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
     );
     renderPage(<WishList />);
     await screen.findByText("Gjallarhorn");
     fireEvent.click(screen.getByRole("button", { name: /Remove/ }));
-    expect(await screen.findByText("Failed to remove item")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Failed to remove item"),
+    ).toBeInTheDocument();
     // Optimistic removal rolled back → item returns
     expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
   });
@@ -135,7 +149,7 @@ describe("WishList page", () => {
       http.put(`${API}/api/wishlist/:id`, async ({ request }) => {
         putBody = await request.json();
         return HttpResponse.json({ ...sampleWishlist[0], notes: "new note" });
-      })
+      }),
     );
     renderPage(<WishList />);
     await screen.findByText("Gjallarhorn");
@@ -153,7 +167,9 @@ describe("WishList page", () => {
     fireEvent.click(screen.getByRole("button", { name: /Edit notes/ }));
     expect(screen.getByLabelText("Notes for Gjallarhorn")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByLabelText("Notes for Gjallarhorn")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Notes for Gjallarhorn"),
+    ).not.toBeInTheDocument();
   });
 
   it("changes priority through the row dropdown", async () => {
@@ -162,7 +178,7 @@ describe("WishList page", () => {
       http.put(`${API}/api/wishlist/:id`, async ({ request }) => {
         putBody = await request.json();
         return HttpResponse.json({ ...sampleWishlist[0], priority: "URGENT" });
-      })
+      }),
     );
     renderPage(<WishList />);
     await screen.findByText("Gjallarhorn");
@@ -178,7 +194,10 @@ describe("WishList page", () => {
 describe("Settings page", () => {
   function renderSettings(route = "/settings") {
     const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     });
     return render(
       <QueryClientProvider client={qc}>
@@ -197,7 +216,7 @@ describe("Settings page", () => {
             </FlagsProvider>
           </PreferencesProvider>
         </AuthProvider>
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
   }
 
@@ -207,7 +226,9 @@ describe("Settings page", () => {
     expect(screen.getByText("TestGuardian")).toBeInTheDocument();
     // sampleUser.platform === "steam"
     expect(screen.getByText("steam")).toBeInTheDocument();
-    expect(await screen.findByText("No characters loaded yet.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No characters loaded yet."),
+    ).toBeInTheDocument();
   });
 
   it("lists characters when the API returns them", async () => {
@@ -224,8 +245,8 @@ describe("Settings page", () => {
             emblemBackgroundPath: "/eb.png",
             dateLastPlayed: new Date().toISOString(),
           },
-        ])
-      )
+        ]),
+      ),
     );
     renderSettings();
     expect(await screen.findByText(/Hunter/)).toBeInTheDocument();
@@ -238,7 +259,7 @@ describe("Settings page", () => {
       http.put(`${API}/api/preferences`, async ({ request }) => {
         prefBody = await request.json();
         return HttpResponse.json({ cardStyle: "compact", personalize: true });
-      })
+      }),
     );
     renderSettings();
     await screen.findByText("Settings");
@@ -252,7 +273,7 @@ describe("Settings page", () => {
       http.post(`${API}/api/collections/:type/:id/refresh`, () => {
         refreshed = true;
         return HttpResponse.json({ success: true, message: "ok" });
-      })
+      }),
     );
     renderSettings();
     await screen.findByText("Settings");
@@ -274,11 +295,13 @@ describe("Settings page", () => {
       http.post(`${API}/api/auth/logout/all`, () => {
         calledAll = true;
         return HttpResponse.json({ message: "Signed out of all devices" });
-      })
+      }),
     );
     renderSettings();
     await screen.findByText("Settings");
-    fireEvent.click(screen.getByRole("button", { name: "Sign out all devices" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Sign out all devices" }),
+    );
     expect(await screen.findByText("login-stub")).toBeInTheDocument();
     expect(localStorage.getItem("guardian_token")).toBeNull();
     await waitFor(() => expect(calledAll).toBe(true));
@@ -288,14 +311,16 @@ describe("Settings page", () => {
     // A standard-tier user can self-select Beta; the picker is interactive
     // (it's disabled only for admins, which the default flags handler returns).
     server.use(
-      http.get(`${API}/api/flags`, () => HttpResponse.json({ role: "standard", flags: [] }))
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({ role: "standard", flags: [] }),
+      ),
     );
     let optInBody: unknown = null;
     server.use(
       http.put(`${API}/api/account/role`, async ({ request }) => {
         optInBody = await request.json();
         return HttpResponse.json({ role: "beta" });
-      })
+      }),
     );
     renderSettings();
     await screen.findByText("Membership & access");
@@ -308,34 +333,50 @@ describe("Login page", () => {
   it("redirects to the Bungie auth URL on success", async () => {
     server.use(
       http.get(`${API}/api/auth/bungie`, () =>
-        HttpResponse.json({ authUrl: "https://bungie.net/authorize", state: "xyz" })
-      )
+        HttpResponse.json({
+          authUrl: "https://bungie.net/authorize",
+          state: "xyz",
+        }),
+      ),
     );
     renderPage(<Login />);
-    fireEvent.click(screen.getByRole("button", { name: /Sign in with Bungie/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Sign in with Bungie/ }),
+    );
     // After success the button enters the redirecting (loading) state
-    expect(await screen.findByText("Redirecting to Bungie.net…")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Redirecting to Bungie.net…"),
+    ).toBeInTheDocument();
   });
 
   it("shows an error when the auth request fails", async () => {
     server.use(
-      http.get(`${API}/api/auth/bungie`, () => new HttpResponse(null, { status: 500 }))
+      http.get(
+        `${API}/api/auth/bungie`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
     );
     renderPage(<Login />);
-    fireEvent.click(screen.getByRole("button", { name: /Sign in with Bungie/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Sign in with Bungie/ }),
+    );
     expect(
-      await screen.findByText(/Failed to start authentication/)
+      await screen.findByText(/Failed to start authentication/),
     ).toBeInTheDocument();
   });
 
   it("shows an error when the response has no auth URL", async () => {
     server.use(
-      http.get(`${API}/api/auth/bungie`, () => HttpResponse.json({ state: "xyz" }))
+      http.get(`${API}/api/auth/bungie`, () =>
+        HttpResponse.json({ state: "xyz" }),
+      ),
     );
     renderPage(<Login />);
-    fireEvent.click(screen.getByRole("button", { name: /Sign in with Bungie/ }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Sign in with Bungie/ }),
+    );
     expect(
-      await screen.findByText(/No authorization URL received/)
+      await screen.findByText(/No authorization URL received/),
     ).toBeInTheDocument();
   });
 });

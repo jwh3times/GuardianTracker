@@ -19,8 +19,8 @@ type Weekly struct {
 	ResetLabel   string              `json:"resetLabel"`
 	ResetIn      Duration            `json:"resetIn"`
 	DailyResetIn Duration            `json:"dailyResetIn"`
-	ResetAt      time.Time           `json:"resetAt"`    // next weekly reset (checkmark persistence key)
-	FetchedAt    time.Time           `json:"fetchedAt"`  // when the underlying Bungie data was fetched (B8)
+	ResetAt      time.Time           `json:"resetAt"`            // next weekly reset (checkmark persistence key)
+	FetchedAt    time.Time           `json:"fetchedAt"`          // when the underlying Bungie data was fetched (B8)
 	Degraded     bool                `json:"degraded,omitempty"` // true when names/labels are placeholders (manifest still downloading)
 	Xur          *Xur                `json:"xur"`
 	Milestones   []Milestone         `json:"milestones"`
@@ -249,7 +249,6 @@ func toDuration(d time.Duration) Duration {
 	mins := total % 60
 	return Duration{D: days, H: hours, M: mins}
 }
-
 
 // GetWeekly assembles the weekly payload for a user.
 func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipID, bungieToken string) (*Weekly, error) {
@@ -941,4 +940,3 @@ func categoryFromMilestoneName(name string) string {
 		return "Weekly Activity"
 	}
 }
-

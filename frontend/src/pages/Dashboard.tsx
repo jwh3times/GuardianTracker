@@ -26,7 +26,9 @@ import type {
   WishListItem,
 } from "../types/api";
 
-function formatDuration(d: import("../types/design").Duration | undefined): string {
+function formatDuration(
+  d: import("../types/design").Duration | undefined,
+): string {
   if (!d) return "";
   if (d.d && d.d > 0) return `${d.d}d ${d.h ?? 0}h`;
   if (d.h && d.h > 0) return `${d.h}h ${d.m ?? 0}m`;
@@ -35,7 +37,11 @@ function formatDuration(d: import("../types/design").Duration | undefined): stri
 
 const emblemStyle = (url?: string): React.CSSProperties | undefined =>
   url
-    ? { backgroundImage: `url(${url})`, backgroundSize: "cover", backgroundPosition: "center" }
+    ? {
+        backgroundImage: `url(${url})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }
     : undefined;
 
 export function Dashboard() {
@@ -49,13 +55,14 @@ export function Dashboard() {
     queryFn: () => apiFetch<ProfileResponse>("/api/auth/profile"),
   });
 
-  const membershipType = profileData?.user.membershipType ?? user?.membershipType;
+  const membershipType =
+    profileData?.user.membershipType ?? user?.membershipType;
   const membershipId = profileData?.user.membershipId ?? user?.membershipId;
 
   // Shares the "missing" collections cache entry with Settings and the
   // Collections page (one fetch across all three) via the shared query helper.
   const { data: real, isLoading: collectionsLoading } = useQuery(
-    collectionsQuery(membershipType, membershipId, false)
+    collectionsQuery(membershipType, membershipId, false),
   );
 
   const { data: weeklyData, isLoading: weeklyLoading } = useQuery({
@@ -80,7 +87,7 @@ export function Dashboard() {
 
   const fromReal = (
     c: Pick<APICollectionSummary, "total" | "collected"> | undefined,
-    fallback: SummaryCategory
+    fallback: SummaryCategory,
   ): SummaryCategory => {
     if (c && c.total > 0) {
       return {
@@ -93,10 +100,30 @@ export function Dashboard() {
     return fallback;
   };
 
-  const mWeapons: SummaryCategory = { id: "weapons", label: "Weapons", pct: 0, count: [0, 0] };
-  const mArmor: SummaryCategory = { id: "armor", label: "Armor", pct: 0, count: [0, 0] };
-  const mExotics: SummaryCategory = { id: "exotics", label: "Exotics", pct: 0, count: [0, 0] };
-  const mCosmetics: SummaryCategory = { id: "cosmetics", label: "Cosmetics", pct: 0, count: [0, 0] };
+  const mWeapons: SummaryCategory = {
+    id: "weapons",
+    label: "Weapons",
+    pct: 0,
+    count: [0, 0],
+  };
+  const mArmor: SummaryCategory = {
+    id: "armor",
+    label: "Armor",
+    pct: 0,
+    count: [0, 0],
+  };
+  const mExotics: SummaryCategory = {
+    id: "exotics",
+    label: "Exotics",
+    pct: 0,
+    count: [0, 0],
+  };
+  const mCosmetics: SummaryCategory = {
+    id: "cosmetics",
+    label: "Cosmetics",
+    pct: 0,
+    count: [0, 0],
+  };
   const categories: SummaryCategory[] = [
     fromReal(real?.weapons, mWeapons),
     fromReal(real?.armor, mArmor),
@@ -104,7 +131,7 @@ export function Dashboard() {
     fromReal(real?.cosmetics, mCosmetics),
   ];
   const overall = Math.round(
-    categories.reduce((sum, c) => sum + c.pct, 0) / categories.length
+    categories.reduce((sum, c) => sum + c.pct, 0) / categories.length,
   );
 
   return (
@@ -112,7 +139,13 @@ export function Dashboard() {
       <PageHead
         title={`Welcome back, ${displayName}`}
         sub="Your collection at a glance"
-        right={<CountdownChip prefix="Weekly reset" time={weeklyData?.resetIn ?? { d: 0, h: 0, m: 0 }} icon="clock" />}
+        right={
+          <CountdownChip
+            prefix="Weekly reset"
+            time={weeklyData?.resetIn ?? { d: 0, h: 0, m: 0 }}
+            icon="clock"
+          />
+        }
       />
 
       {/* HERO COMPLETION */}
@@ -130,14 +163,24 @@ export function Dashboard() {
               <div className="gt-hero-char-main">
                 <span className="gt-hero-char-name">{activeCharacter.cls}</span>
                 <span className="gt-hero-char-sub mono">
-                  {activeCharacter.race} · <Icon name="bolt" size="0.7rem" style={{ color: "var(--c-exotic)" }} /> {activeCharacter.power}
+                  {activeCharacter.race} ·{" "}
+                  <Icon
+                    name="bolt"
+                    size="0.7rem"
+                    style={{ color: "var(--c-exotic)" }}
+                  />{" "}
+                  {activeCharacter.power}
                 </span>
               </div>
             </div>
           )}
           <div className="gt-hero-radial">
             {collectionsLoading ? (
-              <Skeleton w="clamp(8rem,9vw,10rem)" h="clamp(8rem,9vw,10rem)" r="50%" />
+              <Skeleton
+                w="clamp(8rem,9vw,10rem)"
+                h="clamp(8rem,9vw,10rem)"
+                r="50%"
+              />
             ) : (
               <RadialProgress
                 value={overall}
@@ -151,27 +194,45 @@ export function Dashboard() {
           <div className="gt-hero-bars">
             {collectionsLoading
               ? ["weapons", "armor", "exotics", "cosmetics"].map((id) => (
-                  <div key={id} className="gt-hero-bar" style={{ pointerEvents: "none" }}>
+                  <div
+                    key={id}
+                    className="gt-hero-bar"
+                    style={{ pointerEvents: "none" }}
+                  >
                     <div className="gt-hero-bar-top">
                       <Skeleton w="5rem" h="0.75rem" />
                       <Skeleton w="3.5rem" h="0.75rem" />
                     </div>
-                    <Skeleton w="100%" h="0.5rem" r="var(--r-pill)" style={{ marginTop: "var(--s-2)" }} />
+                    <Skeleton
+                      w="100%"
+                      h="0.5rem"
+                      r="var(--r-pill)"
+                      style={{ marginTop: "var(--s-2)" }}
+                    />
                   </div>
                 ))
               : categories.map((c) => (
-                  <button key={c.id} className="gt-hero-bar" onClick={() => go("/collections")}>
+                  <button
+                    key={c.id}
+                    className="gt-hero-bar"
+                    onClick={() => go("/collections")}
+                  >
                     <div className="gt-hero-bar-top">
                       <span className="gt-hero-bar-label">{c.label}</span>
                       <span className="mono gt-hero-bar-count">
-                        {c.count[0].toLocaleString()}/{c.count[1].toLocaleString()}
+                        {c.count[0].toLocaleString()}/
+                        {c.count[1].toLocaleString()}
                       </span>
                     </div>
                     <ProgressBar
                       value={c.pct}
                       showVal
                       valText={`${c.pct}%`}
-                      color={c.id === "exotics" ? "var(--c-exotic)" : "var(--c-signal)"}
+                      color={
+                        c.id === "exotics"
+                          ? "var(--c-exotic)"
+                          : "var(--c-signal)"
+                      }
                     />
                   </button>
                 ))}
@@ -193,9 +254,21 @@ export function Dashboard() {
         <div className="gt-today">
           {weeklyLoading ? (
             [0, 1, 2].map((i) => (
-              <div key={i} className="gt-today-row" style={{ pointerEvents: "none" }}>
+              <div
+                key={i}
+                className="gt-today-row"
+                style={{ pointerEvents: "none" }}
+              >
                 <Skeleton w="1.2rem" h="1.2rem" r="50%" />
-                <div className="gt-today-main" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+                <div
+                  className="gt-today-main"
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--s-2)",
+                  }}
+                >
                   <Skeleton w="70%" h="0.9rem" />
                   <Skeleton w="45%" h="0.7rem" />
                 </div>
@@ -203,35 +276,62 @@ export function Dashboard() {
               </div>
             ))
           ) : (weeklyData?.dailyActions ?? []).length === 0 ? (
-            <div className="gt-today-row" style={{ pointerEvents: "none", opacity: 0.6 }}>
-              <Icon name="bolt" size="1.2rem" style={{ color: "var(--c-text-3)" }} />
+            <div
+              className="gt-today-row"
+              style={{ pointerEvents: "none", opacity: 0.6 }}
+            >
+              <Icon
+                name="bolt"
+                size="1.2rem"
+                style={{ color: "var(--c-text-3)" }}
+              />
               <div className="gt-today-main">
-                <div className="gt-today-text">Nothing urgent today — check back after daily reset.</div>
+                <div className="gt-today-text">
+                  Nothing urgent today — check back after daily reset.
+                </div>
               </div>
             </div>
           ) : (
             (weeklyData?.dailyActions ?? []).map((action: DailyAction) => {
-              const iconColor = action.category === "xur"
-                ? "var(--c-exotic)"
-                : action.category === "vendor"
-                ? "var(--c-legendary)"
-                : action.category === "activity"
-                ? "var(--c-rare)"
-                : "var(--c-signal)";
-              const timingLabel = action.category === "xur" ? "leaves in" : "resets in";
+              const iconColor =
+                action.category === "xur"
+                  ? "var(--c-exotic)"
+                  : action.category === "vendor"
+                    ? "var(--c-legendary)"
+                    : action.category === "activity"
+                      ? "var(--c-rare)"
+                      : "var(--c-signal)";
+              const timingLabel =
+                action.category === "xur" ? "leaves in" : "resets in";
               const timingStr = formatDuration(action.resetsIn);
               return (
-                <button key={action.id} className="gt-today-row" onClick={() => go("/this-week")}>
-                  <Icon name={action.icon as any} size="1.2rem" style={{ color: iconColor }} />
+                <button
+                  key={action.id}
+                  className="gt-today-row"
+                  onClick={() => go("/this-week")}
+                >
+                  <Icon
+                    name={action.icon as any}
+                    size="1.2rem"
+                    style={{ color: iconColor }}
+                  />
                   <div className="gt-today-main">
                     <div className="gt-today-text">
                       <strong>{action.text}</strong>
                       {action.detail && (
-                        <> — <span style={{ fontWeight: "normal" }}>{action.detail}</span></>
+                        <>
+                          {" "}
+                          —{" "}
+                          <span style={{ fontWeight: "normal" }}>
+                            {action.detail}
+                          </span>
+                        </>
                       )}
                     </div>
                     {timingStr && (
-                      <div className="gt-action-meta mono">{timingLabel} {timingStr}</div>
+                      <div className="gt-action-meta mono">
+                        {timingLabel} {timingStr}
+                      </div>
                     )}
                   </div>
                   <Badge kind={action.badge as any} dot />
@@ -256,7 +356,15 @@ export function Dashboard() {
             {weeklyLoading
               ? [0, 1].map((i) => (
                   <li key={i} className="gt-milestone">
-                    <div className="gt-milestone-l" style={{ display: "flex", flexDirection: "column", gap: "var(--s-2)", flex: 1 }}>
+                    <div
+                      className="gt-milestone-l"
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "var(--s-2)",
+                        flex: 1,
+                      }}
+                    >
                       <Skeleton w="4rem" h="0.65rem" />
                       <Skeleton w="70%" h="0.9rem" />
                       <Skeleton w="55%" h="0.7rem" />
@@ -293,7 +401,11 @@ export function Dashboard() {
         >
           <div className="gt-avail-head">
             {wishlistLoading ? (
-              <Skeleton w="2.5rem" h="1.2rem" style={{ display: "inline-block" }} />
+              <Skeleton
+                w="2.5rem"
+                h="1.2rem"
+                style={{ display: "inline-block" }}
+              />
             ) : (
               <span className="gt-avail-num mono">{availableNowCount}</span>
             )}
@@ -304,9 +416,21 @@ export function Dashboard() {
           <div className="gt-avail-list">
             {wishlistLoading
               ? [0, 1, 2].map((i) => (
-                  <div key={i} className="gt-item gt-item--compact" style={{ pointerEvents: "none" }}>
+                  <div
+                    key={i}
+                    className="gt-item gt-item--compact"
+                    style={{ pointerEvents: "none" }}
+                  >
                     <Skeleton w="1.9rem" h="1.9rem" r="var(--r-sm)" />
-                    <div className="gt-item-head" style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+                    <div
+                      className="gt-item-head"
+                      style={{
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "var(--s-2)",
+                      }}
+                    >
                       <Skeleton w="65%" h="0.9rem" />
                       <Skeleton w="40%" h="0.7rem" />
                     </div>
@@ -324,7 +448,12 @@ export function Dashboard() {
                       data-rarity={entry.rarity}
                       onClick={() => go("/wishlist")}
                     >
-                      <ItemTile rarity={entry.rarity} type={entry.type} icon={entry.icon} style={{ width: "1.9rem" }} />
+                      <ItemTile
+                        rarity={entry.rarity}
+                        type={entry.type}
+                        icon={entry.icon}
+                        style={{ width: "1.9rem" }}
+                      />
                       <div className="gt-item-head" style={{ flex: 1 }}>
                         <div className="gt-item-name">{entry.name}</div>
                         <div className="gt-item-type">{entry.type}</div>
@@ -337,10 +466,18 @@ export function Dashboard() {
       </div>
 
       <div className="gt-dash-actions">
-        <Button variant="outline" icon="collections" onClick={() => go("/collections")}>
+        <Button
+          variant="outline"
+          icon="collections"
+          onClick={() => go("/collections")}
+        >
           View Collections
         </Button>
-        <Button variant="outline" icon="wishlist" onClick={() => go("/wishlist")}>
+        <Button
+          variant="outline"
+          icon="wishlist"
+          onClick={() => go("/wishlist")}
+        >
           Manage Wishlist
         </Button>
         <DataFreshnessChip updatedAt={real?.fetchedAt} />

@@ -59,13 +59,21 @@ export function ItemCard({
             className="gt-iconbtn"
             data-on={wished}
             title="Wishlist"
-            aria-label={wished ? `Remove ${item.name} from wishlist` : `Add ${item.name} to wishlist`}
+            aria-label={
+              wished
+                ? `Remove ${item.name} from wishlist`
+                : `Add ${item.name} to wishlist`
+            }
             onClick={(e) => {
               e.stopPropagation();
               onWish?.(item);
             }}
           >
-            <Icon name="wishlist" size="1rem" fill={wished ? "currentColor" : "none"} />
+            <Icon
+              name="wishlist"
+              size="1rem"
+              fill={wished ? "currentColor" : "none"}
+            />
           </button>
           <button
             className="gt-iconbtn"
@@ -100,13 +108,21 @@ export function ItemCard({
         <button
           className="gt-iconbtn"
           data-on={wished}
-          aria-label={wished ? `Remove ${item.name} from wishlist` : `Add ${item.name} to wishlist`}
+          aria-label={
+            wished
+              ? `Remove ${item.name} from wishlist`
+              : `Add ${item.name} to wishlist`
+          }
           onClick={(e) => {
             e.stopPropagation();
             onWish?.(item);
           }}
         >
-          <Icon name="wishlist" size="0.95rem" fill={wished ? "currentColor" : "none"} />
+          <Icon
+            name="wishlist"
+            size="0.95rem"
+            fill={wished ? "currentColor" : "none"}
+          />
         </button>
       </div>
     );
@@ -133,7 +149,10 @@ export function ItemCard({
             {item.type}
             {item.slot ? ` · ${item.slot}` : ""}
           </div>
-          <div className="gt-item-badges" style={{ marginTop: "var(--s-1)" } as CSS}>
+          <div
+            className="gt-item-badges"
+            style={{ marginTop: "var(--s-1)" } as CSS}
+          >
             <Badge kind={r} dot />
             <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
           </div>
@@ -158,13 +177,21 @@ export function ItemCard({
           className="gt-iconbtn"
           data-on={wished}
           title="Add to wishlist"
-          aria-label={wished ? `Remove ${item.name} from wishlist` : `Add ${item.name} to wishlist`}
+          aria-label={
+            wished
+              ? `Remove ${item.name} from wishlist`
+              : `Add ${item.name} to wishlist`
+          }
           onClick={(e) => {
             e.stopPropagation();
             onWish?.(item);
           }}
         >
-          <Icon name="wishlist" size="1rem" fill={wished ? "currentColor" : "none"} />
+          <Icon
+            name="wishlist"
+            size="1rem"
+            fill={wished ? "currentColor" : "none"}
+          />
         </button>
         <Button
           sm

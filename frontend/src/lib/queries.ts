@@ -13,7 +13,7 @@ import type { APIUserCollections } from "../types/api";
 export function collectionsQuery(
   membershipType: number | undefined,
   membershipId: string | undefined,
-  includeAll = false
+  includeAll = false,
 ) {
   return {
     queryKey: [
@@ -24,7 +24,7 @@ export function collectionsQuery(
     ] as const,
     queryFn: () =>
       apiFetch<APIUserCollections>(
-        `/api/collections/${membershipType}/${membershipId}${includeAll ? "?include=all" : ""}`
+        `/api/collections/${membershipType}/${membershipId}${includeAll ? "?include=all" : ""}`,
       ),
     enabled: membershipType != null && !!membershipId,
   };

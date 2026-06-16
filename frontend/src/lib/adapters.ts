@@ -1,8 +1,4 @@
-import type {
-  APICharacter,
-  APIDestinyItem,
-  WishListItem,
-} from "../types/api";
+import type { APICharacter, APIDestinyItem, WishListItem } from "../types/api";
 import type {
   Character,
   Difficulty,

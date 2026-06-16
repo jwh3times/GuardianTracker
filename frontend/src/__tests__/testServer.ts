@@ -223,32 +223,48 @@ export const sampleAdminFlags = [
 ];
 
 export const defaultHandlers = [
-  http.get(`${API}/api/auth/profile`, () => HttpResponse.json({ user: sampleUser })),
+  http.get(`${API}/api/auth/profile`, () =>
+    HttpResponse.json({ user: sampleUser }),
+  ),
   http.get(`${API}/api/flags`, () => HttpResponse.json(sampleFlags)),
-  http.put(`${API}/api/account/role`, () => HttpResponse.json({ role: "beta" })),
+  http.put(`${API}/api/account/role`, () =>
+    HttpResponse.json({ role: "beta" }),
+  ),
   http.get(`${API}/api/admin/users`, () => HttpResponse.json(sampleAdminUsers)),
   http.put(`${API}/api/admin/users/:id/role`, () =>
-    HttpResponse.json({ id: "2", role: "alpha", previousRole: "beta" })
+    HttpResponse.json({ id: "2", role: "alpha", previousRole: "beta" }),
   ),
   http.get(`${API}/api/admin/flags`, () => HttpResponse.json(sampleAdminFlags)),
   http.put(`${API}/api/admin/flags/:key`, ({ params }) =>
-    HttpResponse.json({ ...sampleAdminFlags[0], key: params.key as string, enabled: true })
+    HttpResponse.json({
+      ...sampleAdminFlags[0],
+      key: params.key as string,
+      enabled: true,
+    }),
   ),
   http.get(`${API}/api/preferences`, () =>
-    HttpResponse.json({ cardStyle: "framed", personalize: true })
+    HttpResponse.json({ cardStyle: "framed", personalize: true }),
   ),
   http.put(`${API}/api/preferences`, () =>
-    HttpResponse.json({ cardStyle: "framed", personalize: true })
+    HttpResponse.json({ cardStyle: "framed", personalize: true }),
   ),
   http.get(`${API}/api/characters/:type/:id`, () => HttpResponse.json([])),
-  http.get(`${API}/api/collections/:type/:id`, () => HttpResponse.json(sampleCollections)),
+  http.get(`${API}/api/collections/:type/:id`, () =>
+    HttpResponse.json(sampleCollections),
+  ),
   http.post(`${API}/api/collections/:type/:id/refresh`, () =>
-    HttpResponse.json({ success: true, message: "ok" })
+    HttpResponse.json({ success: true, message: "ok" }),
   ),
   http.get(`${API}/api/wishlist`, () => HttpResponse.json(sampleWishlist)),
-  http.get(`${API}/api/weekly/recommendations`, () => HttpResponse.json(sampleWeekly)),
-  http.get(`${API}/api/catalysts/:type/:id`, () => HttpResponse.json(sampleCatalysts)),
-  http.get(`${API}/api/crafting/:type/:id`, () => HttpResponse.json(sampleCrafting)),
+  http.get(`${API}/api/weekly/recommendations`, () =>
+    HttpResponse.json(sampleWeekly),
+  ),
+  http.get(`${API}/api/catalysts/:type/:id`, () =>
+    HttpResponse.json(sampleCatalysts),
+  ),
+  http.get(`${API}/api/crafting/:type/:id`, () =>
+    HttpResponse.json(sampleCrafting),
+  ),
   http.get(`${API}/api/seals/:type/:id`, () => HttpResponse.json(sampleSeals)),
   http.get(`${API}/api/items/search`, () => HttpResponse.json([])),
 ];

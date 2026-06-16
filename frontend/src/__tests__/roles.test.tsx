@@ -1,5 +1,13 @@
 import React from "react";
-import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  afterEach,
+  beforeEach,
+} from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -44,7 +52,7 @@ function wrap(ui: React.ReactNode) {
           </MemoryRouter>
         </ToastProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -59,11 +67,15 @@ describe("useFlag", () => {
       <>
         <FlagProbe flagKey="catalysts-crafting" />
         <FlagProbe flagKey="totally-unknown" />
-      </>
+      </>,
     );
-    expect(await screen.findByText("catalysts-crafting=true/true/false")).toBeInTheDocument();
+    expect(
+      await screen.findByText("catalysts-crafting=true/true/false"),
+    ).toBeInTheDocument();
     // Unknown key fails open: enabled + accessible, never locked.
-    expect(screen.getByText("totally-unknown=true/true/false")).toBeInTheDocument();
+    expect(
+      screen.getByText("totally-unknown=true/true/false"),
+    ).toBeInTheDocument();
   });
 
   it("reports locked and hidden states from the server", async () => {
@@ -72,19 +84,39 @@ describe("useFlag", () => {
         HttpResponse.json({
           role: "standard",
           flags: [
-            { key: "gated", name: "Gated", desc: "", category: "", minTier: "alpha", enabled: true, accessible: false, locked: true },
-            { key: "off", name: "Off", desc: "", category: "", minTier: "beta", enabled: false, accessible: false, locked: false },
+            {
+              key: "gated",
+              name: "Gated",
+              desc: "",
+              category: "",
+              minTier: "alpha",
+              enabled: true,
+              accessible: false,
+              locked: true,
+            },
+            {
+              key: "off",
+              name: "Off",
+              desc: "",
+              category: "",
+              minTier: "beta",
+              enabled: false,
+              accessible: false,
+              locked: false,
+            },
           ],
-        })
-      )
+        }),
+      ),
     );
     wrap(
       <>
         <FlagProbe flagKey="gated" />
         <FlagProbe flagKey="off" />
-      </>
+      </>,
     );
-    expect(await screen.findByText("gated=true/false/true")).toBeInTheDocument();
+    expect(
+      await screen.findByText("gated=true/false/true"),
+    ).toBeInTheDocument();
     expect(screen.getByText("off=false/false/false")).toBeInTheDocument();
   });
 });
@@ -107,7 +139,7 @@ describe("LockedFeature", () => {
         }}
         onChangeTier={() => (changed = true)}
         onBack={() => (back = true)}
-      />
+      />,
     );
     expect(screen.getByText("God-roll insights")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Change access tier"));
@@ -132,7 +164,7 @@ describe("Admin console", () => {
           enabled: false,
           updatedAt: new Date().toISOString(),
         });
-      })
+      }),
     );
     wrap(<Admin />);
 
@@ -142,7 +174,9 @@ describe("Admin console", () => {
 
     // Switch to the Feature Flags tab and toggle the first flag's switch.
     fireEvent.click(screen.getByText("Feature Flags"));
-    const toggle = await screen.findByRole("switch", { name: /Enable Catalyst & Crafting tracker/i });
+    const toggle = await screen.findByRole("switch", {
+      name: /Enable Catalyst & Crafting tracker/i,
+    });
     fireEvent.click(toggle);
     await waitFor(() => expect(flagPutHit).toBe(true));
   });
@@ -151,15 +185,19 @@ describe("Admin console", () => {
 describe("admin route guard", () => {
   it("redirects a non-admin away from /admin", async () => {
     server.use(
-      http.get(`${API}/api/flags`, () => HttpResponse.json({ role: "standard", flags: [] }))
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({ role: "standard", flags: [] }),
+      ),
     );
     render(
       <MemoryRouter initialEntries={["/admin"]}>
         <App />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
     // Falls back to the dashboard hero rather than the admin console.
-    expect(await screen.findByText(/Welcome back, TestGuardian/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Welcome back, TestGuardian/),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Admin Console")).not.toBeInTheDocument();
   });
 
@@ -167,11 +205,15 @@ describe("admin route guard", () => {
     render(
       <MemoryRouter initialEntries={["/admin"]}>
         <App />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
     // The lazy-loaded console heading (h1) — distinct from the sidebar nav item.
     expect(
-      await screen.findByRole("heading", { name: /Admin Console/, level: 1 }, { timeout: 3000 })
+      await screen.findByRole(
+        "heading",
+        { name: /Admin Console/, level: 1 },
+        { timeout: 3000 },
+      ),
     ).toBeInTheDocument();
   });
 });

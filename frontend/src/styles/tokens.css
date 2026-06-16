@@ -6,77 +6,79 @@
 
 :root {
   /* ---- BASE SURFACES (cool near-black) ---- */
-  --c-void:        oklch(0.13 0.014 255);   /* app background, deepest */
-  --c-bg:          oklch(0.16 0.014 255);   /* page background */
-  --c-surface:     oklch(0.19 0.015 256);   /* cards */
-  --c-surface-2:   oklch(0.23 0.016 256);   /* raised / hover */
-  --c-surface-3:   oklch(0.27 0.017 257);   /* inputs, chips */
-  --c-line:        oklch(0.30 0.018 258);   /* hairline borders */
-  --c-line-soft:   oklch(0.24 0.016 257);   /* faint dividers */
+  --c-void: oklch(0.13 0.014 255); /* app background, deepest */
+  --c-bg: oklch(0.16 0.014 255); /* page background */
+  --c-surface: oklch(0.19 0.015 256); /* cards */
+  --c-surface-2: oklch(0.23 0.016 256); /* raised / hover */
+  --c-surface-3: oklch(0.27 0.017 257); /* inputs, chips */
+  --c-line: oklch(0.3 0.018 258); /* hairline borders */
+  --c-line-soft: oklch(0.24 0.016 257); /* faint dividers */
 
   /* ---- TEXT ---- */
-  --c-text:        oklch(0.95 0.006 250);   /* primary */
-  --c-text-2:      oklch(0.78 0.010 252);   /* secondary */
-  --c-text-3:      oklch(0.62 0.012 254);   /* tertiary / meta */
-  --c-text-4:      oklch(0.48 0.012 256);   /* disabled / faint */
-  --c-on-accent:   oklch(0.15 0.02 260);    /* text on bright accents */
+  --c-text: oklch(0.95 0.006 250); /* primary */
+  --c-text-2: oklch(0.78 0.01 252); /* secondary */
+  --c-text-3: oklch(0.62 0.012 254); /* tertiary / meta */
+  --c-text-4: oklch(0.48 0.012 256); /* disabled / faint */
+  --c-on-accent: oklch(0.15 0.02 260); /* text on bright accents */
 
   /* ---- BRAND SIGNAL (interactive + "for you" personalization) ---- */
-  --c-signal:      oklch(0.80 0.13 200);    /* aqua-cyan */
-  --c-signal-dim:  oklch(0.80 0.13 200 / 0.16);
-  --c-signal-line: oklch(0.80 0.13 200 / 0.40);
+  --c-signal: oklch(0.8 0.13 200); /* aqua-cyan */
+  --c-signal-dim: oklch(0.8 0.13 200 / 0.16);
+  --c-signal-line: oklch(0.8 0.13 200 / 0.4);
 
   /* ---- RARITY (the brand backbone) ---- */
-  --c-exotic:      oklch(0.83 0.155 88);    /* gold */
+  --c-exotic: oklch(0.83 0.155 88); /* gold */
   /* legendary lifted from L 0.64 → 0.68 so small badge text clears WCAG AA on dark surfaces */
-  --c-legendary:   oklch(0.68 0.150 305);   /* purple */
-  --c-rare:        oklch(0.70 0.120 240);   /* blue */
-  --c-uncommon:    oklch(0.74 0.150 150);   /* green */
-  --c-common:      oklch(0.72 0.010 252);   /* gray */
+  --c-legendary: oklch(0.68 0.15 305); /* purple */
+  --c-rare: oklch(0.7 0.12 240); /* blue */
+  --c-uncommon: oklch(0.74 0.15 150); /* green */
+  --c-common: oklch(0.72 0.01 252); /* gray */
   /* tinted fills (rarity backgrounds at low alpha) */
-  --c-exotic-dim:    oklch(0.83 0.155 88 / 0.13);
-  --c-legendary-dim: oklch(0.64 0.150 305 / 0.15);
-  --c-rare-dim:      oklch(0.70 0.120 240 / 0.14);
-  --c-uncommon-dim:  oklch(0.74 0.150 150 / 0.14);
-  --c-common-dim:    oklch(0.72 0.010 252 / 0.12);
+  --c-exotic-dim: oklch(0.83 0.155 88 / 0.13);
+  --c-legendary-dim: oklch(0.64 0.15 305 / 0.15);
+  --c-rare-dim: oklch(0.7 0.12 240 / 0.14);
+  --c-uncommon-dim: oklch(0.74 0.15 150 / 0.14);
+  --c-common-dim: oklch(0.72 0.01 252 / 0.12);
 
   /* ---- DIFFICULTY (acquisition effort) ---- */
-  --c-easy:        oklch(0.76 0.115 168);
-  --c-moderate:    oklch(0.80 0.130 72);
-  --c-challenging: oklch(0.67 0.180 32);
-  --c-easy-dim:        oklch(0.76 0.115 168 / 0.16);
-  --c-moderate-dim:    oklch(0.80 0.130 72 / 0.16);
-  --c-challenging-dim: oklch(0.67 0.180 32 / 0.16);
+  --c-easy: oklch(0.76 0.115 168);
+  --c-moderate: oklch(0.8 0.13 72);
+  --c-challenging: oklch(0.67 0.18 32);
+  --c-easy-dim: oklch(0.76 0.115 168 / 0.16);
+  --c-moderate-dim: oklch(0.8 0.13 72 / 0.16);
+  --c-challenging-dim: oklch(0.67 0.18 32 / 0.16);
 
   /* ---- STATUS / AVAILABILITY ---- */
-  --c-avail:       oklch(0.78 0.140 158);   /* available now (green) */
-  --c-expiring:    oklch(0.78 0.135 60);    /* expiring soon (amber) */
-  --c-new:         var(--c-signal);          /* new / missing -> signal */
-  --c-complete:    oklch(0.76 0.130 158);   /* complete */
-  --c-progress:    oklch(0.70 0.120 240);   /* in-progress */
-  --c-gild:        oklch(0.84 0.150 92);    /* gilded gold */
-  --c-admin:       oklch(0.70 0.165 350);   /* admin role — magenta */
-  --c-avail-dim:    oklch(0.78 0.140 158 / 0.16);
+  --c-avail: oklch(0.78 0.14 158); /* available now (green) */
+  --c-expiring: oklch(0.78 0.135 60); /* expiring soon (amber) */
+  --c-new: var(--c-signal); /* new / missing -> signal */
+  --c-complete: oklch(0.76 0.13 158); /* complete */
+  --c-progress: oklch(0.7 0.12 240); /* in-progress */
+  --c-gild: oklch(0.84 0.15 92); /* gilded gold */
+  --c-admin: oklch(0.7 0.165 350); /* admin role — magenta */
+  --c-avail-dim: oklch(0.78 0.14 158 / 0.16);
   --c-expiring-dim: oklch(0.78 0.135 60 / 0.16);
 
   /* ---- FEEDBACK ---- */
-  --c-danger:      oklch(0.66 0.190 28);
-  --c-warning:     oklch(0.80 0.130 72);
-  --c-success:     oklch(0.76 0.130 158);
+  --c-danger: oklch(0.66 0.19 28);
+  --c-warning: oklch(0.8 0.13 72);
+  --c-success: oklch(0.76 0.13 158);
 
   /* ---- TYPE FAMILIES ---- */
-  --font-display: "Rajdhani", system-ui, sans-serif;   /* HUD headings + numbers */
-  --font-body:    "Barlow", system-ui, sans-serif;     /* UI + content */
-  --font-mono:    "JetBrains Mono", ui-monospace, monospace; /* data, timers, counts */
+  --font-display:
+    "Rajdhani", system-ui, sans-serif; /* HUD headings + numbers */
+  --font-body: "Barlow", system-ui, sans-serif; /* UI + content */
+  --font-mono:
+    "JetBrains Mono", ui-monospace, monospace; /* data, timers, counts */
 
   /* ---- FLUID TYPE SCALE (clamp: min, vw-pref, max) ---- */
   --t-3xl: clamp(2.2rem, 1.6rem + 2.6vw, 3.4rem);
   --t-2xl: clamp(1.7rem, 1.35rem + 1.6vw, 2.5rem);
-  --t-xl:  clamp(1.35rem, 1.15rem + 0.9vw, 1.8rem);
-  --t-lg:  clamp(1.12rem, 1.02rem + 0.45vw, 1.4rem);
-  --t-md:  clamp(0.98rem, 0.93rem + 0.22vw, 1.08rem);
-  --t-sm:  clamp(0.86rem, 0.83rem + 0.14vw, 0.94rem);
-  --t-xs:  clamp(0.76rem, 0.74rem + 0.09vw, 0.82rem);
+  --t-xl: clamp(1.35rem, 1.15rem + 0.9vw, 1.8rem);
+  --t-lg: clamp(1.12rem, 1.02rem + 0.45vw, 1.4rem);
+  --t-md: clamp(0.98rem, 0.93rem + 0.22vw, 1.08rem);
+  --t-sm: clamp(0.86rem, 0.83rem + 0.14vw, 0.94rem);
+  --t-xs: clamp(0.76rem, 0.74rem + 0.09vw, 0.82rem);
   --t-2xs: clamp(0.68rem, 0.66rem + 0.06vw, 0.72rem);
 
   /* ---- WEIGHTS ---- */
@@ -108,16 +110,16 @@
 
   /* ---- ELEVATION ---- */
   --shadow-sm: 0 0.06rem 0.18rem oklch(0 0 0 / 0.35);
-  --shadow-md: 0 0.4rem 1.2rem oklch(0 0 0 / 0.40);
-  --shadow-lg: 0 1.2rem 3rem oklch(0 0 0 / 0.50);
-  --glow-soft: 0 0 1.4rem;   /* combine with a color: var(--glow-soft) var(--c-exotic-dim) */
+  --shadow-md: 0 0.4rem 1.2rem oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 1.2rem 3rem oklch(0 0 0 / 0.5);
+  --glow-soft: 0 0 1.4rem; /* combine with a color: var(--glow-soft) var(--c-exotic-dim) */
 
   /* ---- LAYOUT METRICS ---- */
   --sidebar-w: 15.5rem;
   --sidebar-rail-w: 4.5rem;
   --topbar-h: 4rem;
   --content-max: 86rem;
-  --tap-min: 2.75rem;   /* 44px min touch target */
+  --tap-min: 2.75rem; /* 44px min touch target */
 
   /* ---- MOTION ---- */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -130,15 +132,39 @@
    RARITY MAPPING HELPERS
    Set --rarity / --rarity-dim on a wrapper; children read them.
    ============================================================ */
-[data-rarity="exotic"]    { --rarity: var(--c-exotic);    --rarity-dim: var(--c-exotic-dim); }
-[data-rarity="legendary"] { --rarity: var(--c-legendary); --rarity-dim: var(--c-legendary-dim); }
-[data-rarity="rare"]      { --rarity: var(--c-rare);      --rarity-dim: var(--c-rare-dim); }
-[data-rarity="uncommon"]  { --rarity: var(--c-uncommon);  --rarity-dim: var(--c-uncommon-dim); }
-[data-rarity="common"]    { --rarity: var(--c-common);    --rarity-dim: var(--c-common-dim); }
+[data-rarity="exotic"] {
+  --rarity: var(--c-exotic);
+  --rarity-dim: var(--c-exotic-dim);
+}
+[data-rarity="legendary"] {
+  --rarity: var(--c-legendary);
+  --rarity-dim: var(--c-legendary-dim);
+}
+[data-rarity="rare"] {
+  --rarity: var(--c-rare);
+  --rarity-dim: var(--c-rare-dim);
+}
+[data-rarity="uncommon"] {
+  --rarity: var(--c-uncommon);
+  --rarity-dim: var(--c-uncommon-dim);
+}
+[data-rarity="common"] {
+  --rarity: var(--c-common);
+  --rarity-dim: var(--c-common-dim);
+}
 
-[data-diff="easy"]        { --diff: var(--c-easy);        --diff-dim: var(--c-easy-dim); }
-[data-diff="moderate"]    { --diff: var(--c-moderate);    --diff-dim: var(--c-moderate-dim); }
-[data-diff="challenging"] { --diff: var(--c-challenging); --diff-dim: var(--c-challenging-dim); }
+[data-diff="easy"] {
+  --diff: var(--c-easy);
+  --diff-dim: var(--c-easy-dim);
+}
+[data-diff="moderate"] {
+  --diff: var(--c-moderate);
+  --diff-dim: var(--c-moderate-dim);
+}
+[data-diff="challenging"] {
+  --diff: var(--c-challenging);
+  --diff-dim: var(--c-challenging-dim);
+}
 
 /* ============================================================
    DENSITY MODES (driven by Tweaks; affects spacing + card size)
@@ -157,8 +183,14 @@
 /* ============================================================
    BASE RESET
    ============================================================ */
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: clamp(15px, 0.9rem + 0.2vw, 17px); }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html {
+  font-size: clamp(15px, 0.9rem + 0.2vw, 17px);
+}
 body {
   font-family: var(--font-body);
   background: var(--c-bg);
@@ -167,24 +199,68 @@ body {
   text-rendering: optimizeLegibility;
   line-height: 1.45;
 }
-h1, h2, h3, h4 { font-family: var(--font-display); font-weight: var(--w-semi); line-height: 1.05; letter-spacing: 0.01em; }
-button, input, select, textarea { font: inherit; color: inherit; }
-button { cursor: pointer; border: none; background: none; }
-a { color: inherit; text-decoration: none; }
-::selection { background: var(--c-signal-dim); }
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: var(--w-semi);
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+::selection {
+  background: var(--c-signal-dim);
+}
 
 /* numeric / data styling helper */
-.mono { font-family: var(--font-mono); font-feature-settings: "tnum" 1; letter-spacing: -0.01em; }
-.tabular { font-variant-numeric: tabular-nums; }
+.mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
 
 /* focus ring */
-:focus-visible { outline: 0.14rem solid var(--c-signal); outline-offset: 0.14rem; border-radius: var(--r-xs); }
+:focus-visible {
+  outline: 0.14rem solid var(--c-signal);
+  outline-offset: 0.14rem;
+  border-radius: var(--r-xs);
+}
 
 /* scrollbars */
-*::-webkit-scrollbar { width: 0.55rem; height: 0.55rem; }
-*::-webkit-scrollbar-thumb { background: var(--c-surface-3); border-radius: var(--r-pill); }
-*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar {
+  width: 0.55rem;
+  height: 0.55rem;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--c-surface-3);
+  border-radius: var(--r-pill);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }

@@ -35,7 +35,10 @@ function saveDoneIds(resetAt: string, ids: Set<string>) {
 function purgeOldWeeks(currentResetAt: string) {
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
-    if (key?.startsWith(DONE_KEY_PREFIX) && key !== DONE_KEY_PREFIX + currentResetAt) {
+    if (
+      key?.startsWith(DONE_KEY_PREFIX) &&
+      key !== DONE_KEY_PREFIX + currentResetAt
+    ) {
       localStorage.removeItem(key);
     }
   }
@@ -58,7 +61,7 @@ export function ThisWeek() {
   const doneIds = useMemo(
     () => loadDoneIds(resetAt),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- version invalidates the localStorage read
-    [resetAt, version]
+    [resetAt, version],
   );
 
   useEffect(() => {
@@ -86,7 +89,14 @@ export function ThisWeek() {
 
   if (isLoading) {
     return (
-      <div className="gt-page" style={{ display: "flex", justifyContent: "center", padding: "var(--s-8)" }}>
+      <div
+        className="gt-page"
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          padding: "var(--s-8)",
+        }}
+      >
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -109,8 +119,8 @@ export function ThisWeek() {
       {w?.degraded && (
         <div className="gt-card" style={{ padding: "var(--s-3)" }}>
           <span className="mono" style={{ color: "var(--c-text-3)" }}>
-            Item names are still loading on the server — some labels may appear as
-            placeholders and will fill in shortly.
+            Item names are still loading on the server — some labels may appear
+            as placeholders and will fill in shortly.
           </span>
         </div>
       )}

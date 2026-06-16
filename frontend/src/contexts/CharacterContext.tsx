@@ -43,7 +43,7 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
     queryKey: ["characters", user?.membershipType, membershipId],
     queryFn: () =>
       apiFetch<APICharacter[]>(
-        `/api/characters/${user!.membershipType}/${user!.membershipId}`
+        `/api/characters/${user!.membershipType}/${user!.membershipId}`,
       ),
     enabled: !!membershipId && user?.membershipType != null,
   });
@@ -54,9 +54,10 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
   // re-read after writes. Switching accounts re-derives automatically.
   const [version, bump] = useReducer((x: number) => x + 1, 0);
   const pickedId = useMemo(
-    () => (membershipId ? localStorage.getItem(storageKey(membershipId)) : null),
+    () =>
+      membershipId ? localStorage.getItem(storageKey(membershipId)) : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- version invalidates the localStorage read
-    [membershipId, version]
+    [membershipId, version],
   );
 
   const setActiveCharacter = useCallback(
@@ -64,7 +65,7 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
       if (membershipId) localStorage.setItem(storageKey(membershipId), id);
       bump();
     },
-    [membershipId]
+    [membershipId],
   );
 
   // A stale persisted pick (deleted character) falls back to the first character.
@@ -73,7 +74,7 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({ characters, activeCharacter, setActiveCharacter, isLoading }),
-    [characters, activeCharacter, setActiveCharacter, isLoading]
+    [characters, activeCharacter, setActiveCharacter, isLoading],
   );
 
   return (

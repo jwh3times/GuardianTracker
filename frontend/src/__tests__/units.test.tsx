@@ -1,13 +1,32 @@
 import React from "react";
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, renderHook, act, waitFor } from "@testing-library/react";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
+import {
+  render,
+  screen,
+  fireEvent,
+  renderHook,
+  act,
+  waitFor,
+} from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "./testServer";
 import { ApiError } from "../lib/api";
 import { errorState } from "../lib/errorState";
 import { ItemCard } from "../components/kit/ItemCard";
 import { ToastProvider, useToast } from "../components/ui/Toast";
-import { PreferencesProvider, usePreferences } from "../contexts/PreferencesContext";
+import {
+  PreferencesProvider,
+  usePreferences,
+} from "../contexts/PreferencesContext";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import type { GTItem } from "../types/design";
 
@@ -25,18 +44,26 @@ describe("errorState", () => {
   });
 
   it("maps MANIFEST_NOT_READY and 503 to the warming-up copy", () => {
-    expect(errorState(new ApiError("x", 500, "MANIFEST_NOT_READY")).title).toMatch(/Warming up/);
+    expect(
+      errorState(new ApiError("x", 500, "MANIFEST_NOT_READY")).title,
+    ).toMatch(/Warming up/);
     expect(errorState(new ApiError("x", 503)).title).toMatch(/Warming up/);
   });
 
   it("maps BUNGIE_ERROR and 502 to the Bungie-unavailable copy", () => {
-    expect(errorState(new ApiError("x", 500, "BUNGIE_ERROR")).title).toMatch(/Bungie API unavailable/);
-    expect(errorState(new ApiError("x", 502)).title).toMatch(/Bungie API unavailable/);
+    expect(errorState(new ApiError("x", 500, "BUNGIE_ERROR")).title).toMatch(
+      /Bungie API unavailable/,
+    );
+    expect(errorState(new ApiError("x", 502)).title).toMatch(
+      /Bungie API unavailable/,
+    );
   });
 
   it("falls back to the generic copy for unknown errors", () => {
     expect(errorState(new Error("boom")).title).toMatch(/Couldn't load data/);
-    expect(errorState(new ApiError("x", 400, "SOMETHING_ELSE")).title).toMatch(/Couldn't load data/);
+    expect(errorState(new ApiError("x", 400, "SOMETHING_ELSE")).title).toMatch(
+      /Couldn't load data/,
+    );
   });
 });
 
@@ -68,7 +95,7 @@ describe("ItemCard", () => {
         personalize="aggressive"
         onOpen={(i) => opened.push(i)}
         onWish={(i) => wished.push(i)}
-      />
+      />,
     );
     expect(screen.getByText("Fatebringer")).toBeInTheDocument();
     expect(screen.getByText("Avail now")).toBeInTheDocument();
@@ -85,11 +112,13 @@ describe("ItemCard", () => {
         density="list"
         showCollected
         wished
-      />
+      />,
     );
     expect(screen.getByText(/Vault of Glass/)).toBeInTheDocument();
     // wished=true → remove label
-    expect(screen.getByLabelText("Remove Fatebringer from wishlist")).toBeInTheDocument();
+    expect(
+      screen.getByLabelText("Remove Fatebringer from wishlist"),
+    ).toBeInTheDocument();
   });
 
   it("renders the compact density and hides for-you badges when personalize is off", () => {
@@ -99,7 +128,13 @@ describe("ItemCard", () => {
   });
 
   it("shows the Collected badge in grid for an owned item", () => {
-    render(<ItemCard item={{ ...baseItem, collected: true }} density="grid" showCollected />);
+    render(
+      <ItemCard
+        item={{ ...baseItem, collected: true }}
+        density="grid"
+        showCollected
+      />,
+    );
     expect(screen.getByText("Collected")).toBeInTheDocument();
   });
 });
@@ -115,7 +150,7 @@ describe("Toast", () => {
     const { rerender } = render(
       <ToastProvider>
         <ToastTrigger type="success" />
-      </ToastProvider>
+      </ToastProvider>,
     );
     fireEvent.click(screen.getByText("fire"));
     expect(screen.getByText("msg-success")).toBeInTheDocument();
@@ -126,7 +161,7 @@ describe("Toast", () => {
     rerender(
       <ToastProvider>
         <ToastTrigger type="error" />
-      </ToastProvider>
+      </ToastProvider>,
     );
     fireEvent.click(screen.getByText("fire"));
     expect(screen.getByText("msg-error")).toBeInTheDocument();
@@ -137,14 +172,17 @@ describe("Toast", () => {
 
   it("throws when used outside a provider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => renderHook(() => useToast())).toThrow(/within a ToastProvider/);
+    expect(() => renderHook(() => useToast())).toThrow(
+      /within a ToastProvider/,
+    );
     spy.mockRestore();
   });
 });
 
 /* ---------------- PreferencesContext ---------------- */
 function PrefsView() {
-  const { cardStyle, personalize, setCardStyle, setPersonalize } = usePreferences();
+  const { cardStyle, personalize, setCardStyle, setPersonalize } =
+    usePreferences();
   return (
     <div>
       <span data-testid="card">{cardStyle}</span>
@@ -160,18 +198,21 @@ describe("PreferencesContext", () => {
     render(
       <PreferencesProvider>
         <PrefsView />
-      </PreferencesProvider>
+      </PreferencesProvider>,
     );
     expect(screen.getByTestId("card")).toHaveTextContent("framed");
     expect(screen.getByTestId("pers")).toHaveTextContent("normal");
   });
 
   it("loads compact/off from localStorage and survives invalid JSON", () => {
-    localStorage.setItem("guardian_prefs", JSON.stringify({ cardStyle: "compact", personalize: "off" }));
+    localStorage.setItem(
+      "guardian_prefs",
+      JSON.stringify({ cardStyle: "compact", personalize: "off" }),
+    );
     const { unmount } = render(
       <PreferencesProvider>
         <PrefsView />
-      </PreferencesProvider>
+      </PreferencesProvider>,
     );
     expect(screen.getByTestId("card")).toHaveTextContent("compact");
     expect(screen.getByTestId("pers")).toHaveTextContent("off");
@@ -181,7 +222,7 @@ describe("PreferencesContext", () => {
     render(
       <PreferencesProvider>
         <PrefsView />
-      </PreferencesProvider>
+      </PreferencesProvider>,
     );
     expect(screen.getByTestId("card")).toHaveTextContent("framed");
   });
@@ -190,15 +231,17 @@ describe("PreferencesContext", () => {
     localStorage.setItem("guardian_token", "tok");
     server.use(
       http.get(`${API}/api/preferences`, () =>
-        HttpResponse.json({ cardStyle: "compact", personalize: false })
-      )
+        HttpResponse.json({ cardStyle: "compact", personalize: false }),
+      ),
     );
     render(
       <PreferencesProvider>
         <PrefsView />
-      </PreferencesProvider>
+      </PreferencesProvider>,
     );
-    await waitFor(() => expect(screen.getByTestId("card")).toHaveTextContent("compact"));
+    await waitFor(() =>
+      expect(screen.getByTestId("card")).toHaveTextContent("compact"),
+    );
     expect(screen.getByTestId("pers")).toHaveTextContent("off");
   });
 
@@ -208,24 +251,28 @@ describe("PreferencesContext", () => {
       http.put(`${API}/api/preferences`, async ({ request }) => {
         bodies.push(await request.json());
         return HttpResponse.json({ cardStyle: "compact", personalize: true });
-      })
+      }),
     );
     render(
       <PreferencesProvider>
         <PrefsView />
-      </PreferencesProvider>
+      </PreferencesProvider>,
     );
     fireEvent.click(screen.getByText("card"));
     fireEvent.click(screen.getByText("pers"));
     expect(screen.getByTestId("card")).toHaveTextContent("compact");
     expect(screen.getByTestId("pers")).toHaveTextContent("off");
-    await waitFor(() => expect(bodies).toContainEqual({ cardStyle: "compact" }));
+    await waitFor(() =>
+      expect(bodies).toContainEqual({ cardStyle: "compact" }),
+    );
     expect(bodies).toContainEqual({ personalize: false });
   });
 
   it("throws when used outside a provider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => renderHook(() => usePreferences())).toThrow(/within a PreferencesProvider/);
+    expect(() => renderHook(() => usePreferences())).toThrow(
+      /within a PreferencesProvider/,
+    );
     spy.mockRestore();
   });
 });
@@ -260,8 +307,12 @@ describe("AuthContext refresh & recovery", () => {
     localStorage.setItem("guardian_refresh_token", "r1");
     server.use(
       http.post(`${API}/api/auth/refresh`, () =>
-        HttpResponse.json({ token: "newtok", refreshToken: "newref", user: sampleUser })
-      )
+        HttpResponse.json({
+          token: "newtok",
+          refreshToken: "newref",
+          user: sampleUser,
+        }),
+      ),
     );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
@@ -280,8 +331,13 @@ describe("AuthContext refresh & recovery", () => {
     localStorage.setItem("guardian_token", "old");
     localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
     server.use(
-      http.post(`${API}/api/auth/refresh`, () => new HttpResponse(null, { status: 401 })),
-      http.post(`${API}/api/auth/logout`, () => HttpResponse.json({ ok: true }))
+      http.post(
+        `${API}/api/auth/refresh`,
+        () => new HttpResponse(null, { status: 401 }),
+      ),
+      http.post(`${API}/api/auth/logout`, () =>
+        HttpResponse.json({ ok: true }),
+      ),
     );
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });

@@ -2,10 +2,10 @@
 module.exports = {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{ts,tsx}',
-    './components/**/*.{ts,tsx}',
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
   ],
   prefix: "",
   theme: {
@@ -63,8 +63,8 @@ module.exports = {
           solar: "#F2721B",
           void: "#B184C5",
           stasis: "#4D88FF",
-          strand: "#14E28B"
-        }
+          strand: "#14E28B",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -89,13 +89,13 @@ module.exports = {
           to: { transform: "translateY(0)" },
         },
         "pulse-glow": {
-          "0%, 100%": { 
-            boxShadow: "0 0 5px currentColor" 
+          "0%, 100%": {
+            boxShadow: "0 0 5px currentColor",
           },
-          "50%": { 
-            boxShadow: "0 0 20px currentColor, 0 0 30px currentColor" 
+          "50%": {
+            boxShadow: "0 0 20px currentColor, 0 0 30px currentColor",
           },
-        }
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -107,4 +107,4 @@ module.exports = {
     },
   },
   plugins: [],
-}
+};

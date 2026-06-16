@@ -2,11 +2,11 @@ package bungie
 
 // BungieResponse is the standard wrapper for all Bungie API responses.
 type BungieResponse struct {
-	Response        any `json:"Response"`
-	ErrorCode       int         `json:"ErrorCode"`
-	ThrottleSeconds int         `json:"ThrottleSeconds"`
-	ErrorStatus     string      `json:"ErrorStatus"`
-	Message         string      `json:"Message"`
+	Response        any    `json:"Response"`
+	ErrorCode       int    `json:"ErrorCode"`
+	ThrottleSeconds int    `json:"ThrottleSeconds"`
+	ErrorStatus     string `json:"ErrorStatus"`
+	Message         string `json:"Message"`
 }
 
 // ManifestResponse contains manifest metadata.
@@ -162,23 +162,23 @@ func GetTierName(tierType int) string {
 
 // Weapon sub-type constants.
 const (
-	WeaponSubTypeAutoRifle        = 6
-	WeaponSubTypeShotgun          = 7
-	WeaponSubTypeMachineGun       = 8
-	WeaponSubTypeHandCannon       = 9
-	WeaponSubTypeRocketLauncher   = 10
-	WeaponSubTypeFusionRifle      = 11
-	WeaponSubTypeSniperRifle      = 12
-	WeaponSubTypePulseRifle       = 13
-	WeaponSubTypeScoutRifle       = 14
-	WeaponSubTypeSidearm          = 17
-	WeaponSubTypeSword            = 18
-	WeaponSubTypeGrenadeLauncher  = 23
-	WeaponSubTypeSubmachineGun    = 22
-	WeaponSubTypeLinearFusion     = 24
-	WeaponSubTypeTraceRifle       = 25
-	WeaponSubTypeBow              = 31
-	WeaponSubTypeGlaive           = 33
+	WeaponSubTypeAutoRifle       = 6
+	WeaponSubTypeShotgun         = 7
+	WeaponSubTypeMachineGun      = 8
+	WeaponSubTypeHandCannon      = 9
+	WeaponSubTypeRocketLauncher  = 10
+	WeaponSubTypeFusionRifle     = 11
+	WeaponSubTypeSniperRifle     = 12
+	WeaponSubTypePulseRifle      = 13
+	WeaponSubTypeScoutRifle      = 14
+	WeaponSubTypeSidearm         = 17
+	WeaponSubTypeSword           = 18
+	WeaponSubTypeGrenadeLauncher = 23
+	WeaponSubTypeSubmachineGun   = 22
+	WeaponSubTypeLinearFusion    = 24
+	WeaponSubTypeTraceRifle      = 25
+	WeaponSubTypeBow             = 31
+	WeaponSubTypeGlaive          = 33
 )
 
 // GetWeaponTypeName returns a human-readable name for a weapon sub-type.
@@ -225,10 +225,10 @@ func GetWeaponTypeName(subType int) string {
 
 // Armor slot hash constants.
 const (
-	SlotHelmet   uint32 = 3448274439
+	SlotHelmet    uint32 = 3448274439
 	SlotGauntlets uint32 = 3551918588
-	SlotChest    uint32 = 14239492
-	SlotLegs     uint32 = 20886954
+	SlotChest     uint32 = 14239492
+	SlotLegs      uint32 = 20886954
 	SlotClassItem uint32 = 1585787867
 )
 
@@ -273,9 +273,9 @@ func GetClassName(classType int) string {
 
 // Race type constants.
 const (
-	RaceHuman   = 0
-	RaceAwoken  = 1
-	RaceExo     = 2
+	RaceHuman  = 0
+	RaceAwoken = 1
+	RaceExo    = 2
 )
 
 // GetRaceName maps a race type integer to its name.
@@ -296,19 +296,19 @@ func GetRaceName(raceType int) string {
 
 // Vendor hash constants for well-known Bungie vendors.
 const (
-	XurVendorHash      uint32 = 2190858386
-	Ada1VendorHash     uint32 = 350061650
+	XurVendorHash       uint32 = 2190858386
+	Ada1VendorHash      uint32 = 350061650
 	Banshee44VendorHash uint32 = 672118013
 )
 
 // Milestone type constants matching DestinyMilestoneType enum.
 const (
-	MilestoneTypeUnknown = 0
-	MilestoneTypeOneTime = 1
+	MilestoneTypeUnknown  = 0
+	MilestoneTypeOneTime  = 1
 	MilestoneTypeTutorial = 2
-	MilestoneTypeWeekly  = 3
-	MilestoneTypeDaily   = 4
-	MilestoneTypeSpecial = 5
+	MilestoneTypeWeekly   = 3
+	MilestoneTypeDaily    = 4
+	MilestoneTypeSpecial  = 5
 )
 
 // PublicMilestonesResponse wraps the Bungie milestone map.

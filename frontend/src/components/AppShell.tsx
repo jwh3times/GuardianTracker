@@ -17,11 +17,31 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", icon: "dashboard", path: "/dashboard" },
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: "dashboard",
+    path: "/dashboard",
+  },
   { id: "week", label: "This Week", icon: "week", path: "/this-week" },
-  { id: "collections", label: "Collections", icon: "collections", path: "/collections" },
-  { id: "catalysts", label: "Catalysts & Crafting", icon: "catalyst", path: "/catalysts" },
-  { id: "triumphs", label: "Triumphs & Seals", icon: "triumph", path: "/triumphs" },
+  {
+    id: "collections",
+    label: "Collections",
+    icon: "collections",
+    path: "/collections",
+  },
+  {
+    id: "catalysts",
+    label: "Catalysts & Crafting",
+    icon: "catalyst",
+    path: "/catalysts",
+  },
+  {
+    id: "triumphs",
+    label: "Triumphs & Seals",
+    icon: "triumph",
+    path: "/triumphs",
+  },
   { id: "wishlist", label: "Wishlist", icon: "wishlist", path: "/wishlist" },
 ];
 
@@ -35,24 +55,38 @@ const NAV_FLAG: Record<string, string> = {
 const MOBILE_NAV: NavItem[] = [
   { id: "dashboard", label: "Home", icon: "dashboard", path: "/dashboard" },
   { id: "week", label: "Week", icon: "week", path: "/this-week" },
-  { id: "collections", label: "Collect", icon: "collections", path: "/collections" },
+  {
+    id: "collections",
+    label: "Collect",
+    icon: "collections",
+    path: "/collections",
+  },
   { id: "wishlist", label: "Wishlist", icon: "wishlist", path: "/wishlist" },
 ];
 
 /* ---------------- CHARACTER SWITCHER ---------------- */
 const emblemStyle = (url?: string): React.CSSProperties | undefined =>
   url
-    ? { backgroundImage: `url(${url})`, backgroundSize: "cover", backgroundPosition: "center" }
+    ? {
+        backgroundImage: `url(${url})`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }
     : undefined;
 
 function CharacterSwitcher({ displayName }: { displayName?: string }) {
-  const { characters: list, activeCharacter, setActiveCharacter } = useCharacters();
+  const {
+    characters: list,
+    activeCharacter,
+    setActiveCharacter,
+  } = useCharacters();
 
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
@@ -73,11 +107,19 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
   return (
     <div className="gt-charsw" ref={ref}>
       <button className="gt-charsw-btn" onClick={() => setOpen((v) => !v)}>
-        <span className="gt-avatar" data-cls={cur.cls} style={emblemStyle(cur.emblemUrl)}>
+        <span
+          className="gt-avatar"
+          data-cls={cur.cls}
+          style={emblemStyle(cur.emblemUrl)}
+        >
           {cur.emblemUrl ? "" : (displayName || cur.name)[0]}
         </span>
         <span className="gt-charsw-name">{displayName || cur.name}</span>
-        <Icon name="chevronDown" size="0.8rem" style={{ color: "var(--c-text-3)" }} />
+        <Icon
+          name="chevronDown"
+          size="0.8rem"
+          style={{ color: "var(--c-text-3)" }}
+        />
       </button>
       {open && (
         <div className="gt-charsw-menu">
@@ -92,7 +134,11 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
                 setOpen(false);
               }}
             >
-              <span className="gt-avatar" data-cls={c.cls} style={emblemStyle(c.emblemUrl)}>
+              <span
+                className="gt-avatar"
+                data-cls={c.cls}
+                style={emblemStyle(c.emblemUrl)}
+              >
                 {c.emblemUrl ? "" : c.name[0]}
               </span>
               <div className="gt-charsw-opt-main">
@@ -103,10 +149,18 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
                   {c.race} · {c.power}
                 </span>
               </div>
-              {c.id === cur.id && <Icon name="check" size="0.9rem" style={{ color: "var(--c-signal)" }} />}
+              {c.id === cur.id && (
+                <Icon
+                  name="check"
+                  size="0.9rem"
+                  style={{ color: "var(--c-signal)" }}
+                />
+              )}
             </button>
           ))}
-          <div className="gt-charsw-note mono">Collections are account-wide</div>
+          <div className="gt-charsw-note mono">
+            Collections are account-wide
+          </div>
         </div>
       )}
     </div>
@@ -130,7 +184,8 @@ function SearchBar() {
   // close on outside click
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
@@ -140,7 +195,7 @@ function SearchBar() {
     queryKey: ["search", debouncedQ],
     queryFn: () =>
       apiFetch<APISearchResult[]>(
-        `/api/items/search?q=${encodeURIComponent(debouncedQ)}&limit=20`
+        `/api/items/search?q=${encodeURIComponent(debouncedQ)}&limit=20`,
       ),
     enabled: debouncedQ.length >= 2,
     staleTime: 30_000,
@@ -175,7 +230,11 @@ function SearchBar() {
                   navigate(`/collections?item=${i.hash}`);
                 }}
               >
-                <ItemTile rarity={i.rarity.toLowerCase() as any} type={i.type} style={{ width: "1.8rem" }} />
+                <ItemTile
+                  rarity={i.rarity.toLowerCase() as any}
+                  type={i.type}
+                  style={{ width: "1.8rem" }}
+                />
                 <span className="gt-search-opt-name">{i.name}</span>
                 <span className="gt-item-type">{i.type}</span>
               </button>
@@ -253,7 +312,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <span>Admin Console</span>
             </NavLink>
           )}
-          <NavLink to="/settings" className="gt-navitem" data-active={isActive("/settings")}>
+          <NavLink
+            to="/settings"
+            className="gt-navitem"
+            data-active={isActive("/settings")}
+          >
             <Icon name="settings" size="1.15rem" />
             <span>Settings</span>
           </NavLink>
@@ -291,14 +354,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* MOBILE BOTTOM TABS */}
       <nav className="gt-bottomnav">
         {MOBILE_NAV.map((n) => (
-          <NavLink key={n.id} to={n.path} className="gt-bottomtab" data-active={isActive(n.path)}>
+          <NavLink
+            key={n.id}
+            to={n.path}
+            className="gt-bottomtab"
+            data-active={isActive(n.path)}
+          >
             <Icon name={n.icon} size="1.3rem" />
             <span>{n.label}</span>
           </NavLink>
         ))}
         <button
           className="gt-bottomtab"
-          data-active={["/catalysts", "/triumphs", "/settings", "/admin"].some((p) => isActive(p))}
+          data-active={["/catalysts", "/triumphs", "/settings", "/admin"].some(
+            (p) => isActive(p),
+          )}
           onClick={() => setMobileNav(true)}
         >
           <Icon name="menu" size="1.3rem" />
@@ -312,7 +382,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="gt-mobnav" onClick={(e) => e.stopPropagation()}>
             <div className="gt-mobnav-head">
               <Brand />
-              <button className="gt-iconbtn" onClick={() => setMobileNav(false)}>
+              <button
+                className="gt-iconbtn"
+                onClick={() => setMobileNav(false)}
+              >
                 <Icon name="close" size="1.2rem" />
               </button>
             </div>

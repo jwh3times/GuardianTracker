@@ -27,7 +27,9 @@ export const OAuthCallback: React.FC = () => {
 
       if (oauthError) {
         console.error("OAuth error from Bungie:", oauthError, errorDescription);
-        setError(`OAuth error: ${oauthError} - ${errorDescription || "Unknown error"}`);
+        setError(
+          `OAuth error: ${oauthError} - ${errorDescription || "Unknown error"}`,
+        );
         setTimeout(() => navigate("/login?error=oauth_error"), 3000);
         return;
       }
@@ -43,12 +45,17 @@ export const OAuthCallback: React.FC = () => {
         const response = await fetch(`${API_URL}/api/auth/bungie/callback`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ code, state: returnedState ?? "" }).toString(),
+          body: new URLSearchParams({
+            code,
+            state: returnedState ?? "",
+          }).toString(),
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Authentication failed (${response.status})`);
+          throw new Error(
+            errorData.error || `Authentication failed (${response.status})`,
+          );
         }
 
         const data = (await response.json()) as AuthTokenResponse;
@@ -72,13 +79,19 @@ export const OAuthCallback: React.FC = () => {
   return (
     <div className="gt-login">
       <div className="gt-login-bg" />
-      <div className="gt-login-card" style={{ textAlign: "center", alignItems: "center" }}>
+      <div
+        className="gt-login-card"
+        style={{ textAlign: "center", alignItems: "center" }}
+      >
         <Brand />
         {error ? (
           <>
             <div
               className="gt-empty-mark"
-              style={{ "--em": "var(--c-danger)" } as React.CSSProperties & Record<string, string>}
+              style={
+                { "--em": "var(--c-danger)" } as React.CSSProperties &
+                  Record<string, string>
+              }
             >
               <Icon name="info" size="3rem" stroke={1.5} />
             </div>
@@ -93,12 +106,17 @@ export const OAuthCallback: React.FC = () => {
             <h1 className="gt-login-title" style={{ fontSize: "var(--t-xl)" }}>
               Completing sign-in…
             </h1>
-            <p className="gt-login-sub">Verifying your Bungie.net authorization.</p>
+            <p className="gt-login-sub">
+              Verifying your Bungie.net authorization.
+            </p>
             <Icon
               name="refresh"
               size="2rem"
               className="gt-fresh-icon"
-              style={{ color: "var(--c-signal)", animation: "gt-spin 0.9s linear infinite" }}
+              style={{
+                color: "var(--c-signal)",
+                animation: "gt-spin 0.9s linear infinite",
+              }}
             />
           </>
         )}

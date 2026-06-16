@@ -1,15 +1,18 @@
 import React from "react";
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse, delay } from "msw";
-import {
-  API,
-  sampleUser,
-  sampleWeekly,
-  server,
-} from "./testServer";
+import { API, sampleUser, sampleWeekly, server } from "./testServer";
 import { AuthProvider } from "../contexts/AuthContext";
 import { ToastProvider } from "../components/ui/Toast";
 import { Catalysts } from "../pages/Catalysts";
@@ -38,14 +41,14 @@ function renderPage(ui: React.ReactNode, route = "/") {
           <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
         </ToastProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
 const privacy403 = () =>
   HttpResponse.json(
     { error: "Profile is private", code: "PRIVACY_RESTRICTION" },
-    { status: 403 }
+    { status: 403 },
   );
 
 describe("Catalysts page", () => {
@@ -90,13 +93,15 @@ describe("Catalysts page", () => {
             },
           ],
           fetchedAt: "",
-        })
-      )
+        }),
+      ),
     );
     renderPage(<Catalysts />);
     await screen.findByText("Lone Catalyst");
     fireEvent.click(screen.getByRole("button", { name: "Missing" }));
-    expect(screen.getByText("No catalysts match this filter.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No catalysts match this filter."),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText("Clear"));
     expect(await screen.findByText("Lone Catalyst")).toBeInTheDocument();
   });
@@ -146,8 +151,8 @@ describe("Catalysts page", () => {
             },
           ],
           fetchedAt: "",
-        })
-      )
+        }),
+      ),
     );
     renderPage(<Catalysts />);
     await screen.findByText("Sunshot Catalyst");
@@ -156,7 +161,9 @@ describe("Catalysts page", () => {
 
     // Only an in-progress pattern exists → filtering to "complete" empties the grid
     fireEvent.click(screen.getByRole("button", { name: "Complete" }));
-    expect(screen.getByText("No patterns match this filter.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No patterns match this filter."),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText("Clear"));
     expect(await screen.findByText("Half-Done Pattern")).toBeInTheDocument();
   });
@@ -164,7 +171,9 @@ describe("Catalysts page", () => {
   it("shows the privacy error state with a retry and Bungie link", async () => {
     server.use(http.get(`${API}/api/catalysts/:type/:id`, privacy403));
     renderPage(<Catalysts />);
-    expect(await screen.findByText("Your Destiny profile is private")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Your Destiny profile is private"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Bungie privacy settings")).toBeInTheDocument();
     expect(screen.getByText("Retry")).toBeInTheDocument();
   });
@@ -174,7 +183,7 @@ describe("Catalysts page", () => {
       http.get(`${API}/api/catalysts/:type/:id`, async () => {
         await delay(40);
         return HttpResponse.json({ items: [], fetchedAt: "" });
-      })
+      }),
     );
     const { container } = renderPage(<Catalysts />);
     expect(container.querySelector(".gt-page-loading")).not.toBeNull();
@@ -197,7 +206,7 @@ describe("Triumphs page", () => {
     // Collapse the auto-opened first seal
     fireEvent.click(screen.getByText("Conqueror"));
     await waitFor(() =>
-      expect(screen.queryByText("Complete a GM")).not.toBeInTheDocument()
+      expect(screen.queryByText("Complete a GM")).not.toBeInTheDocument(),
     );
 
     // Re-open it
@@ -219,7 +228,9 @@ describe("Triumphs page", () => {
   it("shows the privacy error state", async () => {
     server.use(http.get(`${API}/api/seals/:type/:id`, privacy403));
     renderPage(<Triumphs />);
-    expect(await screen.findByText("Your Destiny profile is private")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Your Destiny profile is private"),
+    ).toBeInTheDocument();
   });
 
   it("renders the loading spinner while the query is in flight", async () => {
@@ -227,7 +238,7 @@ describe("Triumphs page", () => {
       http.get(`${API}/api/seals/:type/:id`, async () => {
         await delay(40);
         return HttpResponse.json({ items: [], fetchedAt: "" });
-      })
+      }),
     );
     const { container } = renderPage(<Triumphs />);
     expect(container.querySelector(".gt-page-loading")).not.toBeNull();
@@ -237,7 +248,9 @@ describe("Triumphs page", () => {
 describe("ThisWeek page", () => {
   it("renders reset label and the Xûr-away module by default", async () => {
     renderPage(<ThisWeek />);
-    expect(await screen.findByText("Resets Tuesday 17:00 UTC")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Resets Tuesday 17:00 UTC"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Xûr returns Friday")).toBeInTheDocument();
     expect(screen.getByText("0/0 done")).toBeInTheDocument();
   });
@@ -258,8 +271,8 @@ describe("ThisWeek page", () => {
               time: "30m",
             },
           ],
-        })
-      )
+        }),
+      ),
     );
     renderPage(<ThisWeek />);
     expect(await screen.findByText("Run a Nightfall")).toBeInTheDocument();
@@ -268,9 +281,9 @@ describe("ThisWeek page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mark done" }));
     expect(await screen.findByText("1/1 done")).toBeInTheDocument();
     // Persisted under the reset-keyed localStorage entry
-    expect(
-      localStorage.getItem("gt_done:" + sampleWeekly.resetAt)
-    ).toContain("rec-1");
+    expect(localStorage.getItem("gt_done:" + sampleWeekly.resetAt)).toContain(
+      "rec-1",
+    );
 
     // Toggle back off
     fireEvent.click(screen.getByRole("button", { name: "Mark done" }));
@@ -288,23 +301,62 @@ describe("ThisWeek page", () => {
             leavesIn: { d: 1, h: 2, m: 0 },
             location: "Tower Hangar",
             items: [
-              { name: "Gjallarhorn", type: "Rocket Launcher", rarity: "exotic", missing: true, cost: "29 Strange Coins" },
-              { name: "Ace of Spades", type: "Hand Cannon", rarity: "exotic", missing: false, cost: "29 Strange Coins" },
+              {
+                name: "Gjallarhorn",
+                type: "Rocket Launcher",
+                rarity: "exotic",
+                missing: true,
+                cost: "29 Strange Coins",
+              },
+              {
+                name: "Ace of Spades",
+                type: "Hand Cannon",
+                rarity: "exotic",
+                missing: false,
+                cost: "29 Strange Coins",
+              },
             ],
           },
           milestones: [
-            { id: "m1", label: "Weekly", name: "Vanguard Ops", reward: "Pinnacle", missing: 2, note: "" },
-            { id: "m2", label: "Weekly", name: "Crucible", reward: "Pinnacle", note: "" },
+            {
+              id: "m1",
+              label: "Weekly",
+              name: "Vanguard Ops",
+              reward: "Pinnacle",
+              missing: 2,
+              note: "",
+            },
+            {
+              id: "m2",
+              label: "Weekly",
+              name: "Crucible",
+              reward: "Pinnacle",
+              note: "",
+            },
           ],
           vendors: [
-            { id: "v1", name: "Banshee", role: "Gunsmith", missing: 3, items: ["Rifle", "Cannon"] },
-            { id: "v2", name: "Xûr", role: "Exotics", missing: 0, items: ["Boots"] },
+            {
+              id: "v1",
+              name: "Banshee",
+              role: "Gunsmith",
+              missing: 3,
+              items: ["Rifle", "Cannon"],
+            },
+            {
+              id: "v2",
+              name: "Xûr",
+              role: "Exotics",
+              missing: 0,
+              items: ["Boots"],
+            },
           ],
-        })
-      )
+        }),
+      ),
     );
     renderPage(<ThisWeek />);
-    expect(await screen.findByText(/Item names are still loading/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Item names are still loading/),
+    ).toBeInTheDocument();
     expect(screen.getByText("Tower Hangar")).toBeInTheDocument();
     expect(screen.getByText("Gjallarhorn")).toBeInTheDocument();
     expect(screen.getByText("Vanguard Ops")).toBeInTheDocument();
@@ -313,11 +365,14 @@ describe("ThisWeek page", () => {
   });
 
   it("purges checkmarks from previous reset weeks on load", async () => {
-    localStorage.setItem("gt_done:2020-01-01T00:00:00Z", JSON.stringify(["old"]));
+    localStorage.setItem(
+      "gt_done:2020-01-01T00:00:00Z",
+      JSON.stringify(["old"]),
+    );
     renderPage(<ThisWeek />);
     await screen.findByText("Resets Tuesday 17:00 UTC");
     await waitFor(() =>
-      expect(localStorage.getItem("gt_done:2020-01-01T00:00:00Z")).toBeNull()
+      expect(localStorage.getItem("gt_done:2020-01-01T00:00:00Z")).toBeNull(),
     );
   });
 
@@ -326,11 +381,13 @@ describe("ThisWeek page", () => {
       http.get(`${API}/api/weekly/recommendations`, async () => {
         await delay(40);
         return HttpResponse.json(sampleWeekly);
-      })
+      }),
     );
     const { container } = renderPage(<ThisWeek />);
     expect(container.querySelector(".gt-page")).not.toBeNull();
     // The spinner-only page has no PageHead while loading
-    expect(screen.queryByText("Resets Tuesday 17:00 UTC")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Resets Tuesday 17:00 UTC"),
+    ).not.toBeInTheDocument();
   });
 });

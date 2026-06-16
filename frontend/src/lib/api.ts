@@ -19,7 +19,7 @@ export class ApiError extends Error {
     message: string,
     public status: number,
     public code?: string,
-    public retryAfter?: number
+    public retryAfter?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -50,7 +50,10 @@ async function doRefresh(): Promise<string | null> {
   }
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   const token = localStorage.getItem("guardian_token");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -92,7 +95,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       errorBody.error || `API error ${res.status}`,
       res.status,
       errorBody.code,
-      errorBody.retryAfter
+      errorBody.retryAfter,
     );
   }
 

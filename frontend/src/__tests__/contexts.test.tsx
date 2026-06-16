@@ -1,5 +1,13 @@
 import React from "react";
-import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  afterEach,
+  beforeEach,
+} from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -71,7 +79,9 @@ describe("CharacterContext", () => {
   ];
 
   function wrapper({ children }: { children: React.ReactNode }) {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     return (
       <QueryClientProvider client={qc}>
         <AuthProvider>
@@ -85,7 +95,9 @@ describe("CharacterContext", () => {
     localStorage.setItem("guardian_token", "tok");
     localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
     server.use(
-      http.get(`${API}/api/characters/:type/:id`, () => HttpResponse.json(characters))
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json(characters),
+      ),
     );
   });
 
@@ -98,14 +110,16 @@ describe("CharacterContext", () => {
     act(() => result.current.setActiveCharacter("char-warlock"));
     expect(result.current.activeCharacter?.id).toBe("char-warlock");
     expect(
-      localStorage.getItem(`guardian_active_character:${sampleUser.membershipId}`)
+      localStorage.getItem(
+        `guardian_active_character:${sampleUser.membershipId}`,
+      ),
     ).toBe("char-warlock");
   });
 
   it("restores a persisted pick on a fresh mount", async () => {
     localStorage.setItem(
       `guardian_active_character:${sampleUser.membershipId}`,
-      "char-warlock"
+      "char-warlock",
     );
     const { result } = renderHook(() => useCharacters(), { wrapper });
 
@@ -116,7 +130,7 @@ describe("CharacterContext", () => {
   it("falls back to the first character when the persisted pick is stale", async () => {
     localStorage.setItem(
       `guardian_active_character:${sampleUser.membershipId}`,
-      "char-deleted"
+      "char-deleted",
     );
     const { result } = renderHook(() => useCharacters(), { wrapper });
 

@@ -45,12 +45,24 @@ export function Login() {
           Chase what matters this week.
         </h1>
         <p className="gt-login-sub">
-          A Destiny 2 companion that turns your sprawling collection into a focused plan of action.
+          A Destiny 2 companion that turns your sprawling collection into a
+          focused plan of action.
         </p>
 
         {error && (
-          <div className="gt-drawer-avail" style={{ background: "var(--c-challenging-dim)", borderColor: "color-mix(in oklch, var(--c-danger) 40%, transparent)" }}>
-            <Icon name="info" size="1rem" style={{ color: "var(--c-danger)" }} />
+          <div
+            className="gt-drawer-avail"
+            style={{
+              background: "var(--c-challenging-dim)",
+              borderColor:
+                "color-mix(in oklch, var(--c-danger) 40%, transparent)",
+            }}
+          >
+            <Icon
+              name="info"
+              size="1rem"
+              style={{ color: "var(--c-danger)" }}
+            />
             <span>{error}</span>
           </div>
         )}
@@ -66,23 +78,43 @@ export function Login() {
             Redirecting to Bungie.net…
           </Button>
         ) : (
-          <Button variant="primary" icon="bungie" onClick={handleBungieLogin} style={{ width: "100%" }}>
+          <Button
+            variant="primary"
+            icon="bungie"
+            onClick={handleBungieLogin}
+            style={{ width: "100%" }}
+          >
             Sign in with Bungie
           </Button>
         )}
 
-        <div className="gt-login-note mono">Read-only · we never modify your account</div>
+        <div className="gt-login-note mono">
+          Read-only · we never modify your account
+        </div>
         <ul className="gt-login-feats">
           <li>
-            <Icon name="collections" size="1rem" style={{ color: "var(--c-signal)" }} /> What's missing across
-            every category
+            <Icon
+              name="collections"
+              size="1rem"
+              style={{ color: "var(--c-signal)" }}
+            />{" "}
+            What's missing across every category
           </li>
           <li>
-            <Icon name="week" size="1rem" style={{ color: "var(--c-exotic)" }} /> The best things to do each week
+            <Icon
+              name="week"
+              size="1rem"
+              style={{ color: "var(--c-exotic)" }}
+            />{" "}
+            The best things to do each week
           </li>
           <li>
-            <Icon name="catalyst" size="1rem" style={{ color: "var(--c-legendary)" }} /> Track catalysts, patterns
-            & seals
+            <Icon
+              name="catalyst"
+              size="1rem"
+              style={{ color: "var(--c-legendary)" }}
+            />{" "}
+            Track catalysts, patterns & seals
           </li>
         </ul>
         <p className="gt-login-note" style={{ color: "var(--c-text-4)" }}>

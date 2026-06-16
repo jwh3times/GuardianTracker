@@ -17,8 +17,15 @@ type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 /* ---------------- ROLE BADGE ---------------- */
 export function RoleBadge({ role, lg }: { role: Role; lg?: boolean }) {
   return (
-    <span className={`gt-badge${lg ? " gt-badge--lg" : ""}`} style={{ "--bdg": roleColor(role) } as CSS}>
-      {role === "admin" ? <Icon name="shield" size="0.85em" /> : <span className="gt-dot" />}
+    <span
+      className={`gt-badge${lg ? " gt-badge--lg" : ""}`}
+      style={{ "--bdg": roleColor(role) } as CSS}
+    >
+      {role === "admin" ? (
+        <Icon name="shield" size="0.85em" />
+      ) : (
+        <span className="gt-dot" />
+      )}
       {ROLE_LABEL[role]}
     </span>
   );
@@ -67,7 +74,8 @@ export function RoleSelect({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
@@ -80,12 +88,19 @@ export function RoleSelect({
         onClick={() => setOpen((v) => !v)}
         style={{ "--bdg": roleColor(value) } as CSS}
       >
-        {value === "admin" ? <Icon name="shield" size="0.85em" /> : <span className="gt-dot" />}
+        {value === "admin" ? (
+          <Icon name="shield" size="0.85em" />
+        ) : (
+          <span className="gt-dot" />
+        )}
         {ROLE_LABEL[value]}
         <Icon name="chevronDown" size="0.75rem" />
       </button>
       {open && (
-        <div className="gt-dd-menu" style={{ right: 0, left: "auto", minWidth: "9rem" }}>
+        <div
+          className="gt-dd-menu"
+          style={{ right: 0, left: "auto", minWidth: "9rem" }}
+        >
           {roles.map((r) => (
             <button
               key={r}
@@ -96,7 +111,8 @@ export function RoleSelect({
                 setOpen(false);
               }}
             >
-              <span className="gt-dot" style={{ background: roleColor(r) }} /> {ROLE_LABEL[r]}
+              <span className="gt-dot" style={{ background: roleColor(r) }} />{" "}
+              {ROLE_LABEL[r]}
             </button>
           ))}
         </div>
@@ -116,7 +132,11 @@ export function TierSegment({
   disabled?: boolean;
 }) {
   return (
-    <div className="gt-tierseg" role="radiogroup" aria-label="Minimum access tier">
+    <div
+      className="gt-tierseg"
+      role="radiogroup"
+      aria-label="Minimum access tier"
+    >
       {MIN_TIERS.map((tier) => (
         <button
           key={tier}
@@ -157,7 +177,10 @@ export function FlagCard({
       <div className="gt-flagcard-head">
         <div className="gt-flagcard-title">
           <span className="gt-flag-name">{flag.name}</span>
-          <span className="gt-badge" style={{ "--bdg": "var(--c-text-3)" } as CSS}>
+          <span
+            className="gt-badge"
+            style={{ "--bdg": "var(--c-text-3)" } as CSS}
+          >
             {flag.category}
           </span>
         </div>
@@ -187,7 +210,10 @@ export function FlagCard({
               <span className="gt-flag-reach-lbl">users · {pct}%</span>
             </>
           ) : (
-            <span className="gt-flag-reach-lbl" style={{ color: "var(--c-text-4)" }}>
+            <span
+              className="gt-flag-reach-lbl"
+              style={{ color: "var(--c-text-4)" }}
+            >
               Disabled — hidden for everyone
             </span>
           )}
@@ -197,7 +223,9 @@ export function FlagCard({
         <div className="gt-flag-reachbar">
           <div
             className="gt-flag-reachbar-fill"
-            style={{ "--val": pct + "%", "--pc": roleColor(flag.minTier) } as CSS}
+            style={
+              { "--val": pct + "%", "--pc": roleColor(flag.minTier) } as CSS
+            }
           />
         </div>
       )}
@@ -258,7 +286,10 @@ export function LockedFeature({
   return (
     <div className="gt-page">
       <div className="gt-card gt-locked">
-        <div className="gt-locked-mark" style={{ "--bdg": roleColor(need) } as CSS}>
+        <div
+          className="gt-locked-mark"
+          style={{ "--bdg": roleColor(need) } as CSS}
+        >
           <Icon name="lock" size="2.4rem" stroke={1.5} />
         </div>
         <div className="gt-locked-tier">
@@ -267,8 +298,9 @@ export function LockedFeature({
         <h2 className="gt-locked-title">{flag.name}</h2>
         <p className="gt-locked-body">{flag.desc}</p>
         <p className="gt-locked-note">
-          This feature is rolling out to <strong>{TIER_LABEL[need]}</strong> members. Switch your
-          access tier to unlock it — or ask an admin to widen the flag.
+          This feature is rolling out to <strong>{TIER_LABEL[need]}</strong>{" "}
+          members. Switch your access tier to unlock it — or ask an admin to
+          widen the flag.
         </p>
         <div className="gt-locked-actions">
           <Button variant="primary" icon="bolt" onClick={onChangeTier}>

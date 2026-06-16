@@ -280,9 +280,21 @@ The Bungie manifest is a ~100MB SQLite file. On first run the API service downlo
 
 GitHub Actions (`.github/workflows/ci-cd.yml`):
 
-1. **test-frontend** — type-check, lint, test with vitest coverage thresholds (lines ≥70%, branches ≥65%), build
-2. **test-go-services** — go vet, govulncheck, go test with race detector; db integration tests run against the Postgres service container via `TEST_DATABASE_URL`; statement-coverage gate ≥60% (ratcheting up — CI lands ~63% with cgo+Postgres; ~52% locally where the sqlite/db packages are skipped — see [Full Go coverage locally](#full-go-coverage-locally-matches-ci))
-3. **build-docker-images** — builds both Docker images; build validation only (no push configured yet)
+1. **format-check** — repo-wide formatting gate: Prettier for the frontend (`npm run format:check`) and `gofmt` for the Go services. Fails if anything wasn't formatted. Fix with `npm run format` (from `frontend/`) or `gofmt -w .` (from `backend/api-service/`).
+2. **test-frontend** — type-check, lint, test with vitest coverage thresholds (lines ≥70%, branches ≥65%), build
+3. **test-go-services** — go vet, govulncheck, go test with race detector; db integration tests run against the Postgres service container via `TEST_DATABASE_URL`; statement-coverage gate ≥60% (ratcheting up — CI lands ~63% with cgo+Postgres; ~52% locally where the sqlite/db packages are skipped — see [Full Go coverage locally](#full-go-coverage-locally-matches-ci))
+4. **build-docker-images** — builds both Docker images; build validation only (no push configured yet)
+
+Separately, **CodeQL** (GitHub default setup) scans go, javascript-typescript, and actions on every PR.
+
+### Branch protection (`main`)
+
+`main` is governed by two repository rulesets (Settings → Rules):
+
+- **"Require PRs and passing checks for main"** (default branch) — requires a pull request to merge (no direct pushes), with all of these status checks green first: `Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, and the CodeQL `Analyze (go)` / `Analyze (javascript-typescript)` / `Analyze (actions)` checks. Strict policy (branch must be up to date), 0 required approvals (solo repo — self-approval isn't possible; self-merge once green is allowed), stale-review dismissal + review-thread resolution on. **No bypass actors** — the rules apply to everyone, admins included.
+- **"Main/Release branch rules"** (all branches) — blocks branch deletion and non-fast-forward (force) pushes.
+
+To change the gate (e.g. add/remove a required check), edit the ruleset via `gh api repos/jwh3times/GuardianTracker/rulesets/<id>` or the GitHub UI; the required-check names must match the CI job `name:` and the CodeQL check contexts exactly.
 
 ## Common Tasks
 

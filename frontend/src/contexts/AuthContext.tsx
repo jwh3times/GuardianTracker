@@ -72,10 +72,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuth(newState);
     };
     window.addEventListener("guardian_token_refreshed", syncFromStorage);
-    return () => window.removeEventListener("guardian_token_refreshed", syncFromStorage);
+    return () =>
+      window.removeEventListener("guardian_token_refreshed", syncFromStorage);
   }, []);
 
-  const login = (newToken: string, newRefreshToken: string, newUser: APIUser) => {
+  const login = (
+    newToken: string,
+    newRefreshToken: string,
+    newUser: APIUser,
+  ) => {
     setAuth({ token: newToken, refreshToken: newRefreshToken, user: newUser });
     localStorage.setItem("guardian_token", newToken);
     localStorage.setItem("guardian_refresh_token", newRefreshToken);
@@ -122,7 +127,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       const data = (await response.json()) as AuthTokenResponse;
-      setAuth({ token: data.token, refreshToken: data.refreshToken, user: data.user });
+      setAuth({
+        token: data.token,
+        refreshToken: data.refreshToken,
+        user: data.user,
+      });
       localStorage.setItem("guardian_token", data.token);
       localStorage.setItem("guardian_refresh_token", data.refreshToken);
       localStorage.setItem("guardian_user", JSON.stringify(data.user));

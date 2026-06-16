@@ -96,14 +96,14 @@ export interface WishListItem {
   itemHash: number;
   name: string;
   itemType: string;
-  rarity: string;       // "Exotic", "Legendary", "Rare", "Uncommon", "Common"
-  icon: string;         // bungie.net icon path, may be ""
-  priority: string;     // "LOW", "MEDIUM", "HIGH", "URGENT"
+  rarity: string; // "Exotic", "Legendary", "Rare", "Uncommon", "Common"
+  icon: string; // bungie.net icon path, may be ""
+  priority: string; // "LOW", "MEDIUM", "HIGH", "URGENT"
   notes: string;
   sources: string[];
-  availableNow: boolean;   // item is currently sold by Xûr (B6)
-  availableFrom?: string;  // "Xûr" when availableNow
-  dateAdded: string;    // RFC3339
+  availableNow: boolean; // item is currently sold by Xûr (B6)
+  availableFrom?: string; // "Xûr" when availableNow
+  dateAdded: string; // RFC3339
 }
 
 /** GET/PUT /api/preferences */
@@ -118,14 +118,18 @@ export interface APISearchResult {
   name: string;
   icon: string;
   type: string;
-  rarity: string;  // "Exotic", "Legendary", etc.
+  rarity: string; // "Exotic", "Legendary", etc.
 }
 
 // --- Catalysts / Crafting / Seals ---
 // Item shapes are identical to the design types; re-export them for use in
 // fetch calls so callers can import from one place.
 
-export type { Catalyst as APICatalyst, CraftPattern as APICraftPattern, Seal as APISeal } from "./design";
+export type {
+  Catalyst as APICatalyst,
+  CraftPattern as APICraftPattern,
+  Seal as APISeal,
+} from "./design";
 
 /** Envelope for GET /api/catalysts|crafting|seals — items + data freshness (B8) */
 export interface APIRecordsEnvelope<T> {

@@ -34,12 +34,17 @@ describe("apiFetch", () => {
     expect(out.hello).toBe("world");
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API}/api/thing`);
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok-1");
+    expect((init.headers as Record<string, string>).Authorization).toBe(
+      "Bearer tok-1",
+    );
   });
 
   it("throws ApiError carrying status and backend code", async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(403, { error: "profile is private", code: "PRIVACY_RESTRICTION" })
+      jsonResponse(403, {
+        error: "profile is private",
+        code: "PRIVACY_RESTRICTION",
+      }),
     );
 
     const err = await apiFetch("/api/thing").catch((e) => e);
@@ -59,7 +64,12 @@ describe("apiFetch", () => {
         return jsonResponse(200, {
           token: "fresh",
           refreshToken: "refresh-2",
-          user: { id: "u", displayName: "G", membershipId: "u", membershipType: 3 },
+          user: {
+            id: "u",
+            displayName: "G",
+            membershipId: "u",
+            membershipType: 3,
+          },
         });
       }
       const auth = (init?.headers as Record<string, string>)?.Authorization;
@@ -87,7 +97,12 @@ describe("apiFetch", () => {
         return jsonResponse(200, {
           token: "fresh",
           refreshToken: "refresh-2",
-          user: { id: "u", displayName: "G", membershipId: "u", membershipType: 3 },
+          user: {
+            id: "u",
+            displayName: "G",
+            membershipId: "u",
+            membershipType: 3,
+          },
         });
       }
       const auth = (init?.headers as Record<string, string>)?.Authorization;
@@ -96,7 +111,11 @@ describe("apiFetch", () => {
         : jsonResponse(401, { error: "expired" });
     });
 
-    await Promise.all([apiFetch("/api/a"), apiFetch("/api/b"), apiFetch("/api/c")]);
+    await Promise.all([
+      apiFetch("/api/a"),
+      apiFetch("/api/b"),
+      apiFetch("/api/c"),
+    ]);
 
     expect(refreshCalls).toBe(1);
   });
@@ -109,7 +128,7 @@ describe("apiFetch", () => {
     fetchMock.mockImplementation(async (url: string) =>
       url.endsWith("/api/auth/refresh")
         ? jsonResponse(401, { error: "revoked" })
-        : jsonResponse(401, { error: "expired" })
+        : jsonResponse(401, { error: "expired" }),
     );
 
     await expect(apiFetch("/api/thing")).rejects.toThrow("Session expired");

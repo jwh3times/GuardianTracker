@@ -14,34 +14,34 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() =>
-  import("./pages/Dashboard").then((m) => ({ default: m.Dashboard }))
+  import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })),
 );
 const Collections = lazy(() =>
-  import("./pages/Collections").then((m) => ({ default: m.Collections }))
+  import("./pages/Collections").then((m) => ({ default: m.Collections })),
 );
 const WishList = lazy(() =>
-  import("./pages/WishList").then((m) => ({ default: m.WishList }))
+  import("./pages/WishList").then((m) => ({ default: m.WishList })),
 );
 const ThisWeek = lazy(() =>
-  import("./pages/ThisWeek").then((m) => ({ default: m.ThisWeek }))
+  import("./pages/ThisWeek").then((m) => ({ default: m.ThisWeek })),
 );
 const Catalysts = lazy(() =>
-  import("./pages/Catalysts").then((m) => ({ default: m.Catalysts }))
+  import("./pages/Catalysts").then((m) => ({ default: m.Catalysts })),
 );
 const Triumphs = lazy(() =>
-  import("./pages/Triumphs").then((m) => ({ default: m.Triumphs }))
+  import("./pages/Triumphs").then((m) => ({ default: m.Triumphs })),
 );
 const Settings = lazy(() =>
-  import("./pages/Settings").then((m) => ({ default: m.Settings }))
+  import("./pages/Settings").then((m) => ({ default: m.Settings })),
 );
 const Admin = lazy(() =>
-  import("./pages/Admin").then((m) => ({ default: m.Admin }))
+  import("./pages/Admin").then((m) => ({ default: m.Admin })),
 );
 const Login = lazy(() =>
-  import("./pages/Login").then((m) => ({ default: m.Login }))
+  import("./pages/Login").then((m) => ({ default: m.Login })),
 );
 const OAuthCallback = lazy(() =>
-  import("./pages/OAuthCallback").then((m) => ({ default: m.OAuthCallback }))
+  import("./pages/OAuthCallback").then((m) => ({ default: m.OAuthCallback })),
 );
 
 const PageLoader: React.FC = () => (
@@ -81,7 +81,9 @@ const ProtectedLayout: React.FC = () => {
 };
 
 // AdminRoute guards the admin console; the server enforces RequireAdmin regardless.
-const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+const AdminRoute: React.FC<{ children: React.ReactElement }> = ({
+  children,
+}) => {
   const { isAdmin, isLoading } = useFlags();
   if (isLoading) return <PageLoader />;
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
@@ -90,10 +92,10 @@ const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) =>
 
 // FlaggedRoute gates a page on a feature flag: hidden flags redirect home, locked
 // flags show the upsell, accessible flags render the page (port of resolvePage).
-const FlaggedRoute: React.FC<{ flagKey: string; children: React.ReactElement }> = ({
-  flagKey,
-  children,
-}) => {
+const FlaggedRoute: React.FC<{
+  flagKey: string;
+  children: React.ReactElement;
+}> = ({ flagKey, children }) => {
   const { flagState } = useFlags();
   const navigate = useNavigate();
   const st = flagState(flagKey);

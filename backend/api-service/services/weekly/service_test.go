@@ -85,16 +85,16 @@ func TestToDuration(t *testing.T) {
 
 func TestCategoryFromMilestoneName(t *testing.T) {
 	cases := map[string]string{
-		"Nightfall: The Ordeal":  "Nightfall",
-		"The Ordeal":             "Nightfall",
-		"Weekly Raid Challenge":  "Featured Raid",
-		"Featured Dungeon":       "Featured Dungeon",
-		"Crucible Playlist":      "Crucible",
-		"Iron Banner":            "Crucible",
-		"Trials of Osiris":       "Crucible",
-		"Gambit Weekly":          "Gambit",
-		"Vanguard Ops":           "Strikes",
-		"Strike Playlist":        "Strikes",
+		"Nightfall: The Ordeal":   "Nightfall",
+		"The Ordeal":              "Nightfall",
+		"Weekly Raid Challenge":   "Featured Raid",
+		"Featured Dungeon":        "Featured Dungeon",
+		"Crucible Playlist":       "Crucible",
+		"Iron Banner":             "Crucible",
+		"Trials of Osiris":        "Crucible",
+		"Gambit Weekly":           "Gambit",
+		"Vanguard Ops":            "Strikes",
+		"Strike Playlist":         "Strikes",
 		"Something Else Entirely": "Weekly Activity",
 	}
 	for in, want := range cases {

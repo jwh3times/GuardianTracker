@@ -52,16 +52,38 @@ export function ItemTile({
 
 /* ---------------- BADGE ---------------- */
 export const BADGE_COLOR: Record<string, string> = {
-  exotic: "var(--c-exotic)", legendary: "var(--c-legendary)", rare: "var(--c-rare)", uncommon: "var(--c-uncommon)", common: "var(--c-common)",
-  easy: "var(--c-easy)", moderate: "var(--c-moderate)", challenging: "var(--c-challenging)",
-  "avail-now": "var(--c-avail)", expiring: "var(--c-expiring)", missing: "var(--c-signal)", new: "var(--c-signal)",
-  "completes-set": "var(--c-exotic)", complete: "var(--c-complete)", "in-progress": "var(--c-progress)", gilded: "var(--c-gild)",
+  exotic: "var(--c-exotic)",
+  legendary: "var(--c-legendary)",
+  rare: "var(--c-rare)",
+  uncommon: "var(--c-uncommon)",
+  common: "var(--c-common)",
+  easy: "var(--c-easy)",
+  moderate: "var(--c-moderate)",
+  challenging: "var(--c-challenging)",
+  "avail-now": "var(--c-avail)",
+  expiring: "var(--c-expiring)",
+  missing: "var(--c-signal)",
+  new: "var(--c-signal)",
+  "completes-set": "var(--c-exotic)",
+  complete: "var(--c-complete)",
+  "in-progress": "var(--c-progress)",
+  gilded: "var(--c-gild)",
   owned: "var(--c-text-3)",
-  urgent: "var(--c-danger)", high: "var(--c-expiring)", medium: "var(--c-rare)", low: "var(--c-text-3)",
+  urgent: "var(--c-danger)",
+  high: "var(--c-expiring)",
+  medium: "var(--c-rare)",
+  low: "var(--c-text-3)",
 };
 const BADGE_LABEL: Record<string, string> = {
-  "avail-now": "Avail now", "completes-set": "Completes set", "in-progress": "In progress",
-  missing: "Missing", new: "New", expiring: "Expiring", complete: "Complete", gilded: "Gilded", owned: "Owned",
+  "avail-now": "Avail now",
+  "completes-set": "Completes set",
+  "in-progress": "In progress",
+  missing: "Missing",
+  new: "New",
+  expiring: "Expiring",
+  complete: "Complete",
+  gilded: "Gilded",
+  owned: "Owned",
 };
 
 export function Badge({
@@ -156,7 +178,9 @@ export function ProgressBar({
         <div className="gt-prog-head">
           {label && <span className="gt-prog-label">{label}</span>}
           {showVal && (
-            <span className="gt-prog-val mono">{valText || `${value}/${max}`}</span>
+            <span className="gt-prog-val mono">
+              {valText || `${value}/${max}`}
+            </span>
           )}
         </div>
       )}
@@ -164,7 +188,9 @@ export function ProgressBar({
         <div
           className="gt-prog-fill"
           data-complete={done}
-          style={{ "--val": pct + "%", "--pc": color || "var(--c-signal)" } as CSS}
+          style={
+            { "--val": pct + "%", "--pc": color || "var(--c-signal)" } as CSS
+          }
         />
       </div>
     </div>
@@ -192,7 +218,11 @@ export function RadialProgress({
   return (
     <div className="gt-radial" style={{ width: size, height: size }}>
       <svg viewBox="0 0 100 100">
-        <polygon className="gt-radial-track" points={HEX_PTS} pathLength={100} />
+        <polygon
+          className="gt-radial-track"
+          points={HEX_PTS}
+          pathLength={100}
+        />
         <polygon
           className="gt-radial-val"
           points={HEX_PTS}
@@ -226,7 +256,10 @@ export function StatTile({
 }) {
   return (
     <div className="gt-stat">
-      <span className={`gt-stat-num${mono ? " mono" : ""}`} style={color ? { color } : undefined}>
+      <span
+        className={`gt-stat-num${mono ? " mono" : ""}`}
+        style={color ? { color } : undefined}
+      >
         {num}
       </span>
       <span className="gt-stat-label">{label}</span>
@@ -235,7 +268,15 @@ export function StatTile({
 }
 
 /* ---------------- COUNTDOWN CHIP ---------------- */
-export function fmtDur({ d = 0, h = 0, m = 0 }: { d?: number; h?: number; m?: number }) {
+export function fmtDur({
+  d = 0,
+  h = 0,
+  m = 0,
+}: {
+  d?: number;
+  h?: number;
+  m?: number;
+}) {
   if (d > 0) return `${d}d ${h}h`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
@@ -370,15 +411,28 @@ export function Skeleton({
   style?: React.CSSProperties;
 }) {
   return (
-    <div className="gt-skel" style={{ width: w, height: h, borderRadius: r, ...style }} />
+    <div
+      className="gt-skel"
+      style={{ width: w, height: h, borderRadius: r, ...style }}
+    />
   );
 }
 export function ItemCardSkeleton() {
   return (
-    <div className="gt-card" style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}>
+    <div
+      className="gt-card"
+      style={{ display: "flex", flexDirection: "column", gap: "var(--s-3)" }}
+    >
       <div style={{ display: "flex", gap: "var(--s-3)" }}>
         <Skeleton w="3rem" h="3rem" r="var(--r-sm)" />
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "var(--s-2)" }}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--s-2)",
+          }}
+        >
           <Skeleton w="70%" h="0.9rem" />
           <Skeleton w="45%" h="0.7rem" />
         </div>
@@ -407,13 +461,22 @@ export function EmptyState({
 }) {
   return (
     <div className="gt-empty">
-      <div className="gt-empty-mark" style={{ "--em": color || "var(--c-text-3)" } as CSS}>
+      <div
+        className="gt-empty-mark"
+        style={{ "--em": color || "var(--c-text-3)" } as CSS}
+      >
         <Icon name={icon} size="3rem" stroke={1.5} />
       </div>
       <div className="gt-empty-title">{title}</div>
       {body && <div className="gt-empty-body">{body}</div>}
       {(action || secondary) && (
-        <div style={{ display: "flex", gap: "var(--s-2)", marginTop: "var(--s-2)" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "var(--s-2)",
+            marginTop: "var(--s-2)",
+          }}
+        >
           {action}
           {secondary}
         </div>

@@ -49,11 +49,20 @@ export function Admin() {
       void qc.invalidateQueries({ queryKey: ["flags"] });
     },
     onError: (e) =>
-      showToast(e instanceof ApiError ? e.message : "Couldn't change role", "error"),
+      showToast(
+        e instanceof ApiError ? e.message : "Couldn't change role",
+        "error",
+      ),
   });
 
   const flagMutation = useMutation({
-    mutationFn: ({ key, patch }: { key: string; patch: { enabled?: boolean; minTier?: Tier } }) =>
+    mutationFn: ({
+      key,
+      patch,
+    }: {
+      key: string;
+      patch: { enabled?: boolean; minTier?: Tier };
+    }) =>
       apiFetch<APIAdminFlag>(`/api/admin/flags/${key}`, {
         method: "PUT",
         body: JSON.stringify(patch),
@@ -63,7 +72,10 @@ export function Admin() {
       void qc.invalidateQueries({ queryKey: ["flags"] });
     },
     onError: (e) =>
-      showToast(e instanceof ApiError ? e.message : "Couldn't update flag", "error"),
+      showToast(
+        e instanceof ApiError ? e.message : "Couldn't update flag",
+        "error",
+      ),
   });
 
   const roleCounts = useMemo(() => {
@@ -75,29 +87,47 @@ export function Admin() {
   const filtered = users.filter(
     (u) =>
       (roleFilter === "all" || u.role === roleFilter) &&
-      (q.length < 1 || (u.displayName + u.membershipId).toLowerCase().includes(q.toLowerCase()))
+      (q.length < 1 ||
+        (u.displayName + u.membershipId)
+          .toLowerCase()
+          .includes(q.toLowerCase())),
   );
 
   const flagOn = flags.filter((f) => f.enabled).length;
   const totalUsers = users.length;
   const reach = (f: APIAdminFlag) =>
-    f.enabled ? users.filter((u) => tierOf(u.role) >= tierOf(f.minTier)).length : 0;
+    f.enabled
+      ? users.filter((u) => tierOf(u.role) >= tierOf(f.minTier)).length
+      : 0;
 
   return (
     <div className="gt-page">
       <PageHead
         title={
           <span className="gt-admin-title">
-            <Icon name="shield" size="1.4rem" style={{ color: "var(--c-admin)" }} /> Admin Console
+            <Icon
+              name="shield"
+              size="1.4rem"
+              style={{ color: "var(--c-admin)" }}
+            />{" "}
+            Admin Console
           </span>
         }
         sub="Manage member roles and feature-flag rollout"
         right={
           <div className="gt-subtabs">
-            <button className="gt-subtab" data-on={tab === "users"} onClick={() => setTab("users")}>
+            <button
+              className="gt-subtab"
+              data-on={tab === "users"}
+              onClick={() => setTab("users")}
+            >
               <Icon name="users" size="0.95rem" /> Users
             </button>
-            <button className="gt-subtab" data-on={tab === "flags"} onClick={() => setTab("flags")}>
+            <button
+              className="gt-subtab"
+              data-on={tab === "flags"}
+              onClick={() => setTab("flags")}
+            >
               <Icon name="flag" size="0.95rem" /> Feature Flags
             </button>
           </div>
@@ -108,14 +138,33 @@ export function Admin() {
         <>
           <div className="gt-coll-stats">
             <StatTile num={roleCounts.all} label="Total members" mono />
-            <StatTile num={roleCounts.beta} label="Beta" mono color="var(--c-rare)" />
-            <StatTile num={roleCounts.alpha} label="Alpha" mono color="var(--c-exotic)" />
-            <StatTile num={roleCounts.admin} label="Admins" mono color="var(--c-admin)" />
+            <StatTile
+              num={roleCounts.beta}
+              label="Beta"
+              mono
+              color="var(--c-rare)"
+            />
+            <StatTile
+              num={roleCounts.alpha}
+              label="Alpha"
+              mono
+              color="var(--c-exotic)"
+            />
+            <StatTile
+              num={roleCounts.admin}
+              label="Admins"
+              mono
+              color="var(--c-admin)"
+            />
           </div>
 
           <div className="gt-coll-toolbar">
             <div className="gt-search gt-admin-search">
-              <Icon name="search" size="1rem" style={{ color: "var(--c-text-3)" }} />
+              <Icon
+                name="search"
+                size="1rem"
+                style={{ color: "var(--c-text-3)" }}
+              />
               <input
                 className="gt-search-input"
                 placeholder="Search members…"
@@ -125,7 +174,11 @@ export function Admin() {
             </div>
             <div className="gt-filterbar">
               {(["all", ...ROLES] as const).map((r) => (
-                <FilterChip key={r} on={roleFilter === r} onClick={() => setRoleFilter(r)}>
+                <FilterChip
+                  key={r}
+                  on={roleFilter === r}
+                  onClick={() => setRoleFilter(r)}
+                >
                   {r === "all" ? "All" : ROLE_LABEL[r]}{" "}
                   <span className="mono" style={{ opacity: 0.6 }}>
                     {roleCounts[r]}
@@ -139,7 +192,9 @@ export function Admin() {
             <div className="gt-userrow gt-userrow--head">
               <span></span>
               <span className="gt-userrow-h">Member</span>
-              <span className="gt-userrow-h gt-userrow-meta">Platform · last active</span>
+              <span className="gt-userrow-h gt-userrow-meta">
+                Platform · last active
+              </span>
               <span className="gt-userrow-h" style={{ textAlign: "right" }}>
                 Role
               </span>
@@ -175,20 +230,30 @@ export function Admin() {
       ) : (
         <>
           <div className="gt-coll-stats">
-            <StatTile num={`${flagOn}/${flags.length}`} label="Flags enabled" mono />
             <StatTile
-              num={flags.filter((f) => f.minTier === "beta" && f.enabled).length}
+              num={`${flagOn}/${flags.length}`}
+              label="Flags enabled"
+              mono
+            />
+            <StatTile
+              num={
+                flags.filter((f) => f.minTier === "beta" && f.enabled).length
+              }
               label="Beta-gated"
               mono
               color="var(--c-rare)"
             />
             <StatTile
-              num={flags.filter((f) => f.minTier === "alpha" && f.enabled).length}
+              num={
+                flags.filter((f) => f.minTier === "alpha" && f.enabled).length
+              }
               label="Alpha-gated"
               mono
               color="var(--c-exotic)"
             />
-            <div className="gt-coll-resultcount mono">Changes apply live across the app</div>
+            <div className="gt-coll-resultcount mono">
+              Changes apply live across the app
+            </div>
           </div>
           {flagsQuery.isLoading ? (
             <EmptyState icon="flag" title="Loading feature flags…" />
@@ -201,7 +266,9 @@ export function Admin() {
                   reached={reach(f)}
                   totalUsers={totalUsers}
                   pending={flagMutation.isPending}
-                  onToggle={(enabled) => flagMutation.mutate({ key: f.key, patch: { enabled } })}
+                  onToggle={(enabled) =>
+                    flagMutation.mutate({ key: f.key, patch: { enabled } })
+                  }
                   onSetMinTier={(minTier) =>
                     flagMutation.mutate({ key: f.key, patch: { minTier } })
                   }
