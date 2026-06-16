@@ -127,7 +127,7 @@ export interface Weekly {
   fetchedAt: string;
   /** True when names/labels are placeholders because the manifest is still downloading. */
   degraded?: boolean;
-  xur: Xur | null;  // null when Xûr is not in town
+  xur: Xur | null; // null when Xûr is not in town
   milestones: Milestone[];
   vendors: VendorRotation[];
   recommended: RecommendedAction[];

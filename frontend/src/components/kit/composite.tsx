@@ -74,13 +74,22 @@ export function Panel({
       {(title || right) && (
         <header className="gt-panel-head">
           <div className="gt-section-title">
-            {icon && <Icon name={icon} size="0.95rem" style={{ color: accent || "var(--c-text-3)" }} />}
+            {icon && (
+              <Icon
+                name={icon}
+                size="0.95rem"
+                style={{ color: accent || "var(--c-text-3)" }}
+              />
+            )}
             {title}
           </div>
           {right}
         </header>
       )}
-      <div className="gt-panel-body" style={pad === false ? { padding: 0 } : undefined}>
+      <div
+        className="gt-panel-body"
+        style={pad === false ? { padding: 0 } : undefined}
+      >
         {children}
       </div>
     </section>
@@ -111,7 +120,10 @@ export function CategoryTree({
         const isOpen = open.has(node.id);
         return (
           <div key={node.id} className="gt-tree-group">
-            <div className="gt-tree-row gt-tree-row--parent" data-active={activeId === node.id}>
+            <div
+              className="gt-tree-row gt-tree-row--parent"
+              data-active={activeId === node.id}
+            >
               <button
                 className="gt-tree-caret"
                 onClick={() => toggle(node.id)}
@@ -120,13 +132,19 @@ export function CategoryTree({
               >
                 <Icon name="chevron" size="0.8rem" />
               </button>
-              <button className="gt-tree-main" onClick={() => onSelect(node.id)}>
+              <button
+                className="gt-tree-main"
+                onClick={() => onSelect(node.id)}
+              >
                 <span className="gt-tree-label">{node.label}</span>
                 <span className="gt-tree-pct mono">{node.pct}%</span>
               </button>
             </div>
             <div className="gt-tree-bar">
-              <div className="gt-tree-bar-fill" style={{ "--val": node.pct + "%" } as CSS} />
+              <div
+                className="gt-tree-bar-fill"
+                style={{ "--val": node.pct + "%" } as CSS}
+              />
             </div>
             {isOpen && node.children && (
               <div className="gt-tree-children">
@@ -178,7 +196,8 @@ export function ActionList({
               {a.badge && <Badge kind={a.badge} dot />}
             </div>
             <div className="gt-action-meta mono">
-              {a.detail} · <span style={{ color: "var(--c-text-2)" }}>{a.time}</span>
+              {a.detail} ·{" "}
+              <span style={{ color: "var(--c-text-2)" }}>{a.time}</span>
             </div>
           </div>
           <Badge kind={a.diff} style={{ flex: "none" }}>
@@ -208,13 +227,19 @@ export function XurModule({ xur }: { xur: Xur | null | undefined }) {
       title="Xûr — weekend exotics"
       icon="bungie"
       accent="var(--c-exotic)"
-      right={<CountdownChip prefix="Leaves" time={xur.leavesIn} soon icon="clock" />}
+      right={
+        <CountdownChip prefix="Leaves" time={xur.leavesIn} soon icon="clock" />
+      }
     >
       <div className="gt-xur-loc mono">{xur.location}</div>
       <ul className="gt-vendor-list">
         {xur.items.map((it) => (
           <li key={it.name} className="gt-vendor-item" data-rarity={it.rarity}>
-            <ItemTile rarity={it.rarity} type={it.type} style={{ width: "2.4rem" }} />
+            <ItemTile
+              rarity={it.rarity}
+              type={it.type}
+              style={{ width: "2.4rem" }}
+            />
             <div className="gt-vendor-main">
               <div className="gt-item-name">{it.name}</div>
               <div className="gt-item-type">
@@ -301,7 +326,11 @@ export function SealCard({
 }) {
   const isGild = seal.gilded > 0;
   const color =
-    seal.pct >= 100 ? "var(--c-gild)" : seal.pct >= 75 ? "var(--c-complete)" : "var(--c-progress)";
+    seal.pct >= 100
+      ? "var(--c-gild)"
+      : seal.pct >= 75
+        ? "var(--c-complete)"
+        : "var(--c-progress)";
   return (
     <div className="gt-seal" data-expanded={expanded}>
       <button className="gt-seal-head" onClick={onToggle}>
@@ -403,13 +432,25 @@ export function ItemDetailDrawer({
         role="dialog"
         aria-label={item.name}
       >
-        <button className="gt-drawer-close gt-iconbtn" onClick={onClose} aria-label="Close">
+        <button
+          className="gt-drawer-close gt-iconbtn"
+          onClick={onClose}
+          aria-label="Close"
+        >
           <Icon name="close" size="1.1rem" />
         </button>
         <div className="gt-drawer-hero">
-          <ItemTile rarity={item.rarity} type={item.type} icon={item.icon} style={{ width: "4.6rem" }} />
+          <ItemTile
+            rarity={item.rarity}
+            type={item.type}
+            icon={item.icon}
+            style={{ width: "4.6rem" }}
+          />
           <div>
-            <div className="gt-item-badges" style={{ marginBottom: "var(--s-1)" } as CSS}>
+            <div
+              className="gt-item-badges"
+              style={{ marginBottom: "var(--s-1)" } as CSS}
+            >
               <Badge kind={item.rarity} dot lg />
             </div>
             <h2 className="gt-drawer-name">{item.name}</h2>
@@ -442,7 +483,11 @@ export function ItemDetailDrawer({
             </button>
           </div>
           <div className="gt-drawer-src">
-            <Icon name="bolt" size="0.9rem" style={{ color: "var(--rarity)" }} />
+            <Icon
+              name="bolt"
+              size="0.9rem"
+              style={{ color: "var(--rarity)" }}
+            />
             <div>
               <div style={{ color: "var(--c-text)" }}>{item.source}</div>
               <div className="gt-item-type">{item.sourceDetail}</div>
@@ -450,9 +495,9 @@ export function ItemDetailDrawer({
           </div>
           {showWhy && (
             <p className="gt-why-text">
-              Difficulty is <strong>estimated</strong> from this item's source — drop sources
-              like raids and Grandmasters score higher than vendor or world drops. Treat it as a
-              guide, not a guarantee.
+              Difficulty is <strong>estimated</strong> from this item's source —
+              drop sources like raids and Grandmasters score higher than vendor
+              or world drops. Treat it as a guide, not a guarantee.
             </p>
           )}
         </div>
@@ -471,7 +516,12 @@ export function ItemDetailDrawer({
         )}
 
         <div className="gt-drawer-actions">
-          <Button variant="primary" icon="wishlist" onClick={() => onWish(item)} style={{ flex: 1 }}>
+          <Button
+            variant="primary"
+            icon="wishlist"
+            onClick={() => onWish(item)}
+            style={{ flex: 1 }}
+          >
             {wished ? "On wishlist" : "Add to Wishlist"}
           </Button>
           <Button variant="outline" icon="external">
@@ -507,14 +557,19 @@ export function Dropdown({
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     document.addEventListener("click", h);
     return () => document.removeEventListener("click", h);
   }, []);
   return (
     <div className="gt-dd" ref={ref}>
-      <button className="gt-fchip" data-on={!!value} onClick={() => setOpen((v) => !v)}>
+      <button
+        className="gt-fchip"
+        data-on={!!value}
+        onClick={() => setOpen((v) => !v)}
+      >
         {value || label}
         {note && !value && <span className="gt-dd-note">({note})</span>}
         <Icon name="chevronDown" size="0.75rem" />

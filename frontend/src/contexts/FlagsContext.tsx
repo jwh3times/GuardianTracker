@@ -36,11 +36,18 @@ interface FlagsContextType {
   refresh: () => void;
 }
 
-const UNKNOWN: FlagState = { flag: null, enabled: true, accessible: true, locked: false };
+const UNKNOWN: FlagState = {
+  flag: null,
+  enabled: true,
+  accessible: true,
+  locked: false,
+};
 
 const FlagsContext = createContext<FlagsContextType | undefined>(undefined);
 
-export const FlagsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const FlagsProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["flags"],
     queryFn: () => apiFetch<APIFlagsResponse>("/api/flags"),
@@ -59,12 +66,20 @@ export const FlagsProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     (key: string): FlagState => {
       const f = byKey.get(key);
       if (!f) return UNKNOWN;
-      return { flag: f, enabled: f.enabled, accessible: f.accessible, locked: f.locked };
+      return {
+        flag: f,
+        enabled: f.enabled,
+        accessible: f.accessible,
+        locked: f.locked,
+      };
     },
-    [byKey]
+    [byKey],
   );
 
-  const accessible = useCallback((key: string) => flagState(key).accessible, [flagState]);
+  const accessible = useCallback(
+    (key: string) => flagState(key).accessible,
+    [flagState],
+  );
 
   const value: FlagsContextType = {
     role,
@@ -75,7 +90,9 @@ export const FlagsProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     refresh: () => void refetch(),
   };
 
-  return <FlagsContext.Provider value={value}>{children}</FlagsContext.Provider>;
+  return (
+    <FlagsContext.Provider value={value}>{children}</FlagsContext.Provider>
+  );
 };
 
 export function useFlags(): FlagsContextType {

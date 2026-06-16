@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { relTime, toGTItem, toWishlistEntry, toCharacter } from "../lib/adapters";
+import {
+  relTime,
+  toGTItem,
+  toWishlistEntry,
+  toCharacter,
+} from "../lib/adapters";
 import type { APICharacter, APIDestinyItem, WishListItem } from "../types/api";
 
 afterEach(() => {
@@ -89,7 +94,11 @@ describe("toWishlistEntry", () => {
   });
 
   it("shows the source when not available now", () => {
-    const entry = toWishlistEntry({ ...apiWish, availableNow: false, availableFrom: undefined });
+    const entry = toWishlistEntry({
+      ...apiWish,
+      availableNow: false,
+      availableFrom: undefined,
+    });
     expect(entry.avail.now).toBe(false);
     expect(entry.avail.where).toBe("Exotic quest");
   });

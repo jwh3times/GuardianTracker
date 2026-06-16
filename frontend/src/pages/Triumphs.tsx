@@ -1,6 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Dropdown, EmptyState, PageHead, SealCard } from "../components/kit";
+import {
+  Button,
+  Dropdown,
+  EmptyState,
+  PageHead,
+  SealCard,
+} from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
 import { errorState } from "../lib/errorState";
@@ -24,7 +30,9 @@ export function Triumphs() {
   } = useQuery({
     queryKey: ["seals", membershipType, membershipId],
     queryFn: () =>
-      apiFetch<APIRecordsEnvelope<Seal>>(`/api/seals/${membershipType}/${membershipId}`),
+      apiFetch<APIRecordsEnvelope<Seal>>(
+        `/api/seals/${membershipType}/${membershipId}`,
+      ),
     enabled: membershipType != null && !!membershipId,
   });
   const seals = useMemo(() => sealsData?.items ?? [], [sealsData]);
@@ -32,12 +40,15 @@ export function Triumphs() {
   const [sort, setSort] = useState<Sort>("closest");
   // undefined = never interacted (auto-open first); null = user explicitly closed
   const [openId, setOpenId] = useState<string | null | undefined>(undefined);
-  const effectiveOpenId = openId === undefined ? (seals[0]?.id ?? null) : openId;
+  const effectiveOpenId =
+    openId === undefined ? (seals[0]?.id ?? null) : openId;
 
   const sorted = useMemo(() => {
     const l = seals.slice();
     if (sort === "closest") {
-      l.sort((a, b) => (b.pct >= 100 ? -1 : b.pct) - (a.pct >= 100 ? -1 : a.pct));
+      l.sort(
+        (a, b) => (b.pct >= 100 ? -1 : b.pct) - (a.pct >= 100 ? -1 : a.pct),
+      );
     } else if (sort === "name") {
       l.sort((a, b) => a.name.localeCompare(b.name));
     }
@@ -60,7 +71,10 @@ export function Triumphs() {
     const es = errorState(error);
     return (
       <div className="gt-page">
-        <PageHead title="Triumphs & Seals" sub={<span className="mono">Seal completion</span>} />
+        <PageHead
+          title="Triumphs & Seals"
+          sub={<span className="mono">Seal completion</span>}
+        />
         <div className="gt-card">
           <EmptyState
             icon={es.icon}
@@ -80,7 +94,13 @@ export function Triumphs() {
                     </Button>
                   </a>
                 )}
-                <Button variant="outline" sm onClick={() => { void refetch(); }}>
+                <Button
+                  variant="outline"
+                  sm
+                  onClick={() => {
+                    void refetch();
+                  }}
+                >
                   Retry
                 </Button>
               </div>
@@ -95,11 +115,17 @@ export function Triumphs() {
     <div className="gt-page">
       <PageHead
         title="Triumphs & Seals"
-        sub={<span className="mono">{seals.length} seals · {gilded} gilded</span>}
+        sub={
+          <span className="mono">
+            {seals.length} seals · {gilded} gilded
+          </span>
+        }
         right={
           <Dropdown
             label="Sort: Closest to done"
-            value={{ closest: "Sort: Closest to done", name: "Sort: Name" }[sort]}
+            value={
+              { closest: "Sort: Closest to done", name: "Sort: Name" }[sort]
+            }
             noClear
             options={[
               { v: "closest", l: "Sort: Closest to done" },

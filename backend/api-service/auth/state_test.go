@@ -34,15 +34,15 @@ func TestStateSigner_Tampering(t *testing.T) {
 	parts := strings.Split(state, ".")
 
 	cases := map[string]string{
-		"tampered signature":  parts[0] + "." + parts[1] + "." + parts[2] + ".AAAA" + parts[3][4:],
-		"tampered timestamp":  parts[0] + ".9999999999." + parts[2] + "." + parts[3],
-		"tampered nonce":      parts[0] + "." + parts[1] + ".AAAAAAAAAAAAAAAAAAAAAA." + parts[3],
-		"wrong version":       "v2." + parts[1] + "." + parts[2] + "." + parts[3],
-		"missing segment":     parts[0] + "." + parts[1] + "." + parts[2],
-		"extra segment":       state + ".extra",
-		"empty string":        "",
-		"garbage":             "not-a-state",
-		"non-numeric ts":      parts[0] + ".abc." + parts[2] + "." + parts[3],
+		"tampered signature": parts[0] + "." + parts[1] + "." + parts[2] + ".AAAA" + parts[3][4:],
+		"tampered timestamp": parts[0] + ".9999999999." + parts[2] + "." + parts[3],
+		"tampered nonce":     parts[0] + "." + parts[1] + ".AAAAAAAAAAAAAAAAAAAAAA." + parts[3],
+		"wrong version":      "v2." + parts[1] + "." + parts[2] + "." + parts[3],
+		"missing segment":    parts[0] + "." + parts[1] + "." + parts[2],
+		"extra segment":      state + ".extra",
+		"empty string":       "",
+		"garbage":            "not-a-state",
+		"non-numeric ts":     parts[0] + ".abc." + parts[2] + "." + parts[3],
 	}
 	for name, tampered := range cases {
 		if s.Verify(tampered, time.Now(), stateTestTTL) {

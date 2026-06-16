@@ -29,14 +29,23 @@ function CatalystCard({ c }: { c: Catalyst }) {
         <ItemTile rarity="exotic" type={c.type || "Weapon"} icon={c.icon} />
         <div className="gt-item-head">
           <div className="gt-item-name">{c.name}</div>
-          <div className="gt-item-type">{c.type ? `${c.type} Catalyst` : "Catalyst"}</div>
+          <div className="gt-item-type">
+            {c.type ? `${c.type} Catalyst` : "Catalyst"}
+          </div>
           <div className="gt-item-badges" style={{ marginTop: "var(--s-1)" }}>
             <Badge kind={c.status} dot />
           </div>
         </div>
       </div>
       {c.obj ? (
-        <ProgressBar value={c.obj.cur} max={c.obj.max} label={c.obj.label} showVal color={color} size="tall" />
+        <ProgressBar
+          value={c.obj.cur}
+          max={c.obj.max}
+          label={c.obj.label}
+          showVal
+          color={color}
+          size="tall"
+        />
       ) : (
         <div className="gt-prog-empty mono">Not yet acquired</div>
       )}
@@ -104,7 +113,9 @@ export function Catalysts() {
   } = useQuery({
     queryKey: ["catalysts", membershipType, membershipId],
     queryFn: () =>
-      apiFetch<APIRecordsEnvelope<Catalyst>>(`/api/catalysts/${membershipType}/${membershipId}`),
+      apiFetch<APIRecordsEnvelope<Catalyst>>(
+        `/api/catalysts/${membershipType}/${membershipId}`,
+      ),
     enabled: membershipType != null && !!membershipId,
   });
   const catalysts = catalystsData?.items ?? [];
@@ -118,7 +129,9 @@ export function Catalysts() {
   } = useQuery({
     queryKey: ["crafting", membershipType, membershipId],
     queryFn: () =>
-      apiFetch<APIRecordsEnvelope<CraftPattern>>(`/api/crafting/${membershipType}/${membershipId}`),
+      apiFetch<APIRecordsEnvelope<CraftPattern>>(
+        `/api/crafting/${membershipType}/${membershipId}`,
+      ),
     enabled: membershipType != null && !!membershipId,
   });
   const crafting = craftingData?.items ?? [];
@@ -142,7 +155,10 @@ export function Catalysts() {
     const es = errorState(catsErr ?? craftErr);
     return (
       <div className="gt-page">
-        <PageHead title="Catalysts & Crafting" sub="Long-grind progress, all in one place" />
+        <PageHead
+          title="Catalysts & Crafting"
+          sub="Long-grind progress, all in one place"
+        />
         <div className="gt-card">
           <EmptyState
             icon={es.icon}
@@ -180,7 +196,8 @@ export function Catalysts() {
     );
   }
 
-  const catFiltered = filter === "all" ? catalysts : catalysts.filter((c) => c.status === filter);
+  const catFiltered =
+    filter === "all" ? catalysts : catalysts.filter((c) => c.status === filter);
   const craftFiltered =
     filter === "all"
       ? crafting
@@ -193,7 +210,9 @@ export function Catalysts() {
               : !done && c.patterns.cur > 0;
         });
   const catDone = catalysts.filter((c) => c.status === "complete").length;
-  const craftable = crafting.filter((c) => c.patterns.cur >= c.patterns.max).length;
+  const craftable = crafting.filter(
+    (c) => c.patterns.cur >= c.patterns.max,
+  ).length;
 
   return (
     <div className="gt-page">
@@ -202,10 +221,18 @@ export function Catalysts() {
         sub="Long-grind progress, all in one place"
         right={
           <div className="gt-subtabs">
-            <button className="gt-subtab" data-on={tab === "catalysts"} onClick={() => setTab("catalysts")}>
+            <button
+              className="gt-subtab"
+              data-on={tab === "catalysts"}
+              onClick={() => setTab("catalysts")}
+            >
               Catalysts
             </button>
-            <button className="gt-subtab" data-on={tab === "crafting"} onClick={() => setTab("crafting")}>
+            <button
+              className="gt-subtab"
+              data-on={tab === "crafting"}
+              onClick={() => setTab("crafting")}
+            >
               Crafting Patterns
             </button>
           </div>
@@ -214,11 +241,22 @@ export function Catalysts() {
 
       <div className="gt-coll-toolbar">
         <div className="gt-filterbar">
-          {(["all", "missing", "in-progress", "complete"] as Filter[]).map((f) => (
-            <button key={f} className="gt-fchip" data-on={filter === f} onClick={() => setFilter(f)}>
-              {f === "all" ? "All" : f === "in-progress" ? "In progress" : f[0].toUpperCase() + f.slice(1)}
-            </button>
-          ))}
+          {(["all", "missing", "in-progress", "complete"] as Filter[]).map(
+            (f) => (
+              <button
+                key={f}
+                className="gt-fchip"
+                data-on={filter === f}
+                onClick={() => setFilter(f)}
+              >
+                {f === "all"
+                  ? "All"
+                  : f === "in-progress"
+                    ? "In progress"
+                    : f[0].toUpperCase() + f.slice(1)}
+              </button>
+            ),
+          )}
         </div>
         <span className="gt-action-meta mono">
           {tab === "catalysts"

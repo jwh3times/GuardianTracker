@@ -28,7 +28,10 @@ class MemoryStorage implements Storage {
   }
 }
 
-if (typeof globalThis.localStorage === "undefined" || globalThis.localStorage == null) {
+if (
+  typeof globalThis.localStorage === "undefined" ||
+  globalThis.localStorage == null
+) {
   Object.defineProperty(globalThis, "localStorage", {
     value: new MemoryStorage(),
     writable: true,

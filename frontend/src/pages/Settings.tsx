@@ -1,7 +1,14 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, DataFreshnessChip, Icon, PageHead, Panel, RoleBadge } from "../components/kit";
+import {
+  Button,
+  DataFreshnessChip,
+  Icon,
+  PageHead,
+  Panel,
+  RoleBadge,
+} from "../components/kit";
 import { useAuth } from "../contexts/AuthContext";
 import { useFlags } from "../contexts/FlagsContext";
 import { usePreferences } from "../contexts/PreferencesContext";
@@ -57,7 +64,8 @@ function Segmented<T extends string>({
 export function Settings() {
   const { user, logout: authLogout, logoutAll: authLogoutAll } = useAuth();
   const { role, isAdmin, refresh: refreshFlags } = useFlags();
-  const { cardStyle, personalize, setCardStyle, setPersonalize } = usePreferences();
+  const { cardStyle, personalize, setCardStyle, setPersonalize } =
+    usePreferences();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -65,9 +73,9 @@ export function Settings() {
     queryKey: ["characters", user?.membershipType, user?.membershipId],
     queryFn: () =>
       apiFetch<APICharacter[]>(
-        `/api/characters/${user!.membershipType}/${user!.membershipId}`
+        `/api/characters/${user!.membershipType}/${user!.membershipId}`,
       ),
-    enabled: !!(user?.membershipId) && user?.membershipType != null,
+    enabled: !!user?.membershipId && user?.membershipType != null,
   });
 
   const characterList = (charsData ?? []).map(toCharacter);
@@ -76,7 +84,7 @@ export function Settings() {
   // the Collections page's missing view, so this is free once any of them has
   // loaded. Supplies real fetchedAt (B8).
   const { data: collections } = useQuery(
-    collectionsQuery(user?.membershipType, user?.membershipId, false)
+    collectionsQuery(user?.membershipType, user?.membershipId, false),
   );
 
   const queryClient = useQueryClient();
@@ -95,14 +103,17 @@ export function Settings() {
       void queryClient.invalidateQueries({ queryKey: ["flags"] });
     },
     onError: (e) =>
-      showToast(e instanceof ApiError ? e.message : "Couldn't change access tier", "error"),
+      showToast(
+        e instanceof ApiError ? e.message : "Couldn't change access tier",
+        "error",
+      ),
   });
 
   const refreshMutation = useMutation({
     mutationFn: () =>
       apiFetch<APICacheRefreshResponse>(
         `/api/collections/${user!.membershipType}/${user!.membershipId}/refresh`,
-        { method: "POST" }
+        { method: "POST" },
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["collections"] });
@@ -126,7 +137,9 @@ export function Settings() {
 
   const platform =
     user?.platform ||
-    (user?.membershipType != null ? PLATFORM_LABEL[user.membershipType] : undefined) ||
+    (user?.membershipType != null
+      ? PLATFORM_LABEL[user.membershipType]
+      : undefined) ||
     "—";
 
   return (
@@ -141,9 +154,10 @@ export function Settings() {
         right={<RoleBadge role={role} lg />}
       >
         <p className="gt-set-note">
-          Guardian Tracker rolls features out in waves. Opt into an early-access tier to try
-          features before they reach everyone — <strong>Beta</strong> for upcoming features,{" "}
-          <strong>Alpha</strong> for the bleeding edge.
+          Guardian Tracker rolls features out in waves. Opt into an early-access
+          tier to try features before they reach everyone —{" "}
+          <strong>Beta</strong> for upcoming features, <strong>Alpha</strong>{" "}
+          for the bleeding edge.
         </p>
         <div className="gt-access-switch">
           <span className="gt-set-k">Access tier</span>
@@ -164,7 +178,11 @@ export function Settings() {
                 style={{ "--bdg": roleColor(r) } as CSS}
                 onClick={() => roleMutation.mutate(r)}
               >
-                {r === "alpha" ? <Icon name="bolt" size="0.9em" /> : <span className="gt-dot" />}
+                {r === "alpha" ? (
+                  <Icon name="bolt" size="0.9em" />
+                ) : (
+                  <span className="gt-dot" />
+                )}
                 {ROLE_LABEL[r]}
               </button>
             ))}
@@ -173,10 +191,15 @@ export function Settings() {
         {isAdmin && (
           <>
             <p className="gt-set-note" style={{ color: "var(--c-admin)" }}>
-              You have <strong>Admin</strong> access — full visibility of every feature. Manage
-              member roles and feature flags in the Admin Console.
+              You have <strong>Admin</strong> access — full visibility of every
+              feature. Manage member roles and feature flags in the Admin
+              Console.
             </p>
-            <Button variant="primary" icon="shield" onClick={() => navigate("/admin")}>
+            <Button
+              variant="primary"
+              icon="shield"
+              onClick={() => navigate("/admin")}
+            >
               Open Admin Console
             </Button>
           </>
@@ -205,7 +228,8 @@ export function Settings() {
           <div>
             <span className="gt-set-v">"For you" badges</span>
             <div className="gt-set-note" style={{ marginTop: "0.15rem" }}>
-              Personalized "Missing" and "Available now" badges across your collection.
+              Personalized "Missing" and "Available now" badges across your
+              collection.
             </div>
           </div>
           <Segmented
@@ -263,8 +287,8 @@ export function Settings() {
             </span>
           </div>
           <p className="gt-set-note">
-            Guardian Tracker caches your collection and refreshes on demand — it never polls live,
-            to respect Bungie's rate limits.
+            Guardian Tracker caches your collection and refreshes on demand — it
+            never polls live, to respect Bungie's rate limits.
           </p>
           <DataFreshnessChip
             updatedAt={collections?.fetchedAt}
@@ -279,8 +303,8 @@ export function Settings() {
 
         <Panel title="Privacy" icon="lock">
           <p className="gt-set-note">
-            Your collection must be set to public on Bungie.net for Guardian Tracker to read it. We
-            never modify your account.
+            Your collection must be set to public on Bungie.net for Guardian
+            Tracker to read it. We never modify your account.
           </p>
           <a
             href="https://www.bungie.net/7/en/User/Account/Privacy"

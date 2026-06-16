@@ -1,0 +1,13 @@
+# Build output and dependencies
+dist
+build
+coverage
+node_modules
+
+# Generated / vendored
+package-lock.json
+*.min.js
+*.min.css
+
+# Design-system reference export (kept as-is; not maintained app source)
+design

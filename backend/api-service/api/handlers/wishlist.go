@@ -406,7 +406,6 @@ func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, col 
 	return resp
 }
 
-
 func isDuplicate(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"

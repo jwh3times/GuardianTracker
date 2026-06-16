@@ -23,12 +23,7 @@ import { errorState } from "../lib/errorState";
 import { collectionsQuery } from "../lib/queries";
 import { toGTItem } from "../lib/adapters";
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../lib/constants";
-import type {
-  Difficulty,
-  GTItem,
-  Rarity,
-  TreeNode,
-} from "../types/design";
+import type { Difficulty, GTItem, Rarity, TreeNode } from "../types/design";
 import type {
   ProfileResponse,
   APICollectionSummary,
@@ -87,7 +82,8 @@ export function Collections() {
     queryFn: () => apiFetch<ProfileResponse>("/api/auth/profile"),
   });
 
-  const membershipType = profileData?.user.membershipType ?? user?.membershipType;
+  const membershipType =
+    profileData?.user.membershipType ?? user?.membershipType;
   const membershipId = profileData?.user.membershipId ?? user?.membershipId;
 
   // The collections browser always loads the full dataset (collected + missing)
@@ -111,7 +107,7 @@ export function Collections() {
 
   const wished = useMemo(
     () => new Set(wishlistData?.map((w) => String(w.itemHash)) ?? []),
-    [wishlistData]
+    [wishlistData],
   );
 
   // Items with an add/remove mutation in flight. Guards against a rapid second
@@ -157,7 +153,7 @@ export function Collections() {
     mutationFn: () =>
       apiFetch<APICacheRefreshResponse>(
         `/api/collections/${membershipType}/${membershipId}/refresh`,
-        { method: "POST" }
+        { method: "POST" },
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["collections"] });
@@ -244,9 +240,11 @@ export function Collections() {
     let list = baseItems.slice();
     if (rarity) list = list.filter((i) => i.rarity === rarity);
     if (diff) list = list.filter((i) => i.diff === diff);
-    if (sort === "rarity") list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
+    if (sort === "rarity")
+      list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
     else if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sort === "difficulty") list.sort((a, b) => DIFF_RANK[a.diff] - DIFF_RANK[b.diff]);
+    else if (sort === "difficulty")
+      list.sort((a, b) => DIFF_RANK[a.diff] - DIFF_RANK[b.diff]);
     else if (sort === "avail")
       list.sort((a, b) => (b.obtainable ? 1 : 0) - (a.obtainable ? 1 : 0));
     return list;
@@ -271,7 +269,11 @@ export function Collections() {
     const row = wishlistData?.find((w) => String(w.itemHash) === item.id);
     if (!row) return; // wishlist cache not refreshed yet; wait for it
     markPending(item.id, true);
-    removeWishlistMutation.mutate({ rowId: row.id, name: item.name, itemId: item.id });
+    removeWishlistMutation.mutate({
+      rowId: row.id,
+      name: item.name,
+      itemId: item.id,
+    });
   };
 
   const total = realBucket?.total ?? 0;
@@ -284,7 +286,11 @@ export function Collections() {
     <div className="gt-page gt-collections">
       <PageHead
         title="Collections"
-        sub={<span className="mono">Track what you're missing across every category</span>}
+        sub={
+          <span className="mono">
+            Track what you're missing across every category
+          </span>
+        }
         right={
           <DataFreshnessChip
             updatedAt={collections?.fetchedAt}
@@ -303,10 +309,17 @@ export function Collections() {
       <div className="gt-coll-layout">
         {/* CATEGORY TREE */}
         <aside className="gt-coll-aside">
-          <div className="gt-section-title" style={{ marginBottom: "var(--s-3)" }}>
+          <div
+            className="gt-section-title"
+            style={{ marginBottom: "var(--s-3)" }}
+          >
             Categories
           </div>
-          <CategoryTree nodes={treeNodes} activeId={active} onSelect={setActive} />
+          <CategoryTree
+            nodes={treeNodes}
+            activeId={active}
+            onSelect={setActive}
+          />
         </aside>
 
         {/* MAIN */}
@@ -314,7 +327,10 @@ export function Collections() {
           {/* FILTER BAR */}
           <div className="gt-coll-toolbar">
             <div className="gt-filterbar">
-              <FilterChip on={missingOnly} onClick={() => setMissingOnly((v) => !v)}>
+              <FilterChip
+                on={missingOnly}
+                onClick={() => setMissingOnly((v) => !v)}
+              >
                 Missing only
               </FilterChip>
               <Dropdown
@@ -332,7 +348,14 @@ export function Collections() {
               />
               <Dropdown
                 label="Sort"
-                value={{ rarity: "Rarity", name: "Name", difficulty: "Difficulty", avail: "Availability" }[sort]}
+                value={
+                  {
+                    rarity: "Rarity",
+                    name: "Name",
+                    difficulty: "Difficulty",
+                    avail: "Availability",
+                  }[sort]
+                }
                 options={[
                   { v: "rarity", l: "Rarity" },
                   { v: "name", l: "Name" },
@@ -365,8 +388,18 @@ export function Collections() {
 
           <div className="gt-coll-stats">
             <StatTile num={total.toLocaleString()} label="Total" mono />
-            <StatTile num={collected.toLocaleString()} label="Collected" mono color="var(--c-complete)" />
-            <StatTile num={missing.toLocaleString()} label="Missing" mono color="var(--c-signal)" />
+            <StatTile
+              num={collected.toLocaleString()}
+              label="Collected"
+              mono
+              color="var(--c-complete)"
+            />
+            <StatTile
+              num={missing.toLocaleString()}
+              label="Missing"
+              mono
+              color="var(--c-signal)"
+            />
             <div className="gt-coll-resultcount mono">{items.length} shown</div>
           </div>
 
@@ -397,7 +430,13 @@ export function Collections() {
                         </Button>
                       </a>
                     )}
-                    <Button variant="outline" sm onClick={() => { void refetch(); }}>
+                    <Button
+                      variant="outline"
+                      sm
+                      onClick={() => {
+                        void refetch();
+                      }}
+                    >
                       Retry
                     </Button>
                   </div>
@@ -409,7 +448,9 @@ export function Collections() {
               <EmptyState
                 icon={hasFilters ? "filter" : "check"}
                 color={hasFilters ? "var(--c-text-3)" : "var(--c-complete)"}
-                title={hasFilters ? "No items match these filters" : "All caught up!"}
+                title={
+                  hasFilters ? "No items match these filters" : "All caught up!"
+                }
                 body={
                   hasFilters
                     ? "Try loosening a filter to see more of this category."

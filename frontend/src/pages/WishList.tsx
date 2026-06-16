@@ -45,7 +45,7 @@ export function WishList() {
 
   const list: WishlistEntry[] = useMemo(
     () => rawItems.map(toWishlistEntry),
-    [rawItems]
+    [rawItems],
   );
 
   const deleteMutation = useMutation({
@@ -54,8 +54,9 @@ export function WishList() {
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: ["wishlist"] });
       const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
-      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) =>
-        old?.filter((i) => i.id !== id) ?? []
+      queryClient.setQueryData<WishListItem[]>(
+        ["wishlist"],
+        (old) => old?.filter((i) => i.id !== id) ?? [],
       );
       return { previous };
     },
@@ -77,8 +78,9 @@ export function WishList() {
     onMutate: async ({ id, priority }) => {
       await queryClient.cancelQueries({ queryKey: ["wishlist"] });
       const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
-      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) =>
-        old?.map((i) => (i.id === id ? { ...i, priority } : i)) ?? []
+      queryClient.setQueryData<WishListItem[]>(
+        ["wishlist"],
+        (old) => old?.map((i) => (i.id === id ? { ...i, priority } : i)) ?? [],
       );
       return { previous };
     },
@@ -100,8 +102,9 @@ export function WishList() {
     onMutate: async ({ id, notes }) => {
       await queryClient.cancelQueries({ queryKey: ["wishlist"] });
       const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
-      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) =>
-        old?.map((i) => (i.id === id ? { ...i, notes } : i)) ?? []
+      queryClient.setQueryData<WishListItem[]>(
+        ["wishlist"],
+        (old) => old?.map((i) => (i.id === id ? { ...i, notes } : i)) ?? [],
       );
       return { previous };
     },
@@ -135,17 +138,24 @@ export function WishList() {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: list.length };
-    PRIORITY_ORDER.forEach((p) => (c[p] = list.filter((i) => i.priority === p).length));
+    PRIORITY_ORDER.forEach(
+      (p) => (c[p] = list.filter((i) => i.priority === p).length),
+    );
     return c;
   }, [list]);
 
   const shown = useMemo(() => {
-    const l = filter === "all" ? list.slice() : list.filter((i) => i.priority === filter);
+    const l =
+      filter === "all"
+        ? list.slice()
+        : list.filter((i) => i.priority === filter);
     if (sort === "availability")
       l.sort((a, b) => (b.avail.now ? 1 : 0) - (a.avail.now ? 1 : 0));
     else if (sort === "priority")
       l.sort(
-        (a, b) => PRIORITY_ORDER.indexOf(a.priority) - PRIORITY_ORDER.indexOf(b.priority)
+        (a, b) =>
+          PRIORITY_ORDER.indexOf(a.priority) -
+          PRIORITY_ORDER.indexOf(b.priority),
       );
     return l;
   }, [list, filter, sort]);
@@ -154,7 +164,10 @@ export function WishList() {
     return (
       <div className="gt-page">
         <PageHead title="Wishlist" />
-        <div className="gt-card" style={{ display: "flex", justifyContent: "center", padding: "3rem" }}>
+        <div
+          className="gt-card"
+          style={{ display: "flex", justifyContent: "center", padding: "3rem" }}
+        >
           <LoadingSpinner />
         </div>
       </div>
@@ -190,13 +203,19 @@ export function WishList() {
         title="Wishlist"
         sub={
           <span className="mono">
-            {list.length} items · {list.filter((i) => i.avail.now).length} available now
+            {list.length} items · {list.filter((i) => i.avail.now).length}{" "}
+            available now
           </span>
         }
         right={
           <Dropdown
             label="Sort: Availability"
-            value={{ availability: "Sort: Availability", priority: "Sort: Priority" }[sort]}
+            value={
+              {
+                availability: "Sort: Availability",
+                priority: "Sort: Priority",
+              }[sort]
+            }
             noClear
             options={[
               { v: "availability", l: "Sort: Availability" },
@@ -221,7 +240,12 @@ export function WishList() {
       <div className="gt-wl-list">
         {shown.map((i) => (
           <div key={i.id} className="gt-wl-item gt-card" data-rarity={i.rarity}>
-            <ItemTile rarity={i.rarity} type={i.type} icon={i.icon} style={{ width: "3rem" }} />
+            <ItemTile
+              rarity={i.rarity}
+              type={i.type}
+              icon={i.icon}
+              style={{ width: "3rem" }}
+            />
             <div className="gt-wl-body">
               <div className="gt-wl-top">
                 <div>
@@ -240,7 +264,9 @@ export function WishList() {
                   <span className="gt-wl-where">{i.avail.where}</span>
                 </div>
               ) : (
-                <div className="gt-action-meta mono">Source: {i.avail.where}</div>
+                <div className="gt-action-meta mono">
+                  Source: {i.avail.where}
+                </div>
               )}
               {editingId === i.id ? (
                 <div className="gt-wl-notes-edit">
@@ -252,11 +278,21 @@ export function WishList() {
                     autoFocus
                     ariaLabel={`Notes for ${i.name}`}
                   />
-                  <div style={{ display: "flex", gap: "var(--s-2)", marginTop: "var(--s-1)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "var(--s-2)",
+                      marginTop: "var(--s-1)",
+                    }}
+                  >
                     <Button variant="primary" sm onClick={saveNotes}>
                       Save
                     </Button>
-                    <Button variant="ghost" sm onClick={() => setEditingId(null)}>
+                    <Button
+                      variant="ghost"
+                      sm
+                      onClick={() => setEditingId(null)}
+                    >
                       Cancel
                     </Button>
                   </div>
@@ -269,14 +305,24 @@ export function WishList() {
                   label="Priority"
                   value={PRIORITY_LABEL[i.priority]}
                   noClear
-                  options={PRIORITY_ORDER.map((p) => ({ v: p, l: PRIORITY_LABEL[p] }))}
+                  options={PRIORITY_ORDER.map((p) => ({
+                    v: p,
+                    l: PRIORITY_LABEL[p],
+                  }))}
                   onPick={(p) => p && setPriority(i.id, p as Priority)}
                 />
                 <span className="gt-action-meta mono">Added {i.added}</span>
-                <button className="gt-link" onClick={() => startEditNotes(i.id, i.notes)}>
-                  <Icon name="settings" size="0.8rem" /> {i.notes ? "Edit notes" : "Add notes"}
+                <button
+                  className="gt-link"
+                  onClick={() => startEditNotes(i.id, i.notes)}
+                >
+                  <Icon name="settings" size="0.8rem" />{" "}
+                  {i.notes ? "Edit notes" : "Add notes"}
                 </button>
-                <button className="gt-link gt-link--danger" onClick={() => remove(i.id, i.name)}>
+                <button
+                  className="gt-link gt-link--danger"
+                  onClick={() => remove(i.id, i.name)}
+                >
                   <Icon name="close" size="0.8rem" /> Remove
                 </button>
               </div>

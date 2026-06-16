@@ -1,5 +1,14 @@
 import React from "react";
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+  vi,
+} from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,7 +41,7 @@ describe("App routing", () => {
     render(
       <MemoryRouter initialEntries={["/"]}>
         <App />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
     expect(await screen.findByText("Sign in with Bungie")).toBeInTheDocument();
   });
@@ -42,10 +51,12 @@ describe("App routing", () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <App />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
     // AppShell sidebar nav renders alongside the dashboard content
-    expect(await screen.findByText(/Welcome back, TestGuardian/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Welcome back, TestGuardian/),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Collections").length).toBeGreaterThan(0);
   });
 
@@ -54,9 +65,11 @@ describe("App routing", () => {
     render(
       <MemoryRouter initialEntries={["/login"]}>
         <App />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
-    expect(await screen.findByText(/Welcome back, TestGuardian/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Welcome back, TestGuardian/),
+    ).toBeInTheDocument();
   });
 });
 
@@ -67,7 +80,9 @@ describe("AppShell interactions", () => {
   });
 
   function renderShell(route = "/dashboard") {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     return render(
       <QueryClientProvider client={qc}>
         <AuthProvider>
@@ -86,7 +101,10 @@ describe("AppShell interactions", () => {
                         }
                       />
                       <Route path="/login" element={<div>login-stub</div>} />
-                      <Route path="/collections" element={<div>collections-stub</div>} />
+                      <Route
+                        path="/collections"
+                        element={<div>collections-stub</div>}
+                      />
                     </Routes>
                   </ToastProvider>
                 </CharacterProvider>
@@ -94,7 +112,7 @@ describe("AppShell interactions", () => {
             </MemoryRouter>
           </PreferencesProvider>
         </AuthProvider>
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
   }
 
@@ -112,7 +130,9 @@ describe("AppShell interactions", () => {
     expect(screen.getAllByText("Sign out")).toHaveLength(2);
     // Clicking the scrim closes the drawer
     fireEvent.click(container.querySelector(".gt-mobnav-scrim")!);
-    await waitFor(() => expect(screen.getAllByText("Sign out")).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getAllByText("Sign out")).toHaveLength(1),
+    );
   });
 
   it("shows the character switcher menu and switches guardians", async () => {
@@ -139,18 +159,20 @@ describe("AppShell interactions", () => {
             emblemBackgroundPath: "",
             dateLastPlayed: new Date().toISOString(),
           },
-        ])
-      )
+        ]),
+      ),
     );
     renderShell();
     // Switcher button shows the display name once characters load
-    const switcher = await screen.findByRole("button", { name: /TestGuardian/ });
+    const switcher = await screen.findByRole("button", {
+      name: /TestGuardian/,
+    });
     fireEvent.click(switcher);
     expect(await screen.findByText("Switch Guardian")).toBeInTheDocument();
     fireEvent.click(screen.getByText(/Warlock/));
     // Menu closes after a pick
     await waitFor(() =>
-      expect(screen.queryByText("Switch Guardian")).not.toBeInTheDocument()
+      expect(screen.queryByText("Switch Guardian")).not.toBeInTheDocument(),
     );
   });
 
@@ -158,25 +180,37 @@ describe("AppShell interactions", () => {
     server.use(
       http.get(`${API}/api/items/search`, () =>
         HttpResponse.json([
-          { hash: 555, name: "Gjallarhorn", icon: "", type: "Rocket Launcher", rarity: "Exotic" },
-        ])
-      )
+          {
+            hash: 555,
+            name: "Gjallarhorn",
+            icon: "",
+            type: "Rocket Launcher",
+            rarity: "Exotic",
+          },
+        ]),
+      ),
     );
     renderShell();
     const input = screen.getByPlaceholderText("Search items…");
     fireEvent.change(input, { target: { value: "gjall" } });
     // Debounced 250ms query → result appears
-    expect(await screen.findByText("Gjallarhorn", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText("Gjallarhorn", {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText("Gjallarhorn"));
     expect(await screen.findByText("collections-stub")).toBeInTheDocument();
   });
 
   it("shows the no-match state for an empty search", async () => {
-    server.use(http.get(`${API}/api/items/search`, () => HttpResponse.json([])));
+    server.use(
+      http.get(`${API}/api/items/search`, () => HttpResponse.json([])),
+    );
     renderShell();
     const input = screen.getByPlaceholderText("Search items…");
     fireEvent.change(input, { target: { value: "zzz" } });
-    expect(await screen.findByText(/No items match/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText(/No items match/, {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
   });
 
   it("signs out from the sidebar", async () => {
@@ -197,7 +231,7 @@ describe("ErrorBoundary", () => {
     render(
       <ErrorBoundary>
         <Boom />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
     expect(screen.getByText("kaboom")).toBeInTheDocument();
@@ -209,7 +243,7 @@ describe("ErrorBoundary", () => {
     render(
       <ErrorBoundary fallback={<div>custom-fallback</div>}>
         <Boom />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
     expect(screen.getByText("custom-fallback")).toBeInTheDocument();
     spy.mockRestore();
@@ -219,7 +253,7 @@ describe("ErrorBoundary", () => {
     render(
       <ErrorBoundary>
         <div>safe-child</div>
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
     expect(screen.getByText("safe-child")).toBeInTheDocument();
   });
@@ -235,19 +269,24 @@ describe("ErrorBoundary", () => {
     render(
       <ErrorBoundary>
         <Boom />
-      </ErrorBoundary>
+      </ErrorBoundary>,
     );
     fireEvent.click(screen.getByText("Reload Page"));
     expect(reload).toHaveBeenCalled();
     fireEvent.click(screen.getByText("Try Again"));
-    Object.defineProperty(window, "location", { configurable: true, value: original });
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: original,
+    });
     spy.mockRestore();
   });
 });
 
 describe("LoadingSpinner", () => {
   it("applies the size class and merges a custom className", () => {
-    const { container, rerender } = render(<LoadingSpinner size="sm" className="extra" />);
+    const { container, rerender } = render(
+      <LoadingSpinner size="sm" className="extra" />,
+    );
     expect(container.firstChild).toHaveClass("h-4", "w-4", "extra");
     rerender(<LoadingSpinner size="lg" />);
     expect(container.firstChild).toHaveClass("h-12", "w-12");

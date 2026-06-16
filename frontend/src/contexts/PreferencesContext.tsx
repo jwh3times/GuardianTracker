@@ -27,7 +27,7 @@ const DEFAULTS: Preferences = { cardStyle: "framed", personalize: "normal" };
 const STORAGE_KEY = "guardian_prefs";
 
 const PreferencesContext = createContext<PreferencesContextType | undefined>(
-  undefined
+  undefined,
 );
 
 function load(): Preferences {
@@ -61,7 +61,9 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
     // On mount, sync from API if authenticated
     const token = localStorage.getItem("guardian_token");
     if (!token) return;
-    apiFetch<{ cardStyle: "framed" | "compact"; personalize: boolean }>("/api/preferences")
+    apiFetch<{ cardStyle: "framed" | "compact"; personalize: boolean }>(
+      "/api/preferences",
+    )
       .then((remote) => {
         setPrefs({
           cardStyle: remote.cardStyle,

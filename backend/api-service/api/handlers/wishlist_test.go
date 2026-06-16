@@ -575,11 +575,13 @@ func TestEnrichItems_WithManifest(t *testing.T) {
 	manifest := &mockManifest{
 		defs: map[uint32]*bungie.InventoryItemDefinition{
 			5555: {
-				Hash: 5555,
+				Hash:              5555,
 				DisplayProperties: bungie.DisplayProperties{Name: "Gjallarhorn"},
 				ItemType:          bungie.ItemTypeWeapon,
 				ItemSubType:       bungie.WeaponSubTypeRocketLauncher,
-				Inventory:         struct{ TierType int `json:"tierType"` }{TierType: bungie.TierTypeExotic},
+				Inventory: struct {
+					TierType int `json:"tierType"`
+				}{TierType: bungie.TierTypeExotic},
 			},
 		},
 	}

@@ -1,5 +1,13 @@
 import React from "react";
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+} from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -39,7 +47,7 @@ function renderPage(ui: React.ReactNode, route = "/") {
           </CharacterProvider>
         </PreferencesProvider>
       </AuthProvider>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -71,9 +79,9 @@ describe("Collections", () => {
             availableNow: false,
             dateAdded: new Date().toISOString(),
           },
-          { status: 201 }
+          { status: 201 },
         );
-      })
+      }),
     );
 
     renderPage(<Collections />);
@@ -89,14 +97,17 @@ describe("Collections", () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
         HttpResponse.json(
-          { error: "User has their Destiny 2 profile set to private", code: "PRIVACY_RESTRICTION" },
-          { status: 403 }
-        )
-      )
+          {
+            error: "User has their Destiny 2 profile set to private",
+            code: "PRIVACY_RESTRICTION",
+          },
+          { status: 403 },
+        ),
+      ),
     );
     renderPage(<Collections />);
     expect(
-      await screen.findByText("Your Destiny profile is private")
+      await screen.findByText("Your Destiny profile is private"),
     ).toBeInTheDocument();
   });
 });
@@ -104,11 +115,15 @@ describe("Collections", () => {
 describe("Dashboard", () => {
   it("renders real collection totals and honest wishlist availability", async () => {
     renderPage(<Dashboard />);
-    expect(await screen.findByText(/Welcome back, TestGuardian/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Welcome back, TestGuardian/),
+    ).toBeInTheDocument();
     // 8 of 10 weapons collected in the fixture
     expect(await screen.findByText("8/10")).toBeInTheDocument();
     // One wishlist item, available now (fixture)
-    expect(await screen.findByText(/of 1 wishlist items available now/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/of 1 wishlist items available now/),
+    ).toBeInTheDocument();
     expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
   });
 });
@@ -126,15 +141,19 @@ describe("OAuthCallback", () => {
           refreshToken: "new-refresh",
           user: sampleUser,
         });
-      })
+      }),
     );
 
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     render(
       <React.StrictMode>
         <QueryClientProvider client={qc}>
           <AuthProvider>
-            <MemoryRouter initialEntries={["/auth/callback?code=onetime&state=sig"]}>
+            <MemoryRouter
+              initialEntries={["/auth/callback?code=onetime&state=sig"]}
+            >
               <Routes>
                 <Route path="/auth/callback" element={<OAuthCallback />} />
                 <Route path="/dashboard" element={<div>dashboard-stub</div>} />
@@ -142,7 +161,7 @@ describe("OAuthCallback", () => {
             </MemoryRouter>
           </AuthProvider>
         </QueryClientProvider>
-      </React.StrictMode>
+      </React.StrictMode>,
     );
 
     expect(await screen.findByText("dashboard-stub")).toBeInTheDocument();
@@ -161,7 +180,7 @@ describe("OAuthCallback", () => {
             </Routes>
           </MemoryRouter>
         </AuthProvider>
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
     expect(await screen.findByText("Authentication error")).toBeInTheDocument();
   });

@@ -109,14 +109,14 @@ Triumphs & Seals, Wishlist, Settings.
 
 ## Pages & Data Sources
 
-| Page                             | Data                                                                                  |
-| -------------------------------- | ------------------------------------------------------------------------------------- |
-| Dashboard                        | Real collection totals (weapons/armor/exotics/cosmetics); real weekly recommendations |
-| Collections                      | Real data via `GET /api/collections?include=all`; supports ?item=<hash> deep-link     |
-| Wishlist                         | Real `GET/POST/PUT/DELETE /api/wishlist`; icon + Xûr availability cross-check         |
-| This Week                        | Real weekly data via `GET /api/weekly/recommendations` (Xûr, milestones, actions)     |
-| Catalysts / Triumphs             | Real data via `GET /api/catalysts`, `/api/crafting`, `/api/seals`                     |
-| Settings                         | Real account info from `useAuth`; appearance prefs via `PreferencesContext`           |
+| Page                 | Data                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| Dashboard            | Real collection totals (weapons/armor/exotics/cosmetics); real weekly recommendations |
+| Collections          | Real data via `GET /api/collections?include=all`; supports ?item=<hash> deep-link     |
+| Wishlist             | Real `GET/POST/PUT/DELETE /api/wishlist`; icon + Xûr availability cross-check         |
+| This Week            | Real weekly data via `GET /api/weekly/recommendations` (Xûr, milestones, actions)     |
+| Catalysts / Triumphs | Real data via `GET /api/catalysts`, `/api/crafting`, `/api/seals`                     |
+| Settings             | Real account info from `useAuth`; appearance prefs via `PreferencesContext`           |
 
 ## User Preferences
 

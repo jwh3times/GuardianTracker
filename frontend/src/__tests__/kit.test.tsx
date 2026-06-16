@@ -14,14 +14,18 @@ import {
 
 describe("ItemTile", () => {
   it("renders the Bungie icon when an icon path is given", () => {
-    const { container } = render(<ItemTile rarity="exotic" type="Hand Cannon" icon="/icons/x.png" />);
+    const { container } = render(
+      <ItemTile rarity="exotic" type="Hand Cannon" icon="/icons/x.png" />,
+    );
     const img = container.querySelector("img.gt-tile-img");
     expect(img).toHaveAttribute("src", "https://www.bungie.net/icons/x.png");
     expect(container.querySelector(".gt-tile-glyph")).toBeNull();
   });
 
   it("falls back to the type glyph when the image fails to load", () => {
-    const { container } = render(<ItemTile rarity="legendary" type="Hand Cannon" icon="/broken.png" />);
+    const { container } = render(
+      <ItemTile rarity="legendary" type="Hand Cannon" icon="/broken.png" />,
+    );
     fireEvent.error(container.querySelector("img.gt-tile-img")!);
     expect(container.querySelector(".gt-tile-glyph")).toHaveTextContent("HC");
   });
@@ -35,7 +39,9 @@ describe("ItemTile", () => {
 describe("DataFreshnessChip", () => {
   it("shows relative time from updatedAt", () => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
-    render(<DataFreshnessChip updatedAt={fiveMinAgo} onRefresh={() => undefined} />);
+    render(
+      <DataFreshnessChip updatedAt={fiveMinAgo} onRefresh={() => undefined} />,
+    );
     expect(screen.getByText("Updated 5m ago")).toBeInTheDocument();
   });
 
@@ -45,20 +51,33 @@ describe("DataFreshnessChip", () => {
   });
 
   it("shows the refreshing state while a refresh is in flight", () => {
-    render(<DataFreshnessChip updatedAt={new Date().toISOString()} refreshing onRefresh={() => undefined} />);
+    render(
+      <DataFreshnessChip
+        updatedAt={new Date().toISOString()}
+        refreshing
+        onRefresh={() => undefined}
+      />,
+    );
     expect(screen.getByText("Refreshing…")).toBeInTheDocument();
   });
 
   it("fires onRefresh on click but not while refreshing", () => {
     let calls = 0;
     const { rerender } = render(
-      <DataFreshnessChip updatedAt={new Date().toISOString()} onRefresh={() => calls++} />
+      <DataFreshnessChip
+        updatedAt={new Date().toISOString()}
+        onRefresh={() => calls++}
+      />,
     );
     fireEvent.click(screen.getByRole("button"));
     expect(calls).toBe(1);
 
     rerender(
-      <DataFreshnessChip updatedAt={new Date().toISOString()} refreshing onRefresh={() => calls++} />
+      <DataFreshnessChip
+        updatedAt={new Date().toISOString()}
+        refreshing
+        onRefresh={() => calls++}
+      />,
     );
     fireEvent.click(screen.getByRole("button"));
     expect(calls).toBe(1);
@@ -86,7 +105,11 @@ describe("Badge", () => {
 describe("FilterChip", () => {
   it("reflects on-state and handles clicks", () => {
     let on = false;
-    render(<FilterChip on={on} onClick={() => (on = true)}>Missing only</FilterChip>);
+    render(
+      <FilterChip on={on} onClick={() => (on = true)}>
+        Missing only
+      </FilterChip>,
+    );
     fireEvent.click(screen.getByText("Missing only"));
     expect(on).toBe(true);
   });
@@ -96,7 +119,12 @@ describe("Textarea", () => {
   it("propagates changes and respects maxLength", () => {
     let value = "";
     render(
-      <Textarea value={value} onChange={(v) => (value = v)} maxLength={500} ariaLabel="Notes" />
+      <Textarea
+        value={value}
+        onChange={(v) => (value = v)}
+        maxLength={500}
+        ariaLabel="Notes"
+      />,
     );
     const el = screen.getByLabelText("Notes");
     fireEvent.change(el, { target: { value: "god roll" } });
@@ -111,7 +139,14 @@ describe("StatTile / EmptyState", () => {
     expect(screen.getByText("1,234")).toBeInTheDocument();
   });
   it("renders empty-state copy and actions", () => {
-    render(<EmptyState icon="filter" title="Nothing here" body="No matches." action={<button>Clear</button>} />);
+    render(
+      <EmptyState
+        icon="filter"
+        title="Nothing here"
+        body="No matches."
+        action={<button>Clear</button>}
+      />,
+    );
     expect(screen.getByText("Nothing here")).toBeInTheDocument();
     expect(screen.getByText("Clear")).toBeInTheDocument();
   });

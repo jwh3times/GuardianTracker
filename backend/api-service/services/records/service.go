@@ -15,22 +15,22 @@ import (
 
 // Record state bit flags from the Bungie API.
 const (
-	RecordStateNone              = 0
-	RecordStateRecordRedeemed    = 1  // bit 0 — triumph completed and claimed
-	RecordStateRewardUnavailable = 2  // bit 1
+	RecordStateNone                  = 0
+	RecordStateRecordRedeemed        = 1  // bit 0 — triumph completed and claimed
+	RecordStateRewardUnavailable     = 2  // bit 1
 	RecordStateObjectiveNotCompleted = 4  // bit 2
-	RecordStateObscured          = 8  // bit 3 — not yet unlocked/visible
-	RecordStateInvisible         = 16 // bit 4
-	RecordStateEntitlementUnowned = 32 // bit 5
-	RecordStateCanEquipTitle     = 64 // bit 6
+	RecordStateObscured              = 8  // bit 3 — not yet unlocked/visible
+	RecordStateInvisible             = 16 // bit 4
+	RecordStateEntitlementUnowned    = 32 // bit 5
+	RecordStateCanEquipTitle         = 64 // bit 6
 )
 
 // Catalyst represents one exotic weapon catalyst and its completion state.
 type Catalyst struct {
 	ID     string  `json:"id"`
 	Name   string  `json:"name"`
-	Type   string  `json:"type"` // weapon type, e.g. "Hand Cannon"; "" when unresolvable
-	Icon   string  `json:"icon"` // record icon path on bungie.net, may be ""
+	Type   string  `json:"type"`   // weapon type, e.g. "Hand Cannon"; "" when unresolvable
+	Icon   string  `json:"icon"`   // record icon path on bungie.net, may be ""
 	Status string  `json:"status"` // "missing" | "in-progress" | "complete"
 	Obj    *CatObj `json:"obj"`    // non-nil only when status = "in-progress"
 	Source string  `json:"source"`
