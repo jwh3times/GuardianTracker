@@ -1,0 +1,13 @@
+# CODEOWNERS — auto-requests review from the listed owners when matching files change.
+# Order matters: the last matching pattern takes precedence.
+# Docs: https://docs.github.com/articles/about-code-owners
+# TODO: Add more granular rules / additional owners as the team grows.
+
+# Default owner for everything in the repo
+*                       @jwh3times
+
+# Examples of more specific ownership (uncomment and adjust as needed):
+# /backend/api-service/  @jwh3times
+# /frontend/             @jwh3times
+# /k8s/                  @jwh3times
+# /.github/              @jwh3times

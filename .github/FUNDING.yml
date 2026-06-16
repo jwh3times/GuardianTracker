@@ -1,0 +1,9 @@
+# Sponsor button shown on the repo.
+# Docs: https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+github: [jwh3times]
+buy_me_a_coffee: jwh3times
+# Other platforms (uncomment and fill in if you add them):
+# ko_fi: your-ko-fi-username
+# patreon: your-patreon-username
+# custom: ["https://example.com/donate"]
