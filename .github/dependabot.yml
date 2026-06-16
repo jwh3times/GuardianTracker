@@ -27,7 +27,7 @@ updates:
     schedule:
       interval: "daily"
       time: "07:00"
-      timezone: "Etc/UTC"
+      timezone: "America/New_York"
     labels:
       - "dependencies"
     commit-message:
@@ -47,7 +47,7 @@ updates:
     schedule:
       interval: "daily"
       time: "07:00"
-      timezone: "Etc/UTC"
+      timezone: "America/New_York"
     labels:
       - "dependencies"
     commit-message:
@@ -68,7 +68,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "07:00"
-      timezone: "Etc/UTC"
+      timezone: "America/New_York"
     labels:
       - "dependencies"
     commit-message:
@@ -92,7 +92,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "07:00"
-      timezone: "Etc/UTC"
+      timezone: "America/New_York"
     labels:
       - "dependencies"
     commit-message:
@@ -114,7 +114,7 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "07:00"
-      timezone: "Etc/UTC"
+      timezone: "America/New_York"
     labels:
       - "dependencies"
     commit-message:
