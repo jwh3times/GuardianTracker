@@ -285,16 +285,19 @@ GitHub Actions (`.github/workflows/ci-cd.yml`):
 3. **test-go-services** — go vet, govulncheck, go test with race detector; db integration tests run against the Postgres service container via `TEST_DATABASE_URL`; statement-coverage gate ≥60% (ratcheting up — CI lands ~63% with cgo+Postgres; ~52% locally where the sqlite/db packages are skipped — see [Full Go coverage locally](#full-go-coverage-locally-matches-ci))
 4. **build-docker-images** — builds both Docker images; build validation only (no push configured yet)
 
-Separately, **CodeQL** (GitHub default setup) scans go, javascript-typescript, and actions on every PR.
+Separately, **CodeQL** (GitHub default setup) scans go, javascript-typescript, and actions on every PR — except **Dependabot-authored PRs**, which default setup does not analyze (Dependabot runs get a read-only token with no `security-events: write`). On those PRs the aggregate `CodeQL` check reports *neutral* ("configurations not found"); that is informational and does not block (see the code-scanning note below).
 
 ### Branch protection (`main`)
 
-`main` is governed by two repository rulesets (Settings → Rules):
+`main` (and `release/**`) is governed by a single repository ruleset, **"Main/Release branch rules"** (id `17717600`, Settings → Rules), which bundles:
 
-- **"Require PRs and passing checks for main"** (default branch) — requires a pull request to merge (no direct pushes), with all of these status checks green first: `Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, and the CodeQL `Analyze (go)` / `Analyze (javascript-typescript)` / `Analyze (actions)` checks. Strict policy (branch must be up to date), 0 required approvals (solo repo — self-approval isn't possible; self-merge once green is allowed), stale-review dismissal + review-thread resolution on. **No bypass actors** — the rules apply to everyone, admins included.
-- **"Main/Release branch rules"** (all branches) — blocks branch deletion and non-fast-forward (force) pushes.
+- **Pull request required** — no direct pushes; 0 required approvals (solo repo — self-approval isn't possible; self-merge once green is allowed), stale-review dismissal + review-thread resolution on, Copilot review on push.
+- **Required status checks** (strict policy — branch must be up to date): `Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`. **The per-language CodeQL `Analyze (...)` contexts are deliberately _not_ required status checks** — default setup never creates them on Dependabot PRs, so requiring them blocked every Dependabot PR indefinitely. CodeQL is instead enforced by the dedicated **code-scanning merge rule** below, which is default-setup-aware and degrades gracefully when an analysis didn't run.
+- **Code scanning merge protection** — CodeQL, `alerts_threshold: errors_and_warnings`, `security_alerts_threshold: medium_or_higher`. This is the real CodeQL gate for human PRs.
+- **Code quality** (warnings) + **deletion** and **non-fast-forward** (force-push) blocks.
+- **No bypass actors** — the rules apply to everyone, admins included.
 
-To change the gate (e.g. add/remove a required check), edit the ruleset via `gh api repos/jwh3times/GuardianTracker/rulesets/<id>` or the GitHub UI; the required-check names must match the CI job `name:` and the CodeQL check contexts exactly.
+To change the gate (e.g. add/remove a required check), edit the ruleset via `gh api repos/jwh3times/GuardianTracker/rulesets/17717600` or the GitHub UI; required status-check names must match the CI job `name:` exactly. Do **not** re-add the CodeQL `Analyze (...)` contexts as required status checks — that re-breaks Dependabot PRs; gate CodeQL through the code-scanning rule instead.
 
 ## Common Tasks
 
