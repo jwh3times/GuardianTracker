@@ -1,0 +1,71 @@
+name: Bug report
+description: Report something that isn't working as expected
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug! Please search existing issues first to avoid duplicates.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+      placeholder: The collections page shows a blank grid after logging in, even though my account has items.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce the behavior?
+      placeholder: |
+        1. Log in via Bungie OAuth
+        2. Open the Collections page
+        3. Select the "Weapons" category
+        4. Observe the empty grid
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The grid should list my owned and missing weapons, grouped by difficulty.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Frontend (React)
+        - API service (Go)
+        - Auth / OAuth
+        - Manifest / collections
+        - Infrastructure (Docker / k8s)
+        - Other / not sure
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, browser, run mode (Docker Compose / individual / Minikube), and any relevant versions.
+      placeholder: |
+        - OS: Windows 11
+        - Browser: Chrome 130
+        - Run mode: Docker Compose
+        - Commit / branch: main @ abc1234
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Paste any relevant log output (api-service console, browser devtools) or screenshots.
+      placeholder: |
+        Paste logs here. For api-service: the console output around the failing request.
+        For the frontend: browser console / network tab errors.
+    validations:
+      required: false
