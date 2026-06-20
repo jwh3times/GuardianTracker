@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // AuditEvent is one entry written to audit_log. Zero-value Outcome defaults to
@@ -57,4 +59,24 @@ func insertAudit(ctx context.Context, q execer, ev AuditEvent) error {
 		ev.EventType, outcome, ev.ActorUserID, ev.ActorMembershipID,
 		ev.TargetUserID, sessionID, ip, truncateUserAgent(ev.UserAgent), string(detailsJSON))
 	return err
+}
+
+// AuditStore is the DB layer for the unified audit trail.
+type AuditStore struct{ pool *pgxpool.Pool }
+
+func NewAuditStore(pool *pgxpool.Pool) *AuditStore { return &AuditStore{pool: pool} }
+
+// Log writes one audit event best-effort on the store's own connection. Callers
+// that need the write to share a mutation's transaction use insertAudit directly.
+func (s *AuditStore) Log(ctx context.Context, ev AuditEvent) error {
+	return insertAudit(ctx, s.pool, ev)
+}
+
+// DeleteOlderThan removes audit rows created before cutoff, returning the count.
+func (s *AuditStore) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM audit_log WHERE created_at < $1`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
 }

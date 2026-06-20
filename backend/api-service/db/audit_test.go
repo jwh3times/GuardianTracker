@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 func TestMigrate_AuditLogReplacesRoleAudit(t *testing.T) {
@@ -57,6 +58,30 @@ func TestInsertAudit_WritesRow(t *testing.T) {
 	}
 	// clean up audit rows referencing the test user before its cleanup deletes it
 	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE actor_user_id = $1`, uid) })
+}
+
+func TestAuditStore_LogAndPrune(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	store := NewAuditStore(pool)
+	mid, _ := createTestUser(t, pool)
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE actor_membership_id = $1`, mid) })
+
+	if err := store.Log(ctx, AuditEvent{EventType: "logout", ActorMembershipID: mid}); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	// Backdate it well past the cutoff and prune.
+	if _, err := pool.Exec(ctx,
+		`UPDATE audit_log SET created_at = now() - interval '400 days' WHERE actor_membership_id = $1`, mid); err != nil {
+		t.Fatalf("backdate: %v", err)
+	}
+	removed, err := store.DeleteOlderThan(ctx, time.Now().AddDate(0, 0, -180))
+	if err != nil {
+		t.Fatalf("DeleteOlderThan: %v", err)
+	}
+	if removed < 1 {
+		t.Errorf("removed = %d, want >= 1", removed)
+	}
 }
 
 func TestInsertAudit_EmptyIPStoresNull(t *testing.T) {
