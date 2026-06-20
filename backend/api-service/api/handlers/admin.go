@@ -73,7 +73,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 // SetUserRole handles PUT /api/admin/users/:id/role — any role incl. admin, with
 // last-admin protection. Bumps the target's token_version and evicts its
-// revocation cache entry so stale sessions re-sync; writes a role_audit row.
+// revocation cache entry so stale sessions re-sync; writes an audit_log row.
 func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	targetID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {

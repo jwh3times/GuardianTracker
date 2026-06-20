@@ -55,7 +55,7 @@ type Config struct {
 }
 
 func Load() *Config {
-	return &Config{
+	cfg := &Config{
 		Port:  getEnv("PORT", "8081"),
 		GoEnv: getEnv("GO_ENV", "development"),
 
@@ -94,6 +94,12 @@ func Load() *Config {
 		AuditRetentionDays: getIntEnv("AUDIT_RETENTION_DAYS", 180),
 		TrustedProxies:     parseCSV(os.Getenv("TRUSTED_PROXIES")),
 	}
+	// Clamp retention floor: 0 (or negative) would make the hourly pruner compute
+	// a cutoff of now() and delete the entire audit_log table on every tick.
+	if cfg.AuditRetentionDays < 1 {
+		cfg.AuditRetentionDays = 180
+	}
+	return cfg
 }
 
 // IsBootstrapAdmin reports whether a membership ID is pinned to admin via

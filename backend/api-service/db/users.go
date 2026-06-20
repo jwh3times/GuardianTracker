@@ -304,8 +304,8 @@ func (s *UserStore) ListUsers(ctx context.Context, q string, limit int) ([]Admin
 
 // SetRoleByID performs an admin-driven role change inside a single transaction:
 // it locks the target (and, when demoting an admin, all admin rows) to enforce
-// last-admin protection, bumps the target's token_version, and writes a
-// role_audit row. The caller evicts the target's revocation cache entry using the
+// last-admin protection, bumps the target's token_version, and writes an
+// audit_log row. The caller evicts the target's revocation cache entry using the
 // returned membership ID. actorMembershipID identifies the acting admin for audit.
 //
 // Returns ErrUserNotFound (unknown target), ErrLastAdmin (would orphan the

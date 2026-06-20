@@ -136,3 +136,20 @@ func TestLoad_AuditOverrides(t *testing.T) {
 		t.Errorf("TrustedProxies = %v, want [10.0.0.0/8 127.0.0.1]", c.TrustedProxies)
 	}
 }
+
+func TestLoad_AuditRetentionClamp(t *testing.T) {
+	// AUDIT_RETENTION_DAYS=0 must be clamped to 180; otherwise the hourly pruner
+	// computes a cutoff of now() and deletes the entire audit_log table each tick.
+	t.Setenv("AUDIT_RETENTION_DAYS", "0")
+	c := Load()
+	if c.AuditRetentionDays != 180 {
+		t.Errorf("AuditRetentionDays = %d with input 0, want clamp to 180", c.AuditRetentionDays)
+	}
+
+	// A valid positive override must pass through unchanged.
+	t.Setenv("AUDIT_RETENTION_DAYS", "30")
+	c = Load()
+	if c.AuditRetentionDays != 30 {
+		t.Errorf("AuditRetentionDays = %d with input 30, want 30", c.AuditRetentionDays)
+	}
+}
