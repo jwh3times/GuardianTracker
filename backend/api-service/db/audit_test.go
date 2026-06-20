@@ -103,3 +103,54 @@ func TestInsertAudit_EmptyIPStoresNull(t *testing.T) {
 	}
 	_ = uid // uid used by createTestUser cleanup; silence unused warning
 }
+
+func TestAuditStore_ListFiltersAndPaginates(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	store := NewAuditStore(pool)
+	mid, uid := createTestUser(t, pool)
+	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE actor_membership_id = $1`, mid) })
+
+	// Three login.success + one flag.update for this actor.
+	for i := 0; i < 3; i++ {
+		if err := store.Log(ctx, AuditEvent{EventType: "login.success", ActorUserID: &uid, ActorMembershipID: mid}); err != nil {
+			t.Fatalf("seed login: %v", err)
+		}
+	}
+	if err := store.Log(ctx, AuditEvent{EventType: "flag.update", ActorUserID: &uid, ActorMembershipID: mid,
+		Details: map[string]any{"key": "god-roll"}}); err != nil {
+		t.Fatalf("seed flag: %v", err)
+	}
+
+	// Filter by exact event type + actor.
+	got, _, err := store.List(ctx, AuditFilter{EventType: "login.success", Actor: mid, Limit: 50})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("login.success rows = %d, want 3", len(got))
+	}
+	if got[0].ActorDisplayName != "Test Guardian" {
+		t.Errorf("actor display = %q, want Test Guardian", got[0].ActorDisplayName)
+	}
+
+	// Prefix filter "login." matches the same 3; keyset paginate at limit 2.
+	page1, cursor, err := store.List(ctx, AuditFilter{EventType: "login.", Actor: mid, Limit: 2})
+	if err != nil {
+		t.Fatalf("List page1: %v", err)
+	}
+	if len(page1) != 2 || cursor == "" {
+		t.Fatalf("page1 = %d rows, cursor=%q; want 2 rows + cursor", len(page1), cursor)
+	}
+	page2, _, err := store.List(ctx, AuditFilter{EventType: "login.", Actor: mid, Limit: 2, Cursor: cursor})
+	if err != nil {
+		t.Fatalf("List page2: %v", err)
+	}
+	if len(page2) != 1 {
+		t.Errorf("page2 = %d rows, want 1", len(page2))
+	}
+	// Pages must not overlap (DESC by created_at,id).
+	if page1[1].ID <= page2[0].ID {
+		t.Errorf("pagination overlap: page1 last id %d, page2 first id %d", page1[1].ID, page2[0].ID)
+	}
+}
