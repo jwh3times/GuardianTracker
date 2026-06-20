@@ -45,6 +45,13 @@ type Config struct {
 	// every login upsert. Bootstraps admin to the owner without manual SQL and
 	// survives DB resets; additional admins are granted via the console.
 	AdminMembershipIDs []string
+
+	// AuditRetentionDays bounds how long audit_log rows (and the IPs they carry)
+	// are retained; an hourly pruner deletes older rows.
+	AuditRetentionDays int
+	// TrustedProxies are CIDRs/IPs gin trusts for X-Forwarded-For when resolving
+	// the client IP recorded in the audit log. Empty in local dev.
+	TrustedProxies []string
 }
 
 func Load() *Config {
@@ -83,6 +90,9 @@ func Load() *Config {
 		TokenEncryptionKeyPrev: os.Getenv("TOKEN_ENCRYPTION_KEY_PREVIOUS"),
 
 		AdminMembershipIDs: parseCSV(os.Getenv("ADMIN_MEMBERSHIP_IDS")),
+
+		AuditRetentionDays: getIntEnv("AUDIT_RETENTION_DAYS", 180),
+		TrustedProxies:     parseCSV(os.Getenv("TRUSTED_PROXIES")),
 	}
 }
 

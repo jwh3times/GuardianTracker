@@ -112,3 +112,27 @@ func TestLoad_FallbacksOnInvalidValues(t *testing.T) {
 		t.Errorf("ManifestCheckInterval = %v, want fallback 1h", cfg.ManifestCheckInterval)
 	}
 }
+
+func TestLoad_AuditDefaults(t *testing.T) {
+	t.Setenv("AUDIT_RETENTION_DAYS", "")
+	t.Setenv("TRUSTED_PROXIES", "")
+	c := Load()
+	if c.AuditRetentionDays != 180 {
+		t.Errorf("AuditRetentionDays = %d, want 180", c.AuditRetentionDays)
+	}
+	if len(c.TrustedProxies) != 0 {
+		t.Errorf("TrustedProxies = %v, want empty", c.TrustedProxies)
+	}
+}
+
+func TestLoad_AuditOverrides(t *testing.T) {
+	t.Setenv("AUDIT_RETENTION_DAYS", "30")
+	t.Setenv("TRUSTED_PROXIES", "10.0.0.0/8, 127.0.0.1")
+	c := Load()
+	if c.AuditRetentionDays != 30 {
+		t.Errorf("AuditRetentionDays = %d, want 30", c.AuditRetentionDays)
+	}
+	if len(c.TrustedProxies) != 2 || c.TrustedProxies[0] != "10.0.0.0/8" || c.TrustedProxies[1] != "127.0.0.1" {
+		t.Errorf("TrustedProxies = %v, want [10.0.0.0/8 127.0.0.1]", c.TrustedProxies)
+	}
+}
