@@ -14,10 +14,17 @@ import (
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
+	"guardian-tracker/api-service/db"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+// AuditLogger records audit events best-effort. Satisfied by *db.AuditStore;
+// nil in degraded mode (no DB).
+type AuditLogger interface {
+	Log(ctx context.Context, ev db.AuditEvent) error
+}
 
 // UserStore is satisfied by db.UserStore (via main.go wiring).
 type UserStore interface {
@@ -46,9 +53,10 @@ type AuthHandler struct {
 	userStore   UserStore               // nil in degraded mode (no DB)
 	revokeCache cache.Cache             // for evicting tver: entries on logout
 	revoker     *auth.RevocationChecker // nil in degraded mode
+	audit       AuditLogger             // nil in degraded mode
 }
 
-func NewAuthHandler(j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userStore UserStore, revokeCache cache.Cache, revoker *auth.RevocationChecker) *AuthHandler {
+func NewAuthHandler(j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userStore UserStore, revokeCache cache.Cache, revoker *auth.RevocationChecker, audit AuditLogger) *AuthHandler {
 	return &AuthHandler{
 		jwt:         j,
 		tokenStore:  ts,
@@ -57,6 +65,7 @@ func NewAuthHandler(j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userSt
 		userStore:   userStore,
 		revokeCache: revokeCache,
 		revoker:     revoker,
+		audit:       audit,
 	}
 }
 
@@ -83,10 +92,14 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	state := c.PostForm("state")
 
 	if code == "" || len(code) > 500 {
+		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
+			Details: map[string]any{"reason": "invalid_code"}})
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid authorization code"})
 		return
 	}
 	if state == "" || !h.state.Verify(state, time.Now(), oauthStateTTL) {
+		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
+			Details: map[string]any{"reason": "invalid_state"}})
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired state. Please try logging in again."})
 		return
 	}
@@ -94,6 +107,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	tokenResp, err := h.exchangeCode(code)
 	if err != nil {
 		log.Printf("Error exchanging code for token: %v", err)
+		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
+			Details: map[string]any{"reason": "code_exchange"}})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete authentication"})
 		return
 	}
@@ -101,6 +116,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	profile, err := h.getBungieProfile(tokenResp.AccessToken)
 	if err != nil {
 		log.Printf("Error getting user profile: %v", err)
+		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
+			Details: map[string]any{"reason": "profile_fetch"}})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user profile"})
 		return
 	}
@@ -109,14 +126,17 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	// Membership IDs in ADMIN_MEMBERSHIP_IDS are pinned to admin on every login.
 	tokenVersion := 1
 	role := auth.RoleStandard
+	var actorUserID *int64
 	if h.userStore != nil {
 		forceAdmin := h.cfg.IsBootstrapAdmin(profile.MembershipID)
-		_, tv, r, err := h.userStore.Upsert(c.Request.Context(), profile.MembershipID, int16(profile.MembershipType), profile.DisplayName, forceAdmin)
+		id, tv, r, err := h.userStore.Upsert(c.Request.Context(), profile.MembershipID, int16(profile.MembershipType), profile.DisplayName, forceAdmin)
 		if err != nil {
 			log.Printf("user upsert failed for %s: %v", profile.MembershipID, err)
 		} else {
 			tokenVersion = tv
 			role = int(r)
+			uid := id
+			actorUserID = &uid
 		}
 	}
 
@@ -161,6 +181,13 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		}
 	}
 
+	h.logAudit(c, db.AuditEvent{
+		EventType:         "login.success",
+		ActorUserID:       actorUserID,
+		ActorMembershipID: profile.MembershipID,
+		SessionID:         sessionID,
+		Details:           map[string]any{"role": auth.RoleName(role)},
+	})
 	c.JSON(http.StatusOK, gin.H{
 		"token":        accessToken,
 		"refreshToken": refreshToken,
@@ -187,6 +214,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	claims, err := h.jwt.ValidateToken(body.RefreshToken)
 	if err != nil || claims.TokenType != "refresh" {
+		h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
+			Details: map[string]any{"reason": "invalid_token"}})
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
 		return
 	}
@@ -194,6 +223,9 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	// Reject refresh attempts after a sign-out-everywhere (token_version bump).
 	if h.revoker != nil {
 		if err := h.revoker.Check(c.Request.Context(), claims.MembershipID, claims.TokenVersion); err != nil {
+			h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
+				ActorMembershipID: claims.MembershipID, SessionID: claims.SessionID,
+				Details: map[string]any{"reason": "revoked"}})
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has been revoked. Please log in again."})
 			return
 		}
@@ -236,7 +268,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			rotated, reused, rerr := h.userStore.RotateSession(c.Request.Context(), sessionID, claims.MembershipID, claims.ID, newJTI, expiresAt)
 			switch {
 			case reused:
-				// Definitive reuse — reject even if the revoking commit later errored.
+				h.logAudit(c, db.AuditEvent{EventType: "refresh.reuse", Outcome: "failure",
+					ActorMembershipID: claims.MembershipID, SessionID: sessionID})
 				log.Printf("refresh-token reuse detected for %s (session %s) — session revoked", claims.MembershipID, sessionID)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session ended for security reasons. Please log in again."})
 				return
@@ -245,6 +278,9 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 				// check above — the new jti goes unrecorded, so the next refresh may re-login.
 				log.Printf("rotate session failed for %s: %v — allowing refresh", claims.MembershipID, rerr)
 			case !rotated:
+				h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
+					ActorMembershipID: claims.MembershipID, SessionID: sessionID,
+					Details: map[string]any{"reason": "expired_session"}})
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has expired. Please log in again."})
 				return
 			}
@@ -315,6 +351,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		h.revokeCache.Delete("sess:" + sessionID)
 	}
 
+	h.logAudit(c, db.AuditEvent{EventType: "logout", ActorMembershipID: c.GetString("membership_id"), SessionID: sessionID})
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
@@ -343,7 +380,21 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 		h.revokeCache.Delete("tver:" + membershipID)
 	}
 
+	h.logAudit(c, db.AuditEvent{EventType: "logout.all", ActorMembershipID: membershipID})
 	c.JSON(http.StatusOK, gin.H{"message": "Signed out of all devices"})
+}
+
+// logAudit writes one event best-effort: it never blocks or fails the request.
+// IP and User-Agent are taken from the request; the caller sets the rest.
+func (h *AuthHandler) logAudit(c *gin.Context, ev db.AuditEvent) {
+	if h.audit == nil {
+		return
+	}
+	ev.IP = c.ClientIP()
+	ev.UserAgent = c.Request.UserAgent()
+	if err := h.audit.Log(c.Request.Context(), ev); err != nil {
+		log.Printf("audit %s: %v", ev.EventType, err)
+	}
 }
 
 // Bungie OAuth helpers

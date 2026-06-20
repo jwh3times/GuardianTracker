@@ -213,7 +213,13 @@ func main() {
 	recordsHandler := handlers.NewRecordsHandler(recordsService, tokenStore)
 
 	// Handlers
-	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker)
+	// Pass audit as a true-nil interface in degraded mode so handlers' nil-guards
+	// engage (a typed-nil *db.AuditStore would make `!= nil` true and panic).
+	var auditLogger handlers.AuditLogger
+	if stores.Audit != nil {
+		auditLogger = stores.Audit
+	}
+	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger)
 	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService)
 	healthHandler := handlers.NewHealthHandler(manifestService)
 	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
