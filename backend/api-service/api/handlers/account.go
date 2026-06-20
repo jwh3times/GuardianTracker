@@ -34,10 +34,11 @@ type AccountHandler struct {
 	users roleSelfStore // nil = degraded mode
 	flags flagLister    // nil = degraded mode
 	cache cache.Cache   // for evicting tver: entries + caching flag rows
+	audit AuditLogger   // nil = best-effort (no-op)
 }
 
-func NewAccountHandler(users roleSelfStore, flags flagLister, c cache.Cache) *AccountHandler {
-	return &AccountHandler{users: users, flags: flags, cache: c}
+func NewAccountHandler(users roleSelfStore, flags flagLister, c cache.Cache, audit AuditLogger) *AccountHandler {
+	return &AccountHandler{users: users, flags: flags, cache: c, audit: audit}
 }
 
 // SetRole handles PUT /api/account/role — self-service tier opt-in.
@@ -78,6 +79,16 @@ func (h *AccountHandler) SetRole(c *gin.Context) {
 	// next request — no token_version bump, so the session is preserved.
 	if h.cache != nil {
 		h.cache.Delete("tver:" + membershipID)
+	}
+	if h.audit != nil {
+		oldRole := c.GetInt("role")
+		_ = h.audit.Log(c.Request.Context(), db.AuditEvent{
+			EventType:         "role.optin",
+			ActorMembershipID: membershipID,
+			IP:                c.ClientIP(),
+			UserAgent:         c.Request.UserAgent(),
+			Details:           map[string]any{"oldRole": oldRole, "newRole": int(role)},
+		})
 	}
 	c.JSON(http.StatusOK, gin.H{"role": auth.RoleName(role)})
 }

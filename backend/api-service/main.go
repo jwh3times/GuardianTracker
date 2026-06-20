@@ -230,10 +230,10 @@ func main() {
 	var accountHandler *handlers.AccountHandler
 	var adminHandler *handlers.AdminHandler
 	if stores.Users != nil {
-		accountHandler = handlers.NewAccountHandler(stores.Users, stores.Flags, appCache)
+		accountHandler = handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger)
 		adminHandler = handlers.NewAdminHandler(stores.Users, stores.Flags, appCache)
 	} else {
-		accountHandler = handlers.NewAccountHandler(nil, nil, appCache)
+		accountHandler = handlers.NewAccountHandler(nil, nil, appCache, auditLogger)
 		adminHandler = handlers.NewAdminHandler(nil, nil, appCache)
 	}
 
