@@ -56,7 +56,7 @@ type fakeFlagStore struct {
 }
 
 func (f *fakeFlagStore) List(_ context.Context) ([]db.FeatureFlag, error) { return f.list, nil }
-func (f *fakeFlagStore) Update(_ context.Context, key string, _ *bool, _ *int16) (*db.FeatureFlag, error) {
+func (f *fakeFlagStore) Update(_ context.Context, key string, _ *bool, _ *int16, _ *int64, _ string) (*db.FeatureFlag, error) {
 	f.lastKey = key
 	if f.updateErr != nil {
 		return nil, f.updateErr

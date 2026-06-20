@@ -104,6 +104,38 @@ func TestInsertAudit_EmptyIPStoresNull(t *testing.T) {
 	_ = uid // uid used by createTestUser cleanup; silence unused warning
 }
 
+func TestFlagStore_UpdateWritesAudit(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	flags := NewFlagStore(pool)
+	_, adminUID := createTestUser(t, pool)
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE event_type = 'flag.update' AND actor_user_id = $1`, adminUID)
+	})
+
+	// Snapshot the flag so we can restore it after the test.
+	orig, err := flags.Get(ctx, "god-roll")
+	if err != nil {
+		t.Fatalf("Get god-roll: %v", err)
+	}
+	t.Cleanup(func() { _, _ = flags.Update(ctx, "god-roll", &orig.Enabled, &orig.MinTier, nil, "") })
+
+	enabled := true
+	if _, err := flags.Update(ctx, "god-roll", &enabled, nil, &adminUID, "admin-mid"); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	var n int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM audit_log
+		 WHERE event_type='flag.update' AND actor_user_id=$1
+		   AND details->>'key'='god-roll'`, adminUID).Scan(&n); err != nil {
+		t.Fatalf("audit query: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("flag.update audit rows = %d, want 1", n)
+	}
+}
+
 func TestAuditStore_ListFiltersAndPaginates(t *testing.T) {
 	pool := testPool(t)
 	ctx := context.Background()
