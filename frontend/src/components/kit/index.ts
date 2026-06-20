@@ -41,3 +41,4 @@ export {
   UserRow,
   LockedFeature,
 } from "./admin";
+export { AuditTable } from "./AuditTable";

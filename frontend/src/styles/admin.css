@@ -427,3 +427,36 @@
     justify-content: center;
   }
 }
+
+/* ---------------- AUDIT LOG TABLE ---------------- */
+.gt-audit-row {
+  display: grid;
+  grid-template-columns: 13rem 1fr 2fr 7rem;
+  gap: var(--s-3);
+  align-items: center;
+  padding: var(--s-3) var(--s-4);
+  border-top: 1px solid var(--c-line-soft);
+}
+.gt-audit-row--head {
+  border-top: none;
+  color: var(--c-text-3);
+}
+.gt-audit-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.gt-audit-pill {
+  background: var(--c-surface-2);
+  border-radius: var(--r-xs);
+  padding: 0 var(--s-1);
+  font-size: 0.78rem;
+}
+.gt-audit-target {
+  opacity: 0.7;
+}
+.gt-audit-empty {
+  padding: var(--s-6);
+  text-align: center;
+  color: var(--c-text-3);
+}
