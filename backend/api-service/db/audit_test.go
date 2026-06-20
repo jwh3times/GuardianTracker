@@ -118,7 +118,18 @@ func TestFlagStore_UpdateWritesAudit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get god-roll: %v", err)
 	}
-	t.Cleanup(func() { _, _ = flags.Update(ctx, "god-roll", &orig.Enabled, &orig.MinTier, nil, "") })
+	// Restore via direct SQL so no second audit row is written.
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx,
+			`UPDATE feature_flags SET enabled = $1, min_tier = $2 WHERE key = 'god-roll'`,
+			orig.Enabled, orig.MinTier)
+	})
+	// Widen audit cleanup to catch any orphan rows (e.g. NULL-actor rows from a
+	// restore that accidentally went through FlagStore.Update).
+	t.Cleanup(func() {
+		_, _ = pool.Exec(ctx,
+			`DELETE FROM audit_log WHERE event_type = 'flag.update' AND details->>'key' = 'god-roll'`)
+	})
 
 	enabled := true
 	if _, err := flags.Update(ctx, "god-roll", &enabled, nil, &adminUID, "admin-mid"); err != nil {
