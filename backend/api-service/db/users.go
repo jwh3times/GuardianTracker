@@ -377,10 +377,12 @@ func (s *UserStore) SetRoleByID(ctx context.Context, actorMembershipID string, t
 		targetUserID, newRole); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO role_audit (actor_user_id, target_user_id, old_role, new_role)
-		 VALUES ($1, $2, $3, $4)`,
-		actorID, targetUserID, oldRole, newRole); err != nil {
+	if err := insertAudit(ctx, tx, AuditEvent{
+		EventType:    "role.change.admin",
+		ActorUserID:  actorID,
+		TargetUserID: &targetUserID,
+		Details:      map[string]any{"oldRole": oldRole, "newRole": newRole},
+	}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

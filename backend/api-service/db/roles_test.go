@@ -130,13 +130,16 @@ func TestUserStore_SetRoleByID_BumpsVersionAndAudits(t *testing.T) {
 	if tv != 2 || role != 2 {
 		t.Errorf("after change: tv=%d role=%d, want tv=2 role=2", tv, role)
 	}
-	// An audit row was written.
+	// An audit row was written to the unified audit_log (in the same tx).
 	var n int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM role_audit WHERE target_user_id = $1 AND new_role = 2`, targetID).Scan(&n); err != nil {
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM audit_log
+		 WHERE event_type = 'role.change.admin' AND target_user_id = $1
+		   AND (details->>'newRole')::int = 2`, targetID).Scan(&n); err != nil {
 		t.Fatalf("audit query: %v", err)
 	}
 	if n != 1 {
-		t.Errorf("role_audit rows = %d, want 1", n)
+		t.Errorf("audit_log rows = %d, want 1", n)
 	}
 }
 
