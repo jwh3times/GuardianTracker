@@ -1,5 +1,5 @@
 import React from "react";
-import { Badge } from "./index";
+import { Badge } from "./primitives";
 import { relTime } from "../../lib/adapters";
 import type { APIAuditEntry } from "../../types/api";
 
