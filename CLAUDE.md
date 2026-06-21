@@ -157,7 +157,8 @@ Or run `./setup.ps1` to copy all at once.
 | `services/search/service.go` | In-memory manifest item search index; async rebuild on manifest update |
 | `services/records/service.go` | Catalysts, crafting patterns, and seals/triumphs from Bungie records API |
 | `cache/cache.go` | In-memory cache (and no-op cache interface) |
-| `db/db.go`, `db/migrate.go`, `db/migrations/{0001_init,0002_roles_flags,0003_refresh_sessions}.sql` | Postgres pool, migration runner, schema DDL (0002 adds roles, feature_flags, role_audit; 0003 adds refresh_sessions for per-device sessions + refresh-token reuse detection) |
+| `db/db.go`, `db/migrate.go`, `db/migrations/{0001_init,0002_roles_flags,0003_refresh_sessions,0004_audit_log}.sql` | Postgres pool, migration runner, schema DDL (0002 adds roles, feature_flags, role_audit; 0003 adds refresh_sessions for per-device sessions + refresh-token reuse detection; 0004 unifies audit_log and drops role_audit) |
+| `db/audit.go` | Unified append-only audit trail store (`audit_log`): best-effort `Log` + in-transaction `insertAudit`, filtered/keyset `List`, retention prune |
 | `db/users.go`, `db/tokens.go`, `db/wishlist.go`, `db/prefs.go`, `db/flags.go` | DB stores for users (+roles/audit + per-device refresh_sessions), encrypted Bungie tokens, wishlist, preferences, feature flags |
 
 **Endpoints:**
@@ -180,6 +181,7 @@ Or run `./setup.ps1` to copy all at once.
 - `PUT /api/admin/users/:id/role` — admin only: set any role; last-admin protected; bumps target token_version + audits
 - `GET /api/admin/flags` — admin only: full feature-flag config
 - `PUT /api/admin/flags/:key` — admin only: toggle `enabled` / set `minTier`
+- `GET /api/admin/audit` — admin only: filtered, keyset-paginated audit feed (`type`, `actor`, `target`, `outcome`, `before`/`after`, `cursor`, `limit`)
 - `GET /api/characters/:membershipType/:membershipId` — user characters (JWT protected)
 - `GET /api/collections/:membershipType/:membershipId` — user collections + `fetchedAt`; `?include=all` adds `collectedItems` per category (JWT protected)
 - `POST /api/collections/:membershipType/:membershipId/refresh` — invalidate cache (JWT protected)
@@ -274,7 +276,8 @@ The Bungie manifest is a ~100MB SQLite file. On first run the API service downlo
 - Two logout scopes: `POST /api/auth/logout` ends only the current session (others stay; Bungie token preserved); `POST /api/auth/logout/all` bumps `token_version` + deletes all sessions + evicts the Bungie token. The middleware checks both `token_version` (account-wide) and session existence (per-device) via `RevocationChecker` with a 60s in-memory cache window
 - Bungie OAuth tokens stored AES-256-GCM encrypted in `bungie_tokens` table; survive scale-to-zero. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the race adopts the winner's tokens
 - Rate limiting: Bungie API client — 10 req/s, burst 20
-- Roles & feature flags (item 13): tiers `standard(0) < beta(1) < alpha(2) < admin(3)` in `users.role`. Authorization always reads the role from the DB-backed `RevocationChecker` cache (now `{token_version, role}`), never from the JWT — so role changes propagate within the 60s window. Admin is bootstrapped only via `ADMIN_MEMBERSHIP_IDS` (pinned at login) or granted by an existing admin; there is no self-service path to admin. Self opt-in (`PUT /api/account/role`, standard/beta/alpha only) evicts the cache entry with **no** token_version bump (session preserved); admin-driven changes (`PUT /api/admin/users/:id/role`) **do** bump token_version + evict the target's cache (forced re-sync) and write a `role_audit` row, with last-admin protection enforced inside the transaction. `RequireAdmin`/`RequireTier` gate server-side; UI flag hiding is not enforcement.
+- Roles & feature flags (item 13): tiers `standard(0) < beta(1) < alpha(2) < admin(3)` in `users.role`. Authorization always reads the role from the DB-backed `RevocationChecker` cache (now `{token_version, role}`), never from the JWT — so role changes propagate within the 60s window. Admin is bootstrapped only via `ADMIN_MEMBERSHIP_IDS` (pinned at login) or granted by an existing admin; there is no self-service path to admin. Self opt-in (`PUT /api/account/role`, standard/beta/alpha only) evicts the cache entry with **no** token_version bump (session preserved); admin-driven changes (`PUT /api/admin/users/:id/role`) **do** bump token_version + evict the target's cache (forced re-sync) and write an audit row, with last-admin protection enforced inside the transaction. `RequireAdmin`/`RequireTier` gate server-side; UI flag hiding is not enforcement.
+- Audit logging: authentication events (login, logout, logout-all, refresh failure), session security events (refresh reuse, session termination), self opt-in role changes, admin role changes, and feature-flag changes are persisted to the unified `audit_log` table. Role and flag changes are written in the mutation's transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). Client IP and User-Agent are captured and retained for `AUDIT_RETENTION_DAYS` (default 180, hourly-pruned). Set `AUDIT_RETENTION_DAYS` in `.env` to change retention. IP addresses are trusted only from `TRUSTED_PROXIES` (gin `SetTrustedProxies`) so they cannot be spoofed; configure as comma-separated CIDR/IP ranges.
 
 ## CI/CD
 
@@ -292,7 +295,7 @@ Separately, **CodeQL** (GitHub default setup) scans go, javascript-typescript, a
 `main` (and `release/**`) is governed by a single repository ruleset, **"Main/Release branch rules"** (id `17717600`, Settings → Rules), which bundles:
 
 - **Pull request required** — no direct pushes; 0 required approvals (solo repo — self-approval isn't possible; self-merge once green is allowed), stale-review dismissal + review-thread resolution on, Copilot review on push.
-- **Required status checks** (strict policy — branch must be up to date): `Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`. **The per-language CodeQL `Analyze (...)` contexts are deliberately _not_ required status checks** — default setup never creates them on Dependabot PRs, so requiring them blocked every Dependabot PR indefinitely. CodeQL is instead enforced by the dedicated **code-scanning merge rule** below, which is default-setup-aware and degrades gracefully when an analysis didn't run.
+- **Required status checks** (strict policy — branch must be up to date): `Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`. **The per-language CodeQL `Analyze (...)` contexts are deliberately *not* required status checks** — default setup never creates them on Dependabot PRs, so requiring them blocked every Dependabot PR indefinitely. CodeQL is instead enforced by the dedicated **code-scanning merge rule** below, which is default-setup-aware and degrades gracefully when an analysis didn't run.
 - **Code scanning merge protection** — CodeQL, `alerts_threshold: errors_and_warnings`, `security_alerts_threshold: medium_or_higher`. This is the real CodeQL gate for human PRs.
 - **Code quality** (warnings) + **deletion** and **non-fast-forward** (force-push) blocks.
 - **No bypass actors** — the rules apply to everyone, admins included.

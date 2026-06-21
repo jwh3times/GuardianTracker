@@ -304,8 +304,8 @@ func (s *UserStore) ListUsers(ctx context.Context, q string, limit int) ([]Admin
 
 // SetRoleByID performs an admin-driven role change inside a single transaction:
 // it locks the target (and, when demoting an admin, all admin rows) to enforce
-// last-admin protection, bumps the target's token_version, and writes a
-// role_audit row. The caller evicts the target's revocation cache entry using the
+// last-admin protection, bumps the target's token_version, and writes an
+// audit_log row. The caller evicts the target's revocation cache entry using the
 // returned membership ID. actorMembershipID identifies the acting admin for audit.
 //
 // Returns ErrUserNotFound (unknown target), ErrLastAdmin (would orphan the
@@ -377,10 +377,12 @@ func (s *UserStore) SetRoleByID(ctx context.Context, actorMembershipID string, t
 		targetUserID, newRole); err != nil {
 		return nil, err
 	}
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO role_audit (actor_user_id, target_user_id, old_role, new_role)
-		 VALUES ($1, $2, $3, $4)`,
-		actorID, targetUserID, oldRole, newRole); err != nil {
+	if err := insertAudit(ctx, tx, AuditEvent{
+		EventType:    "role.change.admin",
+		ActorUserID:  actorID,
+		TargetUserID: &targetUserID,
+		Details:      map[string]any{"oldRole": oldRole, "newRole": newRole},
+	}); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {

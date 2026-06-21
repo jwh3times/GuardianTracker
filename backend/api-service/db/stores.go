@@ -9,6 +9,7 @@ type Stores struct {
 	Wishlist *WishlistStore
 	Prefs    *PrefsStore
 	Flags    *FlagStore
+	Audit    *AuditStore
 }
 
 func NewStores(pool *pgxpool.Pool) *Stores {
@@ -21,5 +22,6 @@ func NewStores(pool *pgxpool.Pool) *Stores {
 		Wishlist: NewWishlistStore(pool),
 		Prefs:    NewPrefsStore(pool),
 		Flags:    NewFlagStore(pool),
+		Audit:    NewAuditStore(pool),
 	}
 }

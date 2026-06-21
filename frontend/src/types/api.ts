@@ -184,3 +184,27 @@ export interface APIAdminFlag {
   enabled: boolean;
   updatedAt: string;
 }
+
+// --- Audit log (Task 10) ---
+
+export interface APIAuditParty {
+  membershipId: string;
+  displayName: string;
+}
+
+export interface APIAuditEntry {
+  id: string;
+  eventType: string;
+  outcome: "success" | "failure";
+  actor: APIAuditParty;
+  target?: APIAuditParty;
+  ip?: string;
+  userAgent?: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface APIAuditPage {
+  entries: APIAuditEntry[];
+  nextCursor: string;
+}

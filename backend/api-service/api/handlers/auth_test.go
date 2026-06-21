@@ -68,7 +68,7 @@ func newAuthHandlerWithStore(t *testing.T, store UserStore) (*AuthHandler, *auth
 		AuthRedirectURI: "http://localhost:3000/auth/callback",
 	}
 	jwt := auth.NewJWT(cfg.JWTSecret, 24, 30)
-	h := NewAuthHandler(jwt, newTokenStore(t), cfg, store, nil, nil)
+	h := NewAuthHandler(jwt, newTokenStore(t), cfg, store, nil, nil, nil)
 	return h, jwt
 }
 
@@ -82,7 +82,7 @@ func newAuthHandler(t *testing.T) (*AuthHandler, *auth.JWT) {
 		AuthRedirectURI: "http://localhost:3000/auth/callback",
 	}
 	jwt := auth.NewJWT(cfg.JWTSecret, 24, 30)
-	h := NewAuthHandler(jwt, newTokenStore(t), cfg, nil, nil, nil)
+	h := NewAuthHandler(jwt, newTokenStore(t), cfg, nil, nil, nil, nil)
 	return h, jwt
 }
 

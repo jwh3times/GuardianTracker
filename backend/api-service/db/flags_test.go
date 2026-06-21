@@ -44,12 +44,12 @@ func TestFlagStore_Update(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = flags.Update(ctx, "god-roll", &orig.Enabled, &orig.MinTier)
+		_, _ = flags.Update(ctx, "god-roll", &orig.Enabled, &orig.MinTier, nil, "")
 	})
 
 	enabled := true
 	var minTier int16 = 1
-	updated, err := flags.Update(ctx, "god-roll", &enabled, &minTier)
+	updated, err := flags.Update(ctx, "god-roll", &enabled, &minTier, nil, "")
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestFlagStore_Update(t *testing.T) {
 	}
 	// Partial update: leave enabled, only change min_tier back.
 	var mt2 int16 = 2
-	updated, err = flags.Update(ctx, "god-roll", nil, &mt2)
+	updated, err = flags.Update(ctx, "god-roll", nil, &mt2, nil, "")
 	if err != nil {
 		t.Fatalf("partial Update: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestFlagStore_Update(t *testing.T) {
 func TestFlagStore_UpdateUnknown(t *testing.T) {
 	pool := testPool(t)
 	enabled := true
-	if _, err := NewFlagStore(pool).Update(context.Background(), "no-such-flag", &enabled, nil); !errors.Is(err, pgx.ErrNoRows) {
+	if _, err := NewFlagStore(pool).Update(context.Background(), "no-such-flag", &enabled, nil, nil, ""); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("Update unknown: got %v, want pgx.ErrNoRows", err)
 	}
 }

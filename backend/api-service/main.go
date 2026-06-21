@@ -186,6 +186,9 @@ func main() {
 	if stores.Users != nil {
 		revoker = auth.NewRevocationChecker(stores.Users, appCache)
 		startSessionPruner(ctx, stores.Users)
+		if stores.Audit != nil {
+			startAuditPruner(ctx, stores.Audit, cfg.AuditRetentionDays)
+		}
 	}
 
 	// Tier gating — enabled only when a DB-backed user store is available; in
@@ -213,7 +216,13 @@ func main() {
 	recordsHandler := handlers.NewRecordsHandler(recordsService, tokenStore)
 
 	// Handlers
-	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker)
+	// Pass audit as a true-nil interface in degraded mode so handlers' nil-guards
+	// engage (a typed-nil *db.AuditStore would make `!= nil` true and panic).
+	var auditLogger handlers.AuditLogger
+	if stores.Audit != nil {
+		auditLogger = stores.Audit
+	}
+	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger)
 	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService)
 	healthHandler := handlers.NewHealthHandler(manifestService)
 	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
@@ -224,15 +233,27 @@ func main() {
 	var accountHandler *handlers.AccountHandler
 	var adminHandler *handlers.AdminHandler
 	if stores.Users != nil {
-		accountHandler = handlers.NewAccountHandler(stores.Users, stores.Flags, appCache)
+		accountHandler = handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger)
 		adminHandler = handlers.NewAdminHandler(stores.Users, stores.Flags, appCache)
 	} else {
-		accountHandler = handlers.NewAccountHandler(nil, nil, appCache)
+		accountHandler = handlers.NewAccountHandler(nil, nil, appCache, auditLogger)
 		adminHandler = handlers.NewAdminHandler(nil, nil, appCache)
+	}
+
+	var auditHandler *handlers.AuditHandler
+	if stores.Audit != nil {
+		auditHandler = handlers.NewAuditHandler(stores.Audit)
+	} else {
+		auditHandler = handlers.NewAuditHandler(nil)
 	}
 
 	// Router
 	router := gin.Default()
+	// Trust only configured proxies for X-Forwarded-For so the audit-logged client
+	// IP can't be spoofed by clients. Empty list (local dev) trusts none.
+	if err := router.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		log.Printf("Warning: SetTrustedProxies(%v): %v", cfg.TrustedProxies, err)
+	}
 	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 
 	router.GET("/health", healthHandler.Health)
@@ -272,6 +293,7 @@ func main() {
 			admin.PUT("/users/:id/role", adminHandler.SetUserRole)
 			admin.GET("/flags", adminHandler.ListFlags)
 			admin.PUT("/flags/:key", adminHandler.UpdateFlag)
+			admin.GET("/audit", auditHandler.ListAudit)
 		}
 
 		// Characters
@@ -346,6 +368,31 @@ func startSessionPruner(ctx context.Context, users *db.UserStore) {
 					log.Printf("session pruner: %v", err)
 				} else if n > 0 {
 					log.Printf("session pruner: removed %d expired session(s)", n)
+				}
+			}
+		}
+	}()
+}
+
+// startAuditPruner periodically deletes audit_log rows older than retentionDays,
+// bounding table growth and the retention window for stored client IPs. Runs until
+// ctx is cancelled at shutdown.
+func startAuditPruner(ctx context.Context, audit *db.AuditStore, retentionDays int) {
+	const interval = time.Hour
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				cutoff := time.Now().AddDate(0, 0, -retentionDays)
+				n, err := audit.DeleteOlderThan(ctx, cutoff)
+				if err != nil {
+					log.Printf("audit pruner: %v", err)
+				} else if n > 0 {
+					log.Printf("audit pruner: removed %d expired audit row(s)", n)
 				}
 			}
 		}

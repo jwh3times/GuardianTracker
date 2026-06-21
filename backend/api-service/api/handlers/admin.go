@@ -25,7 +25,7 @@ type adminUserStore interface {
 // adminFlagStore is the admin slice of db.FlagStore.
 type adminFlagStore interface {
 	List(ctx context.Context) ([]db.FeatureFlag, error)
-	Update(ctx context.Context, key string, enabled *bool, minTier *int16) (*db.FeatureFlag, error)
+	Update(ctx context.Context, key string, enabled *bool, minTier *int16, actorUserID *int64, actorMembershipID string) (*db.FeatureFlag, error)
 }
 
 // AdminHandler serves the admin console: user roster + role management and the
@@ -73,7 +73,7 @@ func (h *AdminHandler) ListUsers(c *gin.Context) {
 
 // SetUserRole handles PUT /api/admin/users/:id/role — any role incl. admin, with
 // last-admin protection. Bumps the target's token_version and evicts its
-// revocation cache entry so stale sessions re-sync; writes a role_audit row.
+// revocation cache entry so stale sessions re-sync; writes an audit_log row.
 func (h *AdminHandler) SetUserRole(c *gin.Context) {
 	targetID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -178,7 +178,8 @@ func (h *AdminHandler) UpdateFlag(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "nothing to update"})
 		return
 	}
-	flag, err := h.flags.Update(c.Request.Context(), key, body.Enabled, minTier)
+	actorMID := c.GetString("membership_id")
+	flag, err := h.flags.Update(c.Request.Context(), key, body.Enabled, minTier, actorUserIDFromContext(c), actorMID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "unknown flag"})
@@ -193,4 +194,15 @@ func (h *AdminHandler) UpdateFlag(c *gin.Context) {
 		h.cache.Delete(flagsCacheKey)
 	}
 	c.JSON(http.StatusOK, toAdminFlag(flag))
+}
+
+// actorUserIDFromContext returns the numeric user id when the middleware stored
+// one, else nil. The audit actor falls back to the denormalized membership id.
+func actorUserIDFromContext(c *gin.Context) *int64 {
+	if v, ok := c.Get("user_id"); ok {
+		if id, ok := v.(int64); ok {
+			return &id
+		}
+	}
+	return nil
 }

@@ -45,7 +45,7 @@ Frontend (React/TS :5273)
 Every port across the config files, by environment. This is the single source of
 truth for the project's ports (CLAUDE.md links here).
 
-**Core services**
+#### Core services
 
 Host ports are deliberately offset from the defaults so the stack can run alongside
 other local projects without colliding on the canonical ports (`5432`/`5050`/`8080`).
@@ -82,7 +82,7 @@ test-postgres   ${TEST_POSTGRES_PORT:-5533} -> 5432   # "test" profile only; not
 | frontend Service | `80 → 8080` | `NodePort` |
 | `startup.ps1` port-forward | `localhost:5273 → frontend:80` | dev access (matches the docker frontend port) |
 
-**Dev / cross-service wiring**
+#### Dev / cross-service wiring
 
 - Vite proxy → `http://localhost:8081` (`vite.config.ts`)
 - `VITE_API_URL` → `http://localhost:8081` (`frontend/.env.example`)

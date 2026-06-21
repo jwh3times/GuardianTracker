@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AuditTable,
   EmptyState,
   FilterChip,
   FlagCard,
@@ -14,9 +15,9 @@ import { useAuth } from "../contexts/AuthContext";
 import { apiFetch, ApiError } from "../lib/api";
 import { relTime } from "../lib/adapters";
 import { ROLES, ROLE_LABEL, tierOf, type Role, type Tier } from "../lib/roles";
-import type { APIAdminFlag, APIAdminUser } from "../types/api";
+import type { APIAdminFlag, APIAdminUser, APIAuditPage } from "../types/api";
 
-type Tab = "users" | "flags";
+type Tab = "users" | "flags" | "audit";
 
 export function Admin() {
   const qc = useQueryClient();
@@ -33,6 +34,16 @@ export function Admin() {
   const flagsQuery = useQuery({
     queryKey: ["admin", "flags"],
     queryFn: () => apiFetch<APIAdminFlag[]>("/api/admin/flags"),
+  });
+
+  const [auditType, setAuditType] = useState<string>("");
+  const auditQuery = useQuery({
+    queryKey: ["admin", "audit", auditType],
+    queryFn: () =>
+      apiFetch<APIAuditPage>(
+        `/api/admin/audit?limit=100${auditType ? `&type=${encodeURIComponent(auditType)}` : ""}`,
+      ),
+    enabled: tab === "audit",
   });
 
   const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
@@ -129,6 +140,13 @@ export function Admin() {
               onClick={() => setTab("flags")}
             >
               <Icon name="flag" size="0.95rem" /> Feature Flags
+            </button>
+            <button
+              className="gt-subtab"
+              data-on={tab === "audit"}
+              onClick={() => setTab("audit")}
+            >
+              <Icon name="shield" size="0.95rem" /> Audit Log
             </button>
           </div>
         }
@@ -227,7 +245,7 @@ export function Admin() {
             )}
           </div>
         </>
-      ) : (
+      ) : tab === "flags" ? (
         <>
           <div className="gt-coll-stats">
             <StatTile
@@ -276,6 +294,33 @@ export function Admin() {
               ))}
             </div>
           )}
+        </>
+      ) : (
+        <>
+          <div className="gt-coll-toolbar">
+            <div className="gt-filterbar">
+              {[
+                ["", "All"],
+                ["login.", "Logins"],
+                ["logout", "Logouts"],
+                ["refresh.", "Sessions"],
+                ["role.", "Roles"],
+                ["flag.update", "Flags"],
+              ].map(([val, lbl]) => (
+                <FilterChip
+                  key={val || "all"}
+                  on={auditType === val}
+                  onClick={() => setAuditType(val)}
+                >
+                  {lbl}
+                </FilterChip>
+              ))}
+            </div>
+          </div>
+          <AuditTable
+            entries={auditQuery.data?.entries ?? []}
+            loading={auditQuery.isLoading}
+          />
         </>
       )}
     </div>
