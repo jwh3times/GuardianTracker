@@ -67,7 +67,7 @@ func TestAuditStore_LogAndPrune(t *testing.T) {
 	mid, _ := createTestUser(t, pool)
 	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE actor_membership_id = $1`, mid) })
 
-	if err := store.Log(ctx, AuditEvent{EventType: "logout", ActorMembershipID: mid}); err != nil {
+	if err := store.Log(ctx, AuditEvent{EventType: "logout.session", ActorMembershipID: mid}); err != nil {
 		t.Fatalf("Log: %v", err)
 	}
 	// Backdate it well past the cutoff and prune.
@@ -90,7 +90,7 @@ func TestInsertAudit_EmptyIPStoresNull(t *testing.T) {
 	mid, uid := createTestUser(t, pool)
 	t.Cleanup(func() { _, _ = pool.Exec(ctx, `DELETE FROM audit_log WHERE actor_membership_id = $1`, mid) })
 
-	if err := insertAudit(ctx, pool, AuditEvent{EventType: "logout", ActorMembershipID: mid}); err != nil {
+	if err := insertAudit(ctx, pool, AuditEvent{EventType: "logout.session", ActorMembershipID: mid}); err != nil {
 		t.Fatalf("insertAudit: %v", err)
 	}
 	var ipIsNull bool

@@ -92,6 +92,52 @@ describe("Admin Audit panel", () => {
     expect(screen.getByText("Tester")).toBeInTheDocument();
   });
 
+  it("Logouts chip requests the logout. family and labels both events", async () => {
+    let requestedType: string | null = null;
+    server.use(
+      http.get(`${API}/api/admin/audit`, ({ request }) => {
+        const type = new URL(request.url).searchParams.get("type") ?? "";
+        if (type !== "logout.") {
+          return HttpResponse.json({ entries: [], nextCursor: "" });
+        }
+        requestedType = type;
+        return HttpResponse.json({
+          entries: [
+            {
+              id: "10",
+              eventType: "logout.session",
+              outcome: "success",
+              actor: { membershipId: "mid-1", displayName: "Tester" },
+              details: {},
+              createdAt: new Date().toISOString(),
+            },
+            {
+              id: "11",
+              eventType: "logout.all",
+              outcome: "success",
+              actor: { membershipId: "mid-1", displayName: "Tester" },
+              details: {},
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          nextCursor: "",
+        });
+      }),
+    );
+
+    renderAdmin();
+    fireEvent.click(screen.getByText(/Audit Log/i));
+    fireEvent.click(await screen.findByText("Logouts"));
+
+    // The single-device event (logout.session) labels as "Logout"; the all-devices
+    // event labels as "Logout (all devices)". Both must appear → the prefix matched.
+    await waitFor(() =>
+      expect(screen.getByText("Logout (all devices)")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("Logout")).toBeInTheDocument();
+    expect(requestedType).toBe("logout.");
+  });
+
   it("refetches when the Flags filter chip is clicked", async () => {
     renderAdmin();
     fireEvent.click(screen.getByText(/Audit Log/i));

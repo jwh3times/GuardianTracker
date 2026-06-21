@@ -6,7 +6,7 @@ import type { APIAuditEntry } from "../../types/api";
 const EVENT_LABEL: Record<string, string> = {
   "login.success": "Login",
   "login.failure": "Login failed",
-  logout: "Logout",
+  "logout.session": "Logout",
   "logout.all": "Logout (all devices)",
   "refresh.reuse": "Token reuse",
   "refresh.failure": "Refresh failed",

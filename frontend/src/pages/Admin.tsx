@@ -302,7 +302,7 @@ export function Admin() {
               {[
                 ["", "All"],
                 ["login.", "Logins"],
-                ["logout", "Logouts"],
+                ["logout.", "Logouts"],
                 ["refresh.", "Sessions"],
                 ["role.", "Roles"],
                 ["flag.update", "Flags"],

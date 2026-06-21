@@ -12,9 +12,19 @@ import (
 
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/config"
+	"guardian-tracker/api-service/db"
 
 	"github.com/gin-gonic/gin"
 )
+
+// fakeAudit captures emitted audit events so tests can assert on event type and
+// details. Satisfies the AuditLogger interface.
+type fakeAudit struct{ events []db.AuditEvent }
+
+func (f *fakeAudit) Log(_ context.Context, ev db.AuditEvent) error {
+	f.events = append(f.events, ev)
+	return nil
+}
 
 // fakeUserStore is an in-memory UserStore for session-rotation handler tests. It
 // mirrors RotateSession's lock-CAS-with-reuse-delete: a presented jti must match the
@@ -69,6 +79,18 @@ func newAuthHandlerWithStore(t *testing.T, store UserStore) (*AuthHandler, *auth
 	}
 	jwt := auth.NewJWT(cfg.JWTSecret, 24, 30)
 	h := NewAuthHandler(jwt, newTokenStore(t), cfg, store, nil, nil, nil)
+	return h, jwt
+}
+
+func newAuthHandlerWithStoreAndAudit(t *testing.T, store UserStore, audit AuditLogger) (*AuthHandler, *auth.JWT) {
+	t.Helper()
+	cfg := &config.Config{
+		JWTSecret:       testJWTSecret,
+		BungieClientID:  "client-123",
+		AuthRedirectURI: "http://localhost:3000/auth/callback",
+	}
+	jwt := auth.NewJWT(cfg.JWTSecret, 24, 30)
+	h := NewAuthHandler(jwt, newTokenStore(t), cfg, store, nil, nil, audit)
 	return h, jwt
 }
 
@@ -327,6 +349,63 @@ func TestLogoutAll(t *testing.T) {
 	}
 	if len(store.sessions) != 0 {
 		t.Errorf("expected all sessions cleared, got %d", len(store.sessions))
+	}
+}
+
+// TestLogout_EmitsLogoutSessionEvent pins the audit taxonomy: a single-device
+// logout is recorded as "logout.session" so it shares the "logout." family with
+// "logout.all" and the admin Logouts filter (prefix match) catches both.
+func TestLogout_EmitsLogoutSessionEvent(t *testing.T) {
+	store := newFakeUserStore()
+	store.sessions["this-device"] = "jti-a"
+	audit := &fakeAudit{}
+	h, _ := newAuthHandlerWithStoreAndAudit(t, store, audit)
+
+	r := gin.New()
+	r.POST("/logout", func(c *gin.Context) {
+		c.Set("membership_id", testUserID)
+		c.Set("session_id", "this-device")
+		h.Logout(c)
+	})
+	if w := do(r, http.MethodPost, "/logout"); w.Code != http.StatusOK {
+		t.Fatalf("logout = %d, want 200", w.Code)
+	}
+	if len(audit.events) != 1 || audit.events[0].EventType != "logout.session" {
+		t.Fatalf("audit events = %+v, want one logout.session", audit.events)
+	}
+}
+
+// TestRefreshToken_ExpiredSessionAuditReason pins the refresh.failure reason for an
+// unknown/expired session as "expired" (per spec), not "expired_session".
+func TestRefreshToken_ExpiredSessionAuditReason(t *testing.T) {
+	store := newFakeUserStore() // no sessions → RotateSession reports rotated=false
+	audit := &fakeAudit{}
+	h, jwt := newAuthHandlerWithStoreAndAudit(t, store, audit)
+	profile := &auth.BungieUserProfile{MembershipID: testUserID, MembershipType: 3}
+	refresh, _, err := jwt.GenerateRefreshToken(profile, 1, "sess-unknown")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := gin.New()
+	r.POST("/refresh", h.RefreshToken)
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(`{"refreshToken":"`+refresh+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expired-session refresh = %d, want 401: %s", w.Code, w.Body.String())
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("audit events = %+v, want one refresh.failure", audit.events)
+	}
+	ev := audit.events[0]
+	if ev.EventType != "refresh.failure" {
+		t.Errorf("event type = %q, want refresh.failure", ev.EventType)
+	}
+	if got := ev.Details["reason"]; got != "expired" {
+		t.Errorf("reason = %v, want \"expired\"", got)
 	}
 }
 
