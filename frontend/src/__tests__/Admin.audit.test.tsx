@@ -86,9 +86,7 @@ describe("Admin Audit panel", () => {
     // Click the "Audit Log" subtab — triggers the audit query (enabled: tab === "audit")
     fireEvent.click(screen.getByText(/Audit Log/i));
     // AuditTable maps "login.success" → "Login"
-    await waitFor(() =>
-      expect(screen.getByText("Login")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Login")).toBeInTheDocument());
     // IP is rendered in the details cell as "ip: 203.0.113.7"
     expect(screen.getByText(/203\.0\.113\.7/)).toBeInTheDocument();
     expect(screen.getByText("Tester")).toBeInTheDocument();

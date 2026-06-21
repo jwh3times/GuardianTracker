@@ -67,7 +67,7 @@ Conduct reinforces encouraged behaviors and norms that can help avoid conflicts 
 minimize harm.
 
 When an incident does occur, it is important to report it promptly. To report a possible
-violation, email the project maintainer at **jerryholland00@gmail.com**. Reports are
+violation, email the project maintainer at <conduct@holland.vip>. Reports are
 handled confidentially, and you can expect an initial response within 72 hours.
 
 > For **security vulnerabilities**, please use the private disclosure process described in

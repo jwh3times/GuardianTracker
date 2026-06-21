@@ -45,16 +45,16 @@ If you have previously committed credentials to this repository, you **must**:
 
 ### Secrets (Never Commit!)
 
-| Variable               | Description                   | Where to Get                                                 |
-| ---------------------- | ----------------------------- | ------------------------------------------------------------ |
-| `BUNGIE_API_KEY`       | Bungie API access key         | [Bungie Applications](https://www.bungie.net/en/Application) |
-| `BUNGIE_CLIENT_ID`     | OAuth client ID               | Bungie application settings                                  |
-| `BUNGIE_CLIENT_SECRET` | OAuth client secret           | Bungie application settings                                  |
-| `JWT_SECRET`           | Token signing key (32+ chars); also derives the OAuth state HMAC key | `openssl rand -base64 32`             |
-| `POSTGRES_PASSWORD`    | Database password             | Generate a strong random password                            |
-| `DATABASE_URL`         | Postgres connection string (contains credentials) | Compose your provider's connection string  |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 key — AES-256-GCM encryption of stored Bungie tokens | `openssl rand -base64 32`  |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous encryption key, kept readable during key rotation | the key being rotated out |
+| Variable                        | Description                                                           | Where to Get                                                 |
+| ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `BUNGIE_API_KEY`                | Bungie API access key                                                 | [Bungie Applications](https://www.bungie.net/en/Application) |
+| `BUNGIE_CLIENT_ID`              | OAuth client ID                                                       | Bungie application settings                                  |
+| `BUNGIE_CLIENT_SECRET`          | OAuth client secret                                                   | Bungie application settings                                  |
+| `JWT_SECRET`                    | Token signing key (32+ chars); also derives the OAuth state HMAC key  | `openssl rand -base64 32`                                    |
+| `POSTGRES_PASSWORD`             | Database password                                                     | Generate a strong random password                            |
+| `DATABASE_URL`                  | Postgres connection string (contains credentials)                     | Compose your provider's connection string                    |
+| `TOKEN_ENCRYPTION_KEY`          | 32-byte base64 key — AES-256-GCM encryption of stored Bungie tokens   | `openssl rand -base64 32`                                    |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous encryption key, kept readable during key rotation | the key being rotated out                                    |
 
 ### Local Development
 
