@@ -280,7 +280,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			case !rotated:
 				h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 					ActorMembershipID: claims.MembershipID, SessionID: sessionID,
-					Details: map[string]any{"reason": "expired_session"}})
+					Details: map[string]any{"reason": "expired"}})
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has expired. Please log in again."})
 				return
 			}
@@ -351,7 +351,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		h.revokeCache.Delete("sess:" + sessionID)
 	}
 
-	h.logAudit(c, db.AuditEvent{EventType: "logout", ActorMembershipID: c.GetString("membership_id"), SessionID: sessionID})
+	h.logAudit(c, db.AuditEvent{EventType: "logout.session", ActorMembershipID: c.GetString("membership_id"), SessionID: sessionID})
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
