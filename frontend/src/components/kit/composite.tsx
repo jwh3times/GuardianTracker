@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Icon } from "./Icon";
 import {
   Badge,
@@ -101,12 +102,14 @@ export function CategoryTree({
   nodes,
   activeId,
   onSelect,
+  expand,
 }: {
   nodes: TreeNode[];
   activeId: string;
   onSelect: (id: string) => void;
+  expand?: string[];
 }) {
-  const [open, setOpen] = useState<Set<string>>(() => new Set(["weapons"]));
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) =>
     setOpen((s) => {
       const n = new Set(s);
@@ -114,58 +117,81 @@ export function CategoryTree({
       else n.add(id);
       return n;
     });
-  return (
-    <nav className="gt-tree">
-      {nodes.map((node) => {
-        const isOpen = open.has(node.id);
-        return (
-          <div key={node.id} className="gt-tree-group">
-            <div
-              className="gt-tree-row gt-tree-row--parent"
-              data-active={activeId === node.id}
+
+  // Controlled-seed reveal: when a deep-link resolves an ancestor path, merge
+  // those ids into the open set so the selected node is visible. Existing
+  // manually-opened ids are preserved. The `expand` prop is the external system
+  // being synchronized into local open state here, so the in-effect setState is
+  // intentional.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!expand || expand.length === 0) return;
+    setOpen((s) => {
+      const n = new Set(s);
+      for (const id of expand) n.add(id);
+      return n;
+    });
+  }, [expand]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const renderNode = (node: TreeNode, depth: number): ReactNode => {
+    const hasChildren = !!node.children && node.children.length > 0;
+    const isOpen = open.has(node.id);
+    return (
+      <div
+        key={node.id}
+        className="gt-tree-group"
+        role="treeitem"
+        aria-expanded={hasChildren ? isOpen : undefined}
+      >
+        <div
+          className="gt-tree-row gt-tree-row--parent"
+          data-active={activeId === node.id}
+          style={{ paddingLeft: `calc(${depth} * var(--s-3))` }}
+        >
+          {hasChildren ? (
+            <button
+              className="gt-tree-caret"
+              onClick={() => toggle(node.id)}
+              aria-label={`${isOpen ? "Collapse" : "Expand"} ${node.label}`}
+              data-open={isOpen}
             >
-              <button
-                className="gt-tree-caret"
-                onClick={() => toggle(node.id)}
-                aria-label="Expand"
-                data-open={isOpen}
-              >
-                <Icon name="chevron" size="0.8rem" />
-              </button>
-              <button
-                className="gt-tree-main"
-                onClick={() => onSelect(node.id)}
-              >
-                <span className="gt-tree-label">{node.label}</span>
-                <span className="gt-tree-pct mono">{node.pct}%</span>
-              </button>
-            </div>
-            <div className="gt-tree-bar">
-              <div
-                className="gt-tree-bar-fill"
-                style={{ "--val": node.pct + "%" } as CSS}
-              />
-            </div>
-            {isOpen && node.children && (
-              <div className="gt-tree-children">
-                {node.children.map((c) => (
-                  <button
-                    key={c.id}
-                    className="gt-tree-row gt-tree-row--child"
-                    data-active={activeId === c.id}
-                    onClick={() => onSelect(c.id)}
-                  >
-                    <span className="gt-tree-label">{c.label}</span>
-                    <span className="gt-tree-pct mono">
-                      {c.count[0]}/{c.count[1]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
+              <Icon name="chevron" size="0.8rem" />
+            </button>
+          ) : (
+            <span
+              className="gt-tree-caret gt-tree-caret--leaf"
+              aria-hidden="true"
+            />
+          )}
+          <button className="gt-tree-main" onClick={() => onSelect(node.id)}>
+            <span className="gt-tree-label">{node.label}</span>
+            <span className="gt-tree-pct mono">
+              {node.count[0]}/{node.count[1]}
+            </span>
+          </button>
+        </div>
+        <div
+          className="gt-tree-bar"
+          style={{ paddingLeft: `calc(${depth} * var(--s-3))` }}
+        >
+          <div
+            className="gt-tree-bar-fill"
+            style={{ "--val": node.pct + "%" } as CSS}
+          />
+        </div>
+        {hasChildren && isOpen && (
+          <div className="gt-tree-children" role="group">
+            {node.children!.map((c) => renderNode(c, depth + 1))}
           </div>
-        );
-      })}
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <nav className="gt-tree" role="tree">
+      {nodes.map((n) => renderNode(n, 0))}
     </nav>
   );
 }

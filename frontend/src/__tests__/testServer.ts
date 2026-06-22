@@ -12,27 +12,13 @@ export const sampleUser = {
 };
 
 export const sampleCollections = {
-  weapons: {
-    total: 10,
-    collected: 8,
-    missing: [
-      {
-        itemHash: "12345",
-        name: "Fatebringer",
-        description: "A legendary hand cannon.",
-        icon: "/icons/fb.png",
-        itemType: "Hand Cannon",
-        tierType: 5,
-        rarity: "Legendary",
-        difficulty: "Challenging",
-        sources: ["Vault of Glass raid"],
-        isExotic: false,
-      },
-    ],
+  tree: [],
+  summary: {
+    weapons: { total: 10, collected: 8 },
+    armor: { total: 5, collected: 5 },
+    exotics: { total: 3, collected: 2 },
+    cosmetics: { total: 4, collected: 1 },
   },
-  armor: { total: 5, collected: 5, missing: [] },
-  exotics: { total: 3, collected: 2, missing: [] },
-  cosmetics: { total: 4, collected: 1, missing: [] },
   fetchedAt: new Date().toISOString(),
 };
 
