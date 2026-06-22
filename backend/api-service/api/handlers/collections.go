@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"log"
 	"net/http"
@@ -16,20 +17,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// liveAvailabilityProvider returns itemHash → vendor name for items obtainable
+// right now from rotating vendors. Satisfied by *weekly.Service.
+type liveAvailabilityProvider interface {
+	LiveVendorItemHashes(ctx context.Context, membershipType int, membershipID, bungieToken string) map[uint32]string
+}
+
 // CollectionsHandler handles collection-related endpoints.
 type CollectionsHandler struct {
 	collectionsService *collections.Service
 	charactersService  *characters.Service
 	recordsService     *records.Service
 	tokenStore         *auth.TokenStore
+	liveVendors        liveAvailabilityProvider
 }
 
-func NewCollectionsHandler(svc *collections.Service, chars *characters.Service, recs *records.Service, ts *auth.TokenStore) *CollectionsHandler {
+func NewCollectionsHandler(svc *collections.Service, chars *characters.Service, recs *records.Service, ts *auth.TokenStore, live liveAvailabilityProvider) *CollectionsHandler {
 	return &CollectionsHandler{
 		collectionsService: svc,
 		charactersService:  chars,
 		recordsService:     recs,
 		tokenStore:         ts,
+		liveVendors:        live,
 	}
 }
 
@@ -62,6 +71,12 @@ func (h *CollectionsHandler) GetCollections(c *gin.Context) {
 	if c.Query("include") != "all" {
 		c.JSON(http.StatusOK, result.Lightweight())
 		return
+	}
+	// Stamp live "available now" availability (best-effort enrichment — never fails
+	// the request). result is a fresh per-request value; result.Items is read-only.
+	if h.liveVendors != nil {
+		live := h.liveVendors.LiveVendorItemHashes(c.Request.Context(), membershipType, membershipID, bungieToken)
+		result.AvailableNow = availableNowOverlay(result.Items, live)
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -144,4 +159,19 @@ func handleBungieError(c *gin.Context, err error) {
 	}
 	log.Printf("Internal error: %v", err)
 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error", "code": "INTERNAL_ERROR"})
+}
+
+// availableNowOverlay returns the subset of the live-vendor availability map whose
+// items appear in the collection (keyed by item-hash string), so only tracked
+// collectibles get an availability stamp. Iterates the small vendor set, not the
+// ~12k-item collection.
+func availableNowOverlay(items map[string]collections.DestinyItem, live map[uint32]string) map[string]string {
+	out := make(map[string]string)
+	for itemHash, vendor := range live {
+		hs := strconv.FormatUint(uint64(itemHash), 10)
+		if _, ok := items[hs]; ok {
+			out[hs] = vendor
+		}
+	}
+	return out
 }

@@ -227,7 +227,7 @@ func main() {
 	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService)
 	healthHandler := handlers.NewHealthHandler(manifestService)
 	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
-	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore)
+	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore, weeklyService)
 
 	// Roles, feature flags & admin console. In degraded mode pass true-nil stores
 	// so the handlers' nil-guards engage (vs. a typed-nil interface).
