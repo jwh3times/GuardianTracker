@@ -166,15 +166,16 @@ func (s *Service) buildSummary(items []manifest.CollectibleWithItem, collected m
 	for _, cwi := range items {
 		if collected[cwi.Collectible.Hash] {
 			summary.Collected++
-			summary.CollectedItems = append(summary.CollectedItems, s.toDestinyItem(&cwi))
+			summary.CollectedItems = append(summary.CollectedItems, toDestinyItem(&cwi))
 		} else {
-			summary.Missing = append(summary.Missing, s.toDestinyItem(&cwi))
+			summary.Missing = append(summary.Missing, toDestinyItem(&cwi))
 		}
 	}
 	return summary
 }
 
-func (s *Service) toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
+// toDestinyItem maps a manifest collectible+item pair into the frontend item shape.
+func toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
 	item := cwi.Item
 	col := cwi.Collectible
 	di := DestinyItem{
