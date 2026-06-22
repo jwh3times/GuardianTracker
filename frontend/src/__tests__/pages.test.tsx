@@ -173,6 +173,26 @@ describe("Collections", () => {
     expect(captured).toEqual({ itemHash: 200 });
   });
 
+  it("deep-links to an item: opens its drawer and reveals its nested node", async () => {
+    server.use(
+      treeCollectionsHandler,
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json([])),
+    );
+    // Item "200" (Imperial Decree) lives under "Hand Cannons" (node 11),
+    // nested below "Weapons" (node 10). Deep-linking must open the detail
+    // drawer AND expand the sidebar to reveal that nested node.
+    renderPage(<Collections />, "/collections?item=200");
+
+    // Drawer opens for the deep-linked item.
+    expect(
+      await screen.findByRole("dialog", { name: "Imperial Decree" }),
+    ).toBeInTheDocument();
+
+    // The nested "Hand Cannons" node is revealed in the sidebar without any
+    // manual expand click (the deep-link seeds the tree's open set).
+    expect(await screen.findByText("Hand Cannons")).toBeInTheDocument();
+  });
+
   it("shows the privacy error state on PRIVACY_RESTRICTION", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>

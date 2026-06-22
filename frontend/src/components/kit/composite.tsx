@@ -102,10 +102,12 @@ export function CategoryTree({
   nodes,
   activeId,
   onSelect,
+  expand,
 }: {
   nodes: TreeNode[];
   activeId: string;
   onSelect: (id: string) => void;
+  expand?: string[];
 }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const toggle = (id: string) =>
@@ -115,6 +117,22 @@ export function CategoryTree({
       else n.add(id);
       return n;
     });
+
+  // Controlled-seed reveal: when a deep-link resolves an ancestor path, merge
+  // those ids into the open set so the selected node is visible. Existing
+  // manually-opened ids are preserved. The `expand` prop is the external system
+  // being synchronized into local open state here, so the in-effect setState is
+  // intentional.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!expand || expand.length === 0) return;
+    setOpen((s) => {
+      const n = new Set(s);
+      for (const id of expand) n.add(id);
+      return n;
+    });
+  }, [expand]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const renderNode = (node: TreeNode, depth: number): ReactNode => {
     const hasChildren = !!node.children && node.children.length > 0;
@@ -153,7 +171,10 @@ export function CategoryTree({
             </span>
           </button>
         </div>
-        <div className="gt-tree-bar">
+        <div
+          className="gt-tree-bar"
+          style={{ paddingLeft: `calc(${depth} * var(--s-3))` }}
+        >
           <div
             className="gt-tree-bar-fill"
             style={{ "--val": node.pct + "%" } as CSS}

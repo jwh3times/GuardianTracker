@@ -57,6 +57,8 @@ export function Collections() {
 
   // active = selected presentation-node hash ("" until the tree loads → first root).
   const [active, setActive] = useState<string>("");
+  // Ancestor node-hash path to reveal in the sidebar tree (deep-link seed).
+  const [expandPath, setExpandPath] = useState<string[]>([]);
   const [rarity, setRarity] = useState<Rarity | null>(null);
   const [diff, setDiff] = useState<Difficulty | null>(null);
   const [sort, setSort] = useState<SortKey>("rarity");
@@ -167,6 +169,9 @@ export function Collections() {
     const path = findNodePath(collections.tree, itemParam);
     if (d && path) {
       setActive(path[path.length - 1]);
+      // Reveal the full root→node path in the sidebar so the user sees where
+      // in the hierarchy the deep-linked item lives.
+      setExpandPath(path);
       const isCollected = (collections.collectedHashes ?? []).includes(
         itemParam,
       );
@@ -312,6 +317,7 @@ export function Collections() {
             nodes={treeNodes}
             activeId={active}
             onSelect={setActive}
+            expand={expandPath}
           />
         </aside>
 

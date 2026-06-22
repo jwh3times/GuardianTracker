@@ -47,6 +47,20 @@ describe("CategoryTree", () => {
     expect(selected).toBe("12");
   });
 
+  it("reveals a deep descendant via the expand seed without any click", () => {
+    render(
+      <CategoryTree
+        nodes={nodes}
+        activeId="12"
+        onSelect={() => {}}
+        expand={["10", "11"]}
+      />,
+    );
+    // Seeding the ancestor path ("10" → "11") opens both levels on mount, so
+    // the depth-2 grandchild is in the document without a manual expand click.
+    expect(screen.getByText("Kinetic HCs")).toBeInTheDocument();
+  });
+
   it("exposes tree a11y roles", () => {
     render(<CategoryTree nodes={nodes} activeId="10" onSelect={() => {}} />);
     expect(screen.getByRole("tree")).toBeInTheDocument();
