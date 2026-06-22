@@ -44,9 +44,13 @@ type TreeStructure struct {
 }
 
 // buildTreeStructure assembles the Collections forest from the full node map and
-// collectible set. Roots are discovered (no hard-coded Collections root): a node is
-// a root when it transitively contains a valid collectible and is not referenced as
-// a child of any other collectible-bearing node.
+// collectible set. Collectible-bearing roots are discovered (no hard-coded
+// Collections root): a node is a candidate root when it transitively contains a
+// valid collectible and is not referenced as a child of any other
+// collectible-bearing node. The single DOMINANT candidate (most collectibles in its
+// subtree) is treated as the real Collections root, and ts.Roots is set to that
+// root's NAMED children — the in-game top-level categories — which drops the noise
+// roots and nameless/redacted branches the real manifest carries.
 func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collectibles []manifest.CollectibleWithItem) *TreeStructure {
 	colByHash := make(map[uint32]manifest.CollectibleWithItem, len(collectibles))
 	items := make(map[string]DestinyItem)
@@ -155,6 +159,11 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 			if !computeContains(ch) || path[ch] {
 				continue
 			}
+			// Skip nameless/redacted nodes (and their subtrees) — these aren't
+			// shown in-game, and the real manifest carries empty-named branches.
+			if cn := nodes[ch]; cn == nil || cn.DisplayProperties.Name == "" {
+				continue
+			}
 			sn.Children = append(sn.Children, build(ch, path))
 		}
 		for _, c := range n.Children.Collectibles {
@@ -170,10 +179,47 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 	}
 
 	ts := &TreeStructure{Items: items}
+
+	// Build every discovered root, then anchor at the single DOMINANT root — the
+	// one whose subtree holds the most collectibles. Against the real manifest the
+	// in-game "Items" root dominates (~12k leaves vs. ~2k for the next), so this
+	// drops the noise roots (duplicate/seasonal micro-trees) without hardcoding a
+	// hash or name.
+	var dominant structNode
+	var dominantCount int
+	haveDominant := false
 	for _, h := range rootHashes {
-		ts.Roots = append(ts.Roots, build(h, map[uint32]bool{}))
+		built := build(h, map[uint32]bool{})
+		if c := leafCount(built); !haveDominant || c > dominantCount {
+			dominant, dominantCount, haveDominant = built, c, true
+		}
+	}
+	if !haveDominant {
+		return ts
+	}
+
+	// Roots are the dominant root's NAMED children (the in-game top-level
+	// categories: Weapons/Armor/Flair/...), sorted by name. If it has none, fall
+	// back to the dominant root itself so the tree is never empty.
+	for _, ch := range dominant.Children {
+		if ch.Name != "" {
+			ts.Roots = append(ts.Roots, ch)
+		}
+	}
+	sort.Slice(ts.Roots, func(i, j int) bool { return ts.Roots[i].Name < ts.Roots[j].Name })
+	if len(ts.Roots) == 0 {
+		ts.Roots = []structNode{dominant}
 	}
 	return ts
+}
+
+// leafCount returns the total number of leaf collectibles placed in a subtree.
+func leafCount(n structNode) int {
+	c := len(n.Leaves)
+	for _, ch := range n.Children {
+		c += leafCount(ch)
+	}
+	return c
 }
 
 // overlay produces counted CollectionNodes for a user's collected set (keyed by
