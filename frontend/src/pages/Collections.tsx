@@ -235,7 +235,12 @@ export function Collections() {
       const collected = collectedSet.has(h);
       if (missingOnly && collected) continue;
       const vendor = collections.availableNow?.[h];
-      out.push({ ...toGTItem(d), collected, obtainable: !!vendor, availFrom: vendor });
+      out.push({
+        ...toGTItem(d),
+        collected,
+        obtainable: !!vendor,
+        availFrom: vendor,
+      });
     }
     return out;
   }, [activeNode, collections, missingOnly, collectedSet]);

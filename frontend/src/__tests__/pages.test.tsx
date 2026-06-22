@@ -196,7 +196,10 @@ describe("Collections", () => {
   it("shows the 'Available now' vendor on an obtainable item", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
-        HttpResponse.json({ ...treeCollections, availableNow: { "200": "Banshee-44" } }),
+        HttpResponse.json({
+          ...treeCollections,
+          availableNow: { "200": "Banshee-44" },
+        }),
       ),
       http.get(`${API}/api/wishlist`, () => HttpResponse.json([])),
     );
