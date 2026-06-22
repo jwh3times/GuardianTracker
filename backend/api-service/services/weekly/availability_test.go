@@ -48,6 +48,12 @@ func TestExtractVendorItems_NilSafe(t *testing.T) {
 	if got := extractVendorItems(nil, liveVendorAllowlist); len(got) != 0 {
 		t.Errorf("nil response = %+v, want empty", got)
 	}
+	// Empty-but-non-nil response: the range loop runs zero times — also empty, no panic.
+	empty := &bungie.CharacterVendorsResponse{}
+	empty.Response.Sales.Data = map[string]bungie.VendorSales{}
+	if got := extractVendorItems(empty, liveVendorAllowlist); len(got) != 0 {
+		t.Errorf("empty response = %+v, want empty", got)
+	}
 }
 
 func TestLiveVendorItemHashes_MergesXurAndVendors(t *testing.T) {
@@ -71,6 +77,25 @@ func TestLiveVendorItemHashes_MergesXurAndVendors(t *testing.T) {
 	}
 	if len(got) != 3 {
 		t.Errorf("len = %d, want 3", len(got))
+	}
+}
+
+func TestLiveVendorItemHashes_XurWinsTie(t *testing.T) {
+	friday := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC) // Xûr present
+
+	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	// Hash 555 is sold by both a vendor and Xûr — Xûr must win the label.
+	c.Set("weekly:public", &publicWeeklyCache{
+		XurPresent: true,
+		XurItems:   []xurItemEnriched{{Hash: 555}},
+	}, time.Minute)
+	c.Set("live:vendoritems", map[uint32]string{555: "Banshee-44"}, time.Minute)
+	s := &Service{cache: c}
+
+	got := s.liveVendorItemHashesAt(context.Background(), 3, "member-1", "token", friday)
+
+	if got[555] != "Xûr" {
+		t.Errorf("shared hash label = %q, want Xûr (Xûr wins ties)", got[555])
 	}
 }
 

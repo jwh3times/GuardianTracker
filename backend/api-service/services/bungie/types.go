@@ -299,9 +299,8 @@ const (
 	XurVendorHash       uint32 = 2190858386
 	Ada1VendorHash      uint32 = 350061650
 	Banshee44VendorHash uint32 = 672118013
-	// Ritual vendors. Verify against DestinyVendorDefinition before relying on
-	// these — a wrong hash is self-correcting (it simply matches no sale items
-	// via the collection intersection), but should still be confirmed.
+	// Ritual vendors. Verified against DestinyVendorDefinition in the real
+	// manifest: 3603221665=Lord Shaxx, 69482069=Commander Zavala, 248695599=The Drifter.
 	ShaxxVendorHash   uint32 = 3603221665
 	ZavalaVendorHash  uint32 = 69482069
 	DrifterVendorHash uint32 = 248695599
