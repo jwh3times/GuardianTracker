@@ -185,14 +185,6 @@ func (r *Repository) getItemsByHashesChunkedLocked(hashes []uint32) (map[uint32]
 	return out, nil
 }
 
-// FilteredCollectibles holds collectibles split into categories.
-type FilteredCollectibles struct {
-	Weapons   []CollectibleWithItem
-	Armor     []CollectibleWithItem
-	Exotics   []CollectibleWithItem
-	Cosmetics []CollectibleWithItem
-}
-
 // cosmeticItemTypes is the set of itemType values bucketed as cosmetics.
 var cosmeticItemTypes = map[int]struct{}{
 	14: {}, // Emblem
@@ -202,42 +194,29 @@ var cosmeticItemTypes = map[int]struct{}{
 	24: {}, // Ghost
 }
 
-func (r *Repository) GetFilteredCollectibles() (*FilteredCollectibles, error) {
-	all, err := r.GetAllCollectiblesWithItems()
-	if err != nil {
-		return nil, err
+// CollectibleCategory classifies an item into one of the collection summary
+// buckets, or "" for item types the summary does not count (mods, etc.).
+func CollectibleCategory(item *bungie.InventoryItemDefinition) string {
+	if item == nil {
+		return ""
 	}
-	result := &FilteredCollectibles{
-		Weapons:   make([]CollectibleWithItem, 0),
-		Armor:     make([]CollectibleWithItem, 0),
-		Exotics:   make([]CollectibleWithItem, 0),
-		Cosmetics: make([]CollectibleWithItem, 0),
+	if _, isCosmetic := cosmeticItemTypes[item.ItemType]; isCosmetic {
+		return "cosmetics"
 	}
-	for _, cwi := range all {
-		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
-			continue
+	isExotic := item.Inventory.TierType == bungie.TierTypeExotic
+	switch item.ItemType {
+	case bungie.ItemTypeWeapon:
+		if isExotic {
+			return "exotics"
 		}
-		if _, isCosmetic := cosmeticItemTypes[cwi.Item.ItemType]; isCosmetic {
-			result.Cosmetics = append(result.Cosmetics, cwi)
-			continue
+		return "weapons"
+	case bungie.ItemTypeArmor:
+		if isExotic {
+			return "exotics"
 		}
-		isExotic := cwi.Item.Inventory.TierType == bungie.TierTypeExotic
-		switch cwi.Item.ItemType {
-		case bungie.ItemTypeWeapon:
-			if isExotic {
-				result.Exotics = append(result.Exotics, cwi)
-			} else {
-				result.Weapons = append(result.Weapons, cwi)
-			}
-		case bungie.ItemTypeArmor:
-			if isExotic {
-				result.Exotics = append(result.Exotics, cwi)
-			} else {
-				result.Armor = append(result.Armor, cwi)
-			}
-		}
+		return "armor"
 	}
-	return result, nil
+	return ""
 }
 
 // GetItemsByHashes fetches inventory item definitions for a batch of hashes.
@@ -340,6 +319,9 @@ type PresentationNodeDef struct {
 		PresentationNodes []struct {
 			PresentationNodeHash uint32 `json:"presentationNodeHash"`
 		} `json:"presentationNodes"`
+		Collectibles []struct {
+			CollectibleHash uint32 `json:"collectibleHash"`
+		} `json:"collectibles"`
 		Records []struct {
 			RecordHash uint32 `json:"recordHash"`
 		} `json:"records"`
@@ -406,6 +388,34 @@ func (r *Repository) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32
 		}
 	}
 	return results, nil
+}
+
+// GetAllPresentationNodes returns every presentation node keyed by hash. One table
+// scan — callers (the collection-tree builder) should cache the result, as it is
+// manifest-version-dependent but user-independent.
+func (r *Repository) GetAllPresentationNodes() (map[uint32]*PresentationNodeDef, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	rows, err := r.db.Query("SELECT json FROM DestinyPresentationNodeDefinition")
+	if err != nil {
+		return nil, fmt.Errorf("GetAllPresentationNodes: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[uint32]*PresentationNodeDef)
+	for rows.Next() {
+		var blob string
+		if err := rows.Scan(&blob); err != nil {
+			return nil, fmt.Errorf("GetAllPresentationNodes scan: %w", err)
+		}
+		var def PresentationNodeDef
+		if err := json.Unmarshal([]byte(blob), &def); err != nil {
+			continue
+		}
+		if def.Hash != 0 {
+			out[def.Hash] = &def
+		}
+	}
+	return out, rows.Err()
 }
 
 // GetRecordDefinitions fetches a batch of record definitions by hash.

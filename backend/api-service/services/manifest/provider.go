@@ -158,12 +158,20 @@ func (p *Provider) GetRecordDefinitions(hashes []uint32) (map[uint32]*RecordDef,
 	return r.GetRecordDefinitions(hashes)
 }
 
-func (p *Provider) GetFilteredCollectibles() (*FilteredCollectibles, error) {
+func (p *Provider) GetAllCollectiblesWithItems() ([]CollectibleWithItem, error) {
 	r, err := p.get()
 	if err != nil {
 		return nil, err
 	}
-	return r.GetFilteredCollectibles()
+	return r.GetAllCollectiblesWithItems()
+}
+
+func (p *Provider) GetAllPresentationNodes() (map[uint32]*PresentationNodeDef, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetAllPresentationNodes()
 }
 
 func (p *Provider) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error) {
