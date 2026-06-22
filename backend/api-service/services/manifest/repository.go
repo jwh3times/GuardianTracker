@@ -340,6 +340,9 @@ type PresentationNodeDef struct {
 		PresentationNodes []struct {
 			PresentationNodeHash uint32 `json:"presentationNodeHash"`
 		} `json:"presentationNodes"`
+		Collectibles []struct {
+			CollectibleHash uint32 `json:"collectibleHash"`
+		} `json:"collectibles"`
 		Records []struct {
 			RecordHash uint32 `json:"recordHash"`
 		} `json:"records"`
@@ -406,6 +409,34 @@ func (r *Repository) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32
 		}
 	}
 	return results, nil
+}
+
+// GetAllPresentationNodes returns every presentation node keyed by hash. One table
+// scan — callers (the collection-tree builder) should cache the result, as it is
+// manifest-version-dependent but user-independent.
+func (r *Repository) GetAllPresentationNodes() (map[uint32]*PresentationNodeDef, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	rows, err := r.db.Query("SELECT json FROM DestinyPresentationNodeDefinition")
+	if err != nil {
+		return nil, fmt.Errorf("GetAllPresentationNodes: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[uint32]*PresentationNodeDef)
+	for rows.Next() {
+		var blob string
+		if err := rows.Scan(&blob); err != nil {
+			return nil, fmt.Errorf("GetAllPresentationNodes scan: %w", err)
+		}
+		var def PresentationNodeDef
+		if err := json.Unmarshal([]byte(blob), &def); err != nil {
+			continue
+		}
+		if def.Hash != 0 {
+			out[def.Hash] = &def
+		}
+	}
+	return out, rows.Err()
 }
 
 // GetRecordDefinitions fetches a batch of record definitions by hash.

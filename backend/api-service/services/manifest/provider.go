@@ -166,6 +166,22 @@ func (p *Provider) GetFilteredCollectibles() (*FilteredCollectibles, error) {
 	return r.GetFilteredCollectibles()
 }
 
+func (p *Provider) GetAllCollectiblesWithItems() ([]CollectibleWithItem, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetAllCollectiblesWithItems()
+}
+
+func (p *Provider) GetAllPresentationNodes() (map[uint32]*PresentationNodeDef, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetAllPresentationNodes()
+}
+
 func (p *Provider) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error) {
 	r, err := p.get()
 	if err != nil {

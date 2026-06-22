@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -71,6 +72,19 @@ func writeFixtureDB(t *testing.T, path string) {
 	for hash, blob := range collectibles {
 		if _, err := db.Exec(`INSERT INTO DestinyCollectibleDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
 			t.Fatalf("fixture collectible %d: %v", hash, err)
+		}
+	}
+
+	if _, err := db.Exec(`CREATE TABLE DestinyPresentationNodeDefinition (id INTEGER PRIMARY KEY, json TEXT)`); err != nil {
+		t.Fatalf("fixture pnode ddl: %v", err)
+	}
+	nodes := map[uint32]string{
+		10: `{"hash":10,"displayProperties":{"name":"Weapons"},"children":{"presentationNodes":[{"presentationNodeHash":11}],"collectibles":[]}}`,
+		11: `{"hash":11,"displayProperties":{"name":"Hand Cannons"},"children":{"presentationNodes":[],"collectibles":[{"collectibleHash":1000}]}}`,
+	}
+	for hash, blob := range nodes {
+		if _, err := db.Exec(`INSERT INTO DestinyPresentationNodeDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
+			t.Fatalf("fixture pnode %d: %v", hash, err)
 		}
 	}
 }
@@ -163,6 +177,39 @@ func TestRepository_Reconnect(t *testing.T) {
 	}
 	if _, err := repo.GetItemsByHashes([]uint32{100}); err != nil {
 		t.Fatalf("query after Reconnect: %v", err)
+	}
+}
+
+func TestPresentationNodeDef_ParsesCollectibles(t *testing.T) {
+	blob := `{"hash":7,"displayProperties":{"name":"Hand Cannons","icon":"/i/hc.png"},
+		"children":{"presentationNodes":[{"presentationNodeHash":8}],
+		"collectibles":[{"collectibleHash":1000},{"collectibleHash":2000}]}}`
+	var def PresentationNodeDef
+	if err := json.Unmarshal([]byte(blob), &def); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(def.Children.Collectibles) != 2 || def.Children.Collectibles[0].CollectibleHash != 1000 {
+		t.Fatalf("collectibles = %+v", def.Children.Collectibles)
+	}
+	if def.Children.PresentationNodes[0].PresentationNodeHash != 8 {
+		t.Fatalf("child node = %+v", def.Children.PresentationNodes)
+	}
+}
+
+func TestRepository_GetAllPresentationNodes(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	nodes, err := repo.GetAllPresentationNodes()
+	if err != nil {
+		t.Fatalf("GetAllPresentationNodes: %v", err)
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("len = %d, want 2", len(nodes))
+	}
+	if nodes[11].Children.Collectibles[0].CollectibleHash != 1000 {
+		t.Errorf("node 11 collectibles = %+v", nodes[11].Children.Collectibles)
+	}
+	if nodes[10].Children.PresentationNodes[0].PresentationNodeHash != 11 {
+		t.Errorf("node 10 children = %+v", nodes[10].Children.PresentationNodes)
 	}
 }
 
