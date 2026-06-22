@@ -202,6 +202,31 @@ var cosmeticItemTypes = map[int]struct{}{
 	24: {}, // Ghost
 }
 
+// CollectibleCategory classifies an item into one of the collection summary
+// buckets, or "" for item types the summary does not count (mods, etc.).
+func CollectibleCategory(item *bungie.InventoryItemDefinition) string {
+	if item == nil {
+		return ""
+	}
+	if _, isCosmetic := cosmeticItemTypes[item.ItemType]; isCosmetic {
+		return "cosmetics"
+	}
+	isExotic := item.Inventory.TierType == bungie.TierTypeExotic
+	switch item.ItemType {
+	case bungie.ItemTypeWeapon:
+		if isExotic {
+			return "exotics"
+		}
+		return "weapons"
+	case bungie.ItemTypeArmor:
+		if isExotic {
+			return "exotics"
+		}
+		return "armor"
+	}
+	return ""
+}
+
 func (r *Repository) GetFilteredCollectibles() (*FilteredCollectibles, error) {
 	all, err := r.GetAllCollectiblesWithItems()
 	if err != nil {
@@ -217,24 +242,15 @@ func (r *Repository) GetFilteredCollectibles() (*FilteredCollectibles, error) {
 		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
 			continue
 		}
-		if _, isCosmetic := cosmeticItemTypes[cwi.Item.ItemType]; isCosmetic {
+		switch CollectibleCategory(cwi.Item) {
+		case "weapons":
+			result.Weapons = append(result.Weapons, cwi)
+		case "armor":
+			result.Armor = append(result.Armor, cwi)
+		case "exotics":
+			result.Exotics = append(result.Exotics, cwi)
+		case "cosmetics":
 			result.Cosmetics = append(result.Cosmetics, cwi)
-			continue
-		}
-		isExotic := cwi.Item.Inventory.TierType == bungie.TierTypeExotic
-		switch cwi.Item.ItemType {
-		case bungie.ItemTypeWeapon:
-			if isExotic {
-				result.Exotics = append(result.Exotics, cwi)
-			} else {
-				result.Weapons = append(result.Weapons, cwi)
-			}
-		case bungie.ItemTypeArmor:
-			if isExotic {
-				result.Exotics = append(result.Exotics, cwi)
-			} else {
-				result.Armor = append(result.Armor, cwi)
-			}
 		}
 	}
 	return result, nil

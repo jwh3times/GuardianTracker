@@ -213,6 +213,35 @@ func TestRepository_GetAllPresentationNodes(t *testing.T) {
 	}
 }
 
+func TestCollectibleCategory(t *testing.T) {
+	mk := func(itemType, tier int) *bungie.InventoryItemDefinition {
+		d := &bungie.InventoryItemDefinition{ItemType: itemType}
+		d.Inventory.TierType = tier
+		return d
+	}
+	cases := []struct {
+		name string
+		item *bungie.InventoryItemDefinition
+		want string
+	}{
+		{"legendary weapon", mk(bungie.ItemTypeWeapon, bungie.TierTypeLegendary), "weapons"},
+		{"exotic weapon", mk(bungie.ItemTypeWeapon, bungie.TierTypeExotic), "exotics"},
+		{"legendary armor", mk(bungie.ItemTypeArmor, bungie.TierTypeLegendary), "armor"},
+		{"exotic armor", mk(bungie.ItemTypeArmor, bungie.TierTypeExotic), "exotics"},
+		{"ship cosmetic", mk(21, bungie.TierTypeLegendary), "cosmetics"},
+		{"ghost cosmetic", mk(24, bungie.TierTypeRare), "cosmetics"},
+		{"mod (uncategorized)", mk(19, bungie.TierTypeCommon), ""},
+		{"nil", nil, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CollectibleCategory(tc.item); got != tc.want {
+				t.Errorf("CollectibleCategory = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestProvider_LazyOpenAndSwap(t *testing.T) {
 	requireSQLite(t)
 	dir := t.TempDir()
