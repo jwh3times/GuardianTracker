@@ -65,6 +65,7 @@ type UserCollections struct {
 	Tree            []CollectionNode       `json:"tree"`
 	Items           map[string]DestinyItem `json:"items,omitempty"`
 	CollectedHashes []string               `json:"collectedHashes,omitempty"`
+	AvailableNow    map[string]string      `json:"availableNow,omitempty"` // itemHash → vendor name; set by the handler on ?include=all
 	Summary         CategorySummary        `json:"summary"`
 	FetchedAt       time.Time              `json:"fetchedAt"`
 }
@@ -90,6 +91,7 @@ type CategorySummary struct {
 func (u UserCollections) Lightweight() UserCollections {
 	u.Items = nil
 	u.CollectedHashes = nil
+	u.AvailableNow = nil
 	u.Tree = nodesWithoutItems(u.Tree)
 	return u
 }

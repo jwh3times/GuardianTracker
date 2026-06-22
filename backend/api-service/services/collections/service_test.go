@@ -97,6 +97,7 @@ func TestLightweight_StripsItems(t *testing.T) {
 		}},
 		Items:           map[string]DestinyItem{"100": {ItemHash: "100"}},
 		CollectedHashes: []string{"100"},
+		AvailableNow:    map[string]string{"100": "Xûr"},
 		Summary:         CategorySummary{Weapons: CategoryCount{Total: 1}},
 	}
 
@@ -108,6 +109,9 @@ func TestLightweight_StripsItems(t *testing.T) {
 	if lw.CollectedHashes != nil {
 		t.Errorf("CollectedHashes not stripped")
 	}
+	if lw.AvailableNow != nil {
+		t.Errorf("AvailableNow not stripped")
+	}
 	if lw.Tree[0].Items != nil || lw.Tree[0].Children[0].Items != nil {
 		t.Errorf("node Items not stripped recursively")
 	}
@@ -115,7 +119,7 @@ func TestLightweight_StripsItems(t *testing.T) {
 		t.Errorf("counts/summary must survive Lightweight")
 	}
 	// Original must be untouched (value-copy contract).
-	if full.Items == nil || full.Tree[0].Items == nil || full.CollectedHashes == nil {
+	if full.Items == nil || full.Tree[0].Items == nil || full.CollectedHashes == nil || full.AvailableNow == nil {
 		t.Errorf("Lightweight mutated the source")
 	}
 }
