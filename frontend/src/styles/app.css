@@ -767,6 +767,10 @@
 .gt-tree-caret[data-open="true"] {
   transform: rotate(90deg);
 }
+.gt-tree-caret--leaf {
+  display: inline-block;
+  width: 0.8rem;
+}
 .gt-tree-main {
   flex: 1;
   display: flex;
