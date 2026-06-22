@@ -4,6 +4,11 @@
 
 Guardian Tracker is a Destiny 2 collection tracker web app. Players log in via Bungie OAuth, and the app analyzes their in-game collections to surface missing items with acquisition difficulty ratings, wish-list management, and weekly recommendations.
 
+## Ground Rules
+
+- **Don't build on unverified assumptions — ask.** When a task depends on a fact you can't confirm from the code, the docs, or a quick check — especially **external or domain facts** (Bungie API response shapes, the manifest's presentation-node structure, third-party behavior, game data) — stop and ask before designing against a guess. If ground truth is *obtainable* (a real Bungie manifest is a public CDN download needing only `BUNGIE_API_KEY` — no OAuth; a running service; a sample response), ask to get it and verify **before** writing the implementation, not as a manual step deferred to the end. Designing a structure to "discover" an unknown at runtime is still building on an assumption — verify the discovery against real data.
+- A sensible default for a genuinely low-stakes choice is fine — state it and proceed. The bar is: would being wrong about this force a rework or ship something incorrect? If yes, it's load-bearing — ask.
+
 ## Architecture
 
 Two services: a Go API backend and a React frontend that calls it directly over REST.

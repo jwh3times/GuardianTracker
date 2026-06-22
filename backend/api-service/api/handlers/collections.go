@@ -56,10 +56,11 @@ func (h *CollectionsHandler) GetCollections(c *gin.Context) {
 		return
 	}
 
-	// Collected items ride along only when asked for (?include=all). The stripping
-	// copies by value, so the cached *UserCollections is never mutated.
+	// The item-detail map and per-item collected hashes ride along only when asked
+	// for (?include=all). Lightweight copies by value, so the cached *UserCollections
+	// is never mutated.
 	if c.Query("include") != "all" {
-		c.JSON(http.StatusOK, result.WithoutCollectedItems())
+		c.JSON(http.StatusOK, result.Lightweight())
 		return
 	}
 	c.JSON(http.StatusOK, result)

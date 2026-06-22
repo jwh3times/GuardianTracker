@@ -22,16 +22,20 @@ import { apiFetch } from "../lib/api";
 import { errorState } from "../lib/errorState";
 import { collectionsQuery } from "../lib/queries";
 import { toGTItem } from "../lib/adapters";
+import {
+  apiNodeToTreeNode,
+  gatherItemHashes,
+  findNodePath,
+} from "../lib/collectionTree";
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../lib/constants";
 import type { Difficulty, GTItem, Rarity, TreeNode } from "../types/design";
 import type {
   ProfileResponse,
-  APICollectionSummary,
+  APICollectionNode,
   APICacheRefreshResponse,
   WishListItem,
 } from "../types/api";
 
-type TopCategory = "weapons" | "armor" | "exotics" | "cosmetics";
 type SortKey = "rarity" | "name" | "difficulty" | "avail";
 
 const RARITY_RANK: Record<Rarity, number> = {
@@ -47,25 +51,14 @@ const DIFF_RANK: Record<Difficulty, number> = {
   easy: 2,
 };
 
-function topOf(id: string): TopCategory {
-  if (id === "armor" || id.startsWith("a-")) return "armor";
-  if (id === "exotics" || id.startsWith("e-")) return "exotics";
-  if (id === "cosmetics" || id.startsWith("c-")) return "cosmetics";
-  return "weapons";
-}
-
-const TOP_CATEGORIES: { id: TopCategory; label: string }[] = [
-  { id: "weapons", label: "Weapons" },
-  { id: "armor", label: "Armor" },
-  { id: "exotics", label: "Exotics" },
-  { id: "cosmetics", label: "Cosmetics" },
-];
-
 export function Collections() {
   const { showToast } = useToast();
   const { cardStyle, personalize } = usePreferences();
 
-  const [active, setActive] = useState("weapons");
+  // active = selected presentation-node hash ("" until the tree loads → first root).
+  const [active, setActive] = useState<string>("");
+  // Ancestor node-hash path to reveal in the sidebar tree (deep-link seed).
+  const [expandPath, setExpandPath] = useState<string[]>([]);
   const [rarity, setRarity] = useState<Rarity | null>(null);
   const [diff, setDiff] = useState<Difficulty | null>(null);
   const [sort, setSort] = useState<SortKey>("rarity");
@@ -166,38 +159,24 @@ export function Collections() {
   });
 
   // Search deep-link (?item=<hash>): once data is loaded, locate the item in
-  // any bucket (missing or collected), open its drawer, and clear the param.
+  // the tree, select its owning node, open its drawer, and clear the param.
   // The URL is the external system being synchronized here; the one-off
   // cascading render on deep-link navigation is intentional.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!itemParam || !collections) return;
-    const buckets: { id: TopCategory; b: APICollectionSummary }[] = [
-      { id: "weapons", b: collections.weapons },
-      { id: "armor", b: collections.armor },
-      { id: "exotics", b: collections.exotics },
-      { id: "cosmetics", b: collections.cosmetics },
-    ];
-    let found: GTItem | null = null;
-    let bucketId: TopCategory | null = null;
-    for (const { id, b } of buckets) {
-      const miss = b?.missing?.find((d) => d.itemHash === itemParam);
-      if (miss) {
-        found = toGTItem(miss);
-        bucketId = id;
-        break;
-      }
-      const coll = b?.collectedItems?.find((d) => d.itemHash === itemParam);
-      if (coll) {
-        found = { ...toGTItem(coll), collected: true };
-        bucketId = id;
-        break;
-      }
-    }
-    if (found && bucketId) {
-      setActive(bucketId);
-      if (found.collected) setMissingOnly(false);
-      setDetail(found);
+    if (!itemParam || !collections?.items) return;
+    const d = collections.items[itemParam];
+    const path = findNodePath(collections.tree, itemParam);
+    if (d && path) {
+      setActive(path[path.length - 1]);
+      // Reveal the full root→node path in the sidebar so the user sees where
+      // in the hierarchy the deep-linked item lives.
+      setExpandPath(path);
+      const isCollected = (collections.collectedHashes ?? []).includes(
+        itemParam,
+      );
+      if (isCollected) setMissingOnly(false);
+      setDetail({ ...toGTItem(d), collected: isCollected });
     } else {
       showToast("That item isn't in your trackable collections", "info");
     }
@@ -206,35 +185,53 @@ export function Collections() {
   }, [itemParam, collections]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const top = topOf(active);
-  const realBucket = collections?.[top];
   const hasReal = !!collections;
 
-  const treeNodes: TreeNode[] = useMemo(() => {
-    if (!collections) return [];
-    return TOP_CATEGORIES.map(({ id, label }) => {
-      const b = collections[id];
-      const total = b?.total ?? 0;
-      const collected = b?.collected ?? 0;
-      return {
-        id,
-        label,
-        pct: total ? Math.round((collected / total) * 100) : 0,
-        count: [collected, total] as [number, number],
-      };
-    });
+  // Sidebar tree built from the API forest.
+  const treeNodes: TreeNode[] = useMemo(
+    () => (collections?.tree ?? []).map(apiNodeToTreeNode),
+    [collections],
+  );
+
+  // hash→node map for item gathering + the selected node's rolled-up counts.
+  const nodeByHash = useMemo(() => {
+    const map = new Map<string, APICollectionNode>();
+    const walk = (n: APICollectionNode) => {
+      map.set(n.hash, n);
+      (n.children ?? []).forEach(walk);
+    };
+    (collections?.tree ?? []).forEach(walk);
+    return map;
   }, [collections]);
 
+  // Owned item hashes — per-item collected state for the missing-only filter.
+  const collectedSet = useMemo(
+    () => new Set(collections?.collectedHashes ?? []),
+    [collections],
+  );
+
+  // Default the selection to the first root once data arrives.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!active && collections?.tree?.length)
+      setActive(collections.tree[0].hash);
+  }, [collections, active]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const activeNode = active ? nodeByHash.get(active) : undefined;
+
   const baseItems: GTItem[] = useMemo(() => {
-    if (!realBucket) return [];
-    const missing = (realBucket.missing ?? []).map(toGTItem);
-    if (missingOnly) return missing;
-    const collected = (realBucket.collectedItems ?? []).map((d) => ({
-      ...toGTItem(d),
-      collected: true,
-    }));
-    return [...missing, ...collected];
-  }, [realBucket, missingOnly]);
+    if (!activeNode || !collections?.items) return [];
+    const out: GTItem[] = [];
+    for (const h of gatherItemHashes(activeNode)) {
+      const d = collections.items[h];
+      if (!d) continue;
+      const collected = collectedSet.has(h);
+      if (missingOnly && collected) continue;
+      out.push({ ...toGTItem(d), collected });
+    }
+    return out;
+  }, [activeNode, collections, missingOnly, collectedSet]);
 
   const items = useMemo(() => {
     let list = baseItems.slice();
@@ -276,8 +273,9 @@ export function Collections() {
     });
   };
 
-  const total = realBucket?.total ?? 0;
-  const collected = realBucket?.collected ?? 0;
+  // Stat tiles use the selected node's rolled-up counts.
+  const total = activeNode?.total ?? 0;
+  const collected = activeNode?.collected ?? 0;
   const missing = Math.max(total - collected, 0);
 
   const errState = errorState(error);
@@ -319,6 +317,7 @@ export function Collections() {
             nodes={treeNodes}
             activeId={active}
             onSelect={setActive}
+            expand={expandPath}
           />
         </aside>
 
