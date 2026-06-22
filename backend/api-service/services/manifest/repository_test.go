@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -73,6 +74,19 @@ func writeFixtureDB(t *testing.T, path string) {
 			t.Fatalf("fixture collectible %d: %v", hash, err)
 		}
 	}
+
+	if _, err := db.Exec(`CREATE TABLE DestinyPresentationNodeDefinition (id INTEGER PRIMARY KEY, json TEXT)`); err != nil {
+		t.Fatalf("fixture pnode ddl: %v", err)
+	}
+	nodes := map[uint32]string{
+		10: `{"hash":10,"displayProperties":{"name":"Weapons"},"children":{"presentationNodes":[{"presentationNodeHash":11}],"collectibles":[]}}`,
+		11: `{"hash":11,"displayProperties":{"name":"Hand Cannons"},"children":{"presentationNodes":[],"collectibles":[{"collectibleHash":1000}]}}`,
+	}
+	for hash, blob := range nodes {
+		if _, err := db.Exec(`INSERT INTO DestinyPresentationNodeDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
+			t.Fatalf("fixture pnode %d: %v", hash, err)
+		}
+	}
 }
 
 func fixtureRepo(t *testing.T) (*Repository, string) {
@@ -102,26 +116,6 @@ func TestRepository_GetItemsByHashes(t *testing.T) {
 	}
 	if defs[200].Inventory.TierType != bungie.TierTypeExotic {
 		t.Errorf("item 200 tier = %d", defs[200].Inventory.TierType)
-	}
-}
-
-func TestRepository_GetFilteredCollectibles(t *testing.T) {
-	repo, _ := fixtureRepo(t)
-	filtered, err := repo.GetFilteredCollectibles()
-	if err != nil {
-		t.Fatalf("GetFilteredCollectibles: %v", err)
-	}
-	if len(filtered.Weapons) != 1 || filtered.Weapons[0].Item.DisplayProperties.Name != "Fatebringer" {
-		t.Errorf("Weapons = %d items", len(filtered.Weapons))
-	}
-	if len(filtered.Exotics) != 1 || filtered.Exotics[0].Item.DisplayProperties.Name != "Gjallarhorn" {
-		t.Errorf("Exotics = %d items", len(filtered.Exotics))
-	}
-	if len(filtered.Armor) != 1 {
-		t.Errorf("Armor = %d items", len(filtered.Armor))
-	}
-	if len(filtered.Cosmetics) != 1 || filtered.Cosmetics[0].Item.DisplayProperties.Name != "Test Ship" {
-		t.Errorf("Cosmetics = %d items", len(filtered.Cosmetics))
 	}
 }
 
@@ -163,6 +157,77 @@ func TestRepository_Reconnect(t *testing.T) {
 	}
 	if _, err := repo.GetItemsByHashes([]uint32{100}); err != nil {
 		t.Fatalf("query after Reconnect: %v", err)
+	}
+}
+
+func TestPresentationNodeDef_ParsesCollectibles(t *testing.T) {
+	blob := `{"hash":7,"displayProperties":{"name":"Hand Cannons","icon":"/i/hc.png"},
+		"children":{"presentationNodes":[{"presentationNodeHash":8}],
+		"collectibles":[{"collectibleHash":1000},{"collectibleHash":2000}]}}`
+	var def PresentationNodeDef
+	if err := json.Unmarshal([]byte(blob), &def); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(def.Children.Collectibles) != 2 || def.Children.Collectibles[0].CollectibleHash != 1000 {
+		t.Fatalf("collectibles = %+v", def.Children.Collectibles)
+	}
+	if def.Children.PresentationNodes[0].PresentationNodeHash != 8 {
+		t.Fatalf("child node = %+v", def.Children.PresentationNodes)
+	}
+}
+
+func TestRepository_GetAllPresentationNodes(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	nodes, err := repo.GetAllPresentationNodes()
+	if err != nil {
+		t.Fatalf("GetAllPresentationNodes: %v", err)
+	}
+	if len(nodes) != 2 {
+		t.Fatalf("len = %d, want 2", len(nodes))
+	}
+	if nodes[11] == nil {
+		t.Fatalf("node 11 is nil; fixture mismatch — check writeFixtureDB")
+	}
+	if nodes[10] == nil {
+		t.Fatalf("node 10 is nil; fixture mismatch — check writeFixtureDB")
+	}
+	if nodes[11].Children.Collectibles[0].CollectibleHash != 1000 {
+		t.Errorf("node 11 collectibles = %+v", nodes[11].Children.Collectibles)
+	}
+	if nodes[10].Children.PresentationNodes[0].PresentationNodeHash != 11 {
+		t.Errorf("node 10 children = %+v", nodes[10].Children.PresentationNodes)
+	}
+	if len(nodes[10].Children.Collectibles) != 0 {
+		t.Errorf("node 10 should have no direct collectibles, got %+v", nodes[10].Children.Collectibles)
+	}
+}
+
+func TestCollectibleCategory(t *testing.T) {
+	mk := func(itemType, tier int) *bungie.InventoryItemDefinition {
+		d := &bungie.InventoryItemDefinition{ItemType: itemType}
+		d.Inventory.TierType = tier
+		return d
+	}
+	cases := []struct {
+		name string
+		item *bungie.InventoryItemDefinition
+		want string
+	}{
+		{"legendary weapon", mk(bungie.ItemTypeWeapon, bungie.TierTypeLegendary), "weapons"},
+		{"exotic weapon", mk(bungie.ItemTypeWeapon, bungie.TierTypeExotic), "exotics"},
+		{"legendary armor", mk(bungie.ItemTypeArmor, bungie.TierTypeLegendary), "armor"},
+		{"exotic armor", mk(bungie.ItemTypeArmor, bungie.TierTypeExotic), "exotics"},
+		{"ship cosmetic", mk(21, bungie.TierTypeLegendary), "cosmetics"},
+		{"ghost cosmetic", mk(24, bungie.TierTypeRare), "cosmetics"},
+		{"mod (uncategorized)", mk(19, bungie.TierTypeCommon), ""},
+		{"nil", nil, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CollectibleCategory(tc.item); got != tc.want {
+				t.Errorf("CollectibleCategory = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

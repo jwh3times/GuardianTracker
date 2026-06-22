@@ -156,31 +156,6 @@ func main() {
 		appCache = cache.NewNoOpCache()
 	}
 
-	// Hooks must be registered before EnsureReady can trigger a download: close
-	// SQLite handles before the file swap (the rename fails on Windows otherwise),
-	// reopen + rebuild the search index after the new version is installed, and
-	// evict manifest-derived caches (e.g. weapon types) so they don't serve stale
-	// labels until their TTL expires (B10).
-	manifestService.RegisterSwapHooks(
-		manifestProvider.CloseForSwap,
-		func(version string) {
-			if err := manifestProvider.Reopen(); err != nil {
-				log.Printf("Warning: manifest provider reopen failed: %v", err)
-			}
-			appCache.Delete(records.WeaponTypesCacheKey)
-			go searchService.BuildIndex()
-		},
-	)
-
-	go func() {
-		log.Println("Checking manifest status...")
-		if err := manifestService.EnsureReady(ctx); err != nil {
-			log.Printf("Warning: could not initialize manifest: %v", err)
-			log.Println("Collections endpoint will return 503 until manifest is available")
-		}
-	}()
-	manifestService.StartBackgroundUpdater(ctx)
-
 	// Revocation checker — nil store = skip version check (degraded mode)
 	var revoker *auth.RevocationChecker
 	if stores.Users != nil {
@@ -199,6 +174,32 @@ func main() {
 	// reconnects across manifest swaps).
 	charactersService := characters.NewService(bungieClient, appCache, cfg.CacheTTLCollections)
 	collectionsService := collections.NewService(bungieClient, manifestService, manifestProvider, appCache, cfg.CacheTTLCollections)
+
+	// Hooks must be registered before EnsureReady can trigger a download: close
+	// SQLite handles before the file swap (the rename fails on Windows otherwise),
+	// reopen + rebuild the search index after the new version is installed, and
+	// evict manifest-derived caches (e.g. weapon types and the collections tree)
+	// so they don't serve stale data until their TTL expires (B10).
+	manifestService.RegisterSwapHooks(
+		manifestProvider.CloseForSwap,
+		func(version string) {
+			if err := manifestProvider.Reopen(); err != nil {
+				log.Printf("Warning: manifest provider reopen failed: %v", err)
+			}
+			appCache.Delete(records.WeaponTypesCacheKey)
+			collectionsService.InvalidateTreeCache()
+			go searchService.BuildIndex()
+		},
+	)
+
+	go func() {
+		log.Println("Checking manifest status...")
+		if err := manifestService.EnsureReady(ctx); err != nil {
+			log.Printf("Warning: could not initialize manifest: %v", err)
+			log.Println("Collections endpoint will return 503 until manifest is available")
+		}
+	}()
+	manifestService.StartBackgroundUpdater(ctx)
 
 	// Weekly service
 	var weeklyWishlist weekly.WishlistReader
