@@ -95,7 +95,7 @@ func TestBuildTreeStructure_SkipsNamelessAndUnknownCollectibles(t *testing.T) {
 	nodes := map[uint32]*manifest.PresentationNodeDef{
 		10: node(10, "Weapons", nil, []uint32{1000, 1001, 9999}),
 	}
-	nameless := col(1001, 101, "")  // empty name -> skipped
+	nameless := col(1001, 101, "")                                           // empty name -> skipped
 	cols := []manifest.CollectibleWithItem{col(1000, 100, "Real"), nameless} // 9999 absent entirely
 	ts := buildTreeStructure(nodes, cols)
 	if len(ts.Roots) != 1 || len(ts.Roots[0].Leaves) != 1 || ts.Roots[0].Leaves[0].ItemHash != "100" {
