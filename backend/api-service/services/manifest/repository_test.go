@@ -185,11 +185,20 @@ func TestRepository_GetAllPresentationNodes(t *testing.T) {
 	if len(nodes) != 2 {
 		t.Fatalf("len = %d, want 2", len(nodes))
 	}
+	if nodes[11] == nil {
+		t.Fatalf("node 11 is nil; fixture mismatch — check writeFixtureDB")
+	}
+	if nodes[10] == nil {
+		t.Fatalf("node 10 is nil; fixture mismatch — check writeFixtureDB")
+	}
 	if nodes[11].Children.Collectibles[0].CollectibleHash != 1000 {
 		t.Errorf("node 11 collectibles = %+v", nodes[11].Children.Collectibles)
 	}
 	if nodes[10].Children.PresentationNodes[0].PresentationNodeHash != 11 {
 		t.Errorf("node 10 children = %+v", nodes[10].Children.PresentationNodes)
+	}
+	if len(nodes[10].Children.Collectibles) != 0 {
+		t.Errorf("node 10 should have no direct collectibles, got %+v", nodes[10].Children.Collectibles)
 	}
 }
 

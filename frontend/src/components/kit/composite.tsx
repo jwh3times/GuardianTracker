@@ -153,7 +153,7 @@ export function CategoryTree({
             <button
               className="gt-tree-caret"
               onClick={() => toggle(node.id)}
-              aria-label={`Expand ${node.label}`}
+              aria-label={`${isOpen ? "Collapse" : "Expand"} ${node.label}`}
               data-open={isOpen}
             >
               <Icon name="chevron" size="0.8rem" />

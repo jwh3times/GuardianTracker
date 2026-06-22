@@ -27,8 +27,8 @@ const tree: APICollectionNode[] = [
         name: "Bows",
         icon: "",
         collected: 0,
-        total: 1,
-        items: ["300"],
+        total: 2,
+        items: ["300", "100"], // "100" duplicates Hand Cannons — exercises Set dedup
       },
     ],
   },
@@ -45,7 +45,10 @@ describe("collectionTree helpers", () => {
   });
 
   it("gatherItemHashes collects all descendants deduped", () => {
-    expect(gatherItemHashes(tree[0]).sort()).toEqual(["100", "200", "300"]);
+    // "100" appears under both Hand Cannons and Bows — dedup must yield it once.
+    const hashes = gatherItemHashes(tree[0]);
+    expect(hashes.sort()).toEqual(["100", "200", "300"]);
+    expect(hashes.filter((h) => h === "100").length).toBe(1);
   });
 
   it("findNodePath returns the path to the node holding an item", () => {

@@ -64,6 +64,8 @@ describe("CategoryTree", () => {
   it("exposes tree a11y roles", () => {
     render(<CategoryTree nodes={nodes} activeId="10" onSelect={() => {}} />);
     expect(screen.getByRole("tree")).toBeInTheDocument();
-    expect(screen.getAllByRole("treeitem").length).toBeGreaterThan(0);
+    // Only the top-level node ("Weapons") renders without expansion; children
+    // are conditionally mounted, so exactly 1 treeitem is present initially.
+    expect(screen.getAllByRole("treeitem").length).toBe(1);
   });
 });

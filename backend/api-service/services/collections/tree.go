@@ -55,7 +55,6 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 	colByHash := make(map[uint32]manifest.CollectibleWithItem, len(collectibles))
 	items := make(map[string]DestinyItem)
 	for _, cwi := range collectibles {
-		cwi := cwi
 		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
 			continue
 		}
@@ -136,8 +135,9 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 		}
 	}
 	// Fallback: if all collectible-bearing nodes are in a mutual cycle, every node
-	// would be marked referenced and rootHashes would be empty. Break the tie by
-	// selecting the node with the smallest hash from the collectible-bearing set.
+	// would be marked referenced and rootHashes would be empty. Promote ALL
+	// collectible-bearing nodes as candidates so the dominant-root selection below
+	// can still anchor on the one with the most leaves.
 	if len(rootHashes) == 0 {
 		for h := range nodes {
 			if computeContains(h) {

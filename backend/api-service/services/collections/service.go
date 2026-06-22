@@ -194,6 +194,7 @@ func (s *Service) getAnalysis(ctx context.Context, membershipType int, membershi
 			}
 		}
 	}
+	log.Printf("User has %d collected items", len(collected))
 
 	collectibles, err := s.manifest.GetAllCollectiblesWithItems()
 	if err != nil {
