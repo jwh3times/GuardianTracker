@@ -17,6 +17,8 @@ export interface GTItem {
   source: string;
   sourceDetail: string;
   obtainable: boolean;
+  /** Vendor currently selling this item ("Banshee-44", "Xûr", …), when obtainable now. */
+  availFrom?: string;
   collected: boolean;
   desc: string;
   perks: string[];

@@ -193,6 +193,26 @@ describe("Collections", () => {
     expect(await screen.findByText("Hand Cannons")).toBeInTheDocument();
   });
 
+  it("shows the 'Available now' vendor on an obtainable item", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json({ ...treeCollections, availableNow: { "200": "Banshee-44" } }),
+      ),
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json([])),
+    );
+    renderPage(<Collections />);
+    await screen.findByText("Weapons");
+    fireEvent.click(screen.getByRole("button", { name: /expand weapons/i }));
+    fireEvent.click(screen.getByText("Hand Cannons"));
+
+    // Imperial Decree (200) is missing and listed; open its drawer.
+    fireEvent.click(await screen.findByText("Imperial Decree"));
+
+    expect(
+      await screen.findByText(/Available now — Banshee-44/i),
+    ).toBeInTheDocument();
+  });
+
   it("shows the privacy error state on PRIVACY_RESTRICTION", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>

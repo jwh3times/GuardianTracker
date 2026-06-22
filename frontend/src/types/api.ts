@@ -80,6 +80,8 @@ export interface APIUserCollections {
   items?: Record<string, APIDestinyItem>;
   /** item hashes the user owns; present only on ?include=all */
   collectedHashes?: string[];
+  /** itemHash → vendor name for items obtainable right now; present only on ?include=all */
+  availableNow?: Record<string, string>;
   summary: APICategorySummary;
   /** When this data was fetched from Bungie (RFC3339, B8) */
   fetchedAt: string;

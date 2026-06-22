@@ -176,7 +176,13 @@ export function Collections() {
         itemParam,
       );
       if (isCollected) setMissingOnly(false);
-      setDetail({ ...toGTItem(d), collected: isCollected });
+      const vendor = collections.availableNow?.[itemParam];
+      setDetail({
+        ...toGTItem(d),
+        collected: isCollected,
+        obtainable: !!vendor,
+        availFrom: vendor,
+      });
     } else {
       showToast("That item isn't in your trackable collections", "info");
     }
@@ -228,7 +234,8 @@ export function Collections() {
       if (!d) continue;
       const collected = collectedSet.has(h);
       if (missingOnly && collected) continue;
-      out.push({ ...toGTItem(d), collected });
+      const vendor = collections.availableNow?.[h];
+      out.push({ ...toGTItem(d), collected, obtainable: !!vendor, availFrom: vendor });
     }
     return out;
   }, [activeNode, collections, missingOnly, collectedSet]);
