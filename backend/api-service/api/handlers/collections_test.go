@@ -112,3 +112,23 @@ func TestHandleBungieError(t *testing.T) {
 		})
 	}
 }
+
+func TestAvailableNowOverlay(t *testing.T) {
+	items := map[string]collections.DestinyItem{"100": {ItemHash: "100"}, "200": {ItemHash: "200"}}
+	live := map[uint32]string{
+		100: "Banshee-44",
+		999: "Xûr", // not in the collection → excluded
+	}
+
+	got := availableNowOverlay(items, live)
+
+	if got["100"] != "Banshee-44" {
+		t.Errorf("item 100 = %q, want Banshee-44", got["100"])
+	}
+	if _, ok := got["999"]; ok {
+		t.Errorf("item 999 (not in collection) must be excluded")
+	}
+	if len(got) != 1 {
+		t.Errorf("len = %d, want 1", len(got))
+	}
+}
