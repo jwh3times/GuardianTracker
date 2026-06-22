@@ -47,21 +47,40 @@ export interface APIDestinyItem {
   isExotic: boolean;
 }
 
-/** CollectionSummary: totals + missing items for one category */
-export interface APICollectionSummary {
+/** One presentation node in the collections tree (mirrors CollectionNode). */
+export interface APICollectionNode {
+  hash: string;
+  name: string;
+  icon: string;
+  collected: number;
+  total: number;
+  children?: APICollectionNode[];
+  /** Item hashes of this node's direct leaf collectibles; present only on ?include=all */
+  items?: string[];
+}
+
+/** Total/collected for one summary bucket. */
+export interface APICategoryCount {
   total: number;
   collected: number;
-  missing: APIDestinyItem[];
-  /** Present only when the request used ?include=all */
-  collectedItems?: APIDestinyItem[];
+}
+
+/** Derived four-bucket rollup for the Dashboard hero / weekly. */
+export interface APICategorySummary {
+  weapons: APICategoryCount;
+  armor: APICategoryCount;
+  exotics: APICategoryCount;
+  cosmetics: APICategoryCount;
 }
 
 /** GET /api/collections/:membershipType/:membershipId */
 export interface APIUserCollections {
-  weapons: APICollectionSummary;
-  armor: APICollectionSummary;
-  exotics: APICollectionSummary;
-  cosmetics: APICollectionSummary;
+  tree: APICollectionNode[];
+  /** hash→detail map; present only on ?include=all */
+  items?: Record<string, APIDestinyItem>;
+  /** item hashes the user owns; present only on ?include=all */
+  collectedHashes?: string[];
+  summary: APICategorySummary;
   /** When this data was fetched from Bungie (RFC3339, B8) */
   fetchedAt: string;
 }
