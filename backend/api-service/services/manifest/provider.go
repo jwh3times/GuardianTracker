@@ -158,14 +158,6 @@ func (p *Provider) GetRecordDefinitions(hashes []uint32) (map[uint32]*RecordDef,
 	return r.GetRecordDefinitions(hashes)
 }
 
-func (p *Provider) GetFilteredCollectibles() (*FilteredCollectibles, error) {
-	r, err := p.get()
-	if err != nil {
-		return nil, err
-	}
-	return r.GetFilteredCollectibles()
-}
-
 func (p *Provider) GetAllCollectiblesWithItems() ([]CollectibleWithItem, error) {
 	r, err := p.get()
 	if err != nil {

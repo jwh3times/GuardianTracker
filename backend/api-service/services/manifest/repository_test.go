@@ -119,26 +119,6 @@ func TestRepository_GetItemsByHashes(t *testing.T) {
 	}
 }
 
-func TestRepository_GetFilteredCollectibles(t *testing.T) {
-	repo, _ := fixtureRepo(t)
-	filtered, err := repo.GetFilteredCollectibles()
-	if err != nil {
-		t.Fatalf("GetFilteredCollectibles: %v", err)
-	}
-	if len(filtered.Weapons) != 1 || filtered.Weapons[0].Item.DisplayProperties.Name != "Fatebringer" {
-		t.Errorf("Weapons = %d items", len(filtered.Weapons))
-	}
-	if len(filtered.Exotics) != 1 || filtered.Exotics[0].Item.DisplayProperties.Name != "Gjallarhorn" {
-		t.Errorf("Exotics = %d items", len(filtered.Exotics))
-	}
-	if len(filtered.Armor) != 1 {
-		t.Errorf("Armor = %d items", len(filtered.Armor))
-	}
-	if len(filtered.Cosmetics) != 1 || filtered.Cosmetics[0].Item.DisplayProperties.Name != "Test Ship" {
-		t.Errorf("Cosmetics = %d items", len(filtered.Cosmetics))
-	}
-}
-
 func TestRepository_GetCollectiblesByItemHashes(t *testing.T) {
 	repo, _ := fixtureRepo(t)
 	cols, err := repo.GetCollectiblesByItemHashes([]uint32{100, 400, 999})

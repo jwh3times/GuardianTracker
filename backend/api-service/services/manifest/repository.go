@@ -185,14 +185,6 @@ func (r *Repository) getItemsByHashesChunkedLocked(hashes []uint32) (map[uint32]
 	return out, nil
 }
 
-// FilteredCollectibles holds collectibles split into categories.
-type FilteredCollectibles struct {
-	Weapons   []CollectibleWithItem
-	Armor     []CollectibleWithItem
-	Exotics   []CollectibleWithItem
-	Cosmetics []CollectibleWithItem
-}
-
 // cosmeticItemTypes is the set of itemType values bucketed as cosmetics.
 var cosmeticItemTypes = map[int]struct{}{
 	14: {}, // Emblem
@@ -225,35 +217,6 @@ func CollectibleCategory(item *bungie.InventoryItemDefinition) string {
 		return "armor"
 	}
 	return ""
-}
-
-func (r *Repository) GetFilteredCollectibles() (*FilteredCollectibles, error) {
-	all, err := r.GetAllCollectiblesWithItems()
-	if err != nil {
-		return nil, err
-	}
-	result := &FilteredCollectibles{
-		Weapons:   make([]CollectibleWithItem, 0),
-		Armor:     make([]CollectibleWithItem, 0),
-		Exotics:   make([]CollectibleWithItem, 0),
-		Cosmetics: make([]CollectibleWithItem, 0),
-	}
-	for _, cwi := range all {
-		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
-			continue
-		}
-		switch CollectibleCategory(cwi.Item) {
-		case "weapons":
-			result.Weapons = append(result.Weapons, cwi)
-		case "armor":
-			result.Armor = append(result.Armor, cwi)
-		case "exotics":
-			result.Exotics = append(result.Exotics, cwi)
-		case "cosmetics":
-			result.Cosmetics = append(result.Cosmetics, cwi)
-		}
-	}
-	return result, nil
 }
 
 // GetItemsByHashes fetches inventory item definitions for a batch of hashes.

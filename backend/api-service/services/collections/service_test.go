@@ -51,7 +51,7 @@ func TestClassifyDifficulty(t *testing.T) {
 	}
 }
 
-// fabricate builds a CollectibleWithItem for buildSummary tests.
+// fabricate builds a CollectibleWithItem (a weapon collectible) for service tests.
 func fabricate(colHash, itemHash uint32, name, source string, tier int) manifest.CollectibleWithItem {
 	item := &bungie.InventoryItemDefinition{
 		Hash:              itemHash,
@@ -70,8 +70,7 @@ func fabricate(colHash, itemHash uint32, name, source string, tier int) manifest
 	}
 }
 
-func TestBuildSummary(t *testing.T) {
-	s := &Service{}
+func TestBuildCategorySummary(t *testing.T) {
 	items := []manifest.CollectibleWithItem{
 		fabricate(1, 101, "Owned Gun", "World drops", bungie.TierTypeLegendary),
 		fabricate(2, 102, "Missing Gun", "Found in the raid", bungie.TierTypeLegendary),
@@ -79,52 +78,89 @@ func TestBuildSummary(t *testing.T) {
 	}
 	collected := map[uint32]bool{1: true}
 
-	sum := s.buildSummary(items, collected)
+	sum := buildCategorySummary(items, collected)
 
-	if sum.Total != 3 {
-		t.Errorf("Total = %d, want 3", sum.Total)
+	if sum.Weapons.Total != 2 || sum.Weapons.Collected != 1 {
+		t.Errorf("weapons = %d/%d, want 1/2", sum.Weapons.Collected, sum.Weapons.Total)
 	}
-	if sum.Collected != 1 {
-		t.Errorf("Collected = %d, want 1", sum.Collected)
-	}
-	if len(sum.Missing) != 2 {
-		t.Fatalf("len(Missing) = %d, want 2", len(sum.Missing))
-	}
-	if len(sum.CollectedItems) != 1 {
-		t.Fatalf("len(CollectedItems) = %d, want 1", len(sum.CollectedItems))
-	}
-	if sum.CollectedItems[0].Name != "Owned Gun" {
-		t.Errorf("CollectedItems[0].Name = %q", sum.CollectedItems[0].Name)
-	}
-	if sum.Missing[0].Name != "Missing Gun" || sum.Missing[0].Difficulty != "Challenging" {
-		t.Errorf("Missing[0] = %+v", sum.Missing[0])
-	}
-	if !sum.Missing[1].IsExotic || sum.Missing[1].Rarity != "Exotic" {
-		t.Errorf("Missing[1] = %+v, want exotic", sum.Missing[1])
+	if sum.Exotics.Total != 1 || sum.Exotics.Collected != 0 {
+		t.Errorf("exotics = %d/%d, want 0/1", sum.Exotics.Collected, sum.Exotics.Total)
 	}
 }
 
-func TestGetMissingItemHashes_FromCachedCollections(t *testing.T) {
+func TestLightweight_StripsItems(t *testing.T) {
+	full := UserCollections{
+		Tree: []CollectionNode{{
+			Hash: "10", Total: 1, Items: []string{"100"},
+			Children: []CollectionNode{{Hash: "11", Items: []string{"100"}}},
+		}},
+		Items:           map[string]DestinyItem{"100": {ItemHash: "100"}},
+		CollectedHashes: []string{"100"},
+		Summary:         CategorySummary{Weapons: CategoryCount{Total: 1}},
+	}
+
+	lw := full.Lightweight()
+
+	if lw.Items != nil {
+		t.Errorf("Items map not stripped")
+	}
+	if lw.CollectedHashes != nil {
+		t.Errorf("CollectedHashes not stripped")
+	}
+	if lw.Tree[0].Items != nil || lw.Tree[0].Children[0].Items != nil {
+		t.Errorf("node Items not stripped recursively")
+	}
+	if lw.Tree[0].Total != 1 || lw.Summary.Weapons.Total != 1 {
+		t.Errorf("counts/summary must survive Lightweight")
+	}
+	// Original must be untouched (value-copy contract).
+	if full.Items == nil || full.Tree[0].Items == nil || full.CollectedHashes == nil {
+		t.Errorf("Lightweight mutated the source")
+	}
+}
+
+// fakeManifest implements ManifestRepo for service tests.
+type fakeManifest struct {
+	cols  []manifest.CollectibleWithItem
+	nodes map[uint32]*manifest.PresentationNodeDef
+}
+
+func (f *fakeManifest) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
+	return f.cols, nil
+}
+func (f *fakeManifest) GetAllPresentationNodes() (map[uint32]*manifest.PresentationNodeDef, error) {
+	return f.nodes, nil
+}
+
+func TestGetMissingItemHashes_ExcludesCosmetics(t *testing.T) {
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
 	s := &Service{cache: c}
 
-	cached := &UserCollections{
-		Weapons: CollectionSummary{Missing: []DestinyItem{{ItemHash: "100"}, {ItemHash: "200"}}},
-		Armor:   CollectionSummary{Missing: []DestinyItem{{ItemHash: "300"}}},
-		Exotics: CollectionSummary{Missing: []DestinyItem{{ItemHash: "400"}}},
+	weapon := fabricate(1, 100, "Gun", "World drops", bungie.TierTypeLegendary) // item 100
+	cosmetic := manifest.CollectibleWithItem{
+		Collectible: bungie.CollectibleDefinition{Hash: 2, ItemHash: 200,
+			DisplayProperties: bungie.DisplayProperties{Name: "Ship"}},
+		Item: &bungie.InventoryItemDefinition{Hash: 200, ItemType: 21,
+			DisplayProperties: bungie.DisplayProperties{Name: "Ship"}},
 	}
-	c.Set("collections:3:member-1", cached, time.Minute)
+	a := &analysis{
+		collectibles: []manifest.CollectibleWithItem{weapon, cosmetic},
+		collected:    map[uint32]bool{}, // nothing collected
+		fetchedAt:    time.Now(),
+	}
+	c.Set("collections:3:member-1", a, time.Minute)
 
 	got, err := s.GetMissingItemHashes(context.Background(), 3, "member-1", "token")
 	if err != nil {
 		t.Fatalf("GetMissingItemHashes: %v", err)
 	}
-	for _, want := range []uint32{100, 200, 300, 400} {
-		if _, ok := got[want]; !ok {
-			t.Errorf("missing hash %d not in result", want)
-		}
+	if _, ok := got[100]; !ok {
+		t.Errorf("weapon item 100 should be missing")
 	}
-	if len(got) != 4 {
-		t.Errorf("len = %d, want 4", len(got))
+	if _, ok := got[200]; ok {
+		t.Errorf("cosmetic item 200 must be excluded")
+	}
+	if len(got) != 1 {
+		t.Errorf("len = %d, want 1", len(got))
 	}
 }
