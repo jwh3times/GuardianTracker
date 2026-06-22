@@ -22,7 +22,7 @@ import { toWishlistEntry } from "../lib/adapters";
 import type { DailyAction, SummaryCategory, Weekly } from "../types/design";
 import type {
   ProfileResponse,
-  APICollectionSummary,
+  APICategoryCount,
   WishListItem,
 } from "../types/api";
 
@@ -86,7 +86,7 @@ export function Dashboard() {
   const availableNowCount = wishlistEntries.filter((e) => e.avail.now).length;
 
   const fromReal = (
-    c: Pick<APICollectionSummary, "total" | "collected"> | undefined,
+    c: APICategoryCount | undefined,
     fallback: SummaryCategory,
   ): SummaryCategory => {
     if (c && c.total > 0) {
@@ -125,10 +125,10 @@ export function Dashboard() {
     count: [0, 0],
   };
   const categories: SummaryCategory[] = [
-    fromReal(real?.weapons, mWeapons),
-    fromReal(real?.armor, mArmor),
-    fromReal(real?.exotics, mExotics),
-    fromReal(real?.cosmetics, mCosmetics),
+    fromReal(real?.summary.weapons, mWeapons),
+    fromReal(real?.summary.armor, mArmor),
+    fromReal(real?.summary.exotics, mExotics),
+    fromReal(real?.summary.cosmetics, mCosmetics),
   ];
   const overall = Math.round(
     categories.reduce((sum, c) => sum + c.pct, 0) / categories.length,
