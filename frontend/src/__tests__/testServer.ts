@@ -47,7 +47,9 @@ export const sampleWeekly = {
   fetchedAt: new Date().toISOString(),
   xur: null,
   milestones: [],
-  recommended: [],
+  recommended: [
+    { id: "eff-1", text: "Run Vault of Glass", detail: "Fills 3 missing items", badge: "activity", done: false, diff: "Challenging", time: "" },
+  ],
   dailyActions: [],
 };
 

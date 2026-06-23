@@ -251,6 +251,29 @@ export function Dashboard() {
           </button>
         }
       >
+        {!weeklyLoading && weeklyData?.recommended?.[0] && (
+          <button
+            className="gt-today-row"
+            style={{ marginBottom: "var(--s-2)" }}
+            onClick={() => go("/this-week")}
+          >
+            <Icon name="bolt" size="1.2rem" style={{ color: "var(--c-signal)" }} />
+            <div className="gt-today-main">
+              <div className="gt-action-meta mono">Best thing to do today</div>
+              <div className="gt-today-text">
+                <strong>{weeklyData.recommended[0].text}</strong>
+                {weeklyData.recommended[0].detail && (
+                  <>
+                    {" "}—{" "}
+                    <span style={{ fontWeight: "normal" }}>
+                      {weeklyData.recommended[0].detail}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          </button>
+        )}
         <div className="gt-today">
           {weeklyLoading ? (
             [0, 1, 2].map((i) => (
