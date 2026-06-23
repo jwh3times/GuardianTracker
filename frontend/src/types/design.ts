@@ -91,19 +91,6 @@ export interface Milestone {
   note: string;
 }
 
-export interface VendorItem {
-  hash: string;
-  name: string;
-}
-
-export interface VendorRotation {
-  id: string;
-  name: string;
-  role: string;
-  missing: number;
-  items: VendorItem[];
-}
-
 export interface RecommendedAction {
   id: string;
   text: string;
@@ -137,7 +124,6 @@ export interface Weekly {
   degraded?: boolean;
   xur: Xur | null; // null when Xûr is not in town
   milestones: Milestone[];
-  vendors: VendorRotation[];
   recommended: RecommendedAction[];
   dailyActions: DailyAction[];
 }

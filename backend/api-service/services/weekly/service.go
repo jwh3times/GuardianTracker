@@ -24,7 +24,6 @@ type Weekly struct {
 	Degraded     bool                `json:"degraded,omitempty"` // true when names/labels are placeholders (manifest still downloading)
 	Xur          *Xur                `json:"xur"`
 	Milestones   []Milestone         `json:"milestones"`
-	Vendors      []VendorRotation    `json:"vendors"`
 	Recommended  []RecommendedAction `json:"recommended"`
 	DailyActions []DailyAction       `json:"dailyActions"`
 }
@@ -64,22 +63,6 @@ type Milestone struct {
 	Reward  string `json:"reward"`
 	Missing *int   `json:"missing,omitempty"`
 	Note    string `json:"note"`
-}
-
-// VendorItem is one item in a vendor's rotation; Hash lets the frontend deep-link
-// to the Collections drawer.
-type VendorItem struct {
-	Hash string `json:"hash"`
-	Name string `json:"name"`
-}
-
-// VendorRotation summarises one vendor's weekly inventory.
-type VendorRotation struct {
-	ID      string       `json:"id"`
-	Name    string       `json:"name"`
-	Role    string       `json:"role"`
-	Missing int          `json:"missing"`
-	Items   []VendorItem `json:"items"`
 }
 
 // RecommendedAction is one suggested action for the player this week.
@@ -358,28 +341,6 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		})
 	}
 
-	// Assemble vendor rotation (Xûr first, then the rotating character-402 vendors)
-	vendors := []VendorRotation{}
-	if pub.XurPresent && len(pub.XurItems) > 0 {
-		missingCount := 0
-		items := make([]VendorItem, len(pub.XurItems))
-		for i, xi := range pub.XurItems {
-			items[i] = VendorItem{Hash: strconv.FormatUint(uint64(xi.Hash), 10), Name: xi.Name}
-			if _, ok := missingHashes[xi.Hash]; ok {
-				missingCount++
-			}
-		}
-		vendors = append(vendors, VendorRotation{
-			ID:      fmt.Sprintf("v-%d", bungie.XurVendorHash),
-			Name:    "Xûr",
-			Role:    "Agent of the Nine",
-			Missing: missingCount,
-			Items:   items,
-		})
-	}
-
-	vendors = append(vendors, s.buildVendorRotations(ctx, membershipType, membershipID, bungieToken, missingHashes, now)...)
-
 	recommended := s.buildRecommended(pub, missingHashes, wishlistHashes)
 	dailyActions := s.buildDailyActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
 
@@ -396,7 +357,6 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		Degraded:     pub.Degraded,
 		Xur:          xurBlock,
 		Milestones:   milestones,
-		Vendors:      vendors,
 		Recommended:  recommended,
 		DailyActions: dailyActions,
 	}, nil
