@@ -7,7 +7,6 @@ import {
   MilestoneModule,
   PageHead,
   Panel,
-  VendorModule,
   XurModule,
 } from "../components/kit";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
@@ -147,11 +146,6 @@ export function ThisWeek() {
         />
         <MilestoneModule milestones={w?.milestones ?? []} />
       </div>
-
-      <VendorModule
-        vendors={w?.vendors ?? []}
-        onSelect={(hash) => navigate("/collections?item=" + hash)}
-      />
     </div>
   );
 }
