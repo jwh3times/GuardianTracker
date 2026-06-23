@@ -19,6 +19,7 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/characters"
 	"guardian-tracker/api-service/services/collections"
+	"guardian-tracker/api-service/services/efficiency"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/records"
 	"guardian-tracker/api-service/services/search"
@@ -147,6 +148,9 @@ func main() {
 	// Search service — builds its index asynchronously after the manifest is available
 	searchService := search.NewService(manifestService, cfg.ManifestDBPath)
 
+	// Efficiency engine — scores items by acquisition difficulty; index built async
+	efficiencyEngine := efficiency.NewEngine(manifestProvider, manifestService)
+
 	// Cache — created before the swap hooks so the after-swap hook can evict
 	// manifest-derived cache entries.
 	var appCache cache.Cache
@@ -189,6 +193,7 @@ func main() {
 			appCache.Delete(records.WeaponTypesCacheKey)
 			collectionsService.InvalidateTreeCache()
 			go searchService.BuildIndex()
+			go efficiencyEngine.BuildIndex()
 		},
 	)
 
@@ -206,10 +211,11 @@ func main() {
 	if stores.Wishlist != nil {
 		weeklyWishlist = &weeklyWishlistAdapter{s: stores.Wishlist}
 	}
-	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache)
+	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine)
 	weeklyHandler := handlers.NewWeeklyHandler(weeklyService, tokenStore)
 
 	go searchService.BuildIndex()
+	go efficiencyEngine.BuildIndex()
 	searchHandler := handlers.NewSearchHandler(searchService)
 
 	// Records service (catalysts, crafting, seals)
