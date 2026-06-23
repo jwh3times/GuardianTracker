@@ -33,6 +33,12 @@ func TestRankOrdersByScoreAndFiltersEmpty(t *testing.T) {
 	if got[0].MissingCount != 2 {
 		t.Errorf("VoG missing count = %d, want 2", got[0].MissingCount)
 	}
+	if got[1].Label != "Crucible" {
+		t.Errorf("second action = %q, want Crucible", got[1].Label)
+	}
+	if got[0].Why != "Fills 2 missing items" {
+		t.Errorf("VoG why = %q, want \"Fills 2 missing items\"", got[0].Why)
+	}
 }
 
 func TestRankWishlistAndVendorBoost(t *testing.T) {
@@ -56,5 +62,11 @@ func TestRankWishlistAndVendorBoost(t *testing.T) {
 	}
 	if got[0].WishlistCount != 1 {
 		t.Errorf("Trials wishlist count = %d, want 1", got[0].WishlistCount)
+	}
+	if got[0].Why != "Fills 1 missing item, 1 on your wishlist" {
+		t.Errorf("Trials why = %q", got[0].Why)
+	}
+	if got[1].Why != "Fills 1 missing item — available now" {
+		t.Errorf("Xûr why = %q", got[1].Why)
 	}
 }
