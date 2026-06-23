@@ -32,7 +32,7 @@ func modDef(name string) *bungie.InventoryItemDefinition {
 
 func TestBuildVendorRotations(t *testing.T) {
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
-	c.Set("live:vendoritems", map[uint32]string{
+	c.Set(liveVendorItemsCacheKey, map[uint32]string{
 		100: "Banshee-44", // legendary weapon, missing
 		200: "Banshee-44", // legendary weapon, owned
 		300: "Banshee-44", // mod -> excluded

@@ -9,6 +9,10 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 )
 
+// liveVendorItemsCacheKey is the shared daily-cache key for the rotating
+// character-402 vendors' sale items (getLiveVendorItems + tests).
+const liveVendorItemsCacheKey = "live:vendoritems"
+
 // liveVendorAllowlist maps the character-402 rotating vendors we surface as
 // "available now" to their display names. Xûr is handled separately (public
 // vendor fetch), so it is not in this map.
@@ -75,7 +79,7 @@ func (s *Service) liveVendorItemHashesAt(ctx context.Context, membershipType int
 // cached daily (shared across users — the rotation is identical for everyone).
 // Returns nil when the fetch is impossible (no client/token/character) or fails.
 func (s *Service) getLiveVendorItems(ctx context.Context, membershipType int, membershipID, bungieToken string, now time.Time) map[uint32]string {
-	const cacheKey = "live:vendoritems"
+	const cacheKey = liveVendorItemsCacheKey
 	if cached, ok := s.cache.Get(cacheKey); ok {
 		if m, ok := cached.(map[uint32]string); ok {
 			return m
