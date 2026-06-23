@@ -46,6 +46,7 @@ type Xur struct {
 
 // XurItem is a single item in Xûr's inventory.
 type XurItem struct {
+	Hash    string `json:"hash"`
 	Name    string `json:"name"`
 	Type    string `json:"type"`
 	Rarity  string `json:"rarity"`
@@ -65,13 +66,20 @@ type Milestone struct {
 	Note    string `json:"note"`
 }
 
+// VendorItem is one item in a vendor's rotation; Hash lets the frontend deep-link
+// to the Collections drawer.
+type VendorItem struct {
+	Hash string `json:"hash"`
+	Name string `json:"name"`
+}
+
 // VendorRotation summarises one vendor's weekly inventory.
 type VendorRotation struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	Role    string   `json:"role"`
-	Missing int      `json:"missing"`
-	Items   []string `json:"items"`
+	ID      string       `json:"id"`
+	Name    string       `json:"name"`
+	Role    string       `json:"role"`
+	Missing int          `json:"missing"`
+	Items   []VendorItem `json:"items"`
 }
 
 // RecommendedAction is one suggested action for the player this week.
@@ -317,6 +325,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		for i, xi := range pub.XurItems {
 			_, isMissing := missingHashes[xi.Hash]
 			items[i] = XurItem{
+				Hash:    strconv.FormatUint(uint64(xi.Hash), 10),
 				Name:    xi.Name,
 				Type:    xi.Type,
 				Rarity:  xi.Rarity,
@@ -349,13 +358,13 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		})
 	}
 
-	// Assemble vendor rotation (Xûr only for now)
+	// Assemble vendor rotation (Xûr first, then the rotating character-402 vendors)
 	vendors := []VendorRotation{}
 	if pub.XurPresent && len(pub.XurItems) > 0 {
 		missingCount := 0
-		itemNames := make([]string, len(pub.XurItems))
+		items := make([]VendorItem, len(pub.XurItems))
 		for i, xi := range pub.XurItems {
-			itemNames[i] = xi.Name
+			items[i] = VendorItem{Hash: strconv.FormatUint(uint64(xi.Hash), 10), Name: xi.Name}
 			if _, ok := missingHashes[xi.Hash]; ok {
 				missingCount++
 			}
@@ -365,9 +374,11 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 			Name:    "Xûr",
 			Role:    "Agent of the Nine",
 			Missing: missingCount,
-			Items:   itemNames,
+			Items:   items,
 		})
 	}
+
+	vendors = append(vendors, s.buildVendorRotations(ctx, membershipType, membershipID, bungieToken, missingHashes, now)...)
 
 	recommended := s.buildRecommended(pub, missingHashes, wishlistHashes)
 	dailyActions := s.buildDailyActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
