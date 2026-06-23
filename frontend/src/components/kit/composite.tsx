@@ -17,7 +17,6 @@ import type {
   RecommendedAction,
   Seal,
   TreeNode,
-  VendorRotation,
   Xur,
 } from "../../types/design";
 
@@ -326,63 +325,6 @@ export function MilestoneModule({ milestones }: { milestones: Milestone[] }) {
           </li>
         ))}
       </ul>
-    </Panel>
-  );
-}
-
-/* ---------------- VENDOR ROTATIONS ---------------- */
-export function VendorModule({
-  vendors,
-  onSelect,
-}: {
-  vendors: VendorRotation[];
-  onSelect?: (hash: string) => void;
-}) {
-  return (
-    <Panel title="Vendor Rotations" icon="collections">
-      <div className="gt-vendor-grid">
-        {vendors.map((v) => (
-          <div key={v.id} className="gt-vendor-card">
-            <div className="gt-vendor-head">
-              <div>
-                <div className="gt-item-name">{v.name}</div>
-                <div className="gt-item-type">{v.role}</div>
-              </div>
-              {v.missing > 0 ? (
-                <Badge kind="missing" dot>
-                  {v.missing} missing
-                </Badge>
-              ) : (
-                <Badge kind="owned" dot>
-                  Caught up
-                </Badge>
-              )}
-            </div>
-            <div className="gt-vendor-items mono">
-              {v.items.flatMap((it, i) => {
-                const btn = (
-                  <button
-                    key={it.hash}
-                    type="button"
-                    className="gt-vendor-itembtn"
-                    onClick={() => onSelect?.(it.hash)}
-                  >
-                    {it.name}
-                  </button>
-                );
-                return i === 0
-                  ? [btn]
-                  : [
-                      <span key={it.hash + "-sep"} aria-hidden="true">
-                        {" · "}
-                      </span>,
-                      btn,
-                    ];
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
     </Panel>
   );
 }

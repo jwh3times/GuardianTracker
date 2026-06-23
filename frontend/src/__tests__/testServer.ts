@@ -47,7 +47,6 @@ export const sampleWeekly = {
   fetchedAt: new Date().toISOString(),
   xur: null,
   milestones: [],
-  vendors: [],
   recommended: [],
   dailyActions: [],
 };

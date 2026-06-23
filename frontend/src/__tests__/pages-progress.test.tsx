@@ -295,7 +295,7 @@ describe("ThisWeek page", () => {
     expect(await screen.findByText("0/1 done")).toBeInTheDocument();
   });
 
-  it("renders the degraded banner, Xûr inventory, milestones and vendors", async () => {
+  it("renders the degraded banner, Xûr inventory and milestones", async () => {
     server.use(
       http.get(`${API}/api/weekly/recommendations`, () =>
         HttpResponse.json({
@@ -341,25 +341,6 @@ describe("ThisWeek page", () => {
               note: "",
             },
           ],
-          vendors: [
-            {
-              id: "v1",
-              name: "Banshee",
-              role: "Gunsmith",
-              missing: 3,
-              items: [
-                { hash: "11", name: "Rifle" },
-                { hash: "12", name: "Cannon" },
-              ],
-            },
-            {
-              id: "v2",
-              name: "Xûr",
-              role: "Exotics",
-              missing: 0,
-              items: [{ hash: "13", name: "Boots" }],
-            },
-          ],
         }),
       ),
     );
@@ -370,8 +351,6 @@ describe("ThisWeek page", () => {
     expect(screen.getByText("Tower Hangar")).toBeInTheDocument();
     expect(screen.getByText("Gjallarhorn")).toBeInTheDocument();
     expect(screen.getByText("Vanguard Ops")).toBeInTheDocument();
-    expect(screen.getByText("Banshee")).toBeInTheDocument();
-    expect(screen.getByText("Caught up")).toBeInTheDocument();
   });
 
   it("purges checkmarks from previous reset weeks on load", async () => {
@@ -401,20 +380,26 @@ describe("ThisWeek page", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("deep-links a vendor item to the collections drawer", async () => {
+  it("deep-links a Xûr item to the collections drawer", async () => {
     server.use(
       http.get(`${API}/api/weekly/recommendations`, () =>
         HttpResponse.json({
           ...sampleWeekly,
-          vendors: [
-            {
-              id: "v-banshee-44",
-              name: "Banshee-44",
-              role: "Gunsmith",
-              missing: 1,
-              items: [{ hash: "100", name: "Fatebringer" }],
-            },
-          ],
+          xur: {
+            present: true,
+            leavesIn: { d: 1, h: 2, m: 0 },
+            location: "Tower Hangar",
+            items: [
+              {
+                hash: "100",
+                name: "Fatebringer",
+                type: "Hand Cannon",
+                rarity: "exotic",
+                missing: true,
+                cost: "29 Strange Coins",
+              },
+            ],
+          },
         }),
       ),
     );
@@ -424,7 +409,7 @@ describe("ThisWeek page", () => {
         <LocationProbe />
       </>,
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Fatebringer" }));
+    fireEvent.click(await screen.findByText("Fatebringer"));
     expect(screen.getByTestId("loc").textContent).toBe("/collections?item=100");
   });
 });

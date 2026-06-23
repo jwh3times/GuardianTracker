@@ -26,7 +26,6 @@ export {
   ActionList,
   XurModule,
   MilestoneModule,
-  VendorModule,
   SealCard,
   ItemDetailDrawer,
   Dropdown,
