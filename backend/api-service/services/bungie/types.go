@@ -80,6 +80,7 @@ type CollectibleDefinition struct {
 	Hash              uint32            `json:"hash"`
 	DisplayProperties DisplayProperties `json:"displayProperties"`
 	SourceString      string            `json:"sourceString"`
+	SourceHash        uint32            `json:"sourceHash"`
 	ItemHash          uint32            `json:"itemHash"`
 }
 

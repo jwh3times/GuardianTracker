@@ -1,6 +1,9 @@
 package bungie
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestIsCollected(t *testing.T) {
 	// State bit 0 (NotAcquired) set → not collected; clear → collected.
@@ -126,5 +129,16 @@ func TestGetRaceName(t *testing.T) {
 		if got := GetRaceName(in); got != want {
 			t.Errorf("GetRaceName(%d) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestCollectibleDefinitionParsesSourceHash(t *testing.T) {
+	blob := `{"hash":123,"itemHash":456,"sourceHash":2065138144,"sourceString":"Source: \"Vault of Glass\" Raid"}`
+	var def CollectibleDefinition
+	if err := json.Unmarshal([]byte(blob), &def); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if def.SourceHash != 2065138144 {
+		t.Errorf("SourceHash = %d, want 2065138144", def.SourceHash)
 	}
 }
