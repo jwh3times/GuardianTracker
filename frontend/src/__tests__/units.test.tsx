@@ -21,7 +21,7 @@ import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "./testServer";
 import { ApiError } from "../lib/api";
 import { errorState } from "../lib/errorState";
-import { ItemCard } from "../components/kit/ItemCard";
+import { ItemCard, VendorModule } from "../components/kit";
 import { ToastProvider, useToast } from "../components/ui/Toast";
 import {
   PreferencesProvider,
@@ -359,5 +359,28 @@ describe("AuthContext refresh & recovery", () => {
       window.dispatchEvent(new Event("guardian_token_refreshed"));
     });
     await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+  });
+});
+
+/* ---------------- VendorModule ---------------- */
+describe("VendorModule", () => {
+  it("fires onSelect with the item hash when an item is clicked", () => {
+    const onSelect = vi.fn();
+    render(
+      <VendorModule
+        vendors={[
+          {
+            id: "v-banshee-44",
+            name: "Banshee-44",
+            role: "Gunsmith",
+            missing: 1,
+            items: [{ hash: "100", name: "Fatebringer" }],
+          },
+        ]}
+        onSelect={onSelect}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Fatebringer" }));
+    expect(onSelect).toHaveBeenCalledWith("100");
   });
 });

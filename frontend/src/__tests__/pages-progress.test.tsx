@@ -9,7 +9,7 @@ import {
   afterEach,
 } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse, delay } from "msw";
 import { API, sampleUser, sampleWeekly, server } from "./testServer";
@@ -246,6 +246,11 @@ describe("Triumphs page", () => {
 });
 
 describe("ThisWeek page", () => {
+  function LocationProbe() {
+    const loc = useLocation();
+    return <div data-testid="loc">{loc.pathname + loc.search}</div>;
+  }
+
   it("renders reset label and the Xûr-away module by default", async () => {
     renderPage(<ThisWeek />);
     expect(
@@ -302,6 +307,7 @@ describe("ThisWeek page", () => {
             location: "Tower Hangar",
             items: [
               {
+                hash: "9001",
                 name: "Gjallarhorn",
                 type: "Rocket Launcher",
                 rarity: "exotic",
@@ -309,6 +315,7 @@ describe("ThisWeek page", () => {
                 cost: "29 Strange Coins",
               },
               {
+                hash: "9002",
                 name: "Ace of Spades",
                 type: "Hand Cannon",
                 rarity: "exotic",
@@ -340,14 +347,17 @@ describe("ThisWeek page", () => {
               name: "Banshee",
               role: "Gunsmith",
               missing: 3,
-              items: ["Rifle", "Cannon"],
+              items: [
+                { hash: "11", name: "Rifle" },
+                { hash: "12", name: "Cannon" },
+              ],
             },
             {
               id: "v2",
               name: "Xûr",
               role: "Exotics",
               missing: 0,
-              items: ["Boots"],
+              items: [{ hash: "13", name: "Boots" }],
             },
           ],
         }),
@@ -389,5 +399,32 @@ describe("ThisWeek page", () => {
     expect(
       screen.queryByText("Resets Tuesday 17:00 UTC"),
     ).not.toBeInTheDocument();
+  });
+
+  it("deep-links a vendor item to the collections drawer", async () => {
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json({
+          ...sampleWeekly,
+          vendors: [
+            {
+              id: "v-banshee-44",
+              name: "Banshee-44",
+              role: "Gunsmith",
+              missing: 1,
+              items: [{ hash: "100", name: "Fatebringer" }],
+            },
+          ],
+        }),
+      ),
+    );
+    renderPage(
+      <>
+        <ThisWeek />
+        <LocationProbe />
+      </>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Fatebringer" }));
+    expect(screen.getByTestId("loc").textContent).toBe("/collections?item=100");
   });
 });

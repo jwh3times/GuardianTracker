@@ -64,7 +64,7 @@ func TestLiveVendorItemHashes_MergesXurAndVendors(t *testing.T) {
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 111}, {Hash: 222}},
 	}, time.Minute)
-	c.Set("live:vendoritems", map[uint32]string{333: "Banshee-44"}, time.Minute)
+	c.Set(liveVendorItemsCacheKey, map[uint32]string{333: "Banshee-44"}, time.Minute)
 	s := &Service{cache: c}
 
 	got := s.liveVendorItemHashesAt(context.Background(), 3, "member-1", "token", friday)
@@ -89,7 +89,7 @@ func TestLiveVendorItemHashes_XurWinsTie(t *testing.T) {
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 555}},
 	}, time.Minute)
-	c.Set("live:vendoritems", map[uint32]string{555: "Banshee-44"}, time.Minute)
+	c.Set(liveVendorItemsCacheKey, map[uint32]string{555: "Banshee-44"}, time.Minute)
 	s := &Service{cache: c}
 
 	got := s.liveVendorItemHashesAt(context.Background(), 3, "member-1", "token", friday)

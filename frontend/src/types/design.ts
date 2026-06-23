@@ -66,6 +66,7 @@ export interface Duration {
 }
 
 export interface XurItem {
+  hash: string;
   name: string;
   type: string;
   rarity: Rarity;
@@ -90,12 +91,17 @@ export interface Milestone {
   note: string;
 }
 
+export interface VendorItem {
+  hash: string;
+  name: string;
+}
+
 export interface VendorRotation {
   id: string;
   name: string;
   role: string;
   missing: number;
-  items: string[];
+  items: VendorItem[];
 }
 
 export interface RecommendedAction {

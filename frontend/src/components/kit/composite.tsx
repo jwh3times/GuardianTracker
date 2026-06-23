@@ -236,7 +236,13 @@ export function ActionList({
 }
 
 /* ---------------- XÛR MODULE ---------------- */
-export function XurModule({ xur }: { xur: Xur | null | undefined }) {
+export function XurModule({
+  xur,
+  onSelect,
+}: {
+  xur: Xur | null | undefined;
+  onSelect?: (hash: string) => void;
+}) {
   if (!xur || !xur.present) {
     return (
       <Panel title="Xûr — Agent of Nine" icon="bungie">
@@ -260,7 +266,21 @@ export function XurModule({ xur }: { xur: Xur | null | undefined }) {
       <div className="gt-xur-loc mono">{xur.location}</div>
       <ul className="gt-vendor-list">
         {xur.items.map((it) => (
-          <li key={it.name} className="gt-vendor-item" data-rarity={it.rarity}>
+          <li
+            key={it.hash}
+            className="gt-vendor-item"
+            data-rarity={it.rarity}
+            role={onSelect ? "button" : undefined}
+            tabIndex={onSelect ? 0 : undefined}
+            style={onSelect ? { cursor: "pointer" } : undefined}
+            onClick={() => onSelect?.(it.hash)}
+            onKeyDown={(e) => {
+              if (onSelect && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onSelect(it.hash);
+              }
+            }}
+          >
             <ItemTile
               rarity={it.rarity}
               type={it.type}
@@ -311,7 +331,13 @@ export function MilestoneModule({ milestones }: { milestones: Milestone[] }) {
 }
 
 /* ---------------- VENDOR ROTATIONS ---------------- */
-export function VendorModule({ vendors }: { vendors: VendorRotation[] }) {
+export function VendorModule({
+  vendors,
+  onSelect,
+}: {
+  vendors: VendorRotation[];
+  onSelect?: (hash: string) => void;
+}) {
   return (
     <Panel title="Vendor Rotations" icon="collections">
       <div className="gt-vendor-grid">
@@ -332,7 +358,28 @@ export function VendorModule({ vendors }: { vendors: VendorRotation[] }) {
                 </Badge>
               )}
             </div>
-            <div className="gt-vendor-items mono">{v.items.join(" · ")}</div>
+            <div className="gt-vendor-items mono">
+              {v.items.flatMap((it, i) => {
+                const btn = (
+                  <button
+                    key={it.hash}
+                    type="button"
+                    className="gt-vendor-itembtn"
+                    onClick={() => onSelect?.(it.hash)}
+                  >
+                    {it.name}
+                  </button>
+                );
+                return i === 0
+                  ? [btn]
+                  : [
+                      <span key={it.hash + "-sep"} aria-hidden="true">
+                        {" · "}
+                      </span>,
+                      btn,
+                    ];
+              })}
+            </div>
           </div>
         ))}
       </div>
