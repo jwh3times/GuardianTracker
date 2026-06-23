@@ -12,6 +12,7 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/collections"
+	"guardian-tracker/api-service/services/efficiency"
 )
 
 // Weekly is the assembled weekly recommendations payload sent to the frontend.
@@ -147,6 +148,7 @@ type Service struct {
 	collections *collections.Service
 	wishlist    WishlistReader
 	cache       cache.Cache
+	efficiency  *efficiency.Engine
 }
 
 // ManifestRepo is the subset of the manifest repository the weekly service uses.
@@ -171,13 +173,14 @@ type WishlistItem struct {
 }
 
 // NewService creates a new weekly recommendations service.
-func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache) *Service {
+func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine) *Service {
 	return &Service{
 		bungie:      b,
 		manifest:    m,
 		collections: c,
 		wishlist:    w,
 		cache:       appCache,
+		efficiency:  eng,
 	}
 }
 
@@ -341,7 +344,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		})
 	}
 
-	recommended := s.buildRecommended(pub, missingHashes, wishlistHashes)
+	recommended := s.rankRecommended(ctx, membershipType, membershipID, bungieToken, pub, missingHashes, wishlistHashes)
 	dailyActions := s.buildDailyActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
 
 	fetchedAt := pub.FetchedAt
@@ -471,6 +474,52 @@ func (s *Service) buildDailyActions(pub *publicWeeklyCache, vendors []dailyVendo
 	}
 
 	return actions
+}
+
+// mapEngineActions converts ranked engine actions into the wire RecommendedAction.
+// Reuses existing fields (no new wire shape): Detail = the "why", Badge = availability/
+// source, Diff = difficulty from the source string.
+func (s *Service) mapEngineActions(actions []efficiency.ScoredAction) []RecommendedAction {
+	out := make([]RecommendedAction, 0, len(actions))
+	for _, a := range actions {
+		badge := "Activity"
+		if a.Kind == "vendor" {
+			badge = "Vendor"
+		}
+		switch {
+		case a.AvailableNow:
+			badge = "Available now"
+		case a.WishlistCount > 0:
+			badge = "Wishlist"
+		}
+		out = append(out, RecommendedAction{
+			ID:     a.ID,
+			Text:   a.Text,
+			Detail: a.Why,
+			Badge:  badge,
+			Done:   false,
+			Diff:   collections.ClassifyDifficulty(a.SourceString, false),
+			Time:   "",
+		})
+	}
+	return out
+}
+
+// rankRecommended runs the efficiency engine; falls back to the legacy Xûr-only
+// heuristic when the engine is unavailable or has nothing to suggest (cold index,
+// private profile, no missing set). Best-effort — never fails the weekly request.
+func (s *Service) rankRecommended(ctx context.Context, membershipType int, membershipID, bungieToken string, pub *publicWeeklyCache, missing, wishlist map[uint32]struct{}) []RecommendedAction {
+	if s.efficiency != nil && bungieToken != "" {
+		liveVendors := s.LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)
+		activeMilestones := make([]string, 0, len(pub.MilestoneNames))
+		for _, name := range pub.MilestoneNames {
+			activeMilestones = append(activeMilestones, name)
+		}
+		if actions := s.efficiency.Rank(missing, wishlist, liveVendors, activeMilestones); len(actions) > 0 {
+			return s.mapEngineActions(actions)
+		}
+	}
+	return s.buildRecommended(pub, missing, wishlist)
 }
 
 func (s *Service) buildRecommended(pub *publicWeeklyCache, missing, wishlist map[uint32]struct{}) []RecommendedAction {

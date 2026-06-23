@@ -39,7 +39,7 @@ func weeklyService(t *testing.T, body string, m ManifestRepo) *Service {
 	}))
 	t.Cleanup(srv.Close)
 	return NewService(bungie.NewClient("k", srv.URL, 100, 100), m, nil, nil,
-		cache.NewMemoryCache(time.Minute, time.Minute))
+		cache.NewMemoryCache(time.Minute, time.Minute), nil)
 }
 
 func TestFetchXurInventory_EnrichesFromManifest(t *testing.T) {
@@ -170,6 +170,7 @@ func TestGetWeekly_PublicPath(t *testing.T) {
 		nil, // collections — unused when bungieToken is empty
 		nil, // wishlist — nil-checked
 		cache.NewMemoryCache(time.Minute, time.Minute),
+		nil, // efficiency engine — nil triggers fallback
 	)
 
 	res, err := svc.GetWeekly(context.Background(), 3, "4611686018467260757", "")
