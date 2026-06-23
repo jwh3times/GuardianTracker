@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useReducer } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   ActionList,
@@ -46,6 +47,7 @@ function purgeOldWeeks(currentResetAt: string) {
 
 export function ThisWeek() {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const { data: w, isLoading } = useQuery({
     queryKey: ["weekly"],
@@ -139,11 +141,17 @@ export function ThisWeek() {
       </Panel>
 
       <div className="gt-week-cols">
-        <XurModule xur={w?.xur ?? null} />
+        <XurModule
+          xur={w?.xur ?? null}
+          onSelect={(hash) => navigate("/collections?item=" + hash)}
+        />
         <MilestoneModule milestones={w?.milestones ?? []} />
       </div>
 
-      <VendorModule vendors={w?.vendors ?? []} />
+      <VendorModule
+        vendors={w?.vendors ?? []}
+        onSelect={(hash) => navigate("/collections?item=" + hash)}
+      />
     </div>
   );
 }
