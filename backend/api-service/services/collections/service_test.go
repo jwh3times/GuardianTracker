@@ -45,10 +45,19 @@ func TestClassifyDifficulty(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := classifyDifficulty(tc.source, tc.isExotic); got != tc.want {
-				t.Errorf("classifyDifficulty(%q, %v) = %q, want %q", tc.source, tc.isExotic, got, tc.want)
+			if got := ClassifyDifficulty(tc.source, tc.isExotic); got != tc.want {
+				t.Errorf("ClassifyDifficulty(%q, %v) = %q, want %q", tc.source, tc.isExotic, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestClassifyDifficultyExported(t *testing.T) {
+	if got := ClassifyDifficulty(`Source: "Vault of Glass" Raid`, false); got != "Challenging" {
+		t.Errorf("VoG difficulty = %q, want Challenging", got)
+	}
+	if got := ClassifyDifficulty("Source: Complete strikes", false); got != "Easy" {
+		t.Errorf("strikes difficulty = %q, want Easy", got)
 	}
 }
 
