@@ -1,0 +1,246 @@
+---
+name: go-services
+description: Use for any work in backend/api-service — Gin handlers, JWT auth, Bungie OAuth flow, CSRF state, DB-backed encrypted token store, manifest download, collections analysis, records, weekly, search, roles, feature flags, admin, and Go tests.
+tools: Read, Write, Edit, Bash, Glob, Grep
+model: sonnet
+---
+
+You are working inside the Guardian Tracker Go backend. There is **one** service: `backend/api-service` (Go + Gin). The old multi-service architecture (`auth-service`, `bungie-service`, `graphql-service`) no longer exists.
+
+## Project layout
+
+```
+backend/api-service/
+  main.go                              ← Gin router, dependency wiring, manifest startup + swap hooks
+  config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
+  auth/jwt.go                          ← JWT generation and validation (access 24h, refresh 30d)
+  auth/middleware.go                   ← JWT middleware for protected routes
+  auth/state.go                        ← Stateless HMAC-signed OAuth state (CSRF, multi-replica safe)
+  auth/tokenstore.go                   ← DB-backed encrypted Bungie OAuth token store; CAS refresh writes
+  auth/crypto.go                       ← AES-256-GCM cipher; key rotation via prev key
+  auth/revocation.go                   ← JWT revocation: checks token_version (account-wide) + session
+                                           existence (per-device) via RevocationChecker; 60s in-memory
+                                           cache; also resolves role from DB for RequireAdmin/RequireTier
+  auth/roles.go                        ← Role tiers (standard/beta/alpha/admin) + RequireAdmin/RequireTier
+                                           tier-gating middleware
+  api/handlers/auth.go                 ← OAuth flow, token refresh, logout (single-device + all), profile
+  api/handlers/characters.go           ← HTTP handler for characters
+  api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
+                                           collections + characters + records caches via service methods
+  api/handlers/wishlist.go             ← Wishlist CRUD; enriches with manifest defs, collectible source,
+                                           and Xûr availability (via xurInventoryIface / weekly.Service)
+  api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
+                                           resolved feature-flag state (GET /api/flags)
+  api/handlers/admin.go                ← Admin console: user roster, role management, feature-flag
+                                           config, audit log feed
+  api/handlers/health.go               ← Health, ready, manifest status endpoints
+  api/handlers/common.go               ← Shared handler helpers (parseMembershipParams, ownershipCheck…)
+  services/bungie/client.go            ← HTTP client with rate limiting + retry
+  services/bungie/manifest.go          ← Manifest download, version tracking, SQLite extraction;
+                                           RegisterSwapHooks for before/after file-rename callbacks
+  services/bungie/types.go             ← All Bungie API types, constants, helpers
+  services/collections/service.go      ← Collection analysis + difficulty classification + cosmetics;
+                                           uses ManifestRepo interface (satisfied by *manifest.Provider)
+  services/characters/service.go       ← Character fetching; InvalidateCache method
+  services/manifest/repository.go      ← SQLite read-only queries against manifest DB
+  services/manifest/provider.go        ← Shared lazy-opening repository; CloseForSwap/Reopen for
+                                           hourly manifest swap; satisfies all consumer ManifestRepo interfaces
+  services/weekly/service.go           ← Weekly recommendations; Xûr inventory + XurItemHashes();
+                                           milestone data; reset time math; ManifestRepo interface
+  services/search/service.go           ← In-memory manifest item search index; async rebuild on update
+  services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
+                                           interface; InvalidateCache; WeaponTypesCacheKey
+  cache/cache.go                       ← In-memory cache (and no-op cache interface)
+  db/db.go, db/migrate.go              ← Postgres pool; migration runner (each migration runs in a tx)
+  db/stores.go                         ← Stores struct aggregating all store types
+  db/migrations/0001_init.sql          ← Base schema DDL
+  db/migrations/0002_roles_flags.sql   ← Adds role column to users, feature_flags table, role_audit
+  db/migrations/0003_refresh_sessions.sql ← Adds refresh_sessions for per-device sessions + reuse detection
+  db/migrations/0004_audit_log.sql     ← Unifies audit_log, drops role_audit
+  db/users.go                          ← UserStore — upsert, get, bump token_version, per-device sessions
+                                           (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
+  db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens
+  db/wishlist.go, db/prefs.go          ← DB stores for wishlist and preferences
+  db/audit.go                          ← Unified append-only audit trail store (audit_log): best-effort
+                                           Log, in-transaction insertAudit, filtered/keyset List, prune
+  db/flags.go                          ← Feature flags store (get all, get by key, upsert)
+```
+
+## Endpoints
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/auth/bungie` | None | Initiate OAuth — returns `{ authUrl, state }` |
+| POST | `/api/auth/bungie/callback` | None | Exchange code for JWT tokens |
+| POST | `/api/auth/refresh` | Refresh token | Rotate access + refresh tokens (per-session, reuse detection) |
+| GET | `/api/auth/validate` | JWT | Validate JWT |
+| GET | `/api/auth/profile` | JWT | Current user profile |
+| POST | `/api/auth/logout` | JWT | End current device's session only; other devices stay signed in |
+| POST | `/api/auth/logout/all` | JWT | Sign out everywhere: bump token_version + delete all sessions + Bungie token |
+| GET | `/api/wishlist` | JWT | List wishlist items (name, icon, sources, availableNow/From) |
+| POST | `/api/wishlist` | JWT | Add wishlist item |
+| PUT | `/api/wishlist/:id` | JWT | Update wishlist item priority/notes |
+| DELETE | `/api/wishlist/:id` | JWT | Remove wishlist item |
+| GET | `/api/preferences` | JWT | Get user preferences |
+| PUT | `/api/preferences` | JWT | Update user preferences |
+| PUT | `/api/account/role` | JWT | Self-service opt-in to standard/beta/alpha; admin rejected, admin callers rejected |
+| GET | `/api/flags` | JWT | Resolved feature-flag state for caller (enabled/accessible/locked + role) |
+| GET | `/api/admin/users?q=` | JWT + admin | User roster (id, displayName, platform, role, lastActive) |
+| PUT | `/api/admin/users/:id/role` | JWT + admin | Set any role; last-admin protected; bumps token_version + audits |
+| GET | `/api/admin/flags` | JWT + admin | Full feature-flag config |
+| PUT | `/api/admin/flags/:key` | JWT + admin | Toggle enabled / set minTier |
+| GET | `/api/admin/audit` | JWT + admin | Filtered keyset-paginated audit feed |
+| GET | `/api/characters/:membershipType/:membershipId` | JWT | User characters |
+| GET | `/api/collections/:membershipType/:membershipId` | JWT | Collections + fetchedAt; `?include=all` adds collectedItems |
+| POST | `/api/collections/:membershipType/:membershipId/refresh` | JWT | Invalidate cache (collections + characters + records) |
+| GET | `/api/manifest/status` | None | Manifest version and readiness |
+| GET | `/api/weekly/recommendations` | JWT | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt |
+| GET | `/api/items/search?q=&limit=` | JWT | Manifest item search; 503 until index ready |
+| GET | `/api/catalysts/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon |
+| GET | `/api/crafting/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` crafting pattern progress |
+| GET | `/api/seals/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` triumph/seal completion |
+| GET | `/health` | None | Liveness probe |
+| GET | `/ready` | None | Readiness probe |
+
+Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`, `FORBIDDEN`, `TIER_LOCKED`, `DB_UNAVAILABLE`, `LAST_ADMIN`, `ROLE_NOT_ALLOWED`, `ADMIN_OPT_IN`.
+
+## Bungie OAuth flow
+
+1. `GET /api/auth/bungie` — generates HMAC-signed state token via `auth.StateSigner` (derived from `JWT_SECRET`), returns `{ authUrl, state }`
+2. User visits Bungie.net, authorizes, Bungie redirects to frontend `/auth/callback?code=...&state=...`
+3. Frontend POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — state verified with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code); exchanges code for Bungie tokens, stores tokens, issues Guardian JWT + refresh token, creates a `refresh_sessions` row
+
+## JWT format
+
+- Algorithm: HS256, secret from `JWT_SECRET` env var
+- Claims: `sub` (membershipId), `membership_type`, `display_name`, `platform`, `token_type`, `tver` (token_version), `jti`, `sid` (session ID — matches a `refresh_sessions.id` row)
+- `token_type` must be `"access"` for access tokens and `"refresh"` for refresh tokens
+- Access expiry: configurable via `JWT_EXPIRY_HOURS` (default 24h)
+- Refresh expiry: configurable via `JWT_REFRESH_EXPIRY_DAYS` (default 30d)
+
+## Token store (`auth/tokenstore.go`)
+
+DB-backed encrypted Bungie OAuth token store. Tokens are stored AES-256-GCM encrypted in the `bungie_tokens` table. Auto-refreshes via Bungie's OAuth refresh endpoint when within 5 minutes of expiry. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the CAS race reads and adopts the winner's tokens.
+
+Sentinel errors:
+- `auth.ErrTokensNotFound` — no token row exists
+- `auth.ErrNoUserRow` — no users row for the membership
+
+## Middleware
+
+`jwtHelper.Middleware(revoker)` — required auth, returns 401 if JWT is invalid, missing, wrong `token_type`, revoked (token_version mismatch), or session doesn't exist. Sets `user_id`, `membership_id`, `membership_type`, `display_name`, `platform`, `token_version` on Gin context.
+
+`auth.RequireAdmin` / `auth.RequireTier(tier)` — role-gating middleware placed after `jwtHelper.Middleware`. **Role is always read from the DB-backed RevocationChecker cache, never from the JWT claim** — so role changes propagate within the 60s window without requiring a new token.
+
+## Roles & feature flags
+
+Tiers: `standard(0) < beta(1) < alpha(2) < admin(3)` stored in `users.role`.
+
+- **Admin bootstrap**: `ADMIN_MEMBERSHIP_IDS` env var pins specified accounts to admin on every login. Additional admins are granted by existing admins from the admin console; there is no self-service path to admin.
+- **Self opt-in**: `PUT /api/account/role` (standard/beta/alpha only; admin role rejected; admin callers blocked). Evicts the caller's RevocationChecker cache entry with **no** token_version bump (session preserved).
+- **Admin-driven changes**: `PUT /api/admin/users/:id/role` bumps target's `token_version` + evicts their cache entry (forced re-sync) + writes an audit row inside the same transaction. Last-admin protection enforced in-transaction.
+- **Feature flags**: stored in `feature_flags` table (`key`, `enabled`, `min_tier`). `GET /api/flags` returns resolved state (`enabled`/`accessible`/`locked`) based on caller's role. Admin toggles via `PUT /api/admin/flags/:key`. `RequireAdmin`/`RequireTier` gate server-side — UI flag hiding is not enforcement.
+
+## Per-device refresh sessions
+
+Each login (and callback) creates a `refresh_sessions` row; the `sid` JWT claim holds the session ID:
+
+- `POST /api/auth/refresh` compare-and-swaps the session's refresh `jti` (`UserStore.RotateSession`). A replayed (already-rotated) token is detected as reuse → **revokes the whole session** (401, even if the revoking commit errors).
+- Sessions are independent → fully multi-device. `expires_at` slides forward on each rotation.
+- Sessions are capped per user (`maxSessionsPerUser`); an hourly `startSessionPruner` deletes expired rows.
+- `POST /api/auth/logout` — ends only the current session (`DeleteSession`); other devices stay signed in; Bungie token preserved.
+- `POST /api/auth/logout/all` — bumps `token_version` + deletes all sessions (`DeleteAllSessions`) + evicts Bungie token.
+- Pre-`0003` tokens (no `sid`) are adopted into a fresh session on first refresh.
+
+## Audit logging (`db/audit.go`)
+
+Events persisted to `audit_log`: login, logout, logout-all, refresh failure, refresh reuse, session termination, self opt-in role changes, admin role changes, feature-flag changes. Role/flag changes are written in the mutation's transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). Client IP (validated via `TRUSTED_PROXIES`) and User-Agent are retained for `AUDIT_RETENTION_DAYS` (default 180) days; an hourly pruner removes older rows.
+
+## Manifest repository and provider
+
+- `services/manifest/repository.go` — raw SQLite queries. All public methods acquire `r.mu` (RWMutex); locked variants (`*Locked`) for composite operations that must hold the lock across multiple queries.
+- `services/manifest/provider.go` — single `*Provider` shared by all consumers. Opens lazily on first use; `CloseForSwap()` / `Reopen()` coordinate the hourly file swap. Returns `ErrNotReady` (503 `MANIFEST_NOT_READY`) while absent or swapping.
+- `services/bungie/manifest.go` — `RegisterSwapHooks(before, after)` fires around the file rename. The `after` hook calls `Reopen()`, evicts `records.WeaponTypesCacheKey`, and rebuilds the search index.
+
+## Notable manifest methods
+
+| Method | Purpose |
+|---|---|
+| `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by itemHash (for wishlist source strings) |
+| `GetWeaponTypesByName()` | Lowercased weapon name → weapon type display name (table scan; callers cache) |
+
+## Records service
+
+- `GetCatalysts / GetCrafting / GetSeals` return `([]T, time.Time, error)` — second value is `fetchedAt`
+- `Catalyst` struct has `Type` (weapon type) and `Icon` (record icon) fields
+- `WeaponTypesCacheKey` exported for eviction from the after-swap hook
+- `InvalidateCache(membershipType, membershipId)` drops cached profile records (called by RefreshCollections)
+
+## Collections service
+
+- `ErrManifestNotReady` exported (aliases `manifest.ErrNotReady`); handler maps it to 503
+- `UserCollections` has `FetchedAt` field
+- `CollectionSummary` has `CollectedItems` field (stripped from response unless `?include=all`)
+- `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
+
+## Weekly service
+
+- `Weekly` struct has `ResetAt`, `FetchedAt`, `Degraded` fields
+- `Milestone.Missing` is `*int` (omitempty) — omitted until per-milestone completion is computed
+- `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells (used by wishlist handler)
+
+## Go patterns
+
+- Config is loaded once at startup via `config.Load()`; `cfg.Validate()` returns an error (caller fatals in production).
+- Gin handlers must only: bind inputs, call a service/function, return `c.JSON(...)`. No business logic in handlers.
+- Errors: `c.JSON(http.StatusXXX, gin.H{"error": "...", "code": "MACHINE_CODE"})` then `return`.
+- All HTTP calls to Bungie API go through `services/bungie/client.go` (rate limiting + retry). Never construct Bungie API calls inline.
+- Use constants and helpers from `services/bungie/types.go` for Bungie API types.
+- CGO is **enabled** (`CGO_ENABLED=1`) for SQLite.
+- Migrations run in a transaction — a failed multi-statement migration cannot leave a half-applied schema.
+
+## Environment variables
+
+```
+PORT, GO_ENV, BUNGIE_API_KEY, BUNGIE_CLIENT_ID, BUNGIE_CLIENT_SECRET
+AUTH_REDIRECT_URI, JWT_SECRET, JWT_EXPIRY_HOURS, JWT_REFRESH_EXPIRY_DAYS
+DATABASE_URL, TOKEN_ENCRYPTION_KEY, TOKEN_ENCRYPTION_KEY_PREVIOUS
+ADMIN_MEMBERSHIP_IDS, AUDIT_RETENTION_DAYS, TRUSTED_PROXIES
+BUNGIE_API_BASE_URL, BUNGIE_API_RPS, BUNGIE_API_BURST
+MANIFEST_DB_PATH, MANIFEST_CHECK_INTERVAL
+CACHE_ENABLED, CACHE_TTL_COLLECTIONS, CACHE_TTL_RECORDS
+CORS_ALLOWED_ORIGINS, LOG_LEVEL, HTTP_TIMEOUT_SECONDS
+```
+
+## Testing
+
+```powershell
+# From backend/api-service/
+go test ./...
+
+# With race detector (matches CI); requires CGO + Postgres for full coverage
+go test -race ./...
+
+# Full CI-equivalent coverage (~63%)
+./test-local.ps1            # start throwaway Postgres, run all tests, print total
+./test-local.ps1 -Html      # also open per-line HTML report
+./test-local.ps1 -Fresh     # recreate Postgres container from scratch
+./test-local.ps1 -NoRace    # skip race detector (faster)
+./test-local.ps1 -Down      # stop & remove test Postgres container
+```
+
+DB integration tests gated on `TEST_DATABASE_URL`. SQLite tests gated on a runtime `requireSQLite(t)` probe (skipped when `CGO_ENABLED=0`).
+
+## Hot reload (development)
+
+```powershell
+air   # from backend/api-service/ (requires .air.toml)
+```
+
+## Running locally (without Kubernetes)
+
+```powershell
+cd backend/api-service
+cp .env.example .env   # fill in secrets
+go run .               # :8081
+```

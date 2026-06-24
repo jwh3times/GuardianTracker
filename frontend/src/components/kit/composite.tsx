@@ -543,7 +543,17 @@ export function ItemDetailDrawer({
           >
             {wished ? "On wishlist" : "Add to Wishlist"}
           </Button>
-          <Button variant="outline" icon="external">
+          <Button
+            variant="outline"
+            icon="external"
+            onClick={() =>
+              window.open(
+                `https://www.light.gg/db/items/${item.id}`,
+                "_blank",
+                "noopener,noreferrer",
+              )
+            }
+          >
             Where to farm
           </Button>
         </div>
