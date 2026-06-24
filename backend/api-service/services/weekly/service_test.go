@@ -7,6 +7,7 @@ import (
 
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/efficiency"
 )
 
 // fakeManifest satisfies weekly.ManifestRepo.
@@ -255,5 +256,26 @@ func TestXurItemHashesAt(t *testing.T) {
 	// Outside Xûr's window the lookup short-circuits to empty.
 	if got := s.xurItemHashesAt(context.Background(), wednesday); len(got) != 0 {
 		t.Errorf("expected empty set on a Wednesday, got %d entries", len(got))
+	}
+}
+
+func TestMapEngineActions(t *testing.T) {
+	s := &Service{}
+	actions := []efficiency.ScoredAction{
+		{ID: "eff-1", Text: "Run Vault of Glass", Why: "Fills 3 missing items", SourceString: `Source: "Vault of Glass" Raid`, Kind: "activity", MissingCount: 3, AvailableNow: false},
+		{ID: "eff-2", Text: "Visit Xûr", Why: "Fills 1 missing item — available now", SourceString: "Source: Xûr", Kind: "vendor", MissingCount: 1, AvailableNow: true, WishlistCount: 1},
+	}
+	got := s.mapEngineActions(actions)
+	if len(got) != 2 {
+		t.Fatalf("got %d, want 2", len(got))
+	}
+	if got[0].Text != "Run Vault of Glass" || got[0].Detail != "Fills 3 missing items" {
+		t.Errorf("action 0 = %+v", got[0])
+	}
+	if got[0].Diff != "Challenging" {
+		t.Errorf("VoG diff = %q, want Challenging", got[0].Diff)
+	}
+	if got[1].Badge != "Available now" {
+		t.Errorf("Xûr badge = %q, want 'Available now'", got[1].Badge)
 	}
 }

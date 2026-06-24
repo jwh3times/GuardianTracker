@@ -289,11 +289,11 @@ func toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
 	if col.SourceString != "" {
 		di.Sources = append(di.Sources, col.SourceString)
 	}
-	di.Difficulty = classifyDifficulty(col.SourceString, di.IsExotic)
+	di.Difficulty = ClassifyDifficulty(col.SourceString, di.IsExotic)
 	return di
 }
 
-func classifyDifficulty(source string, isExotic bool) string {
+func ClassifyDifficulty(source string, isExotic bool) string {
 	s := strings.ToLower(source)
 	for _, kw := range []string{"raid", "vault of glass", "king's fall", "root of nightmares", "crota", "deep stone", "garden of salvation", "last wish"} {
 		if strings.Contains(s, kw) {

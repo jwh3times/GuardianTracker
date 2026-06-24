@@ -18,6 +18,7 @@ import { ToastProvider } from "../components/ui/Toast";
 import { Catalysts } from "../pages/Catalysts";
 import { Triumphs } from "../pages/Triumphs";
 import { ThisWeek } from "../pages/ThisWeek";
+import { Dashboard } from "../pages/Dashboard";
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
@@ -257,7 +258,7 @@ describe("ThisWeek page", () => {
       await screen.findByText("Resets Tuesday 17:00 UTC"),
     ).toBeInTheDocument();
     expect(screen.getByText("Xûr returns Friday")).toBeInTheDocument();
-    expect(screen.getByText("0/0 done")).toBeInTheDocument();
+    expect(screen.getByText("0/1 done")).toBeInTheDocument();
   });
 
   it("toggles a recommended action done and persists across the reset key", async () => {
@@ -411,5 +412,17 @@ describe("ThisWeek page", () => {
     );
     fireEvent.click(await screen.findByText("Fatebringer"));
     expect(screen.getByTestId("loc").textContent).toBe("/collections?item=100");
+  });
+});
+
+describe("Dashboard page", () => {
+  function renderDashboard() {
+    return renderPage(<Dashboard />);
+  }
+
+  it("shows the top recommended action as the best thing to do today", async () => {
+    renderDashboard();
+    expect(await screen.findByText("Run Vault of Glass")).toBeInTheDocument();
+    expect(screen.getByText(/Best thing to do today/i)).toBeInTheDocument();
   });
 });
