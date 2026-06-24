@@ -1,0 +1,186 @@
+---
+name: postgres-specialist
+description: Use for Guardian Tracker database work — the SQLite Bungie manifest database used by api-service, the PostgreSQL schema for user data, DB migration runner, and Bungie token store implementation.
+tools: Read, Write, Edit, Bash, Glob, Grep
+model: sonnet
+---
+
+You are working with Guardian Tracker's data layer. There are two databases in this project with very different roles.
+
+## SQLite — Bungie manifest (active, read-only)
+
+The Bungie manifest is a read-only SQLite database managed entirely by `api-service`.
+
+**Location:** `./data/manifest.sqlite` inside the api-service container, on a Kubernetes PVC (`/app/data`)  
+**Size:** ~100MB  
+**Source:** Downloaded as a ZIP from Bungie CDN on startup, extracted to SQLite  
+**Access:** Read-only queries via `services/manifest/repository.go`, accessed through `services/manifest/provider.go`
+
+### Manifest download flow
+
+1. On startup, `services/bungie/manifest.go` fetches manifest metadata from `https://www.bungie.net/Platform/Destiny2/Manifest/`
+2. Compares current version against `./data/manifest_version.txt`
+3. If new or missing: downloads the English `.content` ZIP, extracts to `./data/manifest.sqlite`, writes new version to `manifest_version.txt`
+4. Before renaming the new file over the live one, fires `before` swap hooks (closes open SQLite handles via `manifest.Provider.CloseForSwap()`)
+5. After the rename, fires `after` swap hooks (reopens handles via `manifest.Provider.Reopen()`, evicts `records.WeaponTypesCacheKey`, rebuilds search index)
+6. Background goroutine re-checks every hour (`MANIFEST_CHECK_INTERVAL` seconds, default 3600)
+7. Until manifest is ready, all endpoints that use it return 503 (`MANIFEST_NOT_READY`)
+8. Check readiness via `GET /api/manifest/status`
+
+### Provider / repository split
+
+- `services/manifest/provider.go` — `*Provider` is the single shared manifest handle. It opens the SQLite file lazily on first use and coordinates the hourly file swap via `CloseForSwap()` / `Reopen()`. Returns `ErrNotReady` (503) while the file is absent or being replaced.
+- `services/manifest/repository.go` — raw SQLite queries. All public methods acquire `r.mu` (RWMutex). Locked variants (`*Locked`) are for composite operations that must hold the lock across multiple queries.
+
+### Manifest schema (Bungie format)
+
+The manifest SQLite uses Bungie's own schema — tables store JSON blobs keyed by hash. Key tables queried by Guardian Tracker:
+
+| Table | Contents |
+|---|---|
+| `DestinyInventoryItemDefinition` | All items — weapons, armor, exotics (JSON blob per item) |
+| `DestinyCollectibleDefinition` | Collectible source and acquisition info; `itemHash` field links to items |
+| `DestinyPresentationNodeDefinition` | Collections tree structure (categories, subcategories) |
+| `DestinyMilestoneDefinition` | Weekly milestone names and rewards |
+| `DestinyActivityDefinition` | Activity names and reward info |
+| `DestinyActivityModifierDefinition` | Modifier names for nightfalls etc. |
+| `DestinyRecordDefinition` | Triumph/seal/catalyst record definitions |
+
+Rows contain an `id` (int) column and a `json` column (blob). Queries use `json_extract()` for field-level filtering or unmarshal the blob in Go.
+
+```go
+// Typical manifest query pattern
+rows, err := db.Query(
+    `SELECT id, json FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = ?`,
+    itemType,
+)
+```
+
+**Do not modify the manifest SQLite** — it is a read-only Bungie artifact. All queries live in `services/manifest/repository.go`. Keep them SELECT-only.
+
+### Notable manifest query methods
+
+| Method | Purpose |
+|---|---|
+| `GetItemsByHashes(hashes)` | Batch item definition lookup; chunked at 500 for SQLite IN-clause limits |
+| `GetAllCollectibles()` | All collectible definitions (full table scan) |
+| `GetAllCollectiblesWithItems()` | Collectibles joined to items; holds read lock across both queries |
+| `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by `itemHash`; used for wishlist source strings |
+| `GetFilteredCollectibles()` | Collectibles split into weapon/armor/exotic/cosmetic buckets |
+| `GetWeaponTypesByName()` | Lowercased weapon name → weapon type display name (full table scan; callers cache) |
+
+### Query guidelines
+
+- Filter on `json_extract()` for indexed fields; full JSON scans on large tables (DestinyInventoryItemDefinition has ~10k+ rows) should apply early WHERE clauses
+- IN-clause queries must be chunked at 500 items to stay within SQLite's parameter limit
+- Cross-table joins require application-side assembly (manifest tables don't have FK relationships in Bungie's schema)
+- When adding new manifest queries: add to `services/manifest/repository.go`, keep read-only, add a locked variant if the query must compose with another locked call
+
+## PostgreSQL — user data (active, fully wired)
+
+PostgreSQL is the primary persistence layer for all user data. The api-service connects at startup via `DATABASE_URL`. Schema is applied automatically by the migration runner (`db/migrate.go`) — no manual DDL is needed.
+
+**Connection:** `pgx/v5/pgxpool` (pure Go, no CGO required)  
+**Schema DDL:** `db/migrations/0001_init.sql` (embedded; applied atomically in a transaction)  
+**Bootstrap role:** `database/init/01-init.sql` — creates the `guardian_app` least-privilege role (run once after server provisioning)
+
+### Migration runner
+
+`db/migrate.go` applies unapplied migrations in order. Each migration runs inside a transaction — a failed multi-statement file rolls back completely and is not recorded in `schema_migrations`. The `schema_migrations` table tracks applied versions.
+
+### DB package structure
+
+| File | Contents |
+|---|---|
+| `db/db.go` | Pool creation (`NewPool`); `Close` |
+| `db/migrate.go` | Migration runner; `schema_migrations` table |
+| `db/stores.go` | `Stores` struct aggregating all store types |
+| `db/users.go` | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions) |
+| `db/tokens.go` | `BungieTokenStore` — encrypted Bungie OAuth tokens |
+| `db/wishlist.go` | `WishlistStore` — wishlist CRUD, user-scoped |
+| `db/prefs.go` | `PrefsStore` — user preferences |
+| `db/audit.go` | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune |
+| `db/flags.go` | `FlagsStore` — feature flag get/list/upsert |
+
+### Bungie token store (`db/tokens.go`)
+
+Stores AES-256-GCM encrypted Bungie OAuth tokens in the `bungie_tokens` table.
+
+**`Get(ctx, membershipID)`** — returns `ErrTokensNotFound` (not a generic error) when no row exists for the membership.
+
+**`Upsert(ctx, membershipID, tokens, prevUpdatedAt)`**:
+- Zero `prevUpdatedAt`: unconditional insert/update (login path)
+- Non-zero `prevUpdatedAt`: compare-and-swap against the row's `updated_at` (refresh path — a replica that loses the race gets `updated = false, err = nil`)
+- Returns `ErrNoUserRow` when no `users` row exists for the membership (tokens can't persist)
+- Returns `(newUpdatedAt time.Time, updated bool, err error)` — callers use `newUpdatedAt` as the CAS baseline for future refreshes
+
+**Sentinel errors:**
+- `db.ErrTokensNotFound` — translated to `auth.ErrTokensNotFound` in the adapter in `main.go`
+- `db.ErrNoUserRow` — translated to `auth.ErrNoUserRow` in the adapter
+
+### PostgreSQL schema overview
+
+```sql
+-- Users: one row per Bungie account; role is the resolved tier
+users (id, membership_id, membership_type, display_name, platform,
+       role, token_version, created_at, updated_at)
+
+-- Bungie OAuth tokens: encrypted at rest
+bungie_tokens (id, user_id FK, access_token_enc, refresh_token_enc,
+               access_expires_at, refresh_expires_at, key_version, updated_at)
+
+-- Per-device refresh sessions (migration 0003)
+refresh_sessions (id, user_id FK, jti, expires_at, created_at, updated_at)
+
+-- Wishlist: user-scoped, enriched with manifest data at read time
+wishlist (id, user_id FK, item_hash, priority, notes, created_at, updated_at)
+
+-- User preferences
+user_preferences (id, user_id FK, card_style, personalize, created_at, updated_at)
+
+-- Feature flags (migration 0002)
+feature_flags (id, key, enabled, min_tier, created_at, updated_at)
+
+-- Audit log: append-only (migration 0004 — replaces role_audit)
+audit_log (id, type, actor_id, target_id, outcome, details JSONB,
+           ip_address, user_agent, created_at)
+
+-- Migration tracking
+schema_migrations (version)
+```
+
+### Running PostgreSQL locally for development
+
+```powershell
+# Docker Compose starts Postgres automatically — use that for most dev work.
+# For isolated DB testing, use test-local.ps1 in backend/api-service/:
+./test-local.ps1   # spins up postgres:18-alpine on :5433 as gt-test-pg
+
+# Or manually:
+docker run --name guardian-pg `
+  -e POSTGRES_PASSWORD=devpassword `
+  -e POSTGRES_USER=guardian_app `
+  -e POSTGRES_DB=guardian_tracker `
+  -p 5432:5432 `
+  -d postgres:18-alpine
+
+# Bootstrap least-privilege role (one-time after server provisioning)
+Get-Content database/init/01-init.sql | docker exec -i guardian-pg psql -U postgres -d guardian_tracker
+# Application schema is applied automatically at startup via db.Migrate()
+```
+
+### Redis
+
+Redis is in docker-compose but is not actively used. JWT revocation and token persistence are Postgres-backed. Redis would be needed for multi-replica distributed caching — not yet implemented.
+
+## When to use which database
+
+| Use case | Database |
+|---|---|
+| Looking up item names, icons, sources from Bungie | SQLite manifest (read-only) |
+| Storing user wishlists | PostgreSQL (`db/wishlist.go`) |
+| Storing user profile / token_version | PostgreSQL (`db/users.go`) |
+| Storing encrypted Bungie OAuth tokens | PostgreSQL (`db/tokens.go`) |
+| User preferences | PostgreSQL (`db/prefs.go`) |
+| Collections analysis (missing items) | SQLite manifest + Bungie API live data |
+| Weapon type enrichment for catalysts | SQLite manifest (`GetWeaponTypesByName`; cached) |
