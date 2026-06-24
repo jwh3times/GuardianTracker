@@ -62,7 +62,7 @@ function CraftCard({ c }: { c: CraftPattern }) {
   return (
     <div className="gt-item gt-item--prog" data-rarity="legendary">
       <div className="gt-item-top">
-        <ItemTile rarity="legendary" type={c.type} />
+        <ItemTile rarity="legendary" type={c.type} icon={c.icon} />
         <div className="gt-item-head">
           <div className="gt-item-name">{c.name}</div>
           <div className="gt-item-type">{c.type}</div>

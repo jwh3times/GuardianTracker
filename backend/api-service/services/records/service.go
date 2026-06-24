@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,17 @@ const (
 	RecordStateInvisible             = 16 // bit 4
 	RecordStateEntitlementUnowned    = 32 // bit 5
 	RecordStateCanEquipTitle         = 64 // bit 6
+)
+
+// Bungie files both exotic catalysts and weapon crafting patterns under a single
+// "Patterns & Catalysts" presentation node (exoticCatalystsRootNodeHash). The
+// per-record recordTypeName is the discriminator that separates the two; we walk
+// that one node for both endpoints and partition by these values. (The separate
+// craftingRootNodeHash points at the in-game "Shape" navigation node, which holds
+// no records at all, so it can't drive the crafting list.)
+const (
+	recordTypeCatalyst = "Exotic Catalysts"
+	recordTypePattern  = "Weapon Pattern"
 )
 
 // Catalyst represents one exotic weapon catalyst and its completion state.
@@ -48,6 +60,7 @@ type CraftPattern struct {
 	ID       string           `json:"id"`
 	Name     string           `json:"name"`
 	Type     string           `json:"type"`
+	Icon     string           `json:"icon"` // weapon icon path on bungie.net (the pattern record's own icon)
 	Patterns CraftProgressObj `json:"patterns"`
 	Note     string           `json:"note"`
 	Source   string           `json:"source"`
@@ -84,6 +97,7 @@ type ManifestRepo interface {
 	GetPresentationNodeDefinitions(hashes []uint32) (map[uint32]*manifestrepo.PresentationNodeDef, error)
 	GetRecordDefinitions(hashes []uint32) (map[uint32]*manifestrepo.RecordDef, error)
 	GetWeaponTypesByName() (map[string]string, error)
+	GetExoticWeaponsByName() (map[string]manifestrepo.ExoticWeapon, error)
 }
 
 // Service handles catalysts, crafting, and seals data.
@@ -104,6 +118,11 @@ func NewService(b *bungie.Client, m ManifestRepo, c cache.Cache, ttl time.Durati
 // main.go can evict it from the after-swap hook — otherwise stale weapon-type
 // labels would be served for up to an hour after a manifest update (B10).
 const WeaponTypesCacheKey = "manifest:weaponTypesByName"
+
+// ExoticWeaponsCacheKey is the cache key for the exotic weapon name→{type,icon}
+// map (catalyst weapon-picture resolution). Exported for the same after-swap
+// eviction reason as WeaponTypesCacheKey.
+const ExoticWeaponsCacheKey = "manifest:exoticWeaponsByName"
 
 // recordHashKey formats a record hash as the decimal string key Bungie uses to
 // index the profile records map.
@@ -126,6 +145,62 @@ func (s *Service) weaponTypesByName() map[string]string {
 	}
 	s.cache.Set(WeaponTypesCacheKey, m, time.Hour)
 	return m
+}
+
+// exoticWeaponsByName returns the cached lowercased exotic-weapon-name →
+// {type, icon} map used to resolve a catalyst's weapon picture and type.
+// Failures return an empty map (entries fall back to a type glyph) and are not
+// cached.
+func (s *Service) exoticWeaponsByName() map[string]manifestrepo.ExoticWeapon {
+	if cached, ok := s.cache.Get(ExoticWeaponsCacheKey); ok {
+		if m, ok := cached.(map[string]manifestrepo.ExoticWeapon); ok {
+			return m
+		}
+	}
+	m, err := s.manifest.GetExoticWeaponsByName()
+	if err != nil || len(m) == 0 {
+		return map[string]manifestrepo.ExoticWeapon{}
+	}
+	s.cache.Set(ExoticWeaponsCacheKey, m, time.Hour)
+	return m
+}
+
+// resolveCatalystWeapon maps an exotic catalyst record to its weapon's type and
+// icon. The catalyst record's own icon is a near-transparent generic glyph and
+// its name is often an abbreviation of the weapon ("Whisper Catalyst" vs the
+// weapon "Whisper of the Worm", or "Immovable Refit" for Vexcalibur), so we
+// match against the exotic-weapon map in order of decreasing reliability:
+//  1. exact name with the " Catalyst" suffix stripped,
+//  2. a unique exotic-weapon name containing the stripped name,
+//  3. the longest exotic-weapon name appearing in the catalyst's description
+//     ("…while using <Weapon>." / "…to <Weapon> through shaping…").
+//
+// namesByLen must be the exotic map's keys sorted longest-first (built once by
+// the caller). Returns the zero value when nothing matches; the UI then shows a
+// type-glyph fallback rather than a wrong weapon.
+func resolveCatalystWeapon(catalystName, description string, exotics map[string]manifestrepo.ExoticWeapon, namesByLen []string) manifestrepo.ExoticWeapon {
+	base := strings.ToLower(strings.TrimSuffix(catalystName, " Catalyst"))
+	if w, ok := exotics[base]; ok {
+		return w
+	}
+	if base != "" {
+		match, count := "", 0
+		for name := range exotics {
+			if strings.Contains(name, base) {
+				match, count = name, count+1
+			}
+		}
+		if count == 1 {
+			return exotics[match]
+		}
+	}
+	desc := strings.ToLower(description)
+	for _, name := range namesByLen {
+		if strings.Contains(desc, name) {
+			return exotics[name]
+		}
+	}
+	return manifestrepo.ExoticWeapon{}
 }
 
 // cachedRecords pairs the profile records response with its fetch time (B8).
@@ -257,32 +332,38 @@ func (s *Service) GetCatalysts(ctx context.Context, membershipType int, membersh
 		return nil, time.Time{}, err
 	}
 
-	weaponTypes := s.weaponTypesByName()
+	// Resolve each catalyst's weapon picture/type from the exotic-weapon map; the
+	// catalyst record's own icon is just a generic glyph. namesByLen lets the
+	// resolver fall back to scanning the description for a weapon name.
+	exotics := s.exoticWeaponsByName()
+	namesByLen := make([]string, 0, len(exotics))
+	for name := range exotics {
+		namesByLen = append(namesByLen, name)
+	}
+	sort.Slice(namesByLen, func(i, j int) bool { return len(namesByLen[i]) > len(namesByLen[j]) })
 
 	catalysts := make([]Catalyst, 0, len(recordHashes))
 	for _, hash := range recordHashes {
+		// The catalysts root is the combined "Patterns & Catalysts" node, so it
+		// also contains weapon-pattern records — keep only true catalysts.
+		def, ok := recordDefs[hash]
+		if !ok || def.RecordTypeName != recordTypeCatalyst {
+			continue
+		}
 		record, hasRecord := profileResp.Response.ProfileRecords.Data.Records[recordHashKey(hash)]
 
 		name := "Unknown Catalyst"
-		icon := ""
-		if def, ok := recordDefs[hash]; ok {
-			if def.DisplayProperties.Name != "" {
-				name = def.DisplayProperties.Name
-			}
-			icon = def.DisplayProperties.Icon
+		if def.DisplayProperties.Name != "" {
+			name = def.DisplayProperties.Name
 		}
-		source := recordSources[hash]
 
-		// Catalyst records are conventionally named "<Weapon> Catalyst" — resolve
-		// the weapon's type from the manifest; unresolvable names stay generic.
-		weaponName := strings.ToLower(strings.TrimSuffix(name, " Catalyst"))
+		weapon := resolveCatalystWeapon(name, def.DisplayProperties.Description, exotics, namesByLen)
 
 		cat := Catalyst{
-			ID:     fmt.Sprintf("c-%d", hash),
-			Name:   name,
-			Type:   weaponTypes[weaponName],
-			Icon:   icon,
-			Source: source,
+			ID:   fmt.Sprintf("c-%d", hash),
+			Name: name,
+			Type: weapon.Type,
+			Icon: weapon.Icon,
 		}
 
 		switch {
@@ -304,6 +385,19 @@ func (s *Service) GetCatalysts(ctx context.Context, membershipType int, membersh
 			}
 		}
 
+		// Source line: while in progress, show what the catalyst needs (the
+		// completion requirement); otherwise show where it drops (the obscured
+		// description). Both come from the record; fall back to the record's
+		// category grouping when the preferred text is missing.
+		cat.Source = recordSources[hash]
+		if cat.Status == "in-progress" {
+			if req := strings.TrimSpace(def.DisplayProperties.Description); req != "" {
+				cat.Source = req
+			}
+		} else if src := strings.TrimSpace(def.StateInfo.ObscuredDescription); src != "" {
+			cat.Source = src
+		}
+
 		catalysts = append(catalysts, cat)
 	}
 
@@ -321,11 +415,14 @@ func (s *Service) GetCrafting(ctx context.Context, membershipType int, membershi
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("records: crafting settings: %w", err)
 	}
-	if settings.CraftingRootNodeHash == 0 {
+	// Crafting-pattern records live under the combined "Patterns & Catalysts"
+	// node (exoticCatalystsRootNodeHash), not craftingRootNodeHash (a record-less
+	// in-game nav node). We walk that node and keep only weapon-pattern records.
+	if settings.ExoticCatalystsRootNodeHash == 0 {
 		return nil, time.Time{}, manifestrepo.ErrNotReady
 	}
 
-	recordHashes, recordSources, err := s.walkNodeForRecords(settings.CraftingRootNodeHash)
+	recordHashes, recordSources, err := s.walkNodeForRecords(settings.ExoticCatalystsRootNodeHash)
 	if err != nil {
 		return nil, time.Time{}, err
 	}
@@ -345,13 +442,17 @@ func (s *Service) GetCrafting(ctx context.Context, membershipType int, membershi
 
 	patterns := make([]CraftPattern, 0, len(recordHashes))
 	for _, hash := range recordHashes {
+		// The walked root also contains exotic catalyst records — keep only the
+		// weapon-pattern records.
+		def, ok := recordDefs[hash]
+		if !ok || def.RecordTypeName != recordTypePattern {
+			continue
+		}
 		record, hasRecord := profileResp.Response.ProfileRecords.Data.Records[recordHashKey(hash)]
 
 		name := "Unknown Pattern"
-		if def, ok := recordDefs[hash]; ok {
-			if def.DisplayProperties.Name != "" {
-				name = def.DisplayProperties.Name
-			}
+		if def.DisplayProperties.Name != "" {
+			name = def.DisplayProperties.Name
 		}
 		source := recordSources[hash]
 
@@ -388,6 +489,9 @@ func (s *Service) GetCrafting(ctx context.Context, membershipType int, membershi
 			ID:   fmt.Sprintf("p-%d", hash),
 			Name: name,
 			Type: weaponType,
+			// The pattern record's own icon is the weapon's picture (unlike the
+			// catalyst glyph), so it can be used directly.
+			Icon: def.DisplayProperties.Icon,
 			Patterns: CraftProgressObj{
 				Cur: cur,
 				Max: max,

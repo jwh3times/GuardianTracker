@@ -333,7 +333,18 @@ type PresentationNodeDef struct {
 type RecordDef struct {
 	Hash              uint32                   `json:"hash"`
 	DisplayProperties bungie.DisplayProperties `json:"displayProperties"`
-	Objectives        struct {
+	// RecordTypeName groups records by kind ("Exotic Catalysts", "Weapon Pattern",
+	// …). Bungie files catalysts and crafting patterns under one combined
+	// "Patterns & Catalysts" presentation node, so this is how the records service
+	// tells the two apart.
+	RecordTypeName string `json:"recordTypeName"`
+	// StateInfo.ObscuredDescription is the acquisition-source text shown while a
+	// record is still obscured (e.g. a catalyst's "Found in strikes and the
+	// Crucible."). DisplayProperties.Description is the completion requirement.
+	StateInfo struct {
+		ObscuredDescription string `json:"obscuredDescription"`
+	} `json:"stateInfo"`
+	Objectives struct {
 		ObjectiveHashes   []uint32 `json:"objectiveHashes"`
 		PerkObjectiveHash uint32   `json:"perkObjectiveHash"`
 	} `json:"objectives"`
@@ -638,6 +649,59 @@ func (r *Repository) GetWeaponTypesByName() (map[string]string, error) {
 			continue
 		}
 		out[strings.ToLower(def.DisplayProperties.Name)] = bungie.GetWeaponTypeName(def.ItemSubType)
+	}
+	return out, rows.Err()
+}
+
+// ExoticWeapon carries the display fields the records service uses to enrich an
+// exotic catalyst entry with its weapon's picture and type.
+type ExoticWeapon struct {
+	Type string
+	Icon string
+}
+
+// GetExoticWeaponsByName returns a lowercased exotic-weapon display name →
+// {type, icon} map covering every exotic weapon in the manifest. Catalyst
+// records carry only a near-transparent generic catalyst glyph as their icon, so
+// the records service resolves the real weapon picture (and type) through this
+// map. One table scan — callers should cache the result.
+func (r *Repository) GetExoticWeaponsByName() (map[string]ExoticWeapon, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	rows, err := r.db.Query(
+		"SELECT json FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = ? AND json_extract(json, '$.inventory.tierType') = ?",
+		bungie.ItemTypeWeapon, bungie.TierTypeExotic,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetExoticWeaponsByName: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]ExoticWeapon)
+	for rows.Next() {
+		var blob string
+		if err := rows.Scan(&blob); err != nil {
+			continue
+		}
+		var def struct {
+			DisplayProperties struct {
+				Name string `json:"name"`
+				Icon string `json:"icon"`
+			} `json:"displayProperties"`
+			ItemSubType int `json:"itemSubType"`
+		}
+		if err := json.Unmarshal([]byte(blob), &def); err != nil {
+			continue
+		}
+		name := strings.ToLower(def.DisplayProperties.Name)
+		if name == "" || def.DisplayProperties.Icon == "" {
+			continue
+		}
+		// Keep the first definition seen for a given name; duplicates (re-issued
+		// weapons) share the same icon and type.
+		if _, exists := out[name]; !exists {
+			out[name] = ExoticWeapon{Type: bungie.GetWeaponTypeName(def.ItemSubType), Icon: def.DisplayProperties.Icon}
+		}
 	}
 	return out, rows.Err()
 }

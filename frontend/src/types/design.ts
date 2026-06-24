@@ -157,6 +157,8 @@ export interface CraftPattern {
   id: string;
   name: string;
   type: string;
+  /** Weapon icon path on bungie.net (the pattern record's own icon); may be "". */
+  icon?: string;
   patterns: { cur: number; max: number };
   note: string;
   source: string;
