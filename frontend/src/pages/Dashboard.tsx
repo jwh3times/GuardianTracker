@@ -257,14 +257,19 @@ export function Dashboard() {
             style={{ marginBottom: "var(--s-2)" }}
             onClick={() => go("/this-week")}
           >
-            <Icon name="bolt" size="1.2rem" style={{ color: "var(--c-signal)" }} />
+            <Icon
+              name="bolt"
+              size="1.2rem"
+              style={{ color: "var(--c-signal)" }}
+            />
             <div className="gt-today-main">
               <div className="gt-action-meta mono">Best thing to do today</div>
               <div className="gt-today-text">
                 <strong>{weeklyData.recommended[0].text}</strong>
                 {weeklyData.recommended[0].detail && (
                   <>
-                    {" "}—{" "}
+                    {" "}
+                    —{" "}
                     <span style={{ fontWeight: "normal" }}>
                       {weeklyData.recommended[0].detail}
                     </span>

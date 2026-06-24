@@ -48,7 +48,15 @@ export const sampleWeekly = {
   xur: null,
   milestones: [],
   recommended: [
-    { id: "eff-1", text: "Run Vault of Glass", detail: "Fills 3 missing items", badge: "activity", done: false, diff: "Challenging", time: "" },
+    {
+      id: "eff-1",
+      text: "Run Vault of Glass",
+      detail: "Fills 3 missing items",
+      badge: "activity",
+      done: false,
+      diff: "Challenging",
+      time: "",
+    },
   ],
   dailyActions: [],
 };
