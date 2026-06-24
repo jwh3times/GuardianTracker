@@ -189,3 +189,11 @@ func (p *Provider) GetWeaponTypesByName() (map[string]string, error) {
 	}
 	return r.GetWeaponTypesByName()
 }
+
+func (p *Provider) GetExoticWeaponsByName() (map[string]ExoticWeapon, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetExoticWeaponsByName()
+}

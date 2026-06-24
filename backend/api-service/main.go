@@ -191,6 +191,7 @@ func main() {
 				log.Printf("Warning: manifest provider reopen failed: %v", err)
 			}
 			appCache.Delete(records.WeaponTypesCacheKey)
+			appCache.Delete(records.ExoticWeaponsCacheKey)
 			collectionsService.InvalidateTreeCache()
 			go searchService.BuildIndex()
 			go efficiencyEngine.BuildIndex()

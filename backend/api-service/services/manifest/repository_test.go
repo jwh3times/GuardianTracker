@@ -147,6 +147,31 @@ func TestRepository_GetWeaponTypesByName(t *testing.T) {
 	}
 }
 
+func TestRepository_GetExoticWeaponsByName(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	exotics, err := repo.GetExoticWeaponsByName()
+	if err != nil {
+		t.Fatalf("GetExoticWeaponsByName: %v", err)
+	}
+	gj, ok := exotics["gjallarhorn"]
+	if !ok {
+		t.Fatal("exotic Gjallarhorn missing from map")
+	}
+	if gj.Icon != "/icons/gj.png" {
+		t.Errorf("Gjallarhorn icon = %q, want /icons/gj.png", gj.Icon)
+	}
+	if gj.Type != bungie.GetWeaponTypeName(10) {
+		t.Errorf("Gjallarhorn type = %q", gj.Type)
+	}
+	// Legendary weapons and armor must not appear.
+	if _, ok := exotics["fatebringer"]; ok {
+		t.Error("legendary weapon leaked into exotic map")
+	}
+	if _, ok := exotics["helm of tests"]; ok {
+		t.Error("armor leaked into exotic map")
+	}
+}
+
 func TestRepository_Reconnect(t *testing.T) {
 	repo, _ := fixtureRepo(t)
 	if err := repo.Close(); err != nil {

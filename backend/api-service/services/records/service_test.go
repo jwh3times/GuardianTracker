@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -18,9 +19,10 @@ import (
 
 // fakeRecordsManifest satisfies records.ManifestRepo with JSON-built fixtures.
 type fakeRecordsManifest struct {
-	nodes       map[uint32]*manifestrepo.PresentationNodeDef
-	records     map[uint32]*manifestrepo.RecordDef
-	weaponTypes map[string]string
+	nodes         map[uint32]*manifestrepo.PresentationNodeDef
+	records       map[uint32]*manifestrepo.RecordDef
+	weaponTypes   map[string]string
+	exoticWeapons map[string]manifestrepo.ExoticWeapon
 }
 
 func (f *fakeRecordsManifest) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32]*manifestrepo.PresentationNodeDef, error) {
@@ -48,6 +50,13 @@ func (f *fakeRecordsManifest) GetWeaponTypesByName() (map[string]string, error) 
 		return map[string]string{}, nil
 	}
 	return f.weaponTypes, nil
+}
+
+func (f *fakeRecordsManifest) GetExoticWeaponsByName() (map[string]manifestrepo.ExoticWeapon, error) {
+	if f.exoticWeapons == nil {
+		return map[string]manifestrepo.ExoticWeapon{}, nil
+	}
+	return f.exoticWeapons, nil
 }
 
 func nodeFromJSON(t *testing.T, blob string) *manifestrepo.PresentationNodeDef {
@@ -98,6 +107,9 @@ func newRecordsService(t *testing.T, srv *httptest.Server, m ManifestRepo) *Serv
 }
 
 // catalystFixture: root node 9000 → records 1001-1004 named like real catalysts.
+// The record icons are the generic catalyst glyph (record_*.png); the weapon
+// picture comes from the exotic-weapon map (weapon_*.png), proving the service
+// uses the latter.
 func catalystFixture(t *testing.T) *fakeRecordsManifest {
 	t.Helper()
 	return &fakeRecordsManifest{
@@ -108,15 +120,15 @@ func catalystFixture(t *testing.T) *fakeRecordsManifest {
 					{"recordHash":1001},{"recordHash":1002},{"recordHash":1003},{"recordHash":1004}]}}`),
 		},
 		records: map[uint32]*manifestrepo.RecordDef{
-			1001: recordFromJSON(t, `{"hash":1001,"displayProperties":{"name":"Sunshot Catalyst","icon":"/icons/sunshot.png"}}`),
-			1002: recordFromJSON(t, `{"hash":1002,"displayProperties":{"name":"Riskrunner Catalyst"}}`),
-			1003: recordFromJSON(t, `{"hash":1003,"displayProperties":{"name":"Thunderlord Catalyst"}}`),
-			1004: recordFromJSON(t, `{"hash":1004,"displayProperties":{"name":"Mystery Catalyst"}}`),
+			1001: recordFromJSON(t, `{"hash":1001,"recordTypeName":"Exotic Catalysts","stateInfo":{"obscuredDescription":"Found in strikes and the Crucible."},"displayProperties":{"name":"Sunshot Catalyst","description":"Defeat targets with Sunshot.","icon":"/icons/record_sunshot.png"}}`),
+			1002: recordFromJSON(t, `{"hash":1002,"recordTypeName":"Exotic Catalysts","displayProperties":{"name":"Riskrunner Catalyst","description":"Chain lightning to defeat targets."}}`),
+			1003: recordFromJSON(t, `{"hash":1003,"recordTypeName":"Exotic Catalysts","stateInfo":{"obscuredDescription":"Found in Nightfall: The Ordeal."},"displayProperties":{"name":"Thunderlord Catalyst"}}`),
+			1004: recordFromJSON(t, `{"hash":1004,"recordTypeName":"Exotic Catalysts","displayProperties":{"name":"Mystery Catalyst"}}`),
 		},
-		weaponTypes: map[string]string{
-			"sunshot":     "Hand Cannon",
-			"riskrunner":  "Submachine Gun",
-			"thunderlord": "Machine Gun",
+		exoticWeapons: map[string]manifestrepo.ExoticWeapon{
+			"sunshot":     {Type: "Hand Cannon", Icon: "/icons/weapon_sunshot.png"},
+			"riskrunner":  {Type: "Submachine Gun", Icon: "/icons/weapon_riskrunner.png"},
+			"thunderlord": {Type: "Machine Gun", Icon: "/icons/weapon_thunderlord.png"},
 		},
 	}
 }
@@ -170,9 +182,9 @@ func TestGetCatalysts_StatusMapping(t *testing.T) {
 	}
 }
 
-// TestGetCatalysts_WeaponTypeAndIcon is the B10 regression: catalyst entries
-// resolve their weapon type from the manifest (with a graceful fallback) and
-// carry the record icon.
+// TestGetCatalysts_WeaponTypeAndIcon: catalyst entries resolve their weapon type
+// AND weapon picture from the exotic-weapon map (not the near-transparent record
+// glyph), with a graceful empty fallback for unknown weapons.
 func TestGetCatalysts_WeaponTypeAndIcon(t *testing.T) {
 	profile := `{"ErrorCode":1,"Response":{"profileRecords":{"data":{"records":{}}}}}`
 	s := newRecordsService(t, newBungieServer(t, profile), catalystFixture(t))
@@ -188,25 +200,28 @@ func TestGetCatalysts_WeaponTypeAndIcon(t *testing.T) {
 	if got := byName["Sunshot Catalyst"]; got.Type != "Hand Cannon" {
 		t.Errorf("Sunshot type = %q, want Hand Cannon", got.Type)
 	}
-	if got := byName["Sunshot Catalyst"]; got.Icon != "/icons/sunshot.png" {
-		t.Errorf("Sunshot icon = %q", got.Icon)
+	// The weapon picture, not the record's own catalyst-glyph icon.
+	if got := byName["Sunshot Catalyst"]; got.Icon != "/icons/weapon_sunshot.png" {
+		t.Errorf("Sunshot icon = %q, want the weapon icon", got.Icon)
 	}
-	// "Mystery" isn't a known weapon — type stays empty, never wrong.
-	if got := byName["Mystery Catalyst"]; got.Type != "" {
-		t.Errorf("unknown weapon type = %q, want empty fallback", got.Type)
+	// "Mystery" isn't a known weapon — type and icon stay empty, never wrong.
+	if got := byName["Mystery Catalyst"]; got.Type != "" || got.Icon != "" {
+		t.Errorf("unknown weapon = {type %q icon %q}, want empty fallback", got.Type, got.Icon)
 	}
 }
 
 func TestGetCrafting_TypeResolutionAndProgress(t *testing.T) {
+	// Patterns live under the combined "Patterns & Catalysts" node (9000), not
+	// craftingRootNodeHash — see GetCrafting / combinedFixture.
 	m := &fakeRecordsManifest{
 		nodes: map[uint32]*manifestrepo.PresentationNodeDef{
-			9100: nodeFromJSON(t, `{"hash":9100,
-				"displayProperties":{"name":"Crafting Patterns"},
+			9000: nodeFromJSON(t, `{"hash":9000,
+				"displayProperties":{"name":"Patterns & Catalysts"},
 				"children":{"records":[{"recordHash":2001},{"recordHash":2002}]}}`),
 		},
 		records: map[uint32]*manifestrepo.RecordDef{
-			2001: recordFromJSON(t, `{"hash":2001,"displayProperties":{"name":"Bold Endings"}}`),
-			2002: recordFromJSON(t, `{"hash":2002,"displayProperties":{"name":"Unknownium"}}`),
+			2001: recordFromJSON(t, `{"hash":2001,"recordTypeName":"Weapon Pattern","displayProperties":{"name":"Bold Endings","icon":"/icons/bold_endings.jpg"}}`),
+			2002: recordFromJSON(t, `{"hash":2002,"recordTypeName":"Weapon Pattern","displayProperties":{"name":"Unknownium"}}`),
 		},
 		weaponTypes: map[string]string{"bold endings": "Hand Cannon"},
 	}
@@ -231,6 +246,10 @@ func TestGetCrafting_TypeResolutionAndProgress(t *testing.T) {
 	if bold.Type != "Hand Cannon" {
 		t.Errorf("Bold Endings type = %q, want Hand Cannon (B10)", bold.Type)
 	}
+	// The pattern record's icon is the weapon picture and is passed through.
+	if bold.Icon != "/icons/bold_endings.jpg" {
+		t.Errorf("Bold Endings icon = %q, want the weapon icon", bold.Icon)
+	}
 	if bold.Patterns.Cur != 3 || bold.Patterns.Max != 5 {
 		t.Errorf("Bold Endings progress = %+v", bold.Patterns)
 	}
@@ -240,6 +259,137 @@ func TestGetCrafting_TypeResolutionAndProgress(t *testing.T) {
 	}
 	if unknown.Note != "Pattern unlocked" {
 		t.Errorf("redeemed pattern note = %q", unknown.Note)
+	}
+}
+
+// combinedFixture mirrors the real manifest: exoticCatalystsRootNodeHash (9000)
+// is a combined "Patterns & Catalysts" node whose subtree holds BOTH exotic
+// catalyst records and weapon-pattern records. The two are told apart only by
+// recordTypeName. (craftingRootNodeHash points at a record-less "Shape" nav node.)
+func combinedFixture(t *testing.T) *fakeRecordsManifest {
+	t.Helper()
+	return &fakeRecordsManifest{
+		nodes: map[uint32]*manifestrepo.PresentationNodeDef{
+			9000: nodeFromJSON(t, `{"hash":9000,"displayProperties":{"name":"Patterns & Catalysts"},
+				"children":{"presentationNodes":[{"presentationNodeHash":9001},{"presentationNodeHash":9002}]}}`),
+			9001: nodeFromJSON(t, `{"hash":9001,"displayProperties":{"name":"Exotic Catalysts"},
+				"children":{"records":[{"recordHash":1001},{"recordHash":1002}]}}`),
+			9002: nodeFromJSON(t, `{"hash":9002,"displayProperties":{"name":"Weapon Patterns"},
+				"children":{"records":[{"recordHash":2001},{"recordHash":2002}]}}`),
+		},
+		records: map[uint32]*manifestrepo.RecordDef{
+			1001: recordFromJSON(t, `{"hash":1001,"recordTypeName":"Exotic Catalysts","displayProperties":{"name":"Sunshot Catalyst"}}`),
+			1002: recordFromJSON(t, `{"hash":1002,"recordTypeName":"Exotic Catalysts","displayProperties":{"name":"Riskrunner Catalyst"}}`),
+			2001: recordFromJSON(t, `{"hash":2001,"recordTypeName":"Weapon Pattern","displayProperties":{"name":"Bold Endings"}}`),
+			2002: recordFromJSON(t, `{"hash":2002,"recordTypeName":"Weapon Pattern","displayProperties":{"name":"Aberrant Action"}}`),
+		},
+	}
+}
+
+// TestCatalystsAndCraftingPartition is the regression for the bug where the
+// Catalysts tab showed legendary crafting patterns and the Crafting tab was
+// empty: both endpoints draw from the same "Patterns & Catalysts" node and must
+// partition records by recordTypeName.
+func TestCatalystsAndCraftingPartition(t *testing.T) {
+	profile := `{"ErrorCode":1,"Response":{"profileRecords":{"data":{"records":{}}}}}`
+	srv := newBungieServer(t, profile)
+	s := newRecordsService(t, srv, combinedFixture(t))
+
+	cats, _, err := s.GetCatalysts(context.Background(), 3, "4611686018467260757", "token")
+	if err != nil {
+		t.Fatalf("GetCatalysts: %v", err)
+	}
+	if len(cats) != 2 {
+		t.Fatalf("GetCatalysts returned %d items, want 2 (catalysts only): %+v", len(cats), cats)
+	}
+	for _, c := range cats {
+		if !strings.HasSuffix(c.Name, "Catalyst") {
+			t.Errorf("GetCatalysts leaked a non-catalyst record: %q", c.Name)
+		}
+	}
+
+	patterns, _, err := s.GetCrafting(context.Background(), 3, "4611686018467260757", "token")
+	if err != nil {
+		t.Fatalf("GetCrafting: %v", err)
+	}
+	if len(patterns) != 2 {
+		t.Fatalf("GetCrafting returned %d items, want 2 (patterns only): %+v", len(patterns), patterns)
+	}
+	for _, p := range patterns {
+		if strings.HasSuffix(p.Name, "Catalyst") {
+			t.Errorf("GetCrafting leaked a catalyst record: %q", p.Name)
+		}
+	}
+}
+
+// TestResolveCatalystWeapon covers the three resolution strategies against the
+// real-world name shapes: exact stripped name, a unique substring match for
+// abbreviated names ("Khvostov" → "Khvostov 7G-0X"), and a description scan for
+// names with no relation to the weapon ("Immovable Refit" → Vexcalibur).
+func TestResolveCatalystWeapon(t *testing.T) {
+	exotics := map[string]manifestrepo.ExoticWeapon{
+		"sunshot":             {Type: "Hand Cannon", Icon: "/w/sunshot.jpg"},
+		"khvostov 7g-0x":      {Type: "Auto Rifle", Icon: "/w/khvostov.jpg"},
+		"whisper of the worm": {Type: "Sniper Rifle", Icon: "/w/whisper.jpg"},
+		"vexcalibur":          {Type: "Glaive", Icon: "/w/vexcalibur.jpg"},
+	}
+	namesByLen := make([]string, 0, len(exotics))
+	for n := range exotics {
+		namesByLen = append(namesByLen, n)
+	}
+	sort.Slice(namesByLen, func(i, j int) bool { return len(namesByLen[i]) > len(namesByLen[j]) })
+
+	cases := []struct {
+		name, desc, wantIcon string
+	}{
+		{"Sunshot Catalyst", "Defeat enemies with Sunshot.", "/w/sunshot.jpg"},                        // exact
+		{"Khvostov Catalyst", "Defeat enemies with Khvostov.", "/w/khvostov.jpg"},                     // substring
+		{"Whisper Catalyst", "Defeat enemies with Whisper of the Worm.", "/w/whisper.jpg"},            // substring
+		{"Immovable Refit", "Apply any catalyst to Vexcalibur through shaping.", "/w/vexcalibur.jpg"}, // description
+		{"Nonexistent Catalyst", "Defeat enemies with some weapon.", ""},                              // miss
+	}
+	for _, c := range cases {
+		got := resolveCatalystWeapon(c.name, c.desc, exotics, namesByLen)
+		if got.Icon != c.wantIcon {
+			t.Errorf("resolve(%q) icon = %q, want %q", c.name, got.Icon, c.wantIcon)
+		}
+	}
+}
+
+// TestGetCatalysts_SourceByStatus verifies the hybrid source line: a missing or
+// complete catalyst shows its acquisition source (the record's obscured
+// description), an in-progress one shows the completion requirement (the record
+// description), and a record with neither falls back to its category.
+func TestGetCatalysts_SourceByStatus(t *testing.T) {
+	// 1001 Sunshot: missing → obscured (acquisition) source. 1002 Riskrunner:
+	// in-progress → completion requirement. 1003 Thunderlord: complete → obscured
+	// source. 1004 Mystery: missing, no obscured text → record category fallback.
+	profile := `{"ErrorCode":1,"Response":{"profileRecords":{"data":{"records":{
+		"1002":{"state":4,"objectives":[{"progress":1,"completionValue":10,"complete":false}]},
+		"1003":{"state":1}
+	}}}}}`
+	s := newRecordsService(t, newBungieServer(t, profile), catalystFixture(t))
+
+	cats, _, err := s.GetCatalysts(context.Background(), 3, "4611686018467260757", "token")
+	if err != nil {
+		t.Fatalf("GetCatalysts: %v", err)
+	}
+	byName := map[string]Catalyst{}
+	for _, c := range cats {
+		byName[c.Name] = c
+	}
+	if got := byName["Sunshot Catalyst"]; got.Status != "missing" || got.Source != "Found in strikes and the Crucible." {
+		t.Errorf("missing source = {%q %q}, want {missing, obscured description}", got.Status, got.Source)
+	}
+	if got := byName["Riskrunner Catalyst"]; got.Status != "in-progress" || got.Source != "Chain lightning to defeat targets." {
+		t.Errorf("in-progress source = {%q %q}, want the completion requirement", got.Status, got.Source)
+	}
+	if got := byName["Thunderlord Catalyst"]; got.Status != "complete" || got.Source != "Found in Nightfall: The Ordeal." {
+		t.Errorf("complete source = {%q %q}, want {complete, obscured description}", got.Status, got.Source)
+	}
+	// No obscured text → record category ("Exotic Catalysts").
+	if got := byName["Mystery Catalyst"]; got.Source != "Exotic Catalysts" {
+		t.Errorf("fallback source = %q, want record category", got.Source)
 	}
 }
 
