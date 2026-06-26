@@ -105,8 +105,8 @@ Select-String -Pattern '^FROM' -Recurse -Filter 'Dockerfile*' .
 # What K8s manifests exist?
 Get-ChildItem k8s/ -Filter '*.yaml' | Select-Object Name
 
-# What pages exist in the frontend?
-Get-ChildItem frontend/src/pages/ | Select-Object Name
+# What pages exist in the frontend? (pages live under each feature slice)
+Get-ChildItem frontend/src/features -Recurse -Filter '*.tsx' | Where-Object DirectoryName -like '*\pages' | Select-Object Name
 ```
 
 ## What NOT to change
