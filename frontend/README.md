@@ -9,7 +9,7 @@ React + TypeScript SPA for Guardian Tracker, a Destiny 2 collection tracking app
 - **Data fetching**: TanStack React Query + `lib/api.ts` (`apiFetch` REST helper)
 - **Routing**: React Router v7
 - **Styling**: Custom "Guardian Tracker" design system — oklch design tokens + `gt-*` CSS classes (`src/styles/`). Tailwind is still installed for a few legacy primitives but new UI uses the design system.
-- **Icons**: in-house single-path line set (`components/kit/Icon.tsx`)
+- **Icons**: in-house single-path line set (`components/Icon.tsx`)
 - **Forms/Validation**: React Hook Form + Zod (available)
 - **Tests**: Vitest + React Testing Library
 
@@ -50,42 +50,49 @@ src/
 │   ├── tokens.css               # Design tokens (colors, type, spacing, rarity maps)
 │   ├── kit.css                  # Component styles
 │   └── app.css                  # App shell + page styles
-├── components/
+├── components/                 # Shared design-system components (flat; no kit/ or ui/ subfolders)
 │   ├── AppShell.tsx             # Sidebar + top bar + mobile nav; global search (deep-links to
 │   │                            #   /collections?item=<hash>); character switcher (CharacterContext)
 │   ├── Brand.tsx                # Logo mark
 │   ├── ErrorBoundary.tsx        # React error boundary
-│   ├── kit/                     # Design component kit
-│   │   ├── Icon.tsx
-│   │   ├── primitives.tsx       # Badge, Button, Textarea, ProgressBar, RadialProgress, StatTile,
-│   │   │                        #   CountdownChip, DataFreshnessChip, FilterChip, EmptyState…
-│   │   ├── ItemCard.tsx
-│   │   ├── composite.tsx        # Panel, CategoryTree, ItemDetailDrawer, SealCard, Dropdown…
-│   │   └── index.ts             # Barrel export
-│   └── ui/                      # Legacy primitives (LoadingSpinner, Toast); Button.tsx and Card.tsx deleted
-├── pages/
-│   ├── Login.tsx                # Bungie OAuth initiation
-│   ├── OAuthCallback.tsx        # Handles /auth/callback redirect
-│   ├── Dashboard.tsx            # Completion hero + "do this today" (real totals, real weekly)
-│   ├── Collections.tsx          # Category tree + filterable grid/list + detail drawer;
-│   │                            #   ?include=all for collected items; ?item=<hash> deep-link
-│   ├── WishList.tsx             # Wishlist management; inline notes editor; Xûr availability
-│   ├── ThisWeek.tsx             # Weekly recs / Xûr / milestones (real API)
-│   ├── Catalysts.tsx            # Catalysts & crafting patterns (real API)
-│   ├── Triumphs.tsx             # Triumphs & seals (real API)
-│   └── Settings.tsx             # Account + appearance preferences + sign out
+│   ├── Icon.tsx                 # Single-path line-icon set
+│   ├── primitives.tsx           # Badge, Button, Textarea, ProgressBar, RadialProgress, StatTile,
+│   │                            #   CountdownChip, DataFreshnessChip, FilterChip, EmptyState…
+│   ├── composite.tsx            # Panel, CategoryTree, ItemDetailDrawer, SealCard, Dropdown…
+│   ├── LoadingSpinner.tsx       # (was components/ui/) shown while data loads
+│   └── Toast.tsx                # (was components/ui/) ToastProvider / useToast
+│                                # Import these directly — the components/kit/index.ts barrel is gone
+├── features/                   # Feature slices; each owns its pages, feature-only components, lib, tests
+│   ├── auth/pages/             # Login.tsx (OAuth initiation), OAuthCallback.tsx (code exchange)
+│   ├── collections/
+│   │   ├── pages/              # Collections.tsx (tree + grid + drawer; ?item=<hash> deep-link),
+│   │   │                       #   Catalysts.tsx, Triumphs.tsx
+│   │   ├── components/kit/ItemCard.tsx   # Collection-only item card
+│   │   └── lib/collectionTree.ts         # API node → TreeNode adapters
+│   ├── wishlist/pages/WishList.tsx       # Wishlist mgmt; inline notes editor; Xûr availability
+│   ├── weekly/pages/ThisWeek.tsx         # Weekly recs / Xûr / milestones (real API)
+│   ├── dashboard/pages/Dashboard.tsx     # Completion hero + "do this today" (real totals, real weekly)
+│   ├── settings/pages/Settings.tsx       # Account + appearance preferences + sign out
+│   └── admin/
+│       ├── pages/Admin.tsx               # Admin console (roster, role mgmt, flag config; admin-gated)
+│       └── components/kit/               # admin.tsx (RoleBadge, FlagCard, UserRow, LockedFeature…),
+│                                         #   AuditTable.tsx — tests colocate per feature
 ├── lib/
 │   ├── api.ts                   # apiFetch helper + ApiError (status/code) + QueryClient;
 │   │                            #   API_URL exported; all REST calls go through apiFetch
 │   ├── adapters.ts              # API response types → design GTItem/WishlistEntry; relTime
 │   ├── constants.ts             # RARITIES, glyphs, BUNGIE_CDN base URL
-│   ├── utils.ts                 # cn() Tailwind class merger (legacy ui/ only)
+│   ├── roles.ts                 # Role/tier constants, labels, colors
+│   ├── utils.ts                 # cn() Tailwind class merger (LoadingSpinner + Toast)
 │   ├── errorState.ts            # errorState(error) → ErrorStateCopy; branches on ApiError.code
 │   └── queries.ts               # collectionsQuery() — shared React Query definition
-└── types/
-    ├── api.ts                   # API response types (WishListItem + icon/availableNow,
-    │                            #   APIUserCollections + fetchedAt, APIRecordsEnvelope<T>, etc.)
-    └── design.ts                # Design-system domain types (GTItem, Seal, Weekly + resetAt/fetchedAt…)
+├── types/
+│   ├── api.ts                   # API response types (WishListItem + icon/availableNow,
+│   │                            #   APIUserCollections + fetchedAt, APIRecordsEnvelope<T>, etc.)
+│   └── design.ts                # Design-system domain types (GTItem, Seal, Weekly + resetAt/fetchedAt…)
+└── test/                        # Shared test infra (referenced by vite.config setupFiles)
+    ├── setup.ts                 # Vitest setup file
+    └── testServer.ts            # MSW server + shared fixtures
 ```
 
 ## Authentication Flow
