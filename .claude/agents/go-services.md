@@ -42,6 +42,8 @@ backend/api-service/
   services/collections/service.go      ← Collection analysis + difficulty classification + cosmetics;
                                            uses ManifestRepo interface (satisfied by *manifest.Provider)
   services/characters/service.go       ← Character fetching; InvalidateCache method
+  services/items/service.go            ← Cached weapon-perks lookup; wraps manifest.GetWeaponPerks;
+                                           InvalidateCache for manifest swap hook
   services/manifest/repository.go      ← SQLite read-only queries against manifest DB
   services/manifest/provider.go        ← Shared lazy-opening repository; CloseForSwap/Reopen for
                                            hourly manifest swap; satisfies all consumer ManifestRepo interfaces
