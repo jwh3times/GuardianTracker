@@ -1105,6 +1105,22 @@
   border: 0.07rem solid var(--c-line-soft);
   color: var(--c-text-2);
 }
+.gt-perk-cols {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.gt-perk-col-label {
+  font-size: var(--t-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-2);
+  margin-bottom: var(--s-2);
+}
+.gt-perks-loading {
+  font-size: var(--t-xs);
+  color: var(--c-text-2);
+}
 .gt-drawer-actions {
   display: flex;
   gap: var(--s-3);

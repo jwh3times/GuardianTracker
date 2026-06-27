@@ -80,7 +80,6 @@ const baseItem: GTItem = {
   obtainable: true,
   collected: false,
   desc: "A legendary hand cannon.",
-  perks: ["Explosive Payload"],
   icon: "/icons/fb.png",
 };
 

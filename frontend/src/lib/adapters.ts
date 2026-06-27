@@ -55,7 +55,6 @@ export function toGTItem(d: APIDestinyItem): GTItem {
     obtainable: false,
     collected: false,
     desc: d.description ?? "",
-    perks: [],
     icon: d.icon,
   };
 }

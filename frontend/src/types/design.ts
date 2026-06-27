@@ -28,7 +28,6 @@ export interface GTItem {
   availFrom?: string;
   collected: boolean;
   desc: string;
-  perks: string[];
   /** Real Bungie icon path (relative or absolute), when available. */
   icon?: string;
 }
