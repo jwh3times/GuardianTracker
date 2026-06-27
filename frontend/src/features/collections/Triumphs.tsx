@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Button, EmptyState } from "../../../components/primitives";
-import { Dropdown, PageHead, SealCard } from "../../../components/composite";
-import { useAuth } from "../../../contexts/AuthContext";
-import { apiFetch } from "../../../lib/api";
-import { errorState } from "../../../lib/errorState";
-import { LoadingSpinner } from "../../../components/LoadingSpinner";
-import type { Seal } from "../../../types/design";
-import type { APIRecordsEnvelope } from "../../../types/api";
+import { Button, EmptyState } from "../../components/primitives";
+import { Dropdown, PageHead, SealCard } from "../../components/composite";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiFetch } from "../../lib/api";
+import { errorState } from "../../lib/errorState";
+import { LoadingSpinner } from "../../components/LoadingSpinner";
+import type { Seal } from "../../types/design";
+import type { APIRecordsEnvelope } from "../../types/api";
 
 type Sort = "closest" | "name";
 

@@ -71,24 +71,24 @@ frontend/src/
     Toast.tsx                  ← (was components/ui/) ToastProvider / useToast
                                  Import these directly (e.g. "../../../components/primitives") — the
                                  old components/kit/index.ts barrel has been removed.
-  features/                    ← Feature slices; each owns its pages, feature-only components, lib, tests
-    auth/pages/                ← Login.tsx (OAuth initiation), OAuthCallback.tsx (code exchange)
-    collections/
-      pages/                   ← Collections.tsx (tree + grid/list + detail drawer; ?include=all for
+  features/                    ← Feature slices; each owns its pages, feature-only components, helpers,
+                                 and tests — all flat at the feature root (no pages/, components/kit/,
+                                 or lib/ subfolders)
+    auth/                      ← Login.tsx (OAuth initiation), OAuthCallback.tsx (code exchange)
+    collections/               ← Collections.tsx (tree + grid/list + detail drawer; ?include=all for
                                    collected items; search deep-link ?item=<hash>; add/remove wishlist),
-                                   Catalysts.tsx, Triumphs.tsx ({ items, fetchedAt } envelopes)
-      components/kit/ItemCard.tsx   ← collection-only item card
-      lib/collectionTree.ts    ← API node → TreeNode adapters (collection-specific)
-    wishlist/pages/WishList.tsx     ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
-    weekly/pages/ThisWeek.tsx       ← weekly recommendations / Xûr / milestones (real API)
-    dashboard/pages/Dashboard.tsx   ← completion hero + "do this today"; real totals + cosmetics + weekly
-    settings/pages/Settings.tsx     ← account info, early-access tier opt-in, appearance prefs, sign out
-    admin/
-      pages/Admin.tsx          ← admin console: user roster + role mgmt, flag config (admin-gated route)
-      components/kit/           ← admin-only kit: admin.tsx (RoleBadge, Switch, RoleSelect, TierSegment,
-                                   FlagCard, UserRow, LockedFeature), AuditTable.tsx
+                                   Catalysts.tsx, Triumphs.tsx ({ items, fetchedAt } envelopes),
+                                   ItemCard.tsx (collection-only item card),
+                                   collectionTree.ts (API node → TreeNode adapters, collection-specific)
+    wishlist/WishList.tsx      ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
+    weekly/ThisWeek.tsx        ← weekly recommendations / Xûr / milestones (real API)
+    dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + weekly
+    settings/Settings.tsx      ← account info, early-access tier opt-in, appearance prefs, sign out
+    admin/                     ← Admin.tsx (admin console: user roster + role mgmt, flag config;
+                                   admin-gated route), AdminKit.tsx (RoleBadge, Switch, RoleSelect,
+                                   TierSegment, FlagCard, UserRow, LockedFeature), AuditTable.tsx
                                (Tests colocate per feature, e.g. features/dashboard/Dashboard.test.tsx,
-                                features/collections/lib/collectionTree.test.ts.)
+                                features/collections/collectionTree.test.ts.)
   types/
     api.ts                     ← API response types (APIUser, AuthTokenResponse, WishListItem with
                                    icon/availableNow/availableFrom, APIUserCollections with fetchedAt,
@@ -102,7 +102,8 @@ frontend/src/
 ```
 
 Deleted files / paths (do not reference):
-- `frontend/src/pages/` — pages now live under `frontend/src/features/<feature>/pages/`
+- `frontend/src/pages/` — page files now live directly at `frontend/src/features/<feature>/`
+- `frontend/src/features/<feature>/pages/`, `.../components/kit/`, `.../lib/` — per-feature nesting flattened; page, component, and helper files now sit directly at the feature root (e.g. `features/admin/Admin.tsx`, `features/admin/AdminKit.tsx`, `features/collections/ItemCard.tsx`)
 - `frontend/src/components/kit/` and `frontend/src/components/ui/` — flattened into `components/`
 - `frontend/src/components/kit/index.ts` — barrel removed; import components directly
 - `frontend/src/__tests__/` — tests colocated; shared infra moved to `frontend/src/test/`

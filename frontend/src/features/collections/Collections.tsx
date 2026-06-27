@@ -6,7 +6,7 @@ import {
   Dropdown,
   ItemDetailDrawer,
   PageHead,
-} from "../../../components/composite";
+} from "../../components/composite";
 import {
   Button,
   DataFreshnessChip,
@@ -14,39 +14,29 @@ import {
   FilterChip,
   ItemCardSkeleton,
   StatTile,
-} from "../../../components/primitives";
-import { Icon } from "../../../components/Icon";
-import { ItemCard } from "../components/kit/ItemCard";
-import { useToast } from "../../../components/Toast";
-import { useAuth } from "../../../contexts/AuthContext";
-import { usePreferences } from "../../../contexts/PreferencesContext";
-import { apiFetch } from "../../../lib/api";
-import { errorState } from "../../../lib/errorState";
-import { collectionsQuery } from "../../../lib/queries";
-import { toGTItem } from "../../../lib/adapters";
+} from "../../components/primitives";
+import { Icon } from "../../components/Icon";
+import { ItemCard } from "./ItemCard";
+import { useToast } from "../../components/Toast";
+import { useAuth } from "../../contexts/AuthContext";
+import { usePreferences } from "../../contexts/PreferencesContext";
+import { apiFetch } from "../../lib/api";
+import { errorState } from "../../lib/errorState";
+import { collectionsQuery } from "../../lib/queries";
+import { toGTItem } from "../../lib/adapters";
 import {
   apiNodeToTreeNode,
   gatherItemHashes,
   findNodePath,
-} from "../lib/collectionTree";
-import {
-  DIFFS,
-  DIFF_LABEL,
-  RARITIES,
-  RARITY_LABEL,
-} from "../../../lib/constants";
-import type {
-  Difficulty,
-  GTItem,
-  Rarity,
-  TreeNode,
-} from "../../../types/design";
+} from "./collectionTree";
+import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../../lib/constants";
+import type { Difficulty, GTItem, Rarity, TreeNode } from "../../types/design";
 import type {
   ProfileResponse,
   APICollectionNode,
   APICacheRefreshResponse,
   WishListItem,
-} from "../../../types/api";
+} from "../../types/api";
 
 type SortKey = "rarity" | "name" | "difficulty" | "avail";
 

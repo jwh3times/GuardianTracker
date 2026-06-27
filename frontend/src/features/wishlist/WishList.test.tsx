@@ -16,7 +16,7 @@ import { API, sampleUser, sampleWishlist, server } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 import { ToastProvider } from "../../components/Toast";
-import { WishList } from "./pages/WishList";
+import { WishList } from "./WishList";
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());

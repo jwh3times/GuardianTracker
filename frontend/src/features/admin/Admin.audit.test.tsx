@@ -16,7 +16,7 @@ import { API, sampleUser, server } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 import { ToastProvider } from "../../components/Toast";
-import { Admin } from "./pages/Admin";
+import { Admin } from "./Admin";
 
 // Harness copied from pages-manage.test.tsx (Settings/WishList tests).
 // Admin uses useAuth (needs AuthProvider), useToast (needs ToastProvider),

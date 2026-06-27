@@ -1,28 +1,23 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Button, DataFreshnessChip } from "../../../components/primitives";
-import { PageHead, Panel } from "../../../components/composite";
-import { Icon } from "../../../components/Icon";
-import { RoleBadge } from "../../admin/components/kit/admin";
-import { useAuth } from "../../../contexts/AuthContext";
-import { useFlags } from "../../../contexts/FlagsContext";
-import { usePreferences } from "../../../contexts/PreferencesContext";
-import { useToast } from "../../../components/Toast";
-import { apiFetch, ApiError } from "../../../lib/api";
-import { collectionsQuery } from "../../../lib/queries";
-import { relTime, toCharacter } from "../../../lib/adapters";
-import {
-  MIN_TIERS,
-  ROLE_LABEL,
-  roleColor,
-  type Tier,
-} from "../../../lib/roles";
+import { Button, DataFreshnessChip } from "../../components/primitives";
+import { PageHead, Panel } from "../../components/composite";
+import { Icon } from "../../components/Icon";
+import { RoleBadge } from "../admin/AdminKit";
+import { useAuth } from "../../contexts/AuthContext";
+import { useFlags } from "../../contexts/FlagsContext";
+import { usePreferences } from "../../contexts/PreferencesContext";
+import { useToast } from "../../components/Toast";
+import { apiFetch, ApiError } from "../../lib/api";
+import { collectionsQuery } from "../../lib/queries";
+import { relTime, toCharacter } from "../../lib/adapters";
+import { MIN_TIERS, ROLE_LABEL, roleColor, type Tier } from "../../lib/roles";
 import type {
   APICharacter,
   APICacheRefreshResponse,
   APIRoleResponse,
-} from "../../../types/api";
+} from "../../types/api";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 

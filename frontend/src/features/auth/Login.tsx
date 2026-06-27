@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Brand } from "../../../components/Brand";
-import { Button } from "../../../components/primitives";
-import { Icon } from "../../../components/Icon";
-import type { AuthURLResponse } from "../../../types/api";
+import { Brand } from "../../components/Brand";
+import { Button } from "../../components/primitives";
+import { Icon } from "../../components/Icon";
+import type { AuthURLResponse } from "../../types/api";
 
 export function Login() {
   const [loading, setLoading] = useState(false);

@@ -16,7 +16,7 @@ import { AuthProvider } from "../../contexts/AuthContext";
 import { CharacterProvider } from "../../contexts/CharacterContext";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 import { ToastProvider } from "../../components/Toast";
-import { Dashboard } from "./pages/Dashboard";
+import { Dashboard } from "./Dashboard";
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());

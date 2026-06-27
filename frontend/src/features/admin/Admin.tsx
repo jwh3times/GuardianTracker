@@ -1,30 +1,22 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AuditTable } from "../components/kit/AuditTable";
-import {
-  EmptyState,
-  FilterChip,
-  StatTile,
-} from "../../../components/primitives";
-import { PageHead } from "../../../components/composite";
-import { Icon } from "../../../components/Icon";
-import { FlagCard, UserRow } from "../components/kit/admin";
-import { useToast } from "../../../components/Toast";
-import { useAuth } from "../../../contexts/AuthContext";
-import { apiFetch, ApiError } from "../../../lib/api";
-import { relTime } from "../../../lib/adapters";
+import { AuditTable } from "./AuditTable";
+import { EmptyState, FilterChip, StatTile } from "../../components/primitives";
+import { PageHead } from "../../components/composite";
+import { Icon } from "../../components/Icon";
+import { FlagCard, UserRow } from "./AdminKit";
+import { useToast } from "../../components/Toast";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiFetch, ApiError } from "../../lib/api";
+import { relTime } from "../../lib/adapters";
 import {
   ROLES,
   ROLE_LABEL,
   tierOf,
   type Role,
   type Tier,
-} from "../../../lib/roles";
-import type {
-  APIAdminFlag,
-  APIAdminUser,
-  APIAuditPage,
-} from "../../../types/api";
+} from "../../lib/roles";
+import type { APIAdminFlag, APIAdminUser, APIAuditPage } from "../../types/api";
 
 type Tab = "users" | "flags" | "audit";
 

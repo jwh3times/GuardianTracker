@@ -7,15 +7,15 @@ import {
   FilterChip,
   ItemTile,
   Textarea,
-} from "../../../components/primitives";
-import { Dropdown, PageHead } from "../../../components/composite";
-import { Icon } from "../../../components/Icon";
-import { useToast } from "../../../components/Toast";
-import { LoadingSpinner } from "../../../components/LoadingSpinner";
-import { apiFetch } from "../../../lib/api";
-import { toWishlistEntry } from "../../../lib/adapters";
-import type { WishListItem } from "../../../types/api";
-import type { Priority, WishlistEntry } from "../../../types/design";
+} from "../../components/primitives";
+import { Dropdown, PageHead } from "../../components/composite";
+import { Icon } from "../../components/Icon";
+import { useToast } from "../../components/Toast";
+import { LoadingSpinner } from "../../components/LoadingSpinner";
+import { apiFetch } from "../../lib/api";
+import { toWishlistEntry } from "../../lib/adapters";
+import type { WishListItem } from "../../types/api";
+import type { Priority, WishlistEntry } from "../../types/design";
 
 const PRIORITY_LABEL: Record<Priority, string> = {
   urgent: "Urgent",

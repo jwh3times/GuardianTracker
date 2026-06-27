@@ -15,7 +15,7 @@ import { http, HttpResponse, delay } from "msw";
 import { API, sampleUser, server } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { ToastProvider } from "../../components/Toast";
-import { Catalysts } from "./pages/Catalysts";
+import { Catalysts } from "./Catalysts";
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());

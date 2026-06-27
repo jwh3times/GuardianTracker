@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Icon } from "../../../../components/Icon";
-import { Button } from "../../../../components/primitives";
+import { Icon } from "../../components/Icon";
+import { Button } from "../../components/primitives";
 import {
   MIN_TIERS,
   ROLES,
@@ -9,8 +9,8 @@ import {
   roleColor,
   type Role,
   type Tier,
-} from "../../../../lib/roles";
-import type { APIAdminFlag, APIResolvedFlag } from "../../../../types/api";
+} from "../../lib/roles";
+import type { APIAdminFlag, APIResolvedFlag } from "../../types/api";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 

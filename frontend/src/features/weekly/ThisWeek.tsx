@@ -1,18 +1,18 @@
 import React, { useEffect, useMemo, useReducer } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CountdownChip } from "../../../components/primitives";
+import { CountdownChip } from "../../components/primitives";
 import {
   ActionList,
   MilestoneModule,
   PageHead,
   Panel,
   XurModule,
-} from "../../../components/composite";
-import { LoadingSpinner } from "../../../components/LoadingSpinner";
-import { useAuth } from "../../../contexts/AuthContext";
-import { apiFetch } from "../../../lib/api";
-import type { Weekly } from "../../../types/design";
+} from "../../components/composite";
+import { LoadingSpinner } from "../../components/LoadingSpinner";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiFetch } from "../../lib/api";
+import type { Weekly } from "../../types/design";
 
 const DONE_KEY_PREFIX = "gt_done:";
 

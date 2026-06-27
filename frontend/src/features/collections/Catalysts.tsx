@@ -6,15 +6,15 @@ import {
   EmptyState,
   ItemTile,
   ProgressBar,
-} from "../../../components/primitives";
-import { Icon } from "../../../components/Icon";
-import { PageHead } from "../../../components/composite";
-import { useAuth } from "../../../contexts/AuthContext";
-import { apiFetch } from "../../../lib/api";
-import { errorState } from "../../../lib/errorState";
-import { LoadingSpinner } from "../../../components/LoadingSpinner";
-import type { Catalyst, CraftPattern } from "../../../types/design";
-import type { APIRecordsEnvelope } from "../../../types/api";
+} from "../../components/primitives";
+import { Icon } from "../../components/Icon";
+import { PageHead } from "../../components/composite";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiFetch } from "../../lib/api";
+import { errorState } from "../../lib/errorState";
+import { LoadingSpinner } from "../../components/LoadingSpinner";
+import type { Catalyst, CraftPattern } from "../../types/design";
+import type { APIRecordsEnvelope } from "../../types/api";
 
 function CatalystCard({ c }: { c: Catalyst }) {
   const color =

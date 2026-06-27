@@ -4,7 +4,7 @@ import {
   gatherItemHashes,
   findNodePath,
 } from "./collectionTree";
-import type { APICollectionNode } from "../../../types/api";
+import type { APICollectionNode } from "../../types/api";
 
 const tree: APICollectionNode[] = [
   {
