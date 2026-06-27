@@ -8,6 +8,10 @@ import (
 	"guardian-tracker/api-service/services/manifest"
 )
 
+// maxCacheEntries bounds the perk cache so a flood of distinct (e.g. invalid)
+// item hashes cannot grow it without limit between manifest swaps.
+const maxCacheEntries = 4096
+
 type weaponPerksRepo interface {
 	GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
 }
@@ -41,6 +45,16 @@ func (s *Service) GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
 	}
 
 	s.mu.Lock()
+	if _, exists := s.cache[itemHash]; !exists && len(s.cache) >= maxCacheEntries {
+		// Bound memory: the cache is keyed by the client-supplied item hash, so an
+		// authenticated caller hitting many distinct hashes could otherwise grow it
+		// without limit between manifest swaps. Evict an arbitrary entry at capacity;
+		// legitimate traffic (a few thousand real weapons) never reaches the cap.
+		for k := range s.cache {
+			delete(s.cache, k)
+			break
+		}
+	}
 	s.cache[itemHash] = cols
 	s.mu.Unlock()
 	return cols, nil

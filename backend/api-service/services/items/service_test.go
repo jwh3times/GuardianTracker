@@ -69,3 +69,16 @@ func TestService_InvalidateCache(t *testing.T) {
 		t.Errorf("invalidate did not clear cache: repo calls = %d, want 2", repo.calls)
 	}
 }
+
+func TestService_BoundsCacheSize(t *testing.T) {
+	repo := &fakeRepo{cols: []manifest.PerkColumn{{Label: "Barrel"}}}
+	svc := NewService(repo)
+	for i := uint32(0); i < maxCacheEntries+50; i++ {
+		if _, err := svc.GetWeaponPerks(i); err != nil {
+			t.Fatalf("hash %d: %v", i, err)
+		}
+	}
+	if len(svc.cache) > maxCacheEntries {
+		t.Errorf("cache size = %d, want <= %d", len(svc.cache), maxCacheEntries)
+	}
+}
