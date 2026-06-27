@@ -43,7 +43,7 @@ export default defineConfig(({ mode }) => {
         // the number is flattered by whatever happens to be untested.
         include: ["src/**/*.{ts,tsx}"],
         exclude: [
-          "src/__tests__/**",
+          "src/test/**", // shared test infra (setup, MSW server/fixtures)
           "src/vite-env.d.ts",
           "src/main.tsx",
           "src/index.tsx",
