@@ -214,6 +214,35 @@ describe("Collections", () => {
     ).toBeInTheDocument();
   });
 
+  it("deep-links to a weapon: fetches and renders its perk columns", async () => {
+    server.use(
+      treeCollectionsHandler,
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json([])),
+      http.get(`${API}/api/items/:hash/perks`, () =>
+        HttpResponse.json({
+          itemHash: "200",
+          perkColumns: [
+            { role: "barrel", label: "Barrel", perks: ["Full Bore"] },
+            { role: "trait", label: "Trait 1", perks: ["Frenzy"] },
+          ],
+        }),
+      ),
+    );
+    renderPage(<Collections />, "/collections?item=200");
+
+    // Drawer opens for the deep-linked item, then its perks load and render.
+    expect(
+      await screen.findByRole("dialog", { name: "Imperial Decree" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("Possible perks / rolls"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Barrel")).toBeInTheDocument();
+    expect(screen.getByText("Full Bore")).toBeInTheDocument();
+    expect(screen.getByText("Trait 1")).toBeInTheDocument();
+    expect(screen.getByText("Frenzy")).toBeInTheDocument();
+  });
+
   it("shows the privacy error state on PRIVACY_RESTRICTION", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
