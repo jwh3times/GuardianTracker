@@ -7,41 +7,57 @@ import { PreferencesProvider } from "./contexts/PreferencesContext";
 import { FlagsProvider, useFlags } from "./contexts/FlagsContext";
 import { queryClient } from "./lib/api";
 import { AppShell } from "./components/AppShell";
-import { LockedFeature } from "./components/kit";
-import { LoadingSpinner } from "./components/ui/LoadingSpinner";
-import { ToastProvider } from "./components/ui/Toast";
+import { LockedFeature } from "./features/admin/components/kit/admin";
+import { LoadingSpinner } from "./components/LoadingSpinner";
+import { ToastProvider } from "./components/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() =>
-  import("./pages/Dashboard").then((m) => ({ default: m.Dashboard })),
+  import("./features/dashboard/pages/Dashboard").then((m) => ({
+    default: m.Dashboard,
+  })),
 );
 const Collections = lazy(() =>
-  import("./pages/Collections").then((m) => ({ default: m.Collections })),
+  import("./features/collections/pages/Collections").then((m) => ({
+    default: m.Collections,
+  })),
 );
 const WishList = lazy(() =>
-  import("./pages/WishList").then((m) => ({ default: m.WishList })),
+  import("./features/wishlist/pages/WishList").then((m) => ({
+    default: m.WishList,
+  })),
 );
 const ThisWeek = lazy(() =>
-  import("./pages/ThisWeek").then((m) => ({ default: m.ThisWeek })),
+  import("./features/weekly/pages/ThisWeek").then((m) => ({
+    default: m.ThisWeek,
+  })),
 );
 const Catalysts = lazy(() =>
-  import("./pages/Catalysts").then((m) => ({ default: m.Catalysts })),
+  import("./features/collections/pages/Catalysts").then((m) => ({
+    default: m.Catalysts,
+  })),
 );
 const Triumphs = lazy(() =>
-  import("./pages/Triumphs").then((m) => ({ default: m.Triumphs })),
+  import("./features/collections/pages/Triumphs").then((m) => ({
+    default: m.Triumphs,
+  })),
 );
 const Settings = lazy(() =>
-  import("./pages/Settings").then((m) => ({ default: m.Settings })),
+  import("./features/settings/pages/Settings").then((m) => ({
+    default: m.Settings,
+  })),
 );
 const Admin = lazy(() =>
-  import("./pages/Admin").then((m) => ({ default: m.Admin })),
+  import("./features/admin/pages/Admin").then((m) => ({ default: m.Admin })),
 );
 const Login = lazy(() =>
-  import("./pages/Login").then((m) => ({ default: m.Login })),
+  import("./features/auth/pages/Login").then((m) => ({ default: m.Login })),
 );
 const OAuthCallback = lazy(() =>
-  import("./pages/OAuthCallback").then((m) => ({ default: m.OAuthCallback })),
+  import("./features/auth/pages/OAuthCallback").then((m) => ({
+    default: m.OAuthCallback,
+  })),
 );
 
 const PageLoader: React.FC = () => (

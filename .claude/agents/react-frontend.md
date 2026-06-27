@@ -12,9 +12,15 @@ You are working inside the Guardian Tracker React frontend (`frontend/src/`). Kn
 React + TypeScript + Vite + **TanStack React Query** (REST, not GraphQL). All source in `frontend/src/`. There is no Apollo Client and no GraphQL layer.
 
 The UI uses the custom **Guardian Tracker design system**: oklch design tokens + `gt-*`
-CSS classes in `src/styles/{tokens,kit,app,admin}.css`, with a reusable component kit in
-`components/kit/`. Build new UI from the kit and `gt-*` classes — not Tailwind utilities.
-The design source prototype lives in `frontend/design/` (do not import from it at runtime).
+CSS classes in `src/styles/{tokens,kit,app,admin}.css`, with reusable design-system
+components in `components/` (`primitives.tsx`, `composite.tsx`, `Icon.tsx`). Build new UI
+from these components and `gt-*` classes — not Tailwind utilities. The design source
+prototype lives in `frontend/design/` (do not import from it at runtime).
+
+The frontend is organized **feature-first**: each feature owns its pages, feature-only
+components, lib helpers, and tests under `src/features/<feature>/`. Truly shared building
+blocks live in `components/` (design system), `lib/` (cross-cutting helpers), `contexts/`,
+`types/`, and `styles/`.
 
 Dev commands (run from `frontend/`):
 ```powershell
@@ -48,55 +54,59 @@ frontend/src/
     adapters.ts                ← API response types → design GTItem/WishlistEntry; relTime (guards zero-time)
     constants.ts               ← Label constants (RARITIES, glyphs) + BUNGIE_CDN base URL
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
-    utils.ts                   ← cn() Tailwind class merger (used only by legacy ui/ primitives)
+    utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
     queries.ts                 ← collectionsQuery() — shared React Query definition used by multiple pages
-  pages/
-    Login.tsx                  ← Bungie OAuth initiation
-    OAuthCallback.tsx          ← /auth/callback — exchanges code, stores tokens
-    Dashboard.tsx              ← Completion hero + "do this today"; real collection totals + cosmetics, real weekly
-    Collections.tsx            ← Category tree + filterable item grid/list + detail drawer; ?include=all for
-                                   collected items; search deep-link (?item=<hash>); add/remove wishlist
-    WishList.tsx               ← Wishlist management; real API with optimistic mutations; inline notes editor
-    ThisWeek.tsx               ← Weekly recommendations / Xûr / milestones (real API)
-    Catalysts.tsx              ← Catalysts & crafting patterns (real API; { items, fetchedAt } envelope)
-    Triumphs.tsx               ← Triumphs & seals (real API; { items, fetchedAt } envelope)
-    Settings.tsx               ← Account info + early-access tier opt-in (PUT /api/account/role) +
-                                   appearance preferences + sign out
-    Admin.tsx                  ← Admin console: user roster + role management, feature-flag config
-                                   (admin-gated route, reads FlagsContext for role)
-  components/
+  components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (navigates to
                                    /collections?item=<hash>); character switcher (reads CharacterContext);
                                    flag-gated nav + admin nav link
     Brand.tsx                  ← Logo mark
     ErrorBoundary.tsx          ← App-wide error boundary
-    kit/                       ← Design component kit (build new UI from here)
-      Icon.tsx                 ← single-path line-icon set
-      primitives.tsx           ← Badge, Button, ProgressBar, RadialProgress, StatTile, EmptyState,
+    Icon.tsx                   ← single-path line-icon set
+    primitives.tsx             ← Badge, Button, ProgressBar, RadialProgress, StatTile, EmptyState,
                                    Textarea, FilterChip, CountdownChip, DataFreshnessChip, Skeleton…
-      ItemCard.tsx
-      composite.tsx            ← Panel, CategoryTree, ItemDetailDrawer, SealCard, Dropdown…
-      admin/                   ← Admin-specific kit: RoleBadge, Switch, RoleSelect, TierSegment,
-                                   FlagCard, UserRow, LockedFeature
-      index.ts                 ← barrel export (import from "../components/kit")
-    ui/                        ← Legacy primitives still used by the shell: LoadingSpinner, Toast
-                                   (Button.tsx and Card.tsx have been deleted)
+    composite.tsx              ← Panel, CategoryTree, ItemDetailDrawer, SealCard, Dropdown…
+    LoadingSpinner.tsx         ← (was components/ui/) shown while data loads
+    Toast.tsx                  ← (was components/ui/) ToastProvider / useToast
+                                 Import these directly (e.g. "../../../components/primitives") — the
+                                 old components/kit/index.ts barrel has been removed.
+  features/                    ← Feature slices; each owns its pages, feature-only components, lib, tests
+    auth/pages/                ← Login.tsx (OAuth initiation), OAuthCallback.tsx (code exchange)
+    collections/
+      pages/                   ← Collections.tsx (tree + grid/list + detail drawer; ?include=all for
+                                   collected items; search deep-link ?item=<hash>; add/remove wishlist),
+                                   Catalysts.tsx, Triumphs.tsx ({ items, fetchedAt } envelopes)
+      components/kit/ItemCard.tsx   ← collection-only item card
+      lib/collectionTree.ts    ← API node → TreeNode adapters (collection-specific)
+    wishlist/pages/WishList.tsx     ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
+    weekly/pages/ThisWeek.tsx       ← weekly recommendations / Xûr / milestones (real API)
+    dashboard/pages/Dashboard.tsx   ← completion hero + "do this today"; real totals + cosmetics + weekly
+    settings/pages/Settings.tsx     ← account info, early-access tier opt-in, appearance prefs, sign out
+    admin/
+      pages/Admin.tsx          ← admin console: user roster + role mgmt, flag config (admin-gated route)
+      components/kit/           ← admin-only kit: admin.tsx (RoleBadge, Switch, RoleSelect, TierSegment,
+                                   FlagCard, UserRow, LockedFeature), AuditTable.tsx
+                               (Tests colocate per feature, e.g. features/dashboard/Dashboard.test.tsx,
+                                features/collections/lib/collectionTree.test.ts.)
   types/
     api.ts                     ← API response types (APIUser, AuthTokenResponse, WishListItem with
                                    icon/availableNow/availableFrom, APIUserCollections with fetchedAt,
                                    APICollectionSummary with collectedItems, APIRecordsEnvelope<T>)
     design.ts                  ← Design-system domain types (GTItem, Seal, Weekly with resetAt/fetchedAt/degraded,
                                    Milestone.missing now optional, WishlistEntry with icon)
-  __tests__/
-    utils.test.ts
+  test/                        ← Shared test infra (referenced by vite.config setupFiles)
     setup.ts                   ← Vitest setup file
+    testServer.ts              ← MSW server + shared fixtures
   vite-env.d.ts
 ```
 
-Deleted files (do not reference):
-- `frontend/src/components/ui/Button.tsx`
-- `frontend/src/components/ui/Card.tsx`
+Deleted files / paths (do not reference):
+- `frontend/src/pages/` — pages now live under `frontend/src/features/<feature>/pages/`
+- `frontend/src/components/kit/` and `frontend/src/components/ui/` — flattened into `components/`
+- `frontend/src/components/kit/index.ts` — barrel removed; import components directly
+- `frontend/src/__tests__/` — tests colocated; shared infra moved to `frontend/src/test/`
+- `frontend/src/components/ui/Button.tsx`, `frontend/src/components/ui/Card.tsx` (deleted earlier)
 - `frontend/src/types/index.ts`
 - `frontend/src/lib/apollo.ts`
 - `frontend/src/lib/mockData.ts`
@@ -208,17 +218,17 @@ authenticated pages go inside this group — do not add inline auth checks or re
 The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 
 - Design tokens (oklch colors, fluid type, spacing, radii) live in `src/styles/tokens.css`; component and shell styles in `kit.css` / `app.css`; admin console styles in `admin.css`. These are imported once in `index.tsx`.
-- Style with the `gt-*` class vocabulary (e.g. `gt-card`, `gt-panel`, `gt-item`, `gt-badge`). Reach for the kit components in `components/kit/` before writing markup by hand.
+- Style with the `gt-*` class vocabulary (e.g. `gt-card`, `gt-panel`, `gt-item`, `gt-badge`). Reach for the shared components in `components/` (`primitives`, `composite`, `Icon`) before writing markup by hand.
 - Rarity/difficulty theming: set `data-rarity` (`exotic|legendary|rare|uncommon|common`) or `data-diff` (`easy|moderate|challenging`) on a wrapper; children read the resolved `--rarity` / `--diff` custom properties.
 - Dynamic numeric values are passed as inline CSS custom properties (e.g. `style={{ "--val": pct }}`), cast as needed. Avoid other inline styles where a `gt-*` class exists.
-- Layout is fixed: sidebar nav, comfortable density, cyan "signal" accent. Tailwind is still installed for `components/ui` legacy primitives and `ErrorBoundary` only — do not add new Tailwind-styled UI.
+- Layout is fixed: sidebar nav, comfortable density, cyan "signal" accent. Tailwind is still installed for the `LoadingSpinner` / `Toast` primitives and `ErrorBoundary` only — do not add new Tailwind-styled UI.
 - User-adjustable prefs (card style, "for you" badges) come from `usePreferences()` — do not hardcode them.
 
 ## Testing
 
 - Framework: Vitest + React Testing Library
-- Setup file: `src/__tests__/setup.ts`
-- Tests live in `src/__tests__/`
+- Setup file: `src/test/setup.ts` (MSW server + fixtures in `src/test/testServer.ts`)
+- Tests are colocated with the code they cover: lib tests in `lib/`, component tests in `components/`, and each feature's page tests inside `features/<feature>/`
 - Run: `npm test` (from `frontend/`)
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests
 - Mock `AuthContext` when testing pages that call `useAuth()`
