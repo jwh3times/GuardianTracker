@@ -7,6 +7,13 @@ export type Difficulty = "easy" | "moderate" | "challenging";
 export type Priority = "urgent" | "high" | "medium" | "low";
 export type CatalystStatus = "missing" | "in-progress" | "complete";
 
+/** A weapon perk column for the item drawer (same shape as APIPerkColumn). */
+export interface PerkColumn {
+  role: string;
+  label: string;
+  perks: string[];
+}
+
 export interface GTItem {
   id: string;
   name: string;
