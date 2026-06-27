@@ -15,9 +15,9 @@ import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
 import { queryClient } from "./api";
 import App from "../App";
-import { Admin } from "../features/admin/pages/Admin";
+import { Admin } from "../features/admin/Admin";
 import { FlagsProvider, useFlag } from "../contexts/FlagsContext";
-import { LockedFeature } from "../features/admin/components/kit/admin";
+import { LockedFeature } from "../features/admin/AdminKit";
 import { AuthProvider } from "../contexts/AuthContext";
 import { ToastProvider } from "../components/Toast";
 

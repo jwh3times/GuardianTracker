@@ -21,7 +21,7 @@ import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
 import { ApiError } from "./api";
 import { errorState } from "./errorState";
-import { ItemCard } from "../features/collections/components/kit/ItemCard";
+import { ItemCard } from "../features/collections/ItemCard";
 import { ToastProvider, useToast } from "../components/Toast";
 import {
   PreferencesProvider,

@@ -1,8 +1,8 @@
 import React from "react";
-import { Icon } from "../../../../components/Icon";
-import { Badge, Button, ItemTile } from "../../../../components/primitives";
-import { DIFF_LABEL } from "../../../../lib/constants";
-import type { GTItem } from "../../../../types/design";
+import { Icon } from "../../components/Icon";
+import { Badge, Button, ItemTile } from "../../components/primitives";
+import { DIFF_LABEL } from "../../lib/constants";
+import type { GTItem } from "../../types/design";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 

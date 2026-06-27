@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../../../contexts/AuthContext";
-import { Brand } from "../../../components/Brand";
-import { Icon } from "../../../components/Icon";
-import { API_URL } from "../../../lib/api";
-import type { AuthTokenResponse } from "../../../types/api";
+import { useAuth } from "../../contexts/AuthContext";
+import { Brand } from "../../components/Brand";
+import { Icon } from "../../components/Icon";
+import { API_URL } from "../../lib/api";
+import type { AuthTokenResponse } from "../../types/api";
 
 export const OAuthCallback: React.FC = () => {
   const navigate = useNavigate();

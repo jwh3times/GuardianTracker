@@ -10,27 +10,23 @@ import {
   ProgressBar,
   RadialProgress,
   Skeleton,
-} from "../../../components/primitives";
-import { PageHead, Panel } from "../../../components/composite";
-import { Icon } from "../../../components/Icon";
-import { useAuth } from "../../../contexts/AuthContext";
-import { useCharacters } from "../../../contexts/CharacterContext";
-import { apiFetch } from "../../../lib/api";
-import { collectionsQuery } from "../../../lib/queries";
-import { toWishlistEntry } from "../../../lib/adapters";
-import type {
-  DailyAction,
-  SummaryCategory,
-  Weekly,
-} from "../../../types/design";
+} from "../../components/primitives";
+import { PageHead, Panel } from "../../components/composite";
+import { Icon } from "../../components/Icon";
+import { useAuth } from "../../contexts/AuthContext";
+import { useCharacters } from "../../contexts/CharacterContext";
+import { apiFetch } from "../../lib/api";
+import { collectionsQuery } from "../../lib/queries";
+import { toWishlistEntry } from "../../lib/adapters";
+import type { DailyAction, SummaryCategory, Weekly } from "../../types/design";
 import type {
   ProfileResponse,
   APICategoryCount,
   WishListItem,
-} from "../../../types/api";
+} from "../../types/api";
 
 function formatDuration(
-  d: import("../../../types/design").Duration | undefined,
+  d: import("../../types/design").Duration | undefined,
 ): string {
   if (!d) return "";
   if (d.d && d.d > 0) return `${d.d}d ${d.h ?? 0}h`;

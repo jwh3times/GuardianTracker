@@ -1,5 +1,5 @@
-import type { APICollectionNode } from "../../../types/api";
-import type { TreeNode } from "../../../types/design";
+import type { APICollectionNode } from "../../types/api";
+import type { TreeNode } from "../../types/design";
 
 /** Adapt an API collection node (and its descendants) to the design TreeNode shape. */
 export function apiNodeToTreeNode(n: APICollectionNode): TreeNode {
