@@ -56,7 +56,9 @@ frontend/src/
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
-    queries.ts                 ← collectionsQuery() — shared React Query definition used by multiple pages
+    queries.ts                 ← collectionsQuery() — shared React Query definition used by multiple pages;
+                                   itemPerksQuery(itemHash) — lazy (enabled only when a drawer is open),
+                                   staleTime: Infinity (manifest data doesn't change mid-session)
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (navigates to
                                    /collections?item=<hash>); character switcher (reads CharacterContext);
@@ -66,7 +68,9 @@ frontend/src/
     Icon.tsx                   ← single-path line-icon set
     primitives.tsx             ← Badge, Button, ProgressBar, RadialProgress, StatTile, EmptyState,
                                    Textarea, FilterChip, CountdownChip, DataFreshnessChip, Skeleton…
-    composite.tsx              ← Panel, CategoryTree, ItemDetailDrawer, SealCard, Dropdown…
+    composite.tsx              ← Panel, CategoryTree, ItemDetailDrawer (renders perk columns — label + chips —
+                                   with loading state; props: perkColumns?, perksLoading?; old flat item.perks
+                                   block removed), SealCard, Dropdown…
     LoadingSpinner.tsx         ← (was components/ui/) shown while data loads
     Toast.tsx                  ← (was components/ui/) ToastProvider / useToast
                                  Import these directly (e.g. "../../../components/primitives") — the
@@ -92,9 +96,11 @@ frontend/src/
   types/
     api.ts                     ← API response types (APIUser, AuthTokenResponse, WishListItem with
                                    icon/availableNow/availableFrom, APIUserCollections with fetchedAt,
-                                   APICollectionSummary with collectedItems, APIRecordsEnvelope<T>)
-    design.ts                  ← Design-system domain types (GTItem, Seal, Weekly with resetAt/fetchedAt/degraded,
-                                   Milestone.missing now optional, WishlistEntry with icon)
+                                   APICollectionSummary with collectedItems, APIRecordsEnvelope<T>,
+                                   APIPerkColumn, APIItemPerks)
+    design.ts                  ← Design-system domain types (GTItem — GTItem.perks field REMOVED, Seal,
+                                   Weekly with resetAt/fetchedAt/degraded, Milestone.missing now optional,
+                                   WishlistEntry with icon, PerkColumn)
   test/                        ← Shared test infra (referenced by vite.config setupFiles)
     setup.ts                   ← Vitest setup file
     testServer.ts              ← MSW server + shared fixtures
@@ -133,7 +139,9 @@ const { data } = useQuery({
 
 ## Shared query definitions
 
-`lib/queries.ts` exports `collectionsQuery(membershipType, membershipId, includeAll?)` — the canonical React Query definition for the collections endpoint. Dashboard, Settings, and Collections all use it so they share a single cache entry per (membership, variant) instead of firing separate requests.
+`lib/queries.ts` exports:
+- `collectionsQuery(membershipType, membershipId, includeAll?)` — canonical React Query definition for the collections endpoint; Dashboard, Settings, and Collections all use it so they share a single cache entry per (membership, variant) instead of firing separate requests.
+- `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
 
 ## Authentication
 
@@ -213,6 +221,10 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - `APIRecordsEnvelope<T>`: `{ items: T[]; fetchedAt: string }` — envelope for catalysts/crafting/seals
 - `Weekly`: `+ resetAt`, `+ fetchedAt`, `+ degraded?`
 - `Milestone.missing`: now `number | undefined` (omitted until computed by backend)
+- `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool
+- `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[] }` — response envelope for `/api/items/:itemHash/perks`
+- `GTItem.perks`: REMOVED — the old dead flat perks field no longer exists on the design type; use `PerkColumn[]` from `itemPerksQuery` instead
+- `PerkColumn` (design.ts): `{ role: string; label: string; perks: string[] }` — design-layer parallel to `APIPerkColumn`
 
 ## Styling
 

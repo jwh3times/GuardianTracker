@@ -27,6 +27,8 @@ backend/api-service/
   api/handlers/characters.go           ← HTTP handler for characters
   api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
                                            collections + characters + records caches via service methods
+  api/handlers/items.go                ← HTTP handler for weapon perks (GetPerks); returns manifest-derived
+                                           perk columns; no ownership check (public manifest data)
   api/handlers/wishlist.go             ← Wishlist CRUD; enriches with manifest defs, collectible source,
                                            and Xûr availability (via xurInventoryIface / weekly.Service)
   api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
@@ -98,6 +100,7 @@ backend/api-service/
 | GET | `/api/manifest/status` | None | Manifest version and readiness |
 | GET | `/api/weekly/recommendations` | JWT | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt |
 | GET | `/api/items/search?q=&limit=` | JWT | Manifest item search; 503 until index ready |
+| GET | `/api/items/:itemHash/perks` | JWT | Weapon possible perk pool from manifest; `{ itemHash, perkColumns: [{role,label,perks}] }`; 200 + empty array for non-weapon/unknown hash; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
 | GET | `/api/catalysts/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon |
 | GET | `/api/crafting/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` crafting pattern progress |
 | GET | `/api/seals/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` triumph/seal completion |
@@ -170,6 +173,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 |---|---|
 | `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by itemHash (for wishlist source strings) |
 | `GetWeaponTypesByName()` | Lowercased weapon name → weapon type display name (table scan; callers cache) |
+| `GetWeaponPerks(itemHash)` | Socket-category → plug-set → plug-item traversal yielding ordered perk columns (Intrinsic/Barrel/Magazine/Trait N/Origin); weapon-only (itemType 3 + weapon socket categories); filters kill-tracker/empty/retired plugs, dedupes by name; also exposed via `services/items/service.go` cached wrapper |
 
 ## Records service
 
