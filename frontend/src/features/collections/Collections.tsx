@@ -22,7 +22,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { apiFetch } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
-import { collectionsQuery } from "../../lib/queries";
+import { collectionsQuery, itemPerksQuery } from "../../lib/queries";
 import { toGTItem } from "../../lib/adapters";
 import {
   apiNodeToTreeNode,
@@ -92,6 +92,8 @@ export function Collections() {
     error,
     refetch,
   } = useQuery(collectionsQuery(membershipType, membershipId, true));
+
+  const perksQuery = useQuery(itemPerksQuery(detail?.id));
 
   const queryClient = useQueryClient();
 
@@ -515,6 +517,8 @@ export function Collections() {
       {detail && (
         <ItemDetailDrawer
           item={detail}
+          perkColumns={perksQuery.data?.perkColumns}
+          perksLoading={perksQuery.isLoading}
           onClose={() => setDetail(null)}
           onWish={onWish}
           wished={wished.has(detail.id)}

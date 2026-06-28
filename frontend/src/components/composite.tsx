@@ -14,6 +14,7 @@ import { DIFF_LABEL } from "../lib/constants";
 import type {
   GTItem,
   Milestone,
+  PerkColumn,
   RecommendedAction,
   Seal,
   TreeNode,
@@ -423,11 +424,15 @@ export function ItemDetailDrawer({
   onClose,
   onWish,
   wished,
+  perkColumns,
+  perksLoading,
 }: {
   item: GTItem | null;
   onClose: () => void;
   onWish: (item: GTItem) => void;
   wished: boolean;
+  perkColumns?: PerkColumn[];
+  perksLoading?: boolean;
 }) {
   const [showWhy, setShowWhy] = useState(false);
   useEffect(() => {
@@ -521,16 +526,27 @@ export function ItemDetailDrawer({
           )}
         </div>
 
-        {item.perks && item.perks.length > 0 && (
+        {(perksLoading || (perkColumns && perkColumns.length > 0)) && (
           <div className="gt-drawer-block">
             <div className="gt-section-title">Possible perks / rolls</div>
-            <div className="gt-perks">
-              {item.perks.map((p) => (
-                <span key={p} className="gt-perk">
-                  {p}
-                </span>
-              ))}
-            </div>
+            {perksLoading ? (
+              <div className="gt-perks-loading">Loading perks…</div>
+            ) : (
+              <div className="gt-perk-cols">
+                {perkColumns!.map((col) => (
+                  <div key={col.label} className="gt-perk-col">
+                    <div className="gt-perk-col-label">{col.label}</div>
+                    <div className="gt-perks">
+                      {col.perks.map((p) => (
+                        <span key={p} className="gt-perk">
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -554,7 +570,7 @@ export function ItemDetailDrawer({
               )
             }
           >
-            Where to farm
+            View on light.gg ↗
           </Button>
         </div>
       </aside>

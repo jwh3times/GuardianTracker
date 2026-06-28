@@ -47,6 +47,19 @@ export interface APIDestinyItem {
   isExotic: boolean;
 }
 
+/** One perk column in a weapon's possible-roll pool (mirrors manifest.PerkColumn). */
+export interface APIPerkColumn {
+  role: string; // intrinsic | barrel | magazine | trait | origin
+  label: string; // "Intrinsic", "Barrel", "Trait 1", …
+  perks: string[];
+}
+
+/** GET /api/items/:itemHash/perks */
+export interface APIItemPerks {
+  itemHash: string;
+  perkColumns: APIPerkColumn[];
+}
+
 /** One presentation node in the collections tree (mirrors CollectionNode). */
 export interface APICollectionNode {
   hash: string;

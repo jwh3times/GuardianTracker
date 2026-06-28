@@ -75,6 +75,19 @@ Each login creates a `refresh_sessions` row. `POST /api/auth/refresh` compare-an
 - Test: after an admin changes another user's role via `PUT /api/admin/users/:id/role`, confirm the target user's existing access token is rejected within the RevocationChecker cache window (token_version bumped)
 - Test: `GET /api/admin/audit` — call as a non-admin user — must return 403
 
+## Items endpoint — weapon perk pool
+
+### `GET /api/items/:itemHash/perks`
+
+JWT-gated. NOT membership-scoped — returns public manifest-derived data only (no user data, no owned-instance data). The relevant checks are auth enforcement and input validation, not data isolation.
+
+- Test: call without a JWT — must return 401
+- Test: pass a non-numeric `:itemHash` (e.g. `"abc"`) — must return 400, not 500
+- Test: pass a valid numeric hash for a non-weapon item — must return 200 with an empty `perkColumns` array, not an error
+- Test: pass a valid numeric hash while the manifest is warming — must return 503 (`MANIFEST_NOT_READY`)
+- Test: pass an extremely large integer as `:itemHash` — must not panic or overflow; expect 200 with empty array or 400 if the route rejects it
+- Note: no ownership boundary to probe; any authenticated user may query any itemHash
+
 ## Collections endpoint — data isolation
 
 ### `GET /api/collections/:membershipType/:membershipId`

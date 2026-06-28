@@ -262,6 +262,9 @@ export const defaultHandlers = [
   ),
   http.get(`${API}/api/seals/:type/:id`, () => HttpResponse.json(sampleSeals)),
   http.get(`${API}/api/items/search`, () => HttpResponse.json([])),
+  http.get(`${API}/api/items/:hash/perks`, ({ params }) =>
+    HttpResponse.json({ itemHash: String(params.hash), perkColumns: [] }),
+  ),
 ];
 
 export const server = setupServer(...defaultHandlers);

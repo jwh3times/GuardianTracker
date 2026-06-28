@@ -20,6 +20,7 @@ import (
 	"guardian-tracker/api-service/services/characters"
 	"guardian-tracker/api-service/services/collections"
 	"guardian-tracker/api-service/services/efficiency"
+	"guardian-tracker/api-service/services/items"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/records"
 	"guardian-tracker/api-service/services/search"
@@ -144,6 +145,7 @@ func main() {
 	// manifest file exists (no restart needed after a cold-start download) and
 	// reconnects across the hourly manifest swap via the hooks below.
 	manifestProvider := manifestrepo.NewProvider(cfg.ManifestDBPath)
+	itemsService := items.NewService(manifestProvider)
 
 	// Search service — builds its index asynchronously after the manifest is available
 	searchService := search.NewService(manifestService, cfg.ManifestDBPath)
@@ -197,6 +199,9 @@ func main() {
 			go efficiencyEngine.BuildIndex()
 		},
 	)
+	manifestService.RegisterSwapHooks(nil, func(version string) {
+		itemsService.InvalidateCache()
+	})
 
 	go func() {
 		log.Println("Checking manifest status...")
@@ -235,6 +240,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(manifestService)
 	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
 	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore, weeklyService)
+	itemsHandler := handlers.NewItemsHandler(itemsService)
 
 	// Roles, feature flags & admin console. In degraded mode pass true-nil stores
 	// so the handlers' nil-guards engage (vs. a typed-nil interface).
@@ -316,6 +322,7 @@ func main() {
 
 		// Item search (in-memory index from manifest)
 		api.GET("/items/search", jwtHelper.Middleware(revoker), searchHandler.Search)
+		api.GET("/items/:itemHash/perks", jwtHelper.Middleware(revoker), itemsHandler.GetPerks)
 
 		// Catalysts, crafting patterns, and seals
 		api.GET("/catalysts/:membershipType/:membershipId", jwtHelper.Middleware(revoker), recordsHandler.GetCatalysts)
