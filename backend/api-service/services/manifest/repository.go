@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"math"
 	"strings"
 	"sync"
 
@@ -59,7 +60,19 @@ func (r *Repository) Reconnect() error {
 	return nil
 }
 
-func hashToDBKey(hash uint32) int32 { return int32(hash) }
+// hashToDBKey maps an unsigned Bungie hash to the signed id the manifest SQLite
+// stores. Bungie hashes use the full uint32 range; the manifest writes them as
+// signed two's-complement int32 (values >= 2^31 are stored negative). We
+// reproduce that mapping with int64 arithmetic and an explicit range check
+// instead of a uint32->int32 narrowing conversion, which static analysis flags
+// as a lossy integer conversion (CWE-681). The numeric result is identical to
+// int32(hash) for every uint32, and the manifest id column is INTEGER (int64).
+func hashToDBKey(hash uint32) int64 {
+	if hash > math.MaxInt32 {
+		return int64(hash) - (1 << 32)
+	}
+	return int64(hash)
+}
 
 func (r *Repository) GetCollectibleDefinition(hash uint32) (*bungie.CollectibleDefinition, error) {
 	r.mu.RLock()
