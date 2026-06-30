@@ -52,14 +52,14 @@ other local projects without colliding on the canonical ports (`5432`/`5050`/`80
 Only the host side moves — container ports never change. Each is overridable via the
 env var shown in the Compose mappings below.
 
-| Service | Internal (container/process) | Host / exposed | Defined in |
-| --- | --- | --- | --- |
-| Frontend (dev — Vite) | `5273` | `5273` | `frontend/vite.config.ts`, `frontend/Dockerfile.dev` |
-| Frontend (prod — nginx) | `8080` | `5273` (mapped) | `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml` |
-| API Service (Go/Gin) | `8081` | `8081` | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
-| Postgres | `5432` | `5532` | `docker-compose.yml`, `.env.example` |
-| pgAdmin | `80` | `5150` | `docker-compose.yml`, `.env.example` |
-| Redis | `6379` | `6379` | `docker-compose.yml`, `.env.example` |
+| Service                 | Internal (container/process) | Host / exposed  | Defined in                                                                                     |
+| ----------------------- | ---------------------------- | --------------- | ---------------------------------------------------------------------------------------------- |
+| Frontend (dev — Vite)   | `5273`                       | `5273`          | `frontend/vite.config.ts`, `frontend/Dockerfile.dev`                                           |
+| Frontend (prod — nginx) | `8080`                       | `5273` (mapped) | `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml`                             |
+| API Service (Go/Gin)    | `8081`                       | `8081`          | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
+| Postgres                | `5432`                       | `5532`          | `docker-compose.yml`, `.env.example`                                                           |
+| pgAdmin                 | `80`                         | `5150`          | `docker-compose.yml`, `.env.example`                                                           |
+| Redis                   | `6379`                       | `6379`          | `docker-compose.yml`, `.env.example`                                                           |
 
 **Docker Compose mappings** (`HOST:CONTAINER`)
 
@@ -74,13 +74,13 @@ test-postgres   ${TEST_POSTGRES_PORT:-5533} -> 5432   # "test" profile only; not
 
 **Kubernetes (Minikube — `k8s/`)**
 
-| Object | Port | Notes |
-| --- | --- | --- |
-| api-service Deployment | `containerPort 8081` | liveness `/health`, readiness `/ready` on 8081 |
-| api-service Service | `8081 → 8081` | `ClusterIP` |
-| frontend Deployment | `containerPort 8080` | `NGINX_PORT=8080` env |
-| frontend Service | `80 → 8080` | `NodePort` |
-| `startup.ps1` port-forward | `localhost:5273 → frontend:80` | dev access (matches the docker frontend port) |
+| Object                     | Port                           | Notes                                          |
+| -------------------------- | ------------------------------ | ---------------------------------------------- |
+| api-service Deployment     | `containerPort 8081`           | liveness `/health`, readiness `/ready` on 8081 |
+| api-service Service        | `8081 → 8081`                  | `ClusterIP`                                    |
+| frontend Deployment        | `containerPort 8080`           | `NGINX_PORT=8080` env                          |
+| frontend Service           | `80 → 8080`                    | `NodePort`                                     |
+| `startup.ps1` port-forward | `localhost:5273 → frontend:80` | dev access (matches the docker frontend port)  |
 
 #### Dev / cross-service wiring
 
@@ -139,13 +139,13 @@ cp frontend/.env.example frontend/.env.local
 
 Required secrets:
 
-| Variable | Description |
-| --- | --- |
-| `BUNGIE_API_KEY` | Your Bungie API key |
-| `BUNGIE_CLIENT_ID` | OAuth client ID |
-| `BUNGIE_CLIENT_SECRET` | OAuth client secret |
-| `JWT_SECRET` | 32+ char random string (`openssl rand -base64 32`) |
-| `DATABASE_URL` | Postgres connection string (compose sets it automatically) |
+| Variable               | Description                                                                |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `BUNGIE_API_KEY`       | Your Bungie API key                                                        |
+| `BUNGIE_CLIENT_ID`     | OAuth client ID                                                            |
+| `BUNGIE_CLIENT_SECRET` | OAuth client secret                                                        |
+| `JWT_SECRET`           | 32+ char random string (`openssl rand -base64 32`)                         |
+| `DATABASE_URL`         | Postgres connection string (compose sets it automatically)                 |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`) |
 
 ### 3. Start Services
