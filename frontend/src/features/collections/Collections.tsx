@@ -51,6 +51,7 @@ const DIFF_RANK: Record<Difficulty, number> = {
   challenging: 0,
   moderate: 1,
   easy: 2,
+  unrated: 3,
 };
 
 export function Collections() {

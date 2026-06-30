@@ -3,7 +3,7 @@
 // adapted into `GTItem` before being handed to the components.
 
 export type Rarity = "exotic" | "legendary" | "rare" | "uncommon" | "common";
-export type Difficulty = "easy" | "moderate" | "challenging";
+export type Difficulty = "easy" | "moderate" | "challenging" | "unrated";
 export type Priority = "urgent" | "high" | "medium" | "low";
 export type CatalystStatus = "missing" | "in-progress" | "complete";
 
@@ -21,6 +21,10 @@ export interface GTItem {
   slot: string;
   rarity: Rarity;
   diff: Difficulty;
+  /** Random-roll item that can't be pulled from Collections — must be farmed. */
+  farmOnly?: boolean;
+  /** Non-collectible item opened read-only via deep-link (no collection/wishlist state). */
+  viewOnly?: boolean;
   source: string;
   sourceDetail: string;
   obtainable: boolean;

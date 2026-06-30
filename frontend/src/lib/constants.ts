@@ -10,7 +10,12 @@ export const RARITIES: Rarity[] = [
   "uncommon",
   "common",
 ];
-export const DIFFS: Difficulty[] = ["easy", "moderate", "challenging"];
+export const DIFFS: Difficulty[] = [
+  "easy",
+  "moderate",
+  "challenging",
+  "unrated",
+];
 
 export const RARITY_LABEL: Record<Rarity, string> = {
   exotic: "Exotic",
@@ -23,6 +28,7 @@ export const DIFF_LABEL: Record<Difficulty, string> = {
   easy: "Easy",
   moderate: "Moderate",
   challenging: "Challenging",
+  unrated: "Unrated",
 };
 export const PRIORITY_LABEL: Record<Priority, string> = {
   urgent: "Urgent",

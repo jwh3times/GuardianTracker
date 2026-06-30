@@ -59,8 +59,37 @@ describe("toGTItem", () => {
       sources: [],
     });
     expect(item.rarity).toBe("legendary");
-    expect(item.diff).toBe("moderate");
+    expect(item.diff).toBe("unrated");
     expect(item.source).toBe("Unknown source");
+  });
+});
+
+describe("unrated difficulty and farmOnly field", () => {
+  function mkItem(over: Partial<APIDestinyItem>): APIDestinyItem {
+    return {
+      itemHash: "1",
+      name: "X",
+      description: "",
+      icon: "",
+      itemType: "Hand Cannon",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "Easy",
+      farmOnly: false,
+      sources: [],
+      isExotic: false,
+      ...over,
+    };
+  }
+
+  it("maps Unrated difficulty to unrated and copies farmOnly", () => {
+    const item = toGTItem(mkItem({ difficulty: "Unrated", farmOnly: true }));
+    expect(item.diff).toBe("unrated");
+    expect(item.farmOnly).toBe(true);
+  });
+
+  it("defaults unknown difficulty to unrated", () => {
+    expect(toGTItem(mkItem({ difficulty: "???" })).diff).toBe("unrated");
   });
 });
 

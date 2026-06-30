@@ -43,6 +43,7 @@ export interface APIDestinyItem {
   tierType: number;
   rarity: string;
   difficulty: string;
+  farmOnly?: boolean;
   sources: string[];
   isExotic: boolean;
 }

@@ -19,6 +19,7 @@ const DIFF_MAP: Record<string, Difficulty> = {
   Easy: "easy",
   Moderate: "moderate",
   Challenging: "challenging",
+  Unrated: "unrated",
 };
 const PRIORITY_MAP: Record<string, Priority> = {
   URGENT: "urgent",
@@ -49,7 +50,8 @@ export function toGTItem(d: APIDestinyItem): GTItem {
     type: d.itemType,
     slot: "",
     rarity: RARITY_MAP[d.rarity] ?? "legendary",
-    diff: DIFF_MAP[d.difficulty] ?? "moderate",
+    diff: DIFF_MAP[d.difficulty] ?? "unrated",
+    farmOnly: d.farmOnly ?? false,
     source: sources[0] ?? "Unknown source",
     sourceDetail: sources.slice(1).join(" · ") || sources[0] || "",
     obtainable: false,
