@@ -497,6 +497,7 @@ export function ItemDetailDrawer({
         <div className="gt-drawer-block">
           <div className="gt-section-title">
             Acquisition <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
+            {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
             <button className="gt-why" onClick={() => setShowWhy((v) => !v)}>
               why?{" "}
               <Icon
@@ -517,13 +518,24 @@ export function ItemDetailDrawer({
               <div className="gt-item-type">{item.sourceDetail}</div>
             </div>
           </div>
-          {showWhy && (
+          {item.farmOnly && (
             <p className="gt-why-text">
-              Difficulty is <strong>estimated</strong> from this item's source —
-              drop sources like raids and Grandmasters score higher than vendor
-              or world drops. Treat it as a guide, not a guarantee.
+              Random perks — earn a fresh drop from its source; this item can't
+              be pulled from Collections.
             </p>
           )}
+          {showWhy &&
+            (item.diff === "unrated" ? (
+              <p className="gt-why-text">
+                We couldn't determine difficulty from this item's source.
+              </p>
+            ) : (
+              <p className="gt-why-text">
+                Difficulty is <strong>estimated</strong> from this item's source
+                — drop sources like raids and Grandmasters score higher than
+                vendor or world drops. Treat it as a guide, not a guarantee.
+              </p>
+            ))}
         </div>
 
         {(perksLoading || (perkColumns && perkColumns.length > 0)) && (
