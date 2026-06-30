@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -108,6 +109,39 @@ func (r *Repository) GetInventoryItemDefinition(hash uint32) (*bungie.InventoryI
 		return nil, fmt.Errorf("failed to parse item JSON: %w", err)
 	}
 	return &def, nil
+}
+
+// ItemView is a minimal, manifest-only item projection for the item-by-hash endpoint
+// (deep-linked non-collectible items). No user/collection state.
+type ItemView struct {
+	ItemHash    string `json:"itemHash"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon"`
+	ItemType    string `json:"itemType"`
+	TierType    int    `json:"tierType"`
+	Rarity      string `json:"rarity"`
+	Description string `json:"description"`
+}
+
+// GetItemView returns a minimal item projection, or (nil, nil) when the hash is not in
+// the manifest.
+func (r *Repository) GetItemView(itemHash uint32) (*ItemView, error) {
+	def, err := r.GetInventoryItemDefinition(itemHash)
+	if err != nil {
+		return nil, err
+	}
+	if def == nil {
+		return nil, nil
+	}
+	return &ItemView{
+		ItemHash:    strconv.FormatUint(uint64(itemHash), 10),
+		Name:        def.DisplayProperties.Name,
+		Icon:        def.DisplayProperties.Icon,
+		ItemType:    bungie.ItemTypeName(def.ItemType, def.ItemSubType),
+		TierType:    def.Inventory.TierType,
+		Rarity:      bungie.GetTierName(def.Inventory.TierType),
+		Description: def.DisplayProperties.Description,
+	}, nil
 }
 
 func (r *Repository) GetAllCollectibles() ([]bungie.CollectibleDefinition, error) {

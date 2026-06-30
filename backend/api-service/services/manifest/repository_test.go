@@ -256,6 +256,29 @@ func TestCollectibleCategory(t *testing.T) {
 	}
 }
 
+func TestGetItemView(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+
+	view, err := repo.GetItemView(100)
+	if err != nil {
+		t.Fatalf("GetItemView: %v", err)
+	}
+	if view == nil || view.Name != "Fatebringer" {
+		t.Fatalf("view = %+v, want Name=Fatebringer", view)
+	}
+	if view.ItemHash != "100" {
+		t.Errorf("ItemHash = %q, want \"100\"", view.ItemHash)
+	}
+
+	missing, err := repo.GetItemView(999999)
+	if err != nil {
+		t.Fatalf("GetItemView(unknown): %v", err)
+	}
+	if missing != nil {
+		t.Errorf("unknown hash should return nil, got %+v", missing)
+	}
+}
+
 func TestProvider_LazyOpenAndSwap(t *testing.T) {
 	requireSQLite(t)
 	dir := t.TempDir()
