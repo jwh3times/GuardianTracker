@@ -9,18 +9,19 @@ import (
 	"guardian-tracker/api-service/services/manifest"
 )
 
-// weaponPerksProvider returns a weapon's possible-perk columns. Satisfied by *items.Service.
-type weaponPerksProvider interface {
+// itemProvider returns manifest-derived item detail. Satisfied by *items.Service.
+type itemProvider interface {
 	GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
+	GetItem(itemHash uint32) (*manifest.ItemView, error)
 }
 
-// ItemsHandler serves manifest-derived item detail (perk pools).
+// ItemsHandler serves manifest-derived item detail (perk pools, item views).
 type ItemsHandler struct {
-	perks weaponPerksProvider
+	items itemProvider
 }
 
-func NewItemsHandler(p weaponPerksProvider) *ItemsHandler {
-	return &ItemsHandler{perks: p}
+func NewItemsHandler(p itemProvider) *ItemsHandler {
+	return &ItemsHandler{items: p}
 }
 
 // GetPerks handles GET /api/items/:itemHash/perks.
@@ -33,7 +34,7 @@ func (h *ItemsHandler) GetPerks(c *gin.Context) {
 		return
 	}
 
-	cols, err := h.perks.GetWeaponPerks(uint32(hash64))
+	cols, err := h.items.GetWeaponPerks(uint32(hash64))
 	if err != nil {
 		handleBungieError(c, err) // maps manifest.ErrNotReady → 503 MANIFEST_NOT_READY
 		return
@@ -46,4 +47,24 @@ func (h *ItemsHandler) GetPerks(c *gin.Context) {
 		"itemHash":    c.Param("itemHash"),
 		"perkColumns": cols,
 	})
+}
+
+// GetItem handles GET /api/items/:itemHash — a minimal manifest item view for
+// deep-linked non-collectible items. Requires jwtHelper.Middleware() on the route.
+func (h *ItemsHandler) GetItem(c *gin.Context) {
+	hash64, err := strconv.ParseUint(c.Param("itemHash"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid item hash"})
+		return
+	}
+	view, err := h.items.GetItem(uint32(hash64))
+	if err != nil {
+		handleBungieError(c, err) // manifest.ErrNotReady → 503
+		return
+	}
+	if view == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
+		return
+	}
+	c.JSON(http.StatusOK, view)
 }
