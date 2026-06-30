@@ -1,24 +1,10 @@
 # Dependabot configuration for Guardian Tracker.
 #
-# Replaces the two Claude Code scheduled routines that previously handled
-# dependency updates for this repo:
-#   - "GuardianTracker Package Updater (minor/patch)"  → opened PRs for minor/patch bumps
-#   - "GuardianTracker Major Version Checker"          → surfaced major bumps for human review
-#
-# Behaviour mapping:
-#   - Minor + patch updates are grouped into one PR per ecosystem (low-noise, the
-#     routine bundled these too). CI (.github/workflows/ci-cd.yml) runs on every PR,
-#     replacing the routine's local build/test verification step.
-#   - Major updates arrive as individual PRs so each can be reviewed for breaking
-#     changes before merging — the equivalent of the old "major version checker"
-#     issue, but directly actionable. To suppress major PRs entirely and only ever
-#     get minor/patch, add an `ignore` block with
-#     `update-types: ["version-update:semver-major"]` to that ecosystem.
-#
-# Covers the three ecosystems the routines did (Go modules, npm, GitHub Actions),
-# plus Docker base images and Docker Compose images — new coverage the routines
-# never had. Note: `docker` (Dockerfiles) and `docker-compose` (docker-compose.yml)
-# are distinct ecosystems and each needs its own block.
+# Minor/patch updates are grouped into a single PR per ecosystem to reduce noise;
+# MAJOR bumps arrive individually — EXCEPT for peer-locked families where a lone
+# bump would leave an unsatisfiable peer range. Those families travel together as
+# one major PR.
+# Docs: https://docs.github.com/code-security/dependabot
 version: 2
 updates:
   # ── Go modules (backend/api-service — Go 1.25.x) ──
@@ -54,6 +40,61 @@ updates:
       prefix: "chore"
     open-pull-requests-limit: 10
     groups:
+      # --- Peer-locked families — majors only. All minor/patch bumps land in the
+      #     catch-all group at the bottom. ---
+
+      # react + react-dom ship at identical versions and must match at runtime;
+      # the @types/* packages track the same major.
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+        update-types:
+          - "major"
+
+      # All @radix-ui/* primitives share a peer-requirement on the same React major
+      # and are developed in the same monorepo — major bumps typically ship together.
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+        update-types:
+          - "major"
+
+      # @vitejs/plugin-react requires a matching Vite major; vitest and @vitest/*
+      # track the Vite majors they support.
+      vite-ecosystem:
+        patterns:
+          - "vite"
+          - "vitest"
+          - "@vitejs/plugin-react"
+          - "@vitest/*"
+        update-types:
+          - "major"
+
+      # @testing-library/react and user-event both peer-require @testing-library/dom.
+      testing-library:
+        patterns:
+          - "@testing-library/*"
+        update-types:
+          - "major"
+
+      # @eslint/js is lockstep-versioned with eslint; plugins peer-cap on the eslint
+      # major; typescript-eslint peer-bounds both eslint and typescript.
+      lint-and-typescript:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "eslint-plugin-*"
+          - "eslint-config-*"
+          - "typescript-eslint"
+          - "globals"
+          - "typescript"
+        update-types:
+          - "major"
+
+      # One PR for all minor + patch bumps; ungrouped majors open individually.
       npm-minor-and-patch:
         patterns:
           - "*"
