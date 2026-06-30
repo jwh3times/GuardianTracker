@@ -1,5 +1,6 @@
 // Package items serves manifest-derived, non-user-specific item detail —
-// currently weapon perk pools — with an in-memory cache cleared on manifest swap.
+// currently weapon perk pools and item views — with an in-memory cache cleared
+// on manifest swap.
 package items
 
 import (
@@ -8,25 +9,31 @@ import (
 	"guardian-tracker/api-service/services/manifest"
 )
 
-// maxCacheEntries bounds the perk cache so a flood of distinct (e.g. invalid)
+// maxCacheEntries bounds each cache so a flood of distinct (e.g. invalid)
 // item hashes cannot grow it without limit between manifest swaps.
 const maxCacheEntries = 4096
 
-type weaponPerksRepo interface {
+type itemRepo interface {
 	GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
+	GetItemView(itemHash uint32) (*manifest.ItemView, error)
 }
 
-// Service caches weapon perk columns keyed by item hash. Perk pools are static
-// for a given manifest version, so entries live until the next manifest swap
-// calls InvalidateCache.
+// Service caches weapon perk columns and item views keyed by item hash. Data
+// is static for a given manifest version, so entries live until the next
+// manifest swap calls InvalidateCache.
 type Service struct {
-	repo  weaponPerksRepo
-	mu    sync.RWMutex
-	cache map[uint32][]manifest.PerkColumn
+	repo      itemRepo
+	mu        sync.RWMutex
+	cache     map[uint32][]manifest.PerkColumn
+	viewCache map[uint32]*manifest.ItemView
 }
 
-func NewService(repo weaponPerksRepo) *Service {
-	return &Service{repo: repo, cache: map[uint32][]manifest.PerkColumn{}}
+func NewService(repo itemRepo) *Service {
+	return &Service{
+		repo:      repo,
+		cache:     map[uint32][]manifest.PerkColumn{},
+		viewCache: map[uint32]*manifest.ItemView{},
+	}
 }
 
 // GetWeaponPerks returns cached columns or computes and caches them. Errors
@@ -60,9 +67,40 @@ func (s *Service) GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
 	return cols, nil
 }
 
-// InvalidateCache drops every cached entry. Wired to the manifest swap hook.
+// GetItem returns a cached minimal item view or computes and caches it. (nil,nil) for
+// an unknown hash (not cached). Errors (incl. manifest-not-ready) are never cached.
+func (s *Service) GetItem(itemHash uint32) (*manifest.ItemView, error) {
+	s.mu.RLock()
+	v, ok := s.viewCache[itemHash]
+	s.mu.RUnlock()
+	if ok {
+		return v, nil
+	}
+
+	v, err := s.repo.GetItemView(itemHash)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, nil
+	}
+
+	s.mu.Lock()
+	if _, exists := s.viewCache[itemHash]; !exists && len(s.viewCache) >= maxCacheEntries {
+		for k := range s.viewCache {
+			delete(s.viewCache, k)
+			break
+		}
+	}
+	s.viewCache[itemHash] = v
+	s.mu.Unlock()
+	return v, nil
+}
+
+// InvalidateCache drops every cached entry in both caches. Wired to the manifest swap hook.
 func (s *Service) InvalidateCache() {
 	s.mu.Lock()
 	s.cache = map[uint32][]manifest.PerkColumn{}
+	s.viewCache = map[uint32]*manifest.ItemView{}
 	s.mu.Unlock()
 }
