@@ -37,10 +37,21 @@ and this project aims to adhere to [Semantic Versioning](https://semver.org/spec
 - **User preferences** — card style and personalization options.
 - **Infrastructure** — Docker Compose stack, Kubernetes (Minikube) manifests, and a
   GitHub Actions CI pipeline (format, test, Docker build).
+- **Per-raid-milestone missing counts** — raid and dungeon milestones in This Week now
+  show how many of the player's missing items drop there, via
+  `efficiency.MissingForMilestone`. Non-raid/dungeon milestones still omit the count (no
+  manifest reward→collectible signal).
+- **Read-only item view for deep-linked hashes** — a `GET /api/items/:itemHash`
+  (manifest-only) endpoint and a matching `itemByHashQuery` + `toGTItemView` on the
+  frontend resolve a deep-link miss (`?item=<hash>` with no collectible entry) into a
+  read-only item drawer instead of dead-ending.
 
 ### Changed
 
-- _Nothing yet._
+- **Difficulty ratings** — `ClassifyDifficulty` is now a positive-match table; unmatched
+  sources return `"Unrated"` instead of a misleading "Easy". Items whose source string
+  indicates "cannot be reacquired" are additionally flagged as `farmOnly` and shown with
+  a "Farm only" chip in the item card and drawer.
 
 ### Deprecated
 

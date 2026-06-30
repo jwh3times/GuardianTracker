@@ -136,4 +136,4 @@ npm test
 - Redis is in docker-compose but not actively used (JWT revocation and token persistence are Postgres-backed)
 - Search index is in-memory — lost on restart; rebuilds automatically (~30s after manifest is ready)
 - Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
-- Milestone `missing` counts are not yet computed — field is omitted; the UI hides the badge rather than implying completion
+- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones still omit the field (no manifest reward→collectible signal)

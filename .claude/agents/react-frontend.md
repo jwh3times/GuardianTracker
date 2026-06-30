@@ -51,14 +51,16 @@ frontend/src/
   lib/
     api.ts                     ← apiFetch helper + ApiError (status/code/retryAfter) + QueryClient;
                                    API_URL exported; all REST calls go through apiFetch
-    adapters.ts                ← API response types → design GTItem/WishlistEntry; relTime (guards zero-time)
+    adapters.ts                ← API response types → design GTItem/WishlistEntry; relTime (guards zero-time);
+                                   toGTItemView(APIItemView) — maps a manifest-only item view to a view-only GTItem
     constants.ts               ← Label constants (RARITIES, glyphs) + BUNGIE_CDN base URL
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
     queries.ts                 ← collectionsQuery() — shared React Query definition used by multiple pages;
-                                   itemPerksQuery(itemHash) — lazy (enabled only when a drawer is open),
-                                   staleTime: Infinity (manifest data doesn't change mid-session)
+                                   itemPerksQuery(itemHash) — lazy perk-pool fetch (staleTime: Infinity);
+                                   itemByHashQuery(itemHash) — minimal item view for deep-link miss resolution
+                                   (staleTime: Infinity, retry: false)
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (navigates to
                                    /collections?item=<hash>); character switcher (reads CharacterContext);
@@ -97,7 +99,7 @@ frontend/src/
     api.ts                     ← API response types (APIUser, AuthTokenResponse, WishListItem with
                                    icon/availableNow/availableFrom, APIUserCollections with fetchedAt,
                                    APICollectionSummary with collectedItems, APIRecordsEnvelope<T>,
-                                   APIPerkColumn, APIItemPerks)
+                                   APIPerkColumn, APIItemPerks, APIItemView)
     design.ts                  ← Design-system domain types (GTItem — GTItem.perks field REMOVED, Seal,
                                    Weekly with resetAt/fetchedAt/degraded, Milestone.missing now optional,
                                    WishlistEntry with icon, PerkColumn)
@@ -142,6 +144,7 @@ const { data } = useQuery({
 `lib/queries.ts` exports:
 - `collectionsQuery(membershipType, membershipId, includeAll?)` — canonical React Query definition for the collections endpoint; Dashboard, Settings, and Collections all use it so they share a single cache entry per (membership, variant) instead of firing separate requests.
 - `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
+- `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
 
 ## Authentication
 
@@ -203,7 +206,7 @@ authenticated pages go inside this group — do not add inline auth checks or re
 ## Collections page features
 
 - Loads full data with `?include=all` (collected + missing) and filters display client-side via `missingOnly` toggle — no re-fetch when toggling the filter
-- Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected), opens the detail drawer, then clears the URL param
+- Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected) and opens the detail drawer; if no collectible entry exists, falls back to `itemByHashQuery` → `toGTItemView` for a read-only view drawer
 - Cosmetics is a full top-level category alongside Weapons, Armor, Exotics
 - Add-to-wishlist and remove-from-wishlist mutations with pending-state guard (prevents double-click races)
 
@@ -220,10 +223,12 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - `APICollectionSummary`: `+ collectedItems?: APIDestinyItem[]`
 - `APIRecordsEnvelope<T>`: `{ items: T[]; fetchedAt: string }` — envelope for catalysts/crafting/seals
 - `Weekly`: `+ resetAt`, `+ fetchedAt`, `+ degraded?`
-- `Milestone.missing`: now `number | undefined` (omitted until computed by backend)
+- `Milestone.missing`: now `number | undefined` — populated for raid/dungeon milestones; still omitted for non-raid/dungeon (no manifest reward→collectible signal)
 - `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool
 - `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[] }` — response envelope for `/api/items/:itemHash/perks`
 - `GTItem.perks`: REMOVED — the old dead flat perks field no longer exists on the design type; use `PerkColumn[]` from `itemPerksQuery` instead
+- `GTItem.farmOnly?: boolean` — set when the collectible source indicates "cannot be reacquired"; renders a "Farm only" chip in the item card and drawer
+- `APIItemView`: `{ itemHash, name, icon, itemType, tierType, rarity, description }` — response type for `GET /api/items/:itemHash`; used by `itemByHashQuery` + `toGTItemView` for the view-only deep-link drawer
 - `PerkColumn` (design.ts): `{ role: string; label: string; perks: string[] }` — design-layer parallel to `APIPerkColumn`
 
 ## Styling
@@ -252,4 +257,4 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - `logout()` ends only the current session; other devices remain signed in. `logoutAll()` ends all sessions and evicts the Bungie token. The old access token stays valid server-side until expiry (up to 24h) — revocation cache window is 60s, not instant
 - Search index is built in-memory on the server — lost on restart; pages show a "warming up" error state while it rebuilds (~30s)
 - Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
-- Milestone `missing` counts are not yet computed — the field is absent from the weekly payload; the UI hides the badge rather than implying completion
+- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones still omit the field (no manifest reward→collectible signal)
