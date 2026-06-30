@@ -111,7 +111,7 @@ Add wishlist priority sorting to the Collections drawer
 Fix OAuth callback dropping the state parameter on retry
 ```
 
-- Keep the subject to ~72 characters; add a body when the *why* isn't obvious.
+- Keep the subject to ~72 characters; add a body when the _why_ isn't obvious.
 - One logical change per commit where practical.
 
 ## Formatting
@@ -162,12 +162,12 @@ for the toolchain details (a C compiler is required for the cgo tests).
 
 Every PR must pass these GitHub Actions jobs before it can merge:
 
-| Check | What it does |
-| --- | --- |
-| **Format Check** | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted |
-| **Test Frontend** | type-check, lint, Vitest with coverage thresholds, production build |
-| **Test Go Services** | `go vet`, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against a Postgres service container |
-| **Build Docker Images** | builds both production Docker images (build validation; no push) |
+| Check                   | What it does                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Format Check**        | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted                                                      |
+| **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                        |
+| **Test Go Services**    | `go vet`, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against a Postgres service container |
+| **Build Docker Images** | builds both production Docker images (build validation; no push)                                                           |
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it
 is enforced through a code-scanning merge rule rather than as a required status

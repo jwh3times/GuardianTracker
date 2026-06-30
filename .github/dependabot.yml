@@ -106,8 +106,7 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
       time: "07:00"
       timezone: "America/New_York"
     labels:
@@ -130,8 +129,7 @@ updates:
       - "/frontend"
       - "/backend/api-service"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
       time: "07:00"
       timezone: "America/New_York"
     labels:
@@ -152,8 +150,7 @@ updates:
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
       time: "07:00"
       timezone: "America/New_York"
     labels:

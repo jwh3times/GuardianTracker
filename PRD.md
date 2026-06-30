@@ -10,7 +10,7 @@
 
 **Guardian Tracker is a Destiny 2 companion web app that helps players see what they're missing and decide what to chase next.**
 
-Destiny 2 has thousands of collectible weapons, armor pieces, exotics, catalysts, cosmetics, and triumphs spread across raids, dungeons, vendors, seasonal activities, and limited-time events. The in-game Collections screen tells you *what you have* but is poor at answering the questions players actually ask:
+Destiny 2 has thousands of collectible weapons, armor pieces, exotics, catalysts, cosmetics, and triumphs spread across raids, dungeons, vendors, seasonal activities, and limited-time events. The in-game Collections screen tells you _what you have_ but is poor at answering the questions players actually ask:
 
 - "What am I still missing, and is it even obtainable right now?"
 - "What's the most efficient thing to do this week to fill gaps in my collection?"
@@ -19,18 +19,18 @@ Destiny 2 has thousands of collectible weapons, armor pieces, exotics, catalysts
 
 Guardian Tracker exists to answer those questions with **clarity, prioritization, and a plan of action** — turning a sprawling, opaque collection into a focused, motivating checklist.
 
-**Design north star:** *"Open the app, and within five seconds know the single best thing to do today."*
+**Design north star:** _"Open the app, and within five seconds know the single best thing to do today."_
 
 ---
 
 ## 2. Target Users & Personas
 
-| Persona | Description | Primary Goals | What Frustrates Them |
-| --- | --- | --- | --- |
-| **The Completionist** ("Maya") | Veteran player chasing 100% collections, seals, and titles. Thousands of hours played. | See exact gaps, track long-grind items (catalysts, patterns, raid exotics), measure % completion across every category. | No single view of "what's left." Has to cross-reference wikis. |
-| **The Returning Player** ("Devon") | Played years ago, just came back. Overwhelmed by new systems. | Understand what they own, what changed, what's worth chasing now vs. what's sunset/unavailable. | Doesn't know what's still obtainable or where to start. |
-| **The Weekly Optimizer** ("Sam") | Limited playtime (a few hours/week). Wants maximum reward per session. | A weekly to-do list: best vendor rolls, pinnacle sources, time-limited items expiring soon. | Wasting limited time on low-value activities; missing time-limited content. |
-| **The Min-Maxer** ("Riley") | Cares about perfect rolls and meta loadouts. | Track god rolls on owned weapons, find where to farm specific rolls, manage a curated wishlist. | Can't tell which of their copies has the best perks, or where the roll they want drops. |
+| Persona                            | Description                                                                            | Primary Goals                                                                                                           | What Frustrates Them                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **The Completionist** ("Maya")     | Veteran player chasing 100% collections, seals, and titles. Thousands of hours played. | See exact gaps, track long-grind items (catalysts, patterns, raid exotics), measure % completion across every category. | No single view of "what's left." Has to cross-reference wikis.                          |
+| **The Returning Player** ("Devon") | Played years ago, just came back. Overwhelmed by new systems.                          | Understand what they own, what changed, what's worth chasing now vs. what's sunset/unavailable.                         | Doesn't know what's still obtainable or where to start.                                 |
+| **The Weekly Optimizer** ("Sam")   | Limited playtime (a few hours/week). Wants maximum reward per session.                 | A weekly to-do list: best vendor rolls, pinnacle sources, time-limited items expiring soon.                             | Wasting limited time on low-value activities; missing time-limited content.             |
+| **The Min-Maxer** ("Riley")        | Cares about perfect rolls and meta loadouts.                                           | Track god rolls on owned weapons, find where to farm specific rolls, manage a curated wishlist.                         | Can't tell which of their copies has the best perks, or where the roll they want drops. |
 
 **Platform context:** Players are on PC, Xbox, or PlayStation (Bungie cross-save). They'll use Guardian Tracker on **desktop (primary, often second-monitor while playing)** and **mobile (secondary, planning on the go)**. Design must be responsive and second-screen friendly.
 
@@ -41,12 +41,12 @@ Guardian Tracker exists to answer those questions with **clarity, prioritization
 ### 3.1 Implemented & Working
 
 - **Bungie OAuth login** — Player authorizes via Bungie.net, app stores JWT session, persists across reloads.
-- **Dashboard** — Collection progress cards for Weapons / Armor / Exotics (collected vs. total with progress bars), a "weekly reset" countdown timer, and Quick Actions. *Note: vendor & activity sections on the dashboard currently render hardcoded mock data.*
+- **Dashboard** — Collection progress cards for Weapons / Armor / Exotics (collected vs. total with progress bars), a "weekly reset" countdown timer, and Quick Actions. _Note: vendor & activity sections on the dashboard currently render hardcoded mock data._
 - **Collections page** — The most developed feature. Pulls the player's real collected items from Bungie, compares against the full game manifest, and shows **missing items** in three tabs (Weapons, Armor, Exotics). Each item card shows icon, name, type, description, rarity, an **acquisition difficulty rating** (Easy / Moderate / Challenging, inferred from its source), and source text. Items can be filtered by difficulty and added to a wishlist. Stats row shows Total / Collected / Missing counts.
-- **Wishlist page** — Lists wishlisted items grouped/filterable by priority (Low / Medium / High / Urgent), with per-item priority editing and removal. *Note: backend persistence is mock — see gaps.*
+- **Wishlist page** — Lists wishlisted items grouped/filterable by priority (Low / Medium / High / Urgent), with per-item priority editing and removal. _Note: backend persistence is mock — see gaps._
 - **Design language (baseline)** — Dark theme, Destiny-flavored rarity card styling (exotic/legendary/rare variants, glow effects), rarity & difficulty color coding, toast notifications, loading spinners, lazy-loaded routes, error boundary.
 
-### 3.2 Known Gaps, Placeholders & Debt (things to design *around* or *replace*)
+### 3.2 Known Gaps, Placeholders & Debt (things to design _around_ or _replace_)
 
 - **`DataSourceBanner`** on Collections is a debug component (a colored "Live/Mock data" strip). It must be removed or replaced with a proper, non-debug data-freshness indicator.
 - **Weekly Recommendations** (vendors, activities, pursuits) — schema and UI scaffolding exist, but data is **mock/empty**. This is a flagship feature waiting to be built.
@@ -65,7 +65,7 @@ Top navigation across three authenticated pages: **Dashboard**, **Collections**,
 
 ## 4. What the Bungie API Makes Possible
 
-This is the menu of data the app *can* surface. The backend currently uses only a fraction (the Collectibles component). Design with the full menu in mind — call out which features each screen could use.
+This is the menu of data the app _can_ surface. The backend currently uses only a fraction (the Collectibles component). Design with the full menu in mind — call out which features each screen could use.
 
 ### 4.1 Already wired up
 
@@ -79,7 +79,7 @@ This is the menu of data the app *can* surface. The backend currently uses only 
 - **Vendors (400–402)** — live vendor inventories: **Xûr** (weekend exotics), **Banshee-44** (gunsmith weapons + mods), **Ada-1** (shaders/armor mods), **Saint-14**, **Tess** (Eververse), faction vendors, and their **current sale items, costs, and rotation**. This is what makes "what's worth buying this week" possible.
 - **Public Milestones & Activities (204)** — the **weekly rotators**: featured raid/dungeon, Nightfall weapon, weekly challenges, and the rewards each offers. Powers "what to do this week."
 - **Character data (200, 202, 205)** — characters (class, race, light/power level), subclasses, equipped loadouts, seasonal artifact, progression/ranks (Valor, Glory, Trials, vendor reputation).
-- **Inventory & Item Instances (102, 201, 300–305)** — actual owned item instances with their **rolled perks, stats, masterwork, and sockets** — i.e., *which* roll of a gun you have. Enables god-roll tracking and "you already have a better copy" insights.
+- **Inventory & Item Instances (102, 201, 300–305)** — actual owned item instances with their **rolled perks, stats, masterwork, and sockets** — i.e., _which_ roll of a gun you have. Enables god-roll tracking and "you already have a better copy" insights.
 - **Craftables (1300) & Deepsight** — weapon **crafting pattern progress** (red-border / Deepsight resonance: "3 of 5 patterns extracted"). Huge for completionists.
 - **Metrics (1100)** — tracked lifetime stats.
 - **Profile-level cosmetics** — the manifest + collectibles cover **shaders, emblems, ghost shells, ships, sparrows, finishers, emotes, transmog ornaments** — all collectible categories we don't yet surface.
@@ -309,10 +309,10 @@ A reusable kit (some primitives exist: Button, Card, LoadingSpinner, Toast):
 - **Loading:** skeletons that match final layout; avoid full-page spinners except on first auth.
 - **Empty states:** make them motivating and actionable (celebration for 100%, routing CTAs otherwise).
 - **Error states (design distinct treatments):**
-  - *Session expired* → clear re-auth CTA.
-  - *Bungie API down/maintenance* → reassuring "try again shortly."
-  - *Private profile* → explain the player must make collections public, with a help link.
-  - *Manifest warming* (cold start) → "Getting the latest game data…" with retry.
+  - _Session expired_ → clear re-auth CTA.
+  - _Bungie API down/maintenance_ → reassuring "try again shortly."
+  - _Private profile_ → explain the player must make collections public, with a help link.
+  - _Manifest warming_ (cold start) → "Getting the latest game data…" with retry.
 - **Time-limited content** always paired with a countdown and a clear reset reference (weekly reset = Tuesday 17:00 UTC; a countdown helper already exists).
 - **Voice & tone:** knowledgeable Destiny companion — uses correct in-game terminology (Guardian, Triumphs, Catalysts, Pinnacle, Deepsight, Seals) but stays approachable for returning players.
 
@@ -341,11 +341,11 @@ A reusable kit (some primitives exist: Button, Card, LoadingSpinner, Toast):
 
 ## 12. Roadmap / Prioritization Summary
 
-| Phase | Theme | Includes |
-| --- | --- | --- |
-| **Phase 1 (P0)** | Polish the core loop | Remove debug banner; redesign Collections (category tree, filters, item detail, states); real **This Week** planner with personalized "missing" highlighting; make **Wishlist** real with availability surfacing; redesigned Dashboard. |
-| **Phase 2 (P1)** | Depth for completionists | Catalyst & Crafting tracker; Triumphs/Seals; Cosmetics collections; global search; multi-character; onboarding. |
-| **Phase 3 (P2)** | Power features | God-roll/owned-roll insights; character & loadout overview; notifications/digests; sharing. |
+| Phase            | Theme                    | Includes                                                                                                                                                                                                                                |
+| ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Phase 1 (P0)** | Polish the core loop     | Remove debug banner; redesign Collections (category tree, filters, item detail, states); real **This Week** planner with personalized "missing" highlighting; make **Wishlist** real with availability surfacing; redesigned Dashboard. |
+| **Phase 2 (P1)** | Depth for completionists | Catalyst & Crafting tracker; Triumphs/Seals; Cosmetics collections; global search; multi-character; onboarding.                                                                                                                         |
+| **Phase 3 (P2)** | Power features           | God-roll/owned-roll insights; character & loadout overview; notifications/digests; sharing.                                                                                                                                             |
 
 ---
 
