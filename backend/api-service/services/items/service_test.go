@@ -111,3 +111,41 @@ func TestService_GetItem_CachesAndInvalidates(t *testing.T) {
 		t.Errorf("after invalidate, repo called %d times, want 2", repo.calls)
 	}
 }
+
+func TestService_GetItem_UnknownHashNotCached(t *testing.T) {
+	repo := &fakeItemRepo{view: nil}
+	svc := NewService(repo)
+
+	v, err := svc.GetItem(999)
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	if v != nil {
+		t.Fatalf("first call: got %+v, want nil", v)
+	}
+
+	v, err = svc.GetItem(999)
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if v != nil {
+		t.Fatalf("second call: got %+v, want nil", v)
+	}
+
+	if repo.calls != 2 {
+		t.Errorf("repo calls = %d, want 2 (nil result must not be cached)", repo.calls)
+	}
+}
+
+func TestService_BoundsCacheSize_ViewCache(t *testing.T) {
+	repo := &fakeItemRepo{view: &manifest.ItemView{ItemHash: "1", Name: "Test"}}
+	svc := NewService(repo)
+	for i := uint32(0); i <= maxCacheEntries; i++ {
+		if _, err := svc.GetItem(i); err != nil {
+			t.Fatalf("hash %d: %v", i, err)
+		}
+	}
+	if len(svc.viewCache) > maxCacheEntries {
+		t.Errorf("viewCache size = %d, want <= %d", len(svc.viewCache), maxCacheEntries)
+	}
+}

@@ -335,6 +335,7 @@ func ClassifyDifficulty(source string, isExotic bool) string {
 	switch {
 	case s == "":
 		return "Unrated"
+	// Checked before the keyword tiers: reacquirable raid/dungeon collectibles never carry this string (verified against the manifest), so this short-circuit can't steal a real rating.
 	case strings.Contains(s, "cannot be reacquired"):
 		return "Unrated"
 	case matchesAnyKeyword(s, challengingDiffKeywords):
