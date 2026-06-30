@@ -27,8 +27,9 @@ backend/api-service/
   api/handlers/characters.go           ← HTTP handler for characters
   api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
                                            collections + characters + records caches via service methods
-  api/handlers/items.go                ← HTTP handler for weapon perks (GetPerks); returns manifest-derived
-                                           perk columns; no ownership check (public manifest data)
+  api/handlers/items.go                ← HTTP handlers for manifest-derived item detail: GetPerks (perk pool)
+                                           and GetItem (minimal item view for deep-linked non-collectible
+                                           items); no ownership check (public manifest data)
   api/handlers/wishlist.go             ← Wishlist CRUD; enriches with manifest defs, collectible source,
                                            and Xûr availability (via xurInventoryIface / weekly.Service)
   api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
@@ -44,8 +45,8 @@ backend/api-service/
   services/collections/service.go      ← Collection analysis + difficulty classification + cosmetics;
                                            uses ManifestRepo interface (satisfied by *manifest.Provider)
   services/characters/service.go       ← Character fetching; InvalidateCache method
-  services/items/service.go            ← Cached weapon-perks lookup; wraps manifest.GetWeaponPerks;
-                                           InvalidateCache for manifest swap hook
+  services/items/service.go            ← Cached weapon-perks lookup (GetWeaponPerks) and item-view lookup
+                                           (GetItem); both caches cleared by InvalidateCache on manifest swap
   services/manifest/repository.go      ← SQLite read-only queries against manifest DB
   services/manifest/provider.go        ← Shared lazy-opening repository; CloseForSwap/Reopen for
                                            hourly manifest swap; satisfies all consumer ManifestRepo interfaces
@@ -100,6 +101,7 @@ backend/api-service/
 | GET | `/api/manifest/status` | None | Manifest version and readiness |
 | GET | `/api/weekly/recommendations` | JWT | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt |
 | GET | `/api/items/search?q=&limit=` | JWT | Manifest item search; 503 until index ready |
+| GET | `/api/items/:itemHash` | JWT | Minimal manifest item view for deep-linked non-collectible items; `{ itemHash, name, icon, itemType, tierType, rarity, description }`; 404 for unknown hash; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
 | GET | `/api/items/:itemHash/perks` | JWT | Weapon possible perk pool from manifest; `{ itemHash, perkColumns: [{role,label,perks}] }`; 200 + empty array for non-weapon/unknown hash; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
 | GET | `/api/catalysts/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon |
 | GET | `/api/crafting/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` crafting pattern progress |
@@ -174,6 +176,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 | `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by itemHash (for wishlist source strings) |
 | `GetWeaponTypesByName()` | Lowercased weapon name → weapon type display name (table scan; callers cache) |
 | `GetWeaponPerks(itemHash)` | Socket-category → plug-set → plug-item traversal yielding ordered perk columns (Intrinsic/Barrel/Magazine/Trait N/Origin); weapon-only (itemType 3 + weapon socket categories); filters kill-tracker/empty/retired plugs, dedupes by name; also exposed via `services/items/service.go` cached wrapper |
+| `GetItemView(itemHash)` | Minimal item projection (`ItemView` — name, icon, itemType, tierType, rarity, description); returns `(nil, nil)` for unknown hash; no item-type restriction (all collectible/non-collectible items); also exposed via `services/items/service.go` cached wrapper |
 
 ## Records service
 
@@ -188,11 +191,13 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 - `UserCollections` has `FetchedAt` field
 - `CollectionSummary` has `CollectedItems` field (stripped from response unless `?include=all`)
 - `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
+- `ClassifyDifficulty(source, isExotic)` — positive-match table; returns `"Unrated"` for unmatched sources (no catch-all "Easy"); exported for use by the efficiency engine
+- `DestinyItem.FarmOnly` — set `true` when the collectible source string contains "cannot be reacquired"; surfaced as a "Farm only" chip in the UI
 
 ## Weekly service
 
 - `Weekly` struct has `ResetAt`, `FetchedAt`, `Degraded` fields
-- `Milestone.Missing` is `*int` (omitempty) — omitted until per-milestone completion is computed
+- `Milestone.Missing` is `*int` (omitempty) — populated by `buildMilestones` for raid/dungeon milestones via `efficiency.MissingForMilestone`; non-raid/dungeon milestones still omit it (no manifest reward→collectible signal)
 - `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells (used by wishlist handler)
 
 ## Go patterns

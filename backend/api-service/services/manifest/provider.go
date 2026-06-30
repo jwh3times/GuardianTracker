@@ -205,3 +205,11 @@ func (p *Provider) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 	}
 	return r.GetWeaponPerks(itemHash)
 }
+
+func (p *Provider) GetItemView(itemHash uint32) (*ItemView, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetItemView(itemHash)
+}

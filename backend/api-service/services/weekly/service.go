@@ -327,22 +327,8 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		}
 	}
 
-	// Assemble weekly milestones (for This Week page)
-	milestones := make([]Milestone, 0, len(pub.MilestoneHashes))
-	for _, hash := range pub.MilestoneHashes {
-		name := pub.MilestoneNames[hash]
-		reward := pub.MilestoneRewards[hash]
-		if name == "" {
-			continue
-		}
-		milestones = append(milestones, Milestone{
-			ID:     fmt.Sprintf("m-%d", hash),
-			Label:  "Weekly",
-			Name:   name,
-			Reward: reward,
-			Note:   "",
-		})
-	}
+	// Assemble weekly milestones (for This Week page), with per-raid missing counts.
+	milestones := buildMilestones(pub, s.efficiency, missingHashes)
 
 	recommended := s.rankRecommended(ctx, membershipType, membershipID, bungieToken, pub, missingHashes, wishlistHashes)
 	dailyActions := s.buildDailyActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
@@ -386,6 +372,35 @@ func (s *Service) xurItemHashesAt(ctx context.Context, now time.Time) map[uint32
 		out[it.Hash] = struct{}{}
 	}
 	return out
+}
+
+// buildMilestones turns the cached public milestones into the wire shape, stamping a
+// per-milestone Missing count for raid milestones whose source bucket the efficiency
+// engine can match (nil otherwise — the frontend hides the badge). eng may be nil
+// (legacy fallback / tests).
+func buildMilestones(pub *publicWeeklyCache, eng *efficiency.Engine, missing map[uint32]struct{}) []Milestone {
+	milestones := make([]Milestone, 0, len(pub.MilestoneHashes))
+	for _, hash := range pub.MilestoneHashes {
+		name := pub.MilestoneNames[hash]
+		if name == "" {
+			continue
+		}
+		m := Milestone{
+			ID:     fmt.Sprintf("m-%d", hash),
+			Label:  "Weekly",
+			Name:   name,
+			Reward: pub.MilestoneRewards[hash],
+			Note:   "",
+		}
+		if eng != nil {
+			if count, matched := eng.MissingForMilestone(name, missing); matched {
+				c := count
+				m.Missing = &c
+			}
+		}
+		milestones = append(milestones, m)
+	}
+	return milestones
 }
 
 func (s *Service) buildDailyActions(pub *publicWeeklyCache, vendors []dailyVendorItem, missing, wishlist map[uint32]struct{}, now time.Time, dailyResetIn, weeklyResetIn Duration) []DailyAction {

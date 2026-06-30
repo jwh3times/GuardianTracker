@@ -8,6 +8,7 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/efficiency"
+	"guardian-tracker/api-service/services/manifest"
 )
 
 // fakeManifest satisfies weekly.ManifestRepo.
@@ -277,5 +278,67 @@ func TestMapEngineActions(t *testing.T) {
 	}
 	if got[1].Badge != "Available now" {
 		t.Errorf("Xûr badge = %q, want 'Available now'", got[1].Badge)
+	}
+}
+
+// --- helpers for TestBuildMilestones_SetsMissingForRaid ---
+
+type fakeBucketSource struct {
+	rows []manifest.CollectibleWithItem
+}
+
+func (f fakeBucketSource) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
+	return f.rows, nil
+}
+
+type fakeVersioner struct{ v string }
+
+func (f fakeVersioner) Version() string { return f.v }
+
+func raidRow(itemHash uint32) manifest.CollectibleWithItem {
+	item := &bungie.InventoryItemDefinition{Hash: itemHash}
+	item.Inventory.TierType = bungie.TierTypeLegendary
+	return manifest.CollectibleWithItem{
+		Collectible: bungie.CollectibleDefinition{
+			Hash: itemHash, ItemHash: itemHash, SourceHash: 7,
+			SourceString: "Vault of Glass Raid",
+		},
+		Item: item,
+	}
+}
+
+func TestBuildMilestones_SetsMissingForRaid(t *testing.T) {
+	eng := efficiency.NewEngine(
+		fakeBucketSource{rows: []manifest.CollectibleWithItem{
+			raidRow(100), raidRow(101), raidRow(102),
+		}},
+		fakeVersioner{"v1"},
+	)
+	eng.BuildIndex()
+
+	pub := &publicWeeklyCache{
+		MilestoneHashes:  []uint32{10, 11},
+		MilestoneNames:   map[uint32]string{10: "Vault of Glass", 11: "Clan Rewards"},
+		MilestoneRewards: map[uint32]string{10: "Pinnacle Gear", 11: "XP"},
+	}
+	missing := map[uint32]struct{}{100: {}, 102: {}}
+
+	ms := buildMilestones(pub, eng, missing)
+	byName := map[string]Milestone{}
+	for _, m := range ms {
+		byName[m.Name] = m
+	}
+	if got := byName["Vault of Glass"].Missing; got == nil || *got != 2 {
+		t.Errorf("Vault of Glass Missing = %v, want 2", got)
+	}
+	if byName["Clan Rewards"].Missing != nil {
+		t.Error("non-raid milestone Missing should be nil")
+	}
+
+	// nil engine → all nil, no panic.
+	for _, m := range buildMilestones(pub, nil, missing) {
+		if m.Missing != nil {
+			t.Errorf("nil engine should leave Missing nil, got %v", m.Missing)
+		}
 	}
 }

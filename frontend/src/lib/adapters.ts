@@ -1,4 +1,9 @@
-import type { APICharacter, APIDestinyItem, WishListItem } from "../types/api";
+import type {
+  APICharacter,
+  APIDestinyItem,
+  APIItemView,
+  WishListItem,
+} from "../types/api";
 import type {
   Character,
   Difficulty,
@@ -19,6 +24,7 @@ const DIFF_MAP: Record<string, Difficulty> = {
   Easy: "easy",
   Moderate: "moderate",
   Challenging: "challenging",
+  Unrated: "unrated",
 };
 const PRIORITY_MAP: Record<string, Priority> = {
   URGENT: "urgent",
@@ -49,13 +55,34 @@ export function toGTItem(d: APIDestinyItem): GTItem {
     type: d.itemType,
     slot: "",
     rarity: RARITY_MAP[d.rarity] ?? "legendary",
-    diff: DIFF_MAP[d.difficulty] ?? "moderate",
+    diff: DIFF_MAP[d.difficulty] ?? "unrated",
+    farmOnly: d.farmOnly ?? false,
     source: sources[0] ?? "Unknown source",
     sourceDetail: sources.slice(1).join(" · ") || sources[0] || "",
     obtainable: false,
     collected: false,
     desc: d.description ?? "",
     icon: d.icon,
+  };
+}
+
+/** Adapt a minimal item view (deep-linked non-collectible) into a view-only GTItem. */
+export function toGTItemView(v: APIItemView): GTItem {
+  return {
+    id: v.itemHash,
+    name: v.name,
+    type: v.itemType,
+    slot: "",
+    rarity: RARITY_MAP[v.rarity] ?? "legendary",
+    diff: "unrated",
+    farmOnly: false,
+    source: "",
+    sourceDetail: "",
+    obtainable: false,
+    collected: false,
+    desc: v.description ?? "",
+    icon: v.icon,
+    viewOnly: true,
   };
 }
 

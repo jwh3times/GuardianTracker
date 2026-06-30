@@ -443,6 +443,7 @@ export function ItemDetailDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   if (!item) return null;
+  const viewOnly = !!item.viewOnly;
   return (
     <div className="gt-drawer-scrim" onClick={onClose}>
       <aside
@@ -481,7 +482,13 @@ export function ItemDetailDrawer({
           </div>
         </div>
 
-        {item.obtainable && !item.collected && (
+        {viewOnly && (
+          <p className="gt-drawer-desc" style={{ color: "var(--c-text-3)" }}>
+            Not in your trackable collections — view only.
+          </p>
+        )}
+
+        {!viewOnly && item.obtainable && !item.collected && (
           <div className="gt-drawer-avail">
             <Badge kind="avail-now" dot icon="bolt" lg />
             <span>
@@ -494,37 +501,53 @@ export function ItemDetailDrawer({
 
         <p className="gt-drawer-desc">{item.desc}</p>
 
-        <div className="gt-drawer-block">
-          <div className="gt-section-title">
-            Acquisition <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
-            <button className="gt-why" onClick={() => setShowWhy((v) => !v)}>
-              why?{" "}
-              <Icon
-                name="chevronDown"
-                size="0.7rem"
-                style={{ transform: showWhy ? "rotate(180deg)" : "none" }}
-              />
-            </button>
-          </div>
-          <div className="gt-drawer-src">
-            <Icon
-              name="bolt"
-              size="0.9rem"
-              style={{ color: "var(--rarity)" }}
-            />
-            <div>
-              <div style={{ color: "var(--c-text)" }}>{item.source}</div>
-              <div className="gt-item-type">{item.sourceDetail}</div>
+        {!viewOnly && (
+          <div className="gt-drawer-block">
+            <div className="gt-section-title">
+              Acquisition{" "}
+              <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
+              {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
+              <button className="gt-why" onClick={() => setShowWhy((v) => !v)}>
+                why?{" "}
+                <Icon
+                  name="chevronDown"
+                  size="0.7rem"
+                  style={{ transform: showWhy ? "rotate(180deg)" : "none" }}
+                />
+              </button>
             </div>
+            <div className="gt-drawer-src">
+              <Icon
+                name="bolt"
+                size="0.9rem"
+                style={{ color: "var(--rarity)" }}
+              />
+              <div>
+                <div style={{ color: "var(--c-text)" }}>{item.source}</div>
+                <div className="gt-item-type">{item.sourceDetail}</div>
+              </div>
+            </div>
+            {item.farmOnly && (
+              <p className="gt-why-text">
+                Random perks — earn a fresh drop from its source; this item
+                can't be pulled from Collections.
+              </p>
+            )}
+            {showWhy &&
+              (item.diff === "unrated" ? (
+                <p className="gt-why-text">
+                  We couldn't determine difficulty from this item's source.
+                </p>
+              ) : (
+                <p className="gt-why-text">
+                  Difficulty is <strong>estimated</strong> from this item's
+                  source — drop sources like raids and Grandmasters score higher
+                  than vendor or world drops. Treat it as a guide, not a
+                  guarantee.
+                </p>
+              ))}
           </div>
-          {showWhy && (
-            <p className="gt-why-text">
-              Difficulty is <strong>estimated</strong> from this item's source —
-              drop sources like raids and Grandmasters score higher than vendor
-              or world drops. Treat it as a guide, not a guarantee.
-            </p>
-          )}
-        </div>
+        )}
 
         {(perksLoading || (perkColumns && perkColumns.length > 0)) && (
           <div className="gt-drawer-block">
@@ -551,14 +574,16 @@ export function ItemDetailDrawer({
         )}
 
         <div className="gt-drawer-actions">
-          <Button
-            variant="primary"
-            icon="wishlist"
-            onClick={() => onWish(item)}
-            style={{ flex: 1 }}
-          >
-            {wished ? "On wishlist" : "Add to Wishlist"}
-          </Button>
+          {!viewOnly && (
+            <Button
+              variant="primary"
+              icon="wishlist"
+              onClick={() => onWish(item)}
+              style={{ flex: 1 }}
+            >
+              {wished ? "On wishlist" : "Add to Wishlist"}
+            </Button>
+          )}
           <Button
             variant="outline"
             icon="external"

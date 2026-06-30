@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { relTime, toGTItem, toWishlistEntry, toCharacter } from "./adapters";
+import {
+  relTime,
+  toGTItem,
+  toWishlistEntry,
+  toCharacter,
+  toGTItemView,
+} from "./adapters";
 import type { APICharacter, APIDestinyItem, WishListItem } from "../types/api";
 
 afterEach(() => {
@@ -59,8 +65,37 @@ describe("toGTItem", () => {
       sources: [],
     });
     expect(item.rarity).toBe("legendary");
-    expect(item.diff).toBe("moderate");
+    expect(item.diff).toBe("unrated");
     expect(item.source).toBe("Unknown source");
+  });
+});
+
+describe("unrated difficulty and farmOnly field", () => {
+  function mkItem(over: Partial<APIDestinyItem>): APIDestinyItem {
+    return {
+      itemHash: "1",
+      name: "X",
+      description: "",
+      icon: "",
+      itemType: "Hand Cannon",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "Easy",
+      farmOnly: false,
+      sources: [],
+      isExotic: false,
+      ...over,
+    };
+  }
+
+  it("maps Unrated difficulty to unrated and copies farmOnly", () => {
+    const item = toGTItem(mkItem({ difficulty: "Unrated", farmOnly: true }));
+    expect(item.diff).toBe("unrated");
+    expect(item.farmOnly).toBe(true);
+  });
+
+  it("defaults unknown difficulty to unrated", () => {
+    expect(toGTItem(mkItem({ difficulty: "???" })).diff).toBe("unrated");
   });
 });
 
@@ -104,6 +139,22 @@ describe("toWishlistEntry", () => {
     const entry = toWishlistEntry(legacy as WishListItem);
     expect(entry.avail.now).toBe(false);
   });
+});
+
+it("maps an APIItemView to a view-only GTItem", () => {
+  const g = toGTItemView({
+    itemHash: "55",
+    name: "Mod",
+    icon: "/i.png",
+    itemType: "Mod",
+    tierType: 5,
+    rarity: "Legendary",
+    description: "desc",
+  });
+  expect(g.id).toBe("55");
+  expect(g.viewOnly).toBe(true);
+  expect(g.collected).toBe(false);
+  expect(g.rarity).toBe("legendary");
 });
 
 describe("toCharacter", () => {

@@ -22,8 +22,12 @@ import { useAuth } from "../../contexts/AuthContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { apiFetch } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
-import { collectionsQuery, itemPerksQuery } from "../../lib/queries";
-import { toGTItem } from "../../lib/adapters";
+import {
+  collectionsQuery,
+  itemPerksQuery,
+  itemByHashQuery,
+} from "../../lib/queries";
+import { toGTItem, toGTItemView } from "../../lib/adapters";
 import {
   apiNodeToTreeNode,
   gatherItemHashes,
@@ -51,6 +55,7 @@ const DIFF_RANK: Record<Difficulty, number> = {
   challenging: 0,
   moderate: 1,
   easy: 2,
+  unrated: 3,
 };
 
 export function Collections() {
@@ -94,6 +99,9 @@ export function Collections() {
   } = useQuery(collectionsQuery(membershipType, membershipId, true));
 
   const perksQuery = useQuery(itemPerksQuery(detail?.id));
+
+  const [viewOnlyHash, setViewOnlyHash] = useState<string | null>(null);
+  const itemViewQuery = useQuery(itemByHashQuery(viewOnlyHash));
 
   const queryClient = useQueryClient();
 
@@ -188,11 +196,25 @@ export function Collections() {
         availFrom: vendor,
       });
     } else {
-      showToast("That item isn't in your trackable collections", "info");
+      setViewOnlyHash(itemParam);
     }
     setSearchParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemParam, collections]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (!viewOnlyHash) return;
+    if (itemViewQuery.data) {
+      setDetail(toGTItemView(itemViewQuery.data));
+      setViewOnlyHash(null);
+    } else if (itemViewQuery.isError) {
+      showToast("That item isn't in your trackable collections", "info");
+      setViewOnlyHash(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewOnlyHash, itemViewQuery.data, itemViewQuery.isError]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const hasReal = !!collections;

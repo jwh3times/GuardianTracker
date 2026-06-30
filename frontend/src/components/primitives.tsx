@@ -60,6 +60,8 @@ export const BADGE_COLOR: Record<string, string> = {
   easy: "var(--c-easy)",
   moderate: "var(--c-moderate)",
   challenging: "var(--c-challenging)",
+  unrated: "var(--c-text-3)",
+  farmonly: "var(--c-text-2)",
   "avail-now": "var(--c-avail)",
   expiring: "var(--c-expiring)",
   missing: "var(--c-signal)",
@@ -84,6 +86,7 @@ const BADGE_LABEL: Record<string, string> = {
   complete: "Complete",
   gilded: "Gilded",
   owned: "Owned",
+  farmonly: "Farm only",
 };
 
 export function Badge({

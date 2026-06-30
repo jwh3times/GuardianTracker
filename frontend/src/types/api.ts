@@ -43,8 +43,20 @@ export interface APIDestinyItem {
   tierType: number;
   rarity: string;
   difficulty: string;
+  farmOnly?: boolean;
   sources: string[];
   isExotic: boolean;
+}
+
+/** GET /api/items/:itemHash — minimal manifest item view (mirrors manifest.ItemView). */
+export interface APIItemView {
+  itemHash: string;
+  name: string;
+  icon: string;
+  itemType: string;
+  tierType: number;
+  rarity: string;
+  description: string;
 }
 
 /** One perk column in a weapon's possible-roll pool (mirrors manifest.PerkColumn). */

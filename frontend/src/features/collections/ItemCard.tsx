@@ -51,6 +51,7 @@ export function ItemCard({
           <div className="gt-item-badges">
             <Badge kind={r} dot />
             <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
+            {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
             {showFor && availBadge && <Badge kind="avail-now" dot />}
           </div>
         </div>
@@ -155,6 +156,7 @@ export function ItemCard({
           >
             <Badge kind={r} dot />
             <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
+            {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
           </div>
         </div>
       </div>

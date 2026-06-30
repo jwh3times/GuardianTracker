@@ -49,6 +49,10 @@ function renderPage(ui: React.ReactNode, route = "/") {
   );
 }
 
+function renderCollections(search = "") {
+  return renderPage(<Collections />, `/collections${search}`);
+}
+
 // Tree-shaped ?include=all payload: a "Weapons" root with a single
 // "Hand Cannons" leaf node holding two items, one collected (100) and one
 // missing (200). The shared sampleCollections fixture is the pre-tree flat
@@ -259,5 +263,45 @@ describe("Collections", () => {
     expect(
       await screen.findByText("Your Destiny profile is private"),
     ).toBeInTheDocument();
+  });
+
+  it("opens a view-only drawer for a deep-linked non-collectible item", async () => {
+    server.use(
+      treeCollectionsHandler,
+      http.get(`${API}/api/items/:hash`, () =>
+        HttpResponse.json({
+          itemHash: "999",
+          name: "Vendor Mod",
+          icon: "",
+          itemType: "Mod",
+          tierType: 5,
+          rarity: "Legendary",
+          description: "A mod.",
+        }),
+      ),
+    );
+    renderCollections("?item=999");
+    expect(
+      await screen.findByRole("dialog", { name: "Vendor Mod" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/view only/i)).toBeInTheDocument();
+    // collectible-only affordances are hidden:
+    expect(
+      screen.queryByRole("button", { name: /add to wishlist/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("toasts on a genuine 404 for a deep-linked non-collectible item", async () => {
+    server.use(
+      treeCollectionsHandler,
+      http.get(`${API}/api/items/:hash`, () =>
+        HttpResponse.json({ error: "not found" }, { status: 404 }),
+      ),
+    );
+    renderCollections("?item=999");
+    expect(
+      await screen.findByText(/that item isn't in your trackable collections/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

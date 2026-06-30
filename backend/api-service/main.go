@@ -322,6 +322,7 @@ func main() {
 
 		// Item search (in-memory index from manifest)
 		api.GET("/items/search", jwtHelper.Middleware(revoker), searchHandler.Search)
+		api.GET("/items/:itemHash", jwtHelper.Middleware(revoker), itemsHandler.GetItem)
 		api.GET("/items/:itemHash/perks", jwtHelper.Middleware(revoker), itemsHandler.GetPerks)
 
 		// Catalysts, crafting patterns, and seals

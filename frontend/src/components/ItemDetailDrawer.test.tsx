@@ -1,6 +1,7 @@
 import React from "react";
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { ItemDetailDrawer } from "./composite";
 import type { GTItem } from "../types/design";
 
@@ -75,5 +76,31 @@ describe("ItemDetailDrawer perks", () => {
     expect(
       screen.queryByRole("button", { name: /where to farm/i }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("ItemDetailDrawer difficulty copy", () => {
+  it("shows the unrated 'why' copy", async () => {
+    renderDrawer({ item: { ...baseItem, diff: "unrated" } });
+    await userEvent.click(screen.getByRole("button", { name: /why\?/i }));
+    expect(
+      screen.getByText(/couldn't determine difficulty/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the estimated 'why' copy for rated difficulties", async () => {
+    renderDrawer({ item: { ...baseItem, diff: "moderate" } });
+    await userEvent.click(screen.getByRole("button", { name: /why\?/i }));
+    expect(screen.getByText(/estimated/i)).toBeInTheDocument();
+  });
+
+  it("shows farm-only note when farmOnly is set", () => {
+    renderDrawer({ item: { ...baseItem, farmOnly: true } });
+    expect(screen.getByText(/earn a fresh drop/i)).toBeInTheDocument();
+  });
+
+  it("omits farm-only note when farmOnly is not set", () => {
+    renderDrawer({ item: { ...baseItem, farmOnly: false } });
+    expect(screen.queryByText(/earn a fresh drop/i)).not.toBeInTheDocument();
   });
 });
