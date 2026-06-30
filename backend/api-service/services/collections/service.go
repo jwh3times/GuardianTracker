@@ -149,6 +149,7 @@ type DestinyItem struct {
 	TierType    int      `json:"tierType"`
 	Rarity      string   `json:"rarity"`
 	Difficulty  string   `json:"difficulty"`
+	FarmOnly    bool     `json:"farmOnly"`
 	Sources     []string `json:"sources"`
 	IsExotic    bool     `json:"isExotic"`
 }
@@ -290,36 +291,70 @@ func toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
 		di.Sources = append(di.Sources, col.SourceString)
 	}
 	di.Difficulty = ClassifyDifficulty(col.SourceString, di.IsExotic)
+	di.FarmOnly = strings.Contains(strings.ToLower(col.SourceString), "cannot be reacquired")
 	return di
 }
 
+// Difficulty keyword tiers — verified against the real manifest source-string
+// histogram (2026-06-30). Checked Challenging → Moderate → Easy, first hit wins, so
+// "Grandmaster Nightfall" scores Challenging before the Moderate "nightfall" rule.
+// Every entry is a positive match; anything unmatched is honestly "Unrated" (never a
+// catch-all "Easy"). Extend these lists freely.
+var (
+	challengingDiffKeywords = []string{
+		"raid", "vault of glass", "king's fall", "root of nightmares", "crota",
+		"deep stone", "garden of salvation", "last wish", "vow of the disciple",
+		"salvation's edge", "desert perpetual",
+		"trials", "competitive", "iron banner", "glory", "grandmaster", "pantheon",
+	}
+	moderateDiffKeywords = []string{
+		"dungeon", "prophecy", "grasp of avarice", "duality", "spire of the watcher",
+		"shattered throne", "pit of heresy", "ghosts of the deep", "warlord", "vesper",
+		"sundered doctrine",
+		"nightfall", "lost sector", "exotic quest", "exotic mission", "dreaming city",
+		"season of", "seasonal", "episode", "into the light", "solstice", "exploring",
+		"kepler", "wellspring", "dares", "black armory", "sparrow racing",
+	}
+	easyDiffKeywords = []string{
+		"rank-up package", "rank up package", "earned while leveling", "engram",
+		"season pass", "eververse", "bright dust", "focusing", "world drop",
+		"complete crucible", "complete gambit", "complete strikes", "complete vanguard",
+		"rank-up", "vendor", "banshee", "ada-1", "xûr", "xur", "tower", "monument",
+		"deluxe edition", "pre-order", "preorder", "charity", "special offer",
+		"rewards pass", "new monarchy", "dead orbit", "future war cult", "saint-14",
+	}
+)
+
+// ClassifyDifficulty infers an acquisition-difficulty estimate from a collectible's
+// source string. Every non-Unrated result is a real keyword match; unmatched sources
+// (and empty / "cannot be reacquired" ones) return "Unrated" rather than a misleading
+// default. isExotic is retained for a future exotic-aware tie-break; it is not used as
+// a default today.
 func ClassifyDifficulty(source string, isExotic bool) string {
-	s := strings.ToLower(source)
-	for _, kw := range []string{"raid", "vault of glass", "king's fall", "root of nightmares", "crota", "deep stone", "garden of salvation", "last wish"} {
+	s := strings.ToLower(strings.TrimSpace(source))
+	switch {
+	case s == "":
+		return "Unrated"
+	case strings.Contains(s, "cannot be reacquired"):
+		return "Unrated"
+	case matchesAnyKeyword(s, challengingDiffKeywords):
+		return "Challenging"
+	case matchesAnyKeyword(s, moderateDiffKeywords):
+		return "Moderate"
+	case matchesAnyKeyword(s, easyDiffKeywords):
+		return "Easy"
+	default:
+		return "Unrated"
+	}
+}
+
+func matchesAnyKeyword(s string, keywords []string) bool {
+	for _, kw := range keywords {
 		if strings.Contains(s, kw) {
-			return "Challenging"
+			return true
 		}
 	}
-	for _, kw := range []string{"dungeon", "prophecy", "grasp of avarice", "duality", "spire of the watcher", "shattered throne", "pit of heresy"} {
-		if strings.Contains(s, kw) {
-			return "Moderate"
-		}
-	}
-	for _, kw := range []string{"trials", "competitive", "iron banner", "glory rank"} {
-		if strings.Contains(s, kw) {
-			return "Challenging"
-		}
-	}
-	if strings.Contains(s, "nightfall") {
-		return "Moderate"
-	}
-	if isExotic && strings.Contains(s, "quest") {
-		return "Moderate"
-	}
-	if isExotic {
-		return "Moderate"
-	}
-	return "Easy"
+	return false
 }
 
 // GetMissingItemHashes returns not-collected weapon/armor/exotic item hashes

@@ -38,9 +38,9 @@ func TestClassifyDifficulty(t *testing.T) {
 		{"glory", "Glory rank rewards", false, "Challenging"},
 		{"nightfall", "Nightfall: The Ordeal", false, "Moderate"},
 		{"exotic quest", "Complete the exotic quest", true, "Moderate"},
-		{"exotic no source", "", true, "Moderate"},
+		{"exotic no source", "", true, "Unrated"},
 		{"plain world drop", "World drops", false, "Easy"},
-		{"empty non-exotic", "", false, "Easy"},
+		{"empty non-exotic", "", false, "Unrated"},
 		{"case insensitive", "FOUND IN THE RAID", false, "Challenging"},
 	}
 	for _, tc := range cases {
@@ -233,6 +233,59 @@ func TestGetUserCollections_Projects(t *testing.T) {
 			}
 			return ks
 		}())
+	}
+}
+
+func TestClassifyDifficulty_Tiers(t *testing.T) {
+	cases := []struct {
+		source   string
+		isExotic bool
+		want     string
+	}{
+		{"Source: Vault of Glass Raid", false, "Challenging"},
+		{"Grandmaster Nightfall", false, "Challenging"}, // Challenging beats Moderate "nightfall"
+		{"Source: Trials of Osiris", false, "Challenging"},
+		{"Source: Prophecy dungeon", false, "Moderate"},
+		{"Source: Nightfall", false, "Moderate"},
+		{"Source: Season of the Witch", false, "Moderate"},
+		{"Source: Earn rank-up packages from Banshee-44.", false, "Easy"},
+		{"Source: Open Legendary engrams", false, "Easy"},
+		{"Source: World drops", false, "Easy"},
+		{"", false, "Unrated"},
+		{"   ", true, "Unrated"},
+		{"Random Perks: This item cannot be reacquired from Collection", false, "Unrated"},
+		{"Source: A brand new activity nobody mapped", true, "Unrated"}, // unmatched exotic → Unrated (no floor)
+	}
+	for _, c := range cases {
+		if got := ClassifyDifficulty(c.source, c.isExotic); got != c.want {
+			t.Errorf("ClassifyDifficulty(%q,%v) = %q, want %q", c.source, c.isExotic, got, c.want)
+		}
+	}
+}
+
+func TestToDestinyItem_FarmOnly(t *testing.T) {
+	item := &bungie.InventoryItemDefinition{Hash: 1, ItemType: bungie.ItemTypeWeapon, ItemSubType: 9}
+	item.Inventory.TierType = bungie.TierTypeLegendary
+	item.DisplayProperties.Name = "Test Cannon"
+
+	cwi := &manifest.CollectibleWithItem{
+		Collectible: bungie.CollectibleDefinition{
+			ItemHash:     1,
+			SourceString: "Random Perks: This item cannot be reacquired from Collection",
+		},
+		Item: item,
+	}
+	di := toDestinyItem(cwi)
+	if !di.FarmOnly {
+		t.Error("FarmOnly = false, want true for a 'cannot be reacquired' source")
+	}
+	if di.Difficulty != "Unrated" {
+		t.Errorf("Difficulty = %q, want Unrated", di.Difficulty)
+	}
+
+	cwi.Collectible.SourceString = "Source: World drops"
+	if toDestinyItem(cwi).FarmOnly {
+		t.Error("FarmOnly = true, want false for a normal source")
 	}
 }
 
