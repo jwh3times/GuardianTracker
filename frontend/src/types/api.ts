@@ -48,6 +48,17 @@ export interface APIDestinyItem {
   isExotic: boolean;
 }
 
+/** GET /api/items/:itemHash — minimal manifest item view (mirrors manifest.ItemView). */
+export interface APIItemView {
+  itemHash: string;
+  name: string;
+  icon: string;
+  itemType: string;
+  tierType: number;
+  rarity: string;
+  description: string;
+}
+
 /** One perk column in a weapon's possible-roll pool (mirrors manifest.PerkColumn). */
 export interface APIPerkColumn {
   role: string; // intrinsic | barrel | magazine | trait | origin

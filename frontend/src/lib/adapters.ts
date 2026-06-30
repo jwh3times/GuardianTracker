@@ -1,4 +1,9 @@
-import type { APICharacter, APIDestinyItem, WishListItem } from "../types/api";
+import type {
+  APICharacter,
+  APIDestinyItem,
+  APIItemView,
+  WishListItem,
+} from "../types/api";
 import type {
   Character,
   Difficulty,
@@ -58,6 +63,26 @@ export function toGTItem(d: APIDestinyItem): GTItem {
     collected: false,
     desc: d.description ?? "",
     icon: d.icon,
+  };
+}
+
+/** Adapt a minimal item view (deep-linked non-collectible) into a view-only GTItem. */
+export function toGTItemView(v: APIItemView): GTItem {
+  return {
+    id: v.itemHash,
+    name: v.name,
+    type: v.itemType,
+    slot: "",
+    rarity: RARITY_MAP[v.rarity] ?? "legendary",
+    diff: "unrated",
+    farmOnly: false,
+    source: "",
+    sourceDetail: "",
+    obtainable: false,
+    collected: false,
+    desc: v.description ?? "",
+    icon: v.icon,
+    viewOnly: true,
   };
 }
 

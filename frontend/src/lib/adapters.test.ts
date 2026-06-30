@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { relTime, toGTItem, toWishlistEntry, toCharacter } from "./adapters";
+import {
+  relTime,
+  toGTItem,
+  toWishlistEntry,
+  toCharacter,
+  toGTItemView,
+} from "./adapters";
 import type { APICharacter, APIDestinyItem, WishListItem } from "../types/api";
 
 afterEach(() => {
@@ -133,6 +139,22 @@ describe("toWishlistEntry", () => {
     const entry = toWishlistEntry(legacy as WishListItem);
     expect(entry.avail.now).toBe(false);
   });
+});
+
+it("maps an APIItemView to a view-only GTItem", () => {
+  const g = toGTItemView({
+    itemHash: "55",
+    name: "Mod",
+    icon: "/i.png",
+    itemType: "Mod",
+    tierType: 5,
+    rarity: "Legendary",
+    description: "desc",
+  });
+  expect(g.id).toBe("55");
+  expect(g.viewOnly).toBe(true);
+  expect(g.collected).toBe(false);
+  expect(g.rarity).toBe("legendary");
 });
 
 describe("toCharacter", () => {
