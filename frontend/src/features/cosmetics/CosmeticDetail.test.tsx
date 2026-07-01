@@ -35,4 +35,18 @@ describe("CosmeticDetail", () => {
     fireEvent.click(dialog.parentElement as HTMLElement); // the scrim
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("does not react to Escape when item is null", () => {
+    const onClose = vi.fn();
+    render(<CosmeticDetail item={null} onClose={onClose} />);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("closes on Escape when open", () => {
+    const onClose = vi.fn();
+    render(<CosmeticDetail item={item} onClose={onClose} />);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  });
 });

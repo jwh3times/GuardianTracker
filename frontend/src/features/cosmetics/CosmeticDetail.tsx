@@ -11,12 +11,13 @@ export function CosmeticDetail({
   onClose: () => void;
 }) {
   useEffect(() => {
+    if (!item) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [item, onClose]);
 
   if (!item) return null;
 
@@ -27,6 +28,7 @@ export function CosmeticDetail({
         data-rarity={item.rarity}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
+        aria-modal="true"
         aria-label={item.name}
       >
         <button
