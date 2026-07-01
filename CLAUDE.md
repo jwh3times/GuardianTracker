@@ -64,7 +64,7 @@ npm start       # Vite dev server on :5273
 
 ### Exposing via ngrok (public HTTPS)
 
-To test Bungie OAuth, tunnel the frontend with ngrok. Add the ngrok URL to `CORS_ALLOWED_ORIGINS` in the root `.env`, rebuild api-service, set `AUTH_REDIRECT_URI` to the ngrok callback, and register that URL in your Bungie app at https://www.bungie.net/en/Application. Free ngrok subdomains change on each restart — update all three every time.
+To test Bungie OAuth, tunnel the frontend with ngrok. Add the ngrok URL to `CORS_ALLOWED_ORIGINS` in the root `.env`, rebuild api-service, set `AUTH_REDIRECT_URI` to the ngrok callback, and register that URL in your Bungie app at <https://www.bungie.net/en/Application>. Free ngrok subdomains change on each restart — update all three every time.
 
 ## Environment Setup
 
@@ -78,7 +78,7 @@ Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`
 
 | Variable                        | Purpose                                                                                               |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `BUNGIE_API_KEY`                | From https://www.bungie.net/en/Application                                                            |
+| `BUNGIE_API_KEY`                | From <https://www.bungie.net/en/Application>                                                          |
 | `BUNGIE_CLIENT_ID`              | Bungie app settings                                                                                   |
 | `BUNGIE_CLIENT_SECRET`          | Bungie app settings                                                                                   |
 | `JWT_SECRET`                    | 32+ char random string (`openssl rand -base64 32`)                                                    |
