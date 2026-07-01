@@ -10,10 +10,8 @@
  *     after Task 1b; TYPE_GLYPH already has Shader: "SHD".
  *   - Ornaments are NOT a distinct flat itemType; leave them out of v1.
  *
- * KNOWN CONCERN (Task 1): toDestinyItem in service.go currently emits
- * "Unknown" for cosmetics instead of using ItemTypeName. The items map will
- * have itemType:"Unknown" until that function is extended. Later tasks that
- * classify by itemType must account for this (or a backend fix must land first).
+ * Task 1b made toDestinyItem emit the real ItemTypeName strings (previously
+ * "Unknown" for cosmetics), so these values match the items-map itemType.
  *
  * Order here = gallery tab order. Every entry MUST have a TYPE_GLYPH entry in
  * src/lib/constants.ts for the icon fallback.
