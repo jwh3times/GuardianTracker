@@ -214,7 +214,9 @@ export function Dashboard() {
                   <button
                     key={c.id}
                     className="gt-hero-bar"
-                    onClick={() => go("/collections")}
+                    onClick={() =>
+                      go(c.id === "cosmetics" ? "/cosmetics" : "/collections")
+                    }
                   >
                     <div className="gt-hero-bar-top">
                       <span className="gt-hero-bar-label">{c.label}</span>

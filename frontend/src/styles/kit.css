@@ -620,3 +620,101 @@
   background: var(--c-line-soft);
   border: none;
 }
+
+/* ---------------- COSMETICS GALLERY ---------------- */
+.gt-cosmetics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+.gt-cosmetics h1 {
+  font-size: var(--t-2xl);
+  margin: 0;
+}
+
+.gt-cosmetic-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.gt-cosmetic-tab {
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-pill);
+  background: var(--c-surface);
+  color: var(--c-text-3);
+  cursor: pointer;
+  font-size: var(--t-sm);
+}
+.gt-cosmetic-tab[data-active="true"] {
+  border-color: var(--c-signal);
+  color: var(--c-text);
+  background: color-mix(in oklch, var(--c-signal) 15%, var(--c-surface));
+}
+
+.gt-cosmetic-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.gt-cosmetic-filter {
+  display: inline-flex;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.gt-cosmetic-filter-btn {
+  padding: var(--s-1) var(--s-3);
+  background: var(--c-surface);
+  border: 0;
+  cursor: pointer;
+  color: var(--c-text-3);
+  font-size: var(--t-sm);
+}
+.gt-cosmetic-filter-btn[data-active="true"] {
+  background: var(--c-signal);
+  color: #fff;
+}
+.gt-cosmetic-count {
+  color: var(--c-text-3);
+  font-size: var(--t-sm);
+}
+
+.gt-tilegrid-scroll {
+  overflow-y: auto;
+  max-height: calc(100vh - 18rem);
+}
+/* Keep this width (88px) in sync with TILE_PX in CosmeticsGrid.tsx. */
+.gt-cosmetic-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-1);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  width: 88px;
+  min-width: 0;
+}
+.gt-cosmetic-tile[data-collected="false"] {
+  opacity: 0.42;
+}
+.gt-cosmetic-tile-name {
+  font-size: var(--t-2xs);
+  color: var(--c-text-3);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gt-cosmetic-detail-state {
+  font-size: var(--t-sm);
+  color: var(--c-text-3);
+  margin-top: var(--s-1);
+}
+.gt-cosmetic-empty {
+  color: var(--c-text-3);
+}

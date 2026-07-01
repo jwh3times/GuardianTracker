@@ -86,6 +86,13 @@ frontend/src/
                                    Catalysts.tsx, Triumphs.tsx ({ items, fetchedAt } envelopes),
                                    ItemCard.tsx (collection-only item card),
                                    collectionTree.ts (API node → TreeNode adapters, collection-specific)
+    cosmetics/                 ← browsable /cosmetics gallery (Road to v1 §1). Cosmetics.tsx (type tabs +
+                                   owned/missing/all filter over ?include=all data), CosmeticTile.tsx
+                                   (image-forward tile + owned/missing state), CosmeticsGrid.tsx
+                                   (virtualized tile grid via @tanstack/react-virtual), CosmeticDetail.tsx
+                                   (dedicated view-only drawer — shared ItemDetailDrawer left untouched),
+                                   cosmeticItems.ts (classify by itemType + group), cosmeticBuckets.ts
+                                   (COSMETIC_TYPES: Emblem/Shader/Ghost/Ship/Sparrow/Emote)
     wishlist/WishList.tsx      ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
     weekly/ThisWeek.tsx        ← weekly recommendations / Xûr / milestones (real API)
     dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + weekly

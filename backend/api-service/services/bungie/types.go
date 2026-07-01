@@ -112,6 +112,11 @@ const (
 	ItemTypeMod    = 19
 )
 
+// Item sub-type constants used for classification.
+const (
+	ItemSubTypeShader = 20
+)
+
 // ItemTypeName returns a human-readable item type string, using weapon sub-type for specificity.
 func ItemTypeName(itemType, subType int) string {
 	switch itemType {
@@ -120,6 +125,9 @@ func ItemTypeName(itemType, subType int) string {
 	case ItemTypeArmor:
 		return "Armor"
 	case ItemTypeMod:
+		if subType == ItemSubTypeShader {
+			return "Shader"
+		}
 		return "Mod"
 	case 14:
 		return "Emblem"

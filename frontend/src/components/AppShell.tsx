@@ -31,6 +31,7 @@ const NAV: NavItem[] = [
     icon: "collections",
     path: "/collections",
   },
+  { id: "cosmetics", label: "Cosmetics", icon: "sparkle", path: "/cosmetics" },
   {
     id: "catalysts",
     label: "Catalysts & Crafting",

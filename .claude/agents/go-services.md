@@ -193,6 +193,8 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 - `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
 - `ClassifyDifficulty(source, isExotic)` — positive-match table; returns `"Unrated"` for unmatched sources (no catch-all "Easy"); exported for use by the efficiency engine
 - `DestinyItem.FarmOnly` — set `true` when the collectible source string contains "cannot be reacquired"; surfaced as a "Farm only" chip in the UI
+- `DestinyItem.ItemType` — `toDestinyItem` now names all cosmetic types via `bungie.ItemTypeName` (default case), so cosmetics carry real strings (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`) instead of `"Unknown"`; the frontend cosmetics gallery classifies by these strings
+- Shaders: `bungie.ItemTypeName(19, 20)` → `"Shader"` (subtype-gated), and `manifest.CollectibleCategory` classifies a shader (`ItemType==ItemTypeMod && ItemSubType==ItemSubTypeShader`) as `"cosmetics"` — do NOT add `19` to `cosmeticItemTypes` (that would miscategorize all mods)
 
 ## Weekly service
 

@@ -21,6 +21,10 @@ and this project aims to adhere to [Semantic Versioning](https://semver.org/spec
 - **Collection analysis** — surfaces missing weapons, armor, and exotics,
   classified by acquisition difficulty (Easy / Moderate / Challenging), plus
   cosmetics.
+- **Browsable cosmetics gallery** — a dedicated `/cosmetics` page to browse all
+  cosmetics (emblems, shaders, ghosts, ships, sparrows, emotes) by type, with an
+  owned / missing / all filter, image-forward virtualized tiles, and a view-only
+  detail drawer. Shaders are now classified as cosmetics end-to-end.
 - **Wish list management** — add, prioritize, and annotate desired items, with an
   "available now" cross-check against the current Xûr inventory.
 - **Destiny 2 manifest pipeline** — automatic download, version tracking, hourly
