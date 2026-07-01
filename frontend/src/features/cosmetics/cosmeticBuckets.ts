@@ -6,8 +6,8 @@
  *   - types.go: ItemTypeName cases 14→"Emblem", 21→"Ship", 22→"Sparrow",
  *     23→"Emote", 24→"Ghost" (NOT "Ghost Shell").
  *   - repository.go: cosmeticItemTypes confirms the same five integer types.
- *   - Shaders are NOT cosmetics in this system (absent from cosmeticItemTypes;
- *     ItemTypeName has no shader case).
+ *   - Shaders: classified as cosmetics by the backend (itemType "Shader")
+ *     after Task 1b; TYPE_GLYPH already has Shader: "SHD".
  *   - Ornaments are NOT a distinct flat itemType; leave them out of v1.
  *
  * KNOWN CONCERN (Task 1): toDestinyItem in service.go currently emits
@@ -20,9 +20,10 @@
  */
 export const COSMETIC_TYPES = [
   "Emblem",
+  "Shader",
+  "Ghost",
   "Ship",
   "Sparrow",
-  "Ghost",
   "Emote",
 ] as const;
 
