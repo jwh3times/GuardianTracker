@@ -244,6 +244,11 @@ func TestCollectibleCategory(t *testing.T) {
 		{"exotic armor", mk(bungie.ItemTypeArmor, bungie.TierTypeExotic), "exotics"},
 		{"ship cosmetic", mk(21, bungie.TierTypeLegendary), "cosmetics"},
 		{"ghost cosmetic", mk(24, bungie.TierTypeRare), "cosmetics"},
+		{"shader cosmetic", func() *bungie.InventoryItemDefinition {
+			d := &bungie.InventoryItemDefinition{ItemType: bungie.ItemTypeMod, ItemSubType: bungie.ItemSubTypeShader}
+			d.Inventory.TierType = bungie.TierTypeCommon
+			return d
+		}(), "cosmetics"},
 		{"mod (uncategorized)", mk(19, bungie.TierTypeCommon), ""},
 		{"nil", nil, ""},
 	}

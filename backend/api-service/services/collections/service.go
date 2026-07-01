@@ -285,7 +285,7 @@ func toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
 	case bungie.ItemTypeArmor:
 		di.ItemType = bungie.GetArmorTypeName(item.EquippingBlock.EquipmentSlotTypeHash)
 	default:
-		di.ItemType = "Unknown"
+		di.ItemType = bungie.ItemTypeName(item.ItemType, item.ItemSubType)
 	}
 	if col.SourceString != "" {
 		di.Sources = append(di.Sources, col.SourceString)
