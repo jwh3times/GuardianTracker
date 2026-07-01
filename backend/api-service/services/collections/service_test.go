@@ -289,6 +289,38 @@ func TestToDestinyItem_FarmOnly(t *testing.T) {
 	}
 }
 
+func TestToDestinyItem_ItemType(t *testing.T) {
+	mkCWI := func(itemType, itemSubType int) *manifest.CollectibleWithItem {
+		item := &bungie.InventoryItemDefinition{Hash: 1, ItemType: itemType, ItemSubType: itemSubType}
+		item.Inventory.TierType = bungie.TierTypeLegendary
+		item.DisplayProperties.Name = "Test Item"
+		return &manifest.CollectibleWithItem{
+			Collectible: bungie.CollectibleDefinition{Hash: 1, ItemHash: 1},
+			Item:        item,
+		}
+	}
+
+	cases := []struct {
+		name        string
+		itemType    int
+		itemSubType int
+		wantType    string
+	}{
+		{"shader (19,20)", bungie.ItemTypeMod, bungie.ItemSubTypeShader, "Shader"},
+		{"ghost (24)", 24, 0, "Ghost"},
+		{"ship (21)", 21, 0, "Ship"},
+		{"emblem (14)", 14, 0, "Emblem"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			di := toDestinyItem(mkCWI(tc.itemType, tc.itemSubType))
+			if di.ItemType != tc.wantType {
+				t.Errorf("toDestinyItem ItemType = %q, want %q", di.ItemType, tc.wantType)
+			}
+		})
+	}
+}
+
 func TestGetMissingItemHashes_ExcludesCosmetics(t *testing.T) {
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
 	s := &Service{cache: c}

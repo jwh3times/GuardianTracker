@@ -247,6 +247,13 @@ func CollectibleCategory(item *bungie.InventoryItemDefinition) string {
 	if item == nil {
 		return ""
 	}
+	// Shaders are itemType=19 (ItemTypeMod), itemSubType=20. They must be
+	// classified as cosmetics independently of the cosmeticItemTypes set, because
+	// adding 19 to that set would also catch regular mods (same itemType,
+	// different subType).
+	if item.ItemType == bungie.ItemTypeMod && item.ItemSubType == bungie.ItemSubTypeShader {
+		return "cosmetics"
+	}
 	if _, isCosmetic := cosmeticItemTypes[item.ItemType]; isCosmetic {
 		return "cosmetics"
 	}

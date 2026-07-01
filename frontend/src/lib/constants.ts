@@ -60,6 +60,7 @@ export const TYPE_GLYPH: Record<string, string> = {
   "Leg Armor": "LEG",
   "Class Item": "CLS",
   "Ghost Shell": "GHO",
+  Ghost: "GHO",
   Sparrow: "SPR",
   Ship: "SHP",
   Shader: "SHD",

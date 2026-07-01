@@ -23,6 +23,11 @@ const Collections = lazy(() =>
     default: m.Collections,
   })),
 );
+const Cosmetics = lazy(() =>
+  import("./features/cosmetics/Cosmetics").then((m) => ({
+    default: m.Cosmetics,
+  })),
+);
 const WishList = lazy(() =>
   import("./features/wishlist/WishList").then((m) => ({
     default: m.WishList,
@@ -147,6 +152,7 @@ const AppContent: React.FC = () => {
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/collections" element={<Collections />} />
+          <Route path="/cosmetics" element={<Cosmetics />} />
           <Route path="/wishlist" element={<WishList />} />
           <Route path="/this-week" element={<ThisWeek />} />
           <Route
