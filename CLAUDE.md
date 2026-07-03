@@ -116,6 +116,8 @@ GitHub Actions (`.github/workflows/ci-cd.yml`) — four required jobs:
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
+**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with an auto-incrementing build number on the base version in the root `VERSION` file (`v<x.y.z>.<n>`, e.g. `v0.1.0.4`). Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit. Build numbers restart at 1 when `VERSION` is bumped.
+
 ### Branch protection (`main`)
 
 Ruleset id `17717600` (Settings → Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`), code-scanning gate (errors+warnings / medium+), no bypass actors.
