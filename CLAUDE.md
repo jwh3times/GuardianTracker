@@ -137,6 +137,11 @@ For specialized work, invoke the appropriate subagent:
 | Code review — correctness, security, pattern violations                                                              | `code-reviewer`             |
 | Documentation sync — CLAUDE.md, README.md, SECURITY.md, all agent files                                              | `docs-updater`              |
 
+Docs freshness is auto-checked at the end of every response turn by a read-only Stop hook in
+`.claude/settings.json` (single pre-approved git command + Read/Grep/Glob — it never edits files).
+When it detects drift it blocks the stop with specifics and the main session invokes `docs-updater`
+to fix exactly that drift.
+
 ### Running tests
 
 ```powershell
