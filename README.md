@@ -108,7 +108,7 @@ guardian-tracker/
 ### Prerequisites
 
 - Docker Desktop (for Docker Compose or Minikube deployment)
-- Go 1.21+ and Node.js 20+ (for running services individually)
+- Go 1.25+ and Node.js 26+ (for running services individually — CI pins Go 1.25.x and Node 26)
 - Minikube (for Kubernetes deployment only)
 
 ### 1. Get Bungie API Credentials
@@ -217,10 +217,12 @@ See [SECURITY.md](./SECURITY.md) for credential management, environment setup, a
 
 ## Documentation
 
-- [CLAUDE.md](./CLAUDE.md) — developer guide: architecture, token flow, common tasks
+- [CLAUDE.md](./CLAUDE.md) — developer guide: architecture, auth/token flow, running services, tests
 - [Frontend Guide](./frontend/README.md) — frontend-specific setup and component docs
 - [Kubernetes Deployment](./k8s/README.md) — Minikube setup and troubleshooting
 - [SECURITY.md](./SECURITY.md) — credential management and security guide
+- [SUPPORT.md](./SUPPORT.md) — where to ask questions and report bugs
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — workflow, CI gates, and coverage requirements
 
 ## License
 
