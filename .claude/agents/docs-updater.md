@@ -87,27 +87,16 @@ The following private planning files are gitignored (not committed) and also mai
 
 ## How to detect drift
 
-Before writing, verify against actual code:
+Before writing, verify against actual code. Use the **Grep and Glob tools** (not shell
+commands) — they work identically on Windows, macOS, Linux, and web sessions, and never
+require permission approval:
 
-```powershell
-# What endpoints does api-service expose?
-Select-String -Pattern '(GET|POST|PUT|DELETE|PATCH)\s*\(' backend/api-service/main.go
-
-# What JWT claims are set?
-Select-String -Pattern 'Claims\[|MapClaims|token_type' backend/api-service/auth/jwt.go
-
-# What env vars does each service read?
-Select-String -Pattern 'os\.Getenv|Getenv' backend/api-service/config/config.go
-
-# What Dockerfiles exist and what base images do they use?
-Select-String -Pattern '^FROM' -Recurse -Filter 'Dockerfile*' .
-
-# What K8s manifests exist?
-Get-ChildItem k8s/ -Filter '*.yaml' | Select-Object Name
-
-# What pages exist in the frontend? (pages live under each feature slice)
-Get-ChildItem frontend/src/features -Recurse -Filter '*.tsx' | Where-Object DirectoryName -like '*\pages' | Select-Object Name
-```
+- **Endpoints api-service exposes** — Grep pattern `(GET|POST|PUT|DELETE|PATCH)\(` in `backend/api-service/main.go`
+- **JWT claims set** — Grep pattern `Claims\[|MapClaims|token_type` in `backend/api-service/auth/jwt.go`
+- **Env vars each service reads** — Grep pattern `Getenv` in `backend/api-service/config/config.go`
+- **Dockerfiles and their base images** — Grep pattern `^FROM` with glob `**/Dockerfile*`
+- **K8s manifests present** — Glob `k8s/*.yaml`
+- **Frontend pages** — Glob `frontend/src/features/**/pages/*.tsx`
 
 ## What NOT to change
 
