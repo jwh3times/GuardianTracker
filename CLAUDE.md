@@ -1,4 +1,6 @@
-# Guardian Tracker — Claude Code Guide
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -19,6 +21,22 @@ Frontend (React/TS :5273)
 ```
 
 For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring — see **[Ports in README.md](./README.md#ports)**.
+
+### Key directories
+
+- `backend/api-service/` — Go API: `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency), `config/`, `cache/`.
+- `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `lib/`, `types/`.
+- `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
+
+### Auth & token flow
+
+Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the user's
+Bungie tokens **AES-256-GCM encrypted** in Postgres (`TOKEN_ENCRYPTION_KEY`, with
+`TOKEN_ENCRYPTION_KEY_PREVIOUS` supporting rotation) and issues its own JWTs: short-lived access
+tokens plus per-device rotating refresh sessions with revocation and reuse detection (all
+Postgres-backed — Redis is not used). Role tiers (standard / beta / alpha / admin) and feature
+flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login. Security details and the
+credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
 
 ## Running Services
 
@@ -56,7 +74,7 @@ Dev-validation only — runs `GO_ENV: development` with no Postgres (in-memory t
 
 ```powershell
 # API Service (from backend/api-service/)
-go run .        # or: air   (hot reload via .air.toml)
+go run .
 
 # Frontend (from frontend/)
 npm start       # Vite dev server on :5273
@@ -129,6 +147,17 @@ go test ./...
 # Frontend (from frontend/)
 npm test
 ```
+
+### Full Go coverage locally (matches CI)
+
+A plain `go test ./...` under-reports coverage (~52% vs CI's ~63%) because two test groups
+self-skip: sqlite-backed manifest/search tests need **cgo**, and the `db` package integration tests
+need a reachable Postgres via **`TEST_DATABASE_URL`** (distinct from `DATABASE_URL` — unit tests
+must still exercise the degraded no-DB paths). `./test-local.ps1` (from `backend/api-service/`)
+closes both gaps: it starts the throwaway `test-postgres` Compose service on port **5533** (so it
+won't collide with the main Postgres on 5532), exports `CGO_ENABLED=1` + `TEST_DATABASE_URL`, and
+runs `go test -race -coverprofile`. Flags: `-Html` opens the HTML coverage report; `-Down` removes
+the test container afterwards. Migrations are embedded and applied automatically by the harness.
 
 ## Known Limitations
 
