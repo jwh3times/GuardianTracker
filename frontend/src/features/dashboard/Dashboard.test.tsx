@@ -11,7 +11,8 @@ import {
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { sampleUser, server } from "../../test/testServer";
+import { http, HttpResponse } from "msw";
+import { API, sampleUser, server } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { CharacterProvider } from "../../contexts/CharacterContext";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
@@ -97,5 +98,66 @@ describe("Dashboard page", () => {
     renderDashboard();
     expect(await screen.findByText(/^Welcome back, /)).toBeInTheDocument();
     expect(screen.queryByText(/start with these/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the privacy error state when collections is blocked", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(
+          { error: "restricted", code: "PRIVACY_RESTRICTION" },
+          { status: 403 },
+        ),
+      ),
+    );
+    renderDashboard();
+    expect(
+      await screen.findByText(/your destiny profile is private/i),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the warming state on manifest 503", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(
+          { error: "not ready", code: "MANIFEST_NOT_READY" },
+          { status: 503 },
+        ),
+      ),
+    );
+    renderDashboard();
+    expect(await screen.findByText(/warming up/i)).toBeInTheDocument();
+  });
+
+  it("degrades the weekly panel without zeroing the page", async () => {
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderDashboard();
+    // The muted degraded-state row appears in both the "Do this today" panel
+    // and the "This week — preview" list (task spec: both surfaces degrade
+    // independently), so this is a multi-match query rather than findByText.
+    const degraded = await screen.findAllByText(
+      /couldn't load this week's data/i,
+    );
+    expect(degraded).toHaveLength(2);
+    // Collections hero still renders real numbers:
+    expect(await screen.findByText(/overall/i)).toBeInTheDocument();
+  });
+
+  it("shows a muted row and hides the count header when wishlist fails", async () => {
+    server.use(
+      http.get(`${API}/api/wishlist`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderDashboard();
+    expect(
+      await screen.findByText(/couldn't load your wishlist/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/wishlist items available now/i),
+    ).not.toBeInTheDocument();
   });
 });
