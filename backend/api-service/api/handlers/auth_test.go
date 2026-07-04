@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -406,6 +407,62 @@ func TestRefreshToken_ExpiredSessionAuditReason(t *testing.T) {
 	}
 	if got := ev.Details["reason"]; got != "expired" {
 		t.Errorf("reason = %v, want \"expired\"", got)
+	}
+}
+
+func TestGetBungieProfile_PrefersPrimaryMembership(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/User/GetMembershipsForCurrentUser/" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		fmt.Fprint(w, `{"Response":{"destinyMemberships":[
+			{"membershipType":1,"membershipId":"111","displayName":"XboxCopy"},
+			{"membershipType":3,"membershipId":"333","displayName":"SteamMain"}
+		],"primaryMembershipId":"333"},"ErrorCode":1}`)
+	}))
+	defer srv.Close()
+
+	cfg := &config.Config{BungieAPIBaseURL: srv.URL}
+	h := &AuthHandler{cfg: cfg}
+	p, err := h.getBungieProfile(context.Background(), "tok")
+	if err != nil {
+		t.Fatalf("getBungieProfile: %v", err)
+	}
+	if p.MembershipID != "333" || p.MembershipType != 3 {
+		t.Fatalf("picked %s/%d, want primary 333/3", p.MembershipID, p.MembershipType)
+	}
+}
+
+func TestGetBungieProfile_FallsBackToFirstWithoutPrimary(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"Response":{"destinyMemberships":[
+			{"membershipType":2,"membershipId":"222","displayName":"PSN"}
+		]},"ErrorCode":1}`)
+	}))
+	defer srv.Close()
+	h := &AuthHandler{cfg: &config.Config{BungieAPIBaseURL: srv.URL}}
+	p, err := h.getBungieProfile(context.Background(), "tok")
+	if err != nil {
+		t.Fatalf("getBungieProfile: %v", err)
+	}
+	if p.MembershipID != "222" {
+		t.Fatalf("picked %s, want 222", p.MembershipID)
+	}
+}
+
+func TestExchangeCode_UsesConfiguredTokenURL(t *testing.T) {
+	var hit bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		fmt.Fprint(w, `{"access_token":"a","refresh_token":"r","expires_in":3600,"refresh_expires_in":7776000,"membership_id":"m"}`)
+	}))
+	defer srv.Close()
+	h := &AuthHandler{cfg: &config.Config{BungieTokenURL: srv.URL, BungieClientID: "cid"}}
+	if _, err := h.exchangeCode(context.Background(), "code"); err != nil {
+		t.Fatalf("exchangeCode: %v", err)
+	}
+	if !hit {
+		t.Fatal("configured token URL was not called")
 	}
 }
 

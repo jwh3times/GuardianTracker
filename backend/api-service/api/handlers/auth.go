@@ -78,7 +78,8 @@ func (h *AuthHandler) GetBungieAuthURL(c *gin.Context) {
 		return
 	}
 	authURL := fmt.Sprintf(
-		"https://www.bungie.net/en/OAuth/Authorize?client_id=%s&response_type=code&redirect_uri=%s&state=%s",
+		"%s?client_id=%s&response_type=code&redirect_uri=%s&state=%s",
+		h.cfg.BungieAuthorizeURL,
 		h.cfg.BungieClientID,
 		url.QueryEscape(h.cfg.AuthRedirectURI),
 		url.QueryEscape(state),
@@ -104,7 +105,7 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		return
 	}
 
-	tokenResp, err := h.exchangeCode(code)
+	tokenResp, err := h.exchangeCode(c.Request.Context(), code)
 	if err != nil {
 		log.Printf("Error exchanging code for token: %v", err)
 		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
@@ -113,7 +114,7 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		return
 	}
 
-	profile, err := h.getBungieProfile(tokenResp.AccessToken)
+	profile, err := h.getBungieProfile(c.Request.Context(), tokenResp.AccessToken)
 	if err != nil {
 		log.Printf("Error getting user profile: %v", err)
 		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
@@ -407,7 +408,7 @@ type bungieTokenResponse struct {
 	MembershipID     string `json:"membership_id"`
 }
 
-func (h *AuthHandler) exchangeCode(code string) (*bungieTokenResponse, error) {
+func (h *AuthHandler) exchangeCode(ctx context.Context, code string) (*bungieTokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("code", code)
@@ -416,7 +417,7 @@ func (h *AuthHandler) exchangeCode(code string) (*bungieTokenResponse, error) {
 		data.Set("client_secret", h.cfg.BungieClientSecret)
 	}
 
-	req, err := http.NewRequest("POST", "https://www.bungie.net/platform/app/oauth/token/", strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(ctx, "POST", h.cfg.BungieTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -450,11 +451,13 @@ type bungieAPIResponse struct {
 			MembershipID   string `json:"membershipId"`
 			DisplayName    string `json:"displayName"`
 		} `json:"destinyMemberships"`
+		PrimaryMembershipID string `json:"primaryMembershipId"`
 	} `json:"Response"`
 }
 
-func (h *AuthHandler) getBungieProfile(accessToken string) (*auth.BungieUserProfile, error) {
-	req, err := http.NewRequest("GET", "https://www.bungie.net/Platform/User/GetMembershipsForCurrentUser/", nil)
+func (h *AuthHandler) getBungieProfile(ctx context.Context, accessToken string) (*auth.BungieUserProfile, error) {
+	reqURL := strings.TrimSuffix(h.cfg.BungieAPIBaseURL, "/") + "/User/GetMembershipsForCurrentUser/"
+	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -483,7 +486,17 @@ func (h *AuthHandler) getBungieProfile(accessToken string) (*auth.BungieUserProf
 		return nil, fmt.Errorf("no Destiny memberships found for user")
 	}
 
+	// Cross-save: prefer the primary membership when Bungie reports one;
+	// DestinyMemberships[0] is otherwise arbitrary platform order.
 	m := apiResp.Response.DestinyMemberships[0]
+	if pid := apiResp.Response.PrimaryMembershipID; pid != "" {
+		for _, dm := range apiResp.Response.DestinyMemberships {
+			if dm.MembershipID == pid {
+				m = dm
+				break
+			}
+		}
+	}
 	return &auth.BungieUserProfile{
 		MembershipID:   m.MembershipID,
 		DisplayName:    m.DisplayName,
