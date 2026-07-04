@@ -134,7 +134,7 @@ rm .env.secrets
 - [ ] Rate limiting enabled and tuned for expected traffic
 - [ ] TLS/HTTPS configured (terminate at load balancer or ingress)
 - [ ] Database connections use SSL (`sslmode=require`)
-- [ ] Health endpoints (`/health`, `/ready`) not exposed publicly (behind ingress rules)
+- [ ] Health endpoints (`/health`, `/ready`) are rate-limited and non-sensitive; exposed by design on the API ingress (see InfraTODO Phase 14)
 - [ ] Logging does not include tokens, secrets, or full OAuth codes
 - [ ] Docker images built from pinned base image versions
 - [ ] Kubernetes secrets not stored in version control
