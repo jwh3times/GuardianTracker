@@ -235,4 +235,19 @@ describe("Cosmetics", () => {
     renderCosmetics();
     expect(await screen.findByText(/warming up/i)).toBeInTheDocument();
   });
+
+  it("wires tabs to the tabpanel", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(cosmeticsData),
+      ),
+    );
+    renderCosmetics();
+    const tab = await screen.findByRole("tab", { selected: true });
+    expect(tab).toHaveAttribute("aria-controls", "cosmetics-panel");
+    expect(screen.getByRole("tabpanel")).toHaveAttribute(
+      "id",
+      "cosmetics-panel",
+    );
+  });
 });

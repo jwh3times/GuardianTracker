@@ -112,7 +112,9 @@ export function Cosmetics() {
           <button
             key={t}
             role="tab"
+            id={`cosmetics-tab-${t}`}
             aria-selected={t === activeTab}
+            aria-controls="cosmetics-panel"
             className="gt-cosmetic-tab"
             data-active={t === activeTab}
             onClick={() => setActive(t)}
@@ -141,7 +143,13 @@ export function Cosmetics() {
       {shown.length === 0 ? (
         <p className="gt-cosmetic-empty">Nothing to show for this filter.</p>
       ) : (
-        <CosmeticsGrid items={shown} onOpen={setSelected} />
+        <CosmeticsGrid
+          items={shown}
+          onOpen={setSelected}
+          id="cosmetics-panel"
+          role="tabpanel"
+          aria-labelledby={activeTab ? `cosmetics-tab-${activeTab}` : undefined}
+        />
       )}
       <CosmeticDetail item={selected} onClose={() => setSelected(null)} />
     </div>

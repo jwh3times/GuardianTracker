@@ -208,6 +208,8 @@ function SearchBar() {
       <Icon name="search" size="1rem" style={{ color: "var(--c-text-3)" }} />
       <input
         className="gt-search-input"
+        type="search"
+        aria-label="Search items"
         placeholder="Search items…"
         value={q}
         onChange={(e) => {
@@ -387,6 +389,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 className="gt-iconbtn"
                 onClick={() => setMobileNav(false)}
+                aria-label="Close menu"
               >
                 <Icon name="close" size="1.2rem" />
               </button>

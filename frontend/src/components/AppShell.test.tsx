@@ -219,6 +219,13 @@ describe("AppShell interactions", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels the icon-only controls", () => {
+    renderShell();
+    expect(
+      screen.getByRole("searchbox", { name: /search items/i }),
+    ).toBeInTheDocument();
+  });
+
   it("signs out from the sidebar", async () => {
     renderShell();
     fireEvent.click(screen.getAllByText("Sign out")[0]);

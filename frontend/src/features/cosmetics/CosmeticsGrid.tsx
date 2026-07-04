@@ -11,9 +11,15 @@ const ROW_HEIGHT = 124; // tile (88) + caption + gap; rows are uniform height.
 export function CosmeticsGrid({
   items,
   onOpen,
+  id,
+  role,
+  "aria-labelledby": ariaLabelledBy,
 }: {
   items: GTItem[];
   onOpen: (item: GTItem) => void;
+  id?: string;
+  role?: string;
+  "aria-labelledby"?: string;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [cols, setCols] = useState(1);
@@ -44,6 +50,9 @@ export function CosmeticsGrid({
       ref={parentRef}
       className="gt-tilegrid-scroll"
       data-testid="cosmetics-grid"
+      id={id}
+      role={role}
+      aria-labelledby={ariaLabelledBy}
     >
       <div style={{ height: rows.getTotalSize(), position: "relative" }}>
         {rows.getVirtualItems().map((row) => {
