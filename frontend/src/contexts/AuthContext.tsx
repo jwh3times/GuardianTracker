@@ -5,7 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import type { APIUser, AuthTokenResponse } from "../types/api";
+import type { APIUser } from "../types/api";
 import { apiFetch } from "../lib/api";
 
 interface AuthContextType {
@@ -15,7 +15,6 @@ interface AuthContextType {
   login: (token: string, refreshToken: string, user: APIUser) => void;
   logout: () => void;
   logoutAll: () => void;
-  refreshAccessToken: () => Promise<boolean>;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -62,8 +61,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [auth, setAuth] = useState<AuthState>(readStoredAuth);
   const { user, token, refreshToken } = auth;
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
-
   // Sync React state when apiFetch silently refreshes a token via the 401 retry path.
   // apiFetch writes new tokens to localStorage and fires "guardian_token_refreshed".
   useEffect(() => {
@@ -107,44 +104,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     clearStoredAuth();
   };
 
-  const refreshAccessToken = async (): Promise<boolean> => {
-    if (!refreshToken) {
-      console.error("No refresh token available");
-      return false;
-    }
-
-    try {
-      const response = await fetch(`${API_URL}/api/auth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (!response.ok) {
-        console.error("Failed to refresh token");
-        logout();
-        return false;
-      }
-
-      const data = (await response.json()) as AuthTokenResponse;
-      setAuth({
-        token: data.token,
-        refreshToken: data.refreshToken,
-        user: data.user,
-      });
-      localStorage.setItem("guardian_token", data.token);
-      localStorage.setItem("guardian_refresh_token", data.refreshToken);
-      localStorage.setItem("guardian_user", JSON.stringify(data.user));
-
-      console.log("Successfully refreshed access token");
-      return true;
-    } catch (error) {
-      console.error("Error refreshing token:", error);
-      logout();
-      return false;
-    }
-  };
-
   const value: AuthContextType = {
     user,
     token,
@@ -152,7 +111,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     logoutAll,
-    refreshAccessToken,
     isAuthenticated: !!token && !!user,
     // Auth is hydrated synchronously from localStorage during render, so it is
     // always resolved by the time consumers read it.

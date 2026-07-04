@@ -288,67 +288,6 @@ describe("AuthContext refresh & recovery", () => {
     spy.mockRestore();
   });
 
-  it("refreshAccessToken returns false with no refresh token", async () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-    let ok = true;
-    await act(async () => {
-      ok = await result.current.refreshAccessToken();
-    });
-    expect(ok).toBe(false);
-    spy.mockRestore();
-  });
-
-  it("refreshAccessToken stores new tokens on success", async () => {
-    // readStoredAuth only hydrates refreshToken when token+user are also present.
-    localStorage.setItem("guardian_token", "old");
-    localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
-    localStorage.setItem("guardian_refresh_token", "r1");
-    server.use(
-      http.post(`${API}/api/auth/refresh`, () =>
-        HttpResponse.json({
-          token: "newtok",
-          refreshToken: "newref",
-          user: sampleUser,
-        }),
-      ),
-    );
-    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-    let ok = false;
-    await act(async () => {
-      ok = await result.current.refreshAccessToken();
-    });
-    expect(ok).toBe(true);
-    expect(localStorage.getItem("guardian_token")).toBe("newtok");
-    expect(result.current.isAuthenticated).toBe(true);
-    spy.mockRestore();
-  });
-
-  it("refreshAccessToken logs out when the refresh fails", async () => {
-    localStorage.setItem("guardian_refresh_token", "r1");
-    localStorage.setItem("guardian_token", "old");
-    localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
-    server.use(
-      http.post(
-        `${API}/api/auth/refresh`,
-        () => new HttpResponse(null, { status: 401 }),
-      ),
-      http.post(`${API}/api/auth/logout`, () =>
-        HttpResponse.json({ ok: true }),
-      ),
-    );
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-    let ok = true;
-    await act(async () => {
-      ok = await result.current.refreshAccessToken();
-    });
-    expect(ok).toBe(false);
-    expect(localStorage.getItem("guardian_token")).toBeNull();
-    spy.mockRestore();
-  });
-
   it("syncs state when a token-refreshed event fires", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     expect(result.current.isAuthenticated).toBe(false);

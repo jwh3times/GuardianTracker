@@ -1,7 +1,23 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  afterAll,
+} from "vitest";
+import { http, HttpResponse } from "msw";
+import { API, server } from "../test/testServer";
 import { apiFetch, ApiError } from "./api";
 
-const API = "http://localhost:8081";
+// MSW lifecycle scoped to this file — the global lift across all test files
+// lands in Task 2.8. Only the "refresh handling" suite below uses MSW; the
+// "apiFetch" suite above stubs global fetch directly and is unaffected.
+beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -141,5 +157,81 @@ describe("apiFetch", () => {
     fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
     const out = await apiFetch<void>("/api/thing", { method: "DELETE" });
     expect(out).toBeUndefined();
+  });
+});
+
+describe("apiFetch refresh handling", () => {
+  beforeEach(() => {
+    localStorage.setItem("guardian_token", "expired");
+    localStorage.setItem("guardian_refresh_token", "refresh-abc");
+    localStorage.setItem(
+      "guardian_user",
+      JSON.stringify({ membershipId: "1" }),
+    );
+  });
+  afterEach(() => localStorage.clear());
+
+  it("keeps the session and throws a retryable error when refresh is rate-limited (429)", async () => {
+    server.use(
+      http.get(`${API}/api/thing`, () =>
+        HttpResponse.json({ error: "nope" }, { status: 401 }),
+      ),
+      http.post(`${API}/api/auth/refresh`, () =>
+        HttpResponse.json({ error: "slow down" }, { status: 429 }),
+      ),
+    );
+    await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
+    // Session NOT destroyed — the refresh token survives a transient failure.
+    expect(localStorage.getItem("guardian_refresh_token")).toBe("refresh-abc");
+  });
+
+  it("keeps the session when refresh hits a 5xx", async () => {
+    server.use(
+      http.get(`${API}/api/thing`, () =>
+        HttpResponse.json({ error: "nope" }, { status: 401 }),
+      ),
+      http.post(`${API}/api/auth/refresh`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 503 }),
+      ),
+    );
+    await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
+    expect(localStorage.getItem("guardian_token")).toBe("expired");
+  });
+
+  it("clears the session on a definitive 401 from the refresh endpoint", async () => {
+    server.use(
+      http.get(`${API}/api/thing`, () =>
+        HttpResponse.json({ error: "nope" }, { status: 401 }),
+      ),
+      http.post(`${API}/api/auth/refresh`, () =>
+        HttpResponse.json({ error: "revoked" }, { status: 401 }),
+      ),
+    );
+    await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
+    // Definitive auth failure — session cleared.
+    expect(localStorage.getItem("guardian_token")).toBeNull();
+    expect(localStorage.getItem("guardian_refresh_token")).toBeNull();
+  });
+
+  it("retries the original request after a successful refresh", async () => {
+    let served = false;
+    server.use(
+      http.get(`${API}/api/thing`, () => {
+        if (!served) {
+          served = true;
+          return HttpResponse.json({ error: "nope" }, { status: 401 });
+        }
+        return HttpResponse.json({ ok: true });
+      }),
+      http.post(`${API}/api/auth/refresh`, () =>
+        HttpResponse.json({
+          token: "fresh",
+          refreshToken: "refresh-def",
+          user: { membershipId: "1" },
+        }),
+      ),
+    );
+    await expect(apiFetch("/api/thing")).resolves.toEqual({ ok: true });
+    expect(localStorage.getItem("guardian_token")).toBe("fresh");
   });
 });
