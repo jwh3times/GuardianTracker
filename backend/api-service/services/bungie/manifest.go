@@ -2,7 +2,6 @@ package bungie
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -122,14 +121,14 @@ func (m *ManifestService) Download(ctx context.Context) error {
 	if dbURL == "" {
 		return fmt.Errorf("no English manifest database URL found")
 	}
-	fullURL := "https://www.bungie.net" + dbURL
+	fullURL := m.client.cdnBaseURL + dbURL
 	log.Printf("Downloading manifest version %s from %s", newVersion, fullURL)
-	zipData, err := m.client.DownloadFile(ctx, fullURL)
-	if err != nil {
+	zipPath := m.dbPath + ".zip.tmp"
+	if err := m.client.DownloadFileToPath(ctx, fullURL, zipPath); err != nil {
 		return fmt.Errorf("failed to download manifest: %w", err)
 	}
-	log.Printf("Downloaded %d bytes, extracting...", len(zipData))
-	if err := m.extractManifest(zipData); err != nil {
+	defer os.Remove(zipPath)
+	if err := m.extractManifest(zipPath); err != nil {
 		return fmt.Errorf("failed to extract manifest: %w", err)
 	}
 	m.mu.Lock()
@@ -144,11 +143,12 @@ func (m *ManifestService) Download(ctx context.Context) error {
 	return nil
 }
 
-func (m *ManifestService) extractManifest(zipData []byte) error {
-	zipReader, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
+func (m *ManifestService) extractManifest(zipPath string) error {
+	zipReader, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return fmt.Errorf("failed to read zip: %w", err)
 	}
+	defer zipReader.Close()
 	var dbFile *zip.File
 	for _, f := range zipReader.File {
 		if strings.HasSuffix(f.Name, ".content") {

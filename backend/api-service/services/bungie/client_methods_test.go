@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -157,30 +159,51 @@ func TestGetCommonSettings_BungieError(t *testing.T) {
 	}
 }
 
-func TestDownloadFile_ReturnsBytes(t *testing.T) {
+func TestDownloadFileToPath_WritesFile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("manifest-bytes"))
 	}))
 	defer srv.Close()
 
 	c := NewClient("k", "http://unused", 100, 100)
-	data, err := c.DownloadFile(context.Background(), srv.URL+"/world.content")
+	dest := filepath.Join(t.TempDir(), "world.content")
+	if err := c.DownloadFileToPath(context.Background(), srv.URL+"/world.content", dest); err != nil {
+		t.Fatalf("DownloadFileToPath: %v", err)
+	}
+	data, err := os.ReadFile(dest)
 	if err != nil {
-		t.Fatalf("DownloadFile: %v", err)
+		t.Fatalf("read dest: %v", err)
 	}
 	if string(data) != "manifest-bytes" {
 		t.Errorf("data = %q", data)
 	}
 }
 
-func TestDownloadFile_Non200(t *testing.T) {
+func TestDownloadFileToPath_Non200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer srv.Close()
 
 	c := NewClient("k", "http://unused", 100, 100)
-	if _, err := c.DownloadFile(context.Background(), srv.URL+"/missing"); err == nil {
+	dest := filepath.Join(t.TempDir(), "world.content")
+	if err := c.DownloadFileToPath(context.Background(), srv.URL+"/missing", dest); err == nil {
 		t.Fatal("expected error for 404 download")
+	}
+}
+
+func TestSetCDNBaseURL(t *testing.T) {
+	c := NewClient("k", "http://unused", 100, 100)
+	if c.cdnBaseURL != "https://www.bungie.net" {
+		t.Errorf("default cdnBaseURL = %q", c.cdnBaseURL)
+	}
+	c.SetCDNBaseURL("http://fake-bungie:8090/")
+	if c.cdnBaseURL != "http://fake-bungie:8090" {
+		t.Errorf("cdnBaseURL after SetCDNBaseURL = %q, want trailing slash trimmed", c.cdnBaseURL)
+	}
+	// Empty string must not clobber the existing value.
+	c.SetCDNBaseURL("")
+	if c.cdnBaseURL != "http://fake-bungie:8090" {
+		t.Errorf("cdnBaseURL after empty SetCDNBaseURL = %q, want unchanged", c.cdnBaseURL)
 	}
 }

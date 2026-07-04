@@ -137,6 +137,7 @@ func main() {
 
 	// Bungie API client
 	bungieClient := bungie.NewClient(cfg.BungieAPIKey, cfg.BungieAPIBaseURL, cfg.RateLimitRPS, cfg.RateLimitBurst)
+	bungieClient.SetCDNBaseURL(cfg.BungieCDNBaseURL)
 
 	// Manifest — EnsureReady runs in a goroutine so the HTTP server starts immediately.
 	// The collections endpoint returns 503 until the manifest database is available.
