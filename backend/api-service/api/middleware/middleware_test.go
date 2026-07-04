@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -55,8 +54,12 @@ func TestMaxBodyBytes_Rejects(t *testing.T) {
 	if small.Code != 200 {
 		t.Fatalf("small body got %d, want 200", small.Code)
 	}
+
+	// VALID JSON that exceeds the 64-byte cap — an invalid payload would 400
+	// from JSON syntax alone and prove nothing about MaxBytesReader.
+	oversized := `{"a":"` + strings.Repeat("a", 128) + `"}`
 	big := httptest.NewRecorder()
-	r.ServeHTTP(big, httptest.NewRequest("POST", "/x", bytes.NewReader(bytes.Repeat([]byte("a"), 1024))))
+	r.ServeHTTP(big, httptest.NewRequest("POST", "/x", strings.NewReader(oversized)))
 	if big.Code != 400 {
 		t.Fatalf("big body got %d, want 400", big.Code)
 	}
