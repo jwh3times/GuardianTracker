@@ -6,7 +6,6 @@ import {
   vi,
   beforeAll,
   afterAll,
-  afterEach,
   beforeEach,
 } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -26,7 +25,6 @@ class ResizeObserverStub {
   disconnect() {}
 }
 beforeAll(() => {
-  server.listen({ onUnhandledRequest: "error" });
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     configurable: true,
@@ -52,9 +50,7 @@ beforeAll(() => {
       toJSON: () => {},
     }) as DOMRect;
 });
-afterEach(() => server.resetHandlers());
 afterAll(() => {
-  server.close();
   vi.unstubAllGlobals();
 });
 
@@ -204,8 +200,50 @@ describe("Cosmetics", () => {
       ),
     );
     renderCosmetics();
+    expect(await screen.findByText("No cosmetics data")).toBeInTheDocument();
+  });
+
+  it("shows the privacy error state when the collections request is forbidden", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(
+          { error: "Profile is private", code: "PRIVACY_RESTRICTION" },
+          { status: 403 },
+        ),
+      ),
+    );
+    renderCosmetics();
     expect(
-      await screen.findByText("Cosmetics data unavailable."),
+      await screen.findByText(/your destiny profile is private/i),
     ).toBeInTheDocument();
+    expect(screen.getByText("Retry")).toBeInTheDocument();
+  });
+
+  it("shows the manifest-warming error state when collections return 503", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(
+          { error: "Manifest not ready", code: "MANIFEST_NOT_READY" },
+          { status: 503 },
+        ),
+      ),
+    );
+    renderCosmetics();
+    expect(await screen.findByText(/warming up/i)).toBeInTheDocument();
+  });
+
+  it("wires tabs to the tabpanel", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(cosmeticsData),
+      ),
+    );
+    renderCosmetics();
+    const tab = await screen.findByRole("tab", { selected: true });
+    expect(tab).toHaveAttribute("aria-controls", "cosmetics-panel");
+    expect(screen.getByRole("tabpanel")).toHaveAttribute(
+      "id",
+      "cosmetics-panel",
+    );
   });
 });

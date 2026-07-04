@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom";
-import { afterEach } from "vitest";
+import { afterAll, afterEach, beforeAll } from "vitest";
+import { server } from "./testServer";
 
 // Node 22+ defines an experimental global `localStorage` that is undefined
 // unless --localstorage-file is passed, shadowing jsdom's implementation.
@@ -44,3 +45,9 @@ if (
 afterEach(() => {
   globalThis.localStorage?.clear();
 });
+
+// One MSW lifecycle for every suite — individual files keep using
+// server.use(...) for per-test overrides (resetHandlers clears them).
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());

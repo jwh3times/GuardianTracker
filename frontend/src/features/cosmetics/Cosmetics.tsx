@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Button, EmptyState, Skeleton } from "../../components/primitives";
 import { useAuth } from "../../contexts/AuthContext";
+import { errorState } from "../../lib/errorState";
 import { collectionsQuery } from "../../lib/queries";
 import { COSMETIC_TYPES } from "./cosmeticBuckets";
 import { cosmeticItems, groupByType } from "./cosmeticItems";
@@ -21,7 +23,7 @@ const FILTERS: Filter[] = ["all", "owned", "missing"];
 
 export function Cosmetics() {
   const { user } = useAuth();
-  const { data, isLoading, isError } = useQuery(
+  const { data, isLoading, isError, error, refetch } = useQuery(
     collectionsQuery(user?.membershipType, user?.membershipId, true),
   );
 
@@ -66,15 +68,27 @@ export function Cosmetics() {
     return (
       <div className="gt-cosmetics">
         <h1>Cosmetics</h1>
-        <p>Loading cosmetics…</p>
+        <div className="gt-tilegrid-scroll">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--s-3)" }}>
+            {Array.from({ length: 12 }, (_, i) => (
+              <Skeleton key={i} w="88px" h="6.5rem" r="var(--r-md)" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
   if (isError) {
+    const copy = errorState(error);
     return (
       <div className="gt-cosmetics">
         <h1>Cosmetics</h1>
-        <p>Couldn&apos;t load cosmetics.</p>
+        <EmptyState
+          icon={copy.icon}
+          title={copy.title}
+          body={copy.body}
+          action={<Button onClick={() => void refetch()}>Retry</Button>}
+        />
       </div>
     );
   }
@@ -82,7 +96,10 @@ export function Cosmetics() {
     return (
       <div className="gt-cosmetics">
         <h1>Cosmetics</h1>
-        <p className="gt-cosmetic-empty">Cosmetics data unavailable.</p>
+        <EmptyState
+          title="No cosmetics data"
+          body="Refresh your profile or try again after the next manifest update."
+        />
       </div>
     );
   }
@@ -95,7 +112,9 @@ export function Cosmetics() {
           <button
             key={t}
             role="tab"
+            id={`cosmetics-tab-${t}`}
             aria-selected={t === activeTab}
+            aria-controls="cosmetics-panel"
             className="gt-cosmetic-tab"
             data-active={t === activeTab}
             onClick={() => setActive(t)}
@@ -124,7 +143,13 @@ export function Cosmetics() {
       {shown.length === 0 ? (
         <p className="gt-cosmetic-empty">Nothing to show for this filter.</p>
       ) : (
-        <CosmeticsGrid items={shown} onOpen={setSelected} />
+        <CosmeticsGrid
+          items={shown}
+          onOpen={setSelected}
+          id="cosmetics-panel"
+          role="tabpanel"
+          aria-labelledby={activeTab ? `cosmetics-tab-${activeTab}` : undefined}
+        />
       )}
       <CosmeticDetail item={selected} onClose={() => setSelected(null)} />
     </div>

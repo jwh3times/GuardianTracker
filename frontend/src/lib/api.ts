@@ -26,27 +26,35 @@ export class ApiError extends Error {
   }
 }
 
-// Single in-flight refresh — concurrent 401s share one refresh call.
-let refreshPromise: Promise<string | null> | null = null;
+type RefreshResult =
+  { ok: true; token: string } | { ok: false; transient: boolean };
 
-async function doRefresh(): Promise<string | null> {
+// Single in-flight refresh — concurrent 401s share one refresh call.
+let refreshPromise: Promise<RefreshResult> | null = null;
+
+async function doRefresh(): Promise<RefreshResult> {
   const refreshToken = localStorage.getItem("guardian_refresh_token");
-  if (!refreshToken) return null;
+  if (!refreshToken) return { ok: false, transient: false };
   try {
     const res = await fetch(`${API_URL}/api/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as AuthTokenResponse;
-    localStorage.setItem("guardian_token", data.token);
-    localStorage.setItem("guardian_refresh_token", data.refreshToken);
-    localStorage.setItem("guardian_user", JSON.stringify(data.user));
-    window.dispatchEvent(new Event("guardian_token_refreshed"));
-    return data.token;
+    if (res.ok) {
+      const data = (await res.json()) as AuthTokenResponse;
+      localStorage.setItem("guardian_token", data.token);
+      localStorage.setItem("guardian_refresh_token", data.refreshToken);
+      localStorage.setItem("guardian_user", JSON.stringify(data.user));
+      window.dispatchEvent(new Event("guardian_token_refreshed"));
+      return { ok: true, token: data.token };
+    }
+    // 401/403 → the refresh session is gone: definitive logout.
+    // 429 / 5xx → server busy or down: transient, keep the session.
+    return { ok: false, transient: res.status === 429 || res.status >= 500 };
   } catch {
-    return null;
+    // Network error → transient (don't destroy a session on a blip).
+    return { ok: false, transient: true };
   }
 }
 
@@ -69,20 +77,29 @@ export async function apiFetch<T>(
         refreshPromise = null;
       });
     }
-    const newToken = await refreshPromise;
+    const result = await refreshPromise;
 
-    if (!newToken) {
+    if (result.ok) {
+      res = await fetch(`${API_URL}${path}`, {
+        ...init,
+        headers: { ...headers, Authorization: `Bearer ${result.token}` },
+      });
+    } else if (result.transient) {
+      // Refresh temporarily unavailable (rate-limited / server error). Keep the
+      // session and surface a retryable error so callers show "try again," not logout.
+      throw new ApiError(
+        "Session refresh temporarily unavailable",
+        503,
+        "REFRESH_UNAVAILABLE",
+      );
+    } else {
+      // Definitive auth failure — clear the session and send to login.
       localStorage.removeItem("guardian_token");
       localStorage.removeItem("guardian_refresh_token");
       localStorage.removeItem("guardian_user");
       window.location.href = "/login";
-      throw new Error("Session expired");
+      throw new ApiError("Session expired", 401, "SESSION_EXPIRED");
     }
-
-    res = await fetch(`${API_URL}${path}`, {
-      ...init,
-      headers: { ...headers, Authorization: `Bearer ${newToken}` },
-    });
   }
 
   if (!res.ok) {

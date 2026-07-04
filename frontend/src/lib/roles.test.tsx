@@ -1,13 +1,5 @@
 import React from "react";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  afterEach,
-  beforeEach,
-} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -21,14 +13,16 @@ import { LockedFeature } from "../features/admin/AdminKit";
 import { AuthProvider } from "../contexts/AuthContext";
 import { ToastProvider } from "../components/Toast";
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 const authed = () => {
   localStorage.setItem("guardian_token", "test-token");
   localStorage.setItem("guardian_refresh_token", "test-refresh");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
+  // Not an onboarding test — mark first-run done so the Dashboard greeting
+  // reads "Welcome back" as these assertions expect.
+  localStorage.setItem(
+    `guardian_first_run_done:${sampleUser.membershipId}`,
+    "2026-01-01",
+  );
 };
 
 beforeEach(() => {

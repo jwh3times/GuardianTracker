@@ -1,14 +1,5 @@
 import React from "react";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-  afterEach,
-  vi,
-} from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -24,14 +15,16 @@ import { ToastProvider } from "./Toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoadingSpinner } from "./LoadingSpinner";
 
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
-
 const authed = () => {
   localStorage.setItem("guardian_token", "test-token");
   localStorage.setItem("guardian_refresh_token", "test-refresh");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
+  // Not an onboarding test — mark first-run done so the Dashboard greeting
+  // reads "Welcome back" as these assertions expect.
+  localStorage.setItem(
+    `guardian_first_run_done:${sampleUser.membershipId}`,
+    "2026-01-01",
+  );
 };
 
 describe("App routing", () => {
@@ -213,6 +206,13 @@ describe("AppShell interactions", () => {
     ).toBeInTheDocument();
   });
 
+  it("labels the icon-only controls", () => {
+    renderShell();
+    expect(
+      screen.getByRole("searchbox", { name: /search items/i }),
+    ).toBeInTheDocument();
+  });
+
   it("signs out from the sidebar", async () => {
     renderShell();
     fireEvent.click(screen.getAllByText("Sign out")[0]);
@@ -226,7 +226,7 @@ function Boom(): React.ReactElement {
 }
 
 describe("ErrorBoundary", () => {
-  it("renders the default fallback and shows the dev error message", () => {
+  it("renders the gt fallback and shows the dev error message", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <ErrorBoundary>
@@ -234,7 +234,12 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>,
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
-    expect(screen.getByText("kaboom")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "An unexpected error occurred. Reload the page to continue.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Error: kaboom")).toBeInTheDocument();
     spy.mockRestore();
   });
 
@@ -258,7 +263,7 @@ describe("ErrorBoundary", () => {
     expect(screen.getByText("safe-child")).toBeInTheDocument();
   });
 
-  it("wires the reset and reload actions", () => {
+  it("wires the reload action", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const reload = vi.fn();
     const original = window.location;
@@ -271,9 +276,8 @@ describe("ErrorBoundary", () => {
         <Boom />
       </ErrorBoundary>,
     );
-    fireEvent.click(screen.getByText("Reload Page"));
+    fireEvent.click(screen.getByText("Reload"));
     expect(reload).toHaveBeenCalled();
-    fireEvent.click(screen.getByText("Try Again"));
     Object.defineProperty(window, "location", {
       configurable: true,
       value: original,
