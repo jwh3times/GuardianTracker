@@ -153,3 +153,47 @@ func TestLoad_AuditRetentionClamp(t *testing.T) {
 		t.Errorf("AuditRetentionDays = %d with input 30, want 30", c.AuditRetentionDays)
 	}
 }
+
+func TestLoadBungieURLDefaults(t *testing.T) {
+	cfg := Load()
+	if cfg.BungieAuthorizeURL != "https://www.bungie.net/en/OAuth/Authorize" {
+		t.Errorf("BungieAuthorizeURL = %q", cfg.BungieAuthorizeURL)
+	}
+	if cfg.BungieTokenURL != "https://www.bungie.net/platform/app/oauth/token/" {
+		t.Errorf("BungieTokenURL = %q", cfg.BungieTokenURL)
+	}
+	if cfg.BungieCDNBaseURL != "https://www.bungie.net" {
+		t.Errorf("BungieCDNBaseURL = %q", cfg.BungieCDNBaseURL)
+	}
+	if cfg.AuthRateLimitRPS != 5 || cfg.AuthRateLimitBurst != 10 {
+		t.Errorf("auth rate limit = %d/%d, want 5/10", cfg.AuthRateLimitRPS, cfg.AuthRateLimitBurst)
+	}
+	if cfg.MaxBodyBytes != 65536 {
+		t.Errorf("MaxBodyBytes = %d, want 65536", cfg.MaxBodyBytes)
+	}
+}
+
+func TestLoadBungieURLOverrides(t *testing.T) {
+	t.Setenv("BUNGIE_AUTHORIZE_URL", "http://localhost:8090/en/OAuth/Authorize")
+	t.Setenv("BUNGIE_TOKEN_URL", "http://fake:8090/platform/app/oauth/token/")
+	t.Setenv("BUNGIE_CDN_BASE_URL", "http://fake:8090")
+	cfg := Load()
+	if cfg.BungieAuthorizeURL != "http://localhost:8090/en/OAuth/Authorize" ||
+		cfg.BungieTokenURL != "http://fake:8090/platform/app/oauth/token/" ||
+		cfg.BungieCDNBaseURL != "http://fake:8090" {
+		t.Errorf("overrides not honored: %+v", cfg)
+	}
+}
+
+func TestValidateRejectsWildcardCORSInProduction(t *testing.T) {
+	t.Setenv("GO_ENV", "production")
+	t.Setenv("JWT_SECRET", "0123456789abcdef0123456789abcdef")
+	t.Setenv("BUNGIE_API_KEY", "k")
+	t.Setenv("BUNGIE_CLIENT_ID", "c")
+	t.Setenv("DATABASE_URL", "postgres://x")
+	t.Setenv("TOKEN_ENCRYPTION_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "*")
+	if err := Load().Validate(); err == nil {
+		t.Fatal("expected Validate() error for CORS_ALLOWED_ORIGINS=* in production")
+	}
+}

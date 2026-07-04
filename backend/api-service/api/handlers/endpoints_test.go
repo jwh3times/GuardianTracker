@@ -48,7 +48,7 @@ func newTokenStore(t *testing.T) *auth.TokenStore {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return auth.NewTokenStore(ctx, "cid", "secret", nil, nil)
+	return auth.NewTokenStore(ctx, "cid", "secret", "", nil, nil)
 }
 
 func storeValidToken(ts *auth.TokenStore, id string) {
@@ -66,7 +66,7 @@ func TestHealthHandlers(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "manifest.sqlite")
 	ms := bungie.NewManifestService(bungie.NewClient("k", "http://x", 100, 100), dbPath, time.Hour)
-	h := NewHealthHandler(ms)
+	h := NewHealthHandler(ms, nil)
 
 	r := gin.New()
 	r.GET("/health", h.Health)

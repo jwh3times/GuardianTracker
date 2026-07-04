@@ -177,7 +177,7 @@ cd backend/api-service && go run .
 cd frontend && npm start
 ```
 
-> **Note:** On first run, the API Service downloads the Destiny 2 manifest database (~100MB). The collections endpoint returns 503 until the download completes.
+> **Note:** On first run, the API Service downloads the Destiny 2 manifest database (~100–200 MB). The collections endpoint returns 503 until the download completes.
 
 ## Development
 
@@ -206,7 +206,7 @@ go vet ./...
 
 ## CI/CD
 
-GitHub Actions runs on every push to `main` and `develop`:
+GitHub Actions runs on pushes to `main`/`develop` and pull requests to `main`:
 
 1. Type-check, lint, and test all services
 2. Build Docker images (build validation; push not yet configured)

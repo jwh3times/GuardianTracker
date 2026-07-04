@@ -101,7 +101,7 @@ func newTestStore(t *testing.T, repo TokenRepo, tokenURL string) (*TokenStore, *
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	s := NewTokenStore(ctx, "client-id", "client-secret", repo, cipher)
+	s := NewTokenStore(ctx, "client-id", "client-secret", "", repo, cipher)
 	if tokenURL != "" {
 		s.tokenURL = tokenURL
 	}
@@ -160,7 +160,7 @@ func TestTokenStore_DBLoadOnMemoryMiss(t *testing.T) {
 	// tokens must be loaded and decrypted from the DB.
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	s2 := NewTokenStore(ctx, "client-id", "client-secret", repo, cipher)
+	s2 := NewTokenStore(ctx, "client-id", "client-secret", "", repo, cipher)
 
 	got, err := s2.GetValidToken("user-1")
 	if err != nil {

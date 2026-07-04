@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,15 +21,24 @@ type Client struct {
 	baseURL    string
 	apiKey     string
 	limiter    *rate.Limiter
+
+	// cdnBaseURL is the host for static content downloads (the manifest zip's
+	// mobileWorldContentPaths are host-relative). Overridable for E2E.
+	cdnBaseURL string
+	// downloadClient has a long timeout for the multi-hundred-MB manifest zip —
+	// the shared 30s API client would abort mid-download on slow egress.
+	downloadClient *http.Client
 }
 
 // NewClient creates a new Bungie API client with rate limiting.
 func NewClient(apiKey, baseURL string, rps, burst int) *Client {
 	return &Client{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		baseURL:    baseURL,
-		apiKey:     apiKey,
-		limiter:    rate.NewLimiter(rate.Limit(rps), burst),
+		httpClient:     &http.Client{Timeout: 30 * time.Second},
+		baseURL:        baseURL,
+		apiKey:         apiKey,
+		limiter:        rate.NewLimiter(rate.Limit(rps), burst),
+		cdnBaseURL:     "https://www.bungie.net",
+		downloadClient: &http.Client{Timeout: 10 * time.Minute},
 	}
 }
 
@@ -271,25 +282,54 @@ func (c *Client) GetCommonSettings(ctx context.Context) (*CoreSettings, error) {
 	}, nil
 }
 
-// DownloadFile downloads a file from the given URL into a byte slice.
-func (c *Client) DownloadFile(ctx context.Context, url string) ([]byte, error) {
+// SetCDNBaseURL overrides the static-content host (E2E/fake-Bungie).
+func (c *Client) SetCDNBaseURL(u string) {
+	if u != "" {
+		c.cdnBaseURL = strings.TrimSuffix(u, "/")
+	}
+}
+
+// DownloadFileToPath streams a file to dest without buffering it in memory
+// (the manifest zip is large). Simple 3-attempt retry; respects ctx.
+func (c *Client) DownloadFileToPath(ctx context.Context, url, dest string) error {
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		lastErr = c.downloadToPathOnce(ctx, url, dest)
+		if lastErr == nil {
+			return nil
+		}
+		log.Printf("download attempt %d/3 failed: %v", attempt+1, lastErr)
+	}
+	return lastErr
+}
+
+func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	req.Header.Set("X-API-Key", c.apiKey)
+	resp, err := c.downloadClient.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download failed with status: %d", resp.StatusCode)
+		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
 	}
-	data, err := io.ReadAll(resp.Body)
+	out, err := os.Create(dest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return fmt.Errorf("failed to create %s: %w", dest, err)
 	}
-	return data, nil
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		out.Close()
+		os.Remove(dest)
+		return fmt.Errorf("failed to write %s: %w", dest, err)
+	}
+	return out.Close()
 }
 
 // Profile component constants.

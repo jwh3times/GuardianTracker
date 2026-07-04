@@ -90,15 +90,19 @@ type TokenStore struct {
 }
 
 // NewTokenStore creates a token store and starts the background cleanup goroutine.
-// repo and cipher may both be nil for degraded/dev mode (memory-only, no encryption).
-func NewTokenStore(ctx context.Context, clientID, clientSecret string, repo TokenRepo, cipher *TokenCipher) *TokenStore {
+// repo and cipher may both be nil for degraded/dev mode. tokenURL overrides the
+// Bungie OAuth token endpoint (E2E/fake-Bungie); empty uses the real one.
+func NewTokenStore(ctx context.Context, clientID, clientSecret, tokenURL string, repo TokenRepo, cipher *TokenCipher) *TokenStore {
+	if tokenURL == "" {
+		tokenURL = bungieTokenURL
+	}
 	s := &TokenStore{
 		tokens:       make(map[string]*BungieTokens),
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		repo:         repo,
 		cipher:       cipher,
-		tokenURL:     bungieTokenURL,
+		tokenURL:     tokenURL,
 	}
 	go s.cleanupLoop(ctx)
 	return s

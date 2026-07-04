@@ -20,6 +20,13 @@ type Config struct {
 	BungieClientSecret string
 	AuthRedirectURI    string
 
+	// BungieAuthorizeURL / BungieTokenURL / BungieCDNBaseURL let dev & E2E point
+	// the OAuth pages, token endpoint, and manifest-zip host at a fake Bungie.
+	// BungieAuthorizeURL is browser-facing; the other two are server-side.
+	BungieAuthorizeURL string
+	BungieTokenURL     string
+	BungieCDNBaseURL   string
+
 	JWTSecret            string
 	JWTExpiryHours       int
 	JWTRefreshExpiryDays int
@@ -29,6 +36,12 @@ type Config struct {
 
 	RateLimitRPS   int
 	RateLimitBurst int
+
+	// AuthRateLimitRPS/Burst throttle the unauthenticated auth endpoints per
+	// client IP. MaxBodyBytes caps every request body (http.MaxBytesReader).
+	AuthRateLimitRPS   int
+	AuthRateLimitBurst int
+	MaxBodyBytes       int64
 
 	CacheEnabled        bool
 	CacheTTLCollections time.Duration
@@ -65,6 +78,10 @@ func Load() *Config {
 		BungieClientSecret: os.Getenv("BUNGIE_CLIENT_SECRET"),
 		AuthRedirectURI:    getEnv("AUTH_REDIRECT_URI", "http://localhost:3000/auth/callback"),
 
+		BungieAuthorizeURL: getEnv("BUNGIE_AUTHORIZE_URL", "https://www.bungie.net/en/OAuth/Authorize"),
+		BungieTokenURL:     getEnv("BUNGIE_TOKEN_URL", "https://www.bungie.net/platform/app/oauth/token/"),
+		BungieCDNBaseURL:   getEnv("BUNGIE_CDN_BASE_URL", "https://www.bungie.net"),
+
 		JWTSecret:            os.Getenv("JWT_SECRET"),
 		JWTExpiryHours:       getIntEnv("JWT_EXPIRY_HOURS", 24),
 		JWTRefreshExpiryDays: getIntEnv("JWT_REFRESH_EXPIRY_DAYS", 30),
@@ -74,6 +91,10 @@ func Load() *Config {
 
 		RateLimitRPS:   getIntEnv("BUNGIE_API_RPS", 10),
 		RateLimitBurst: getIntEnv("BUNGIE_API_BURST", 20),
+
+		AuthRateLimitRPS:   getIntEnv("AUTH_RATE_LIMIT_RPS", 5),
+		AuthRateLimitBurst: getIntEnv("AUTH_RATE_LIMIT_BURST", 10),
+		MaxBodyBytes:       int64(getIntEnv("MAX_BODY_BYTES", 65536)),
 
 		CacheEnabled:        getBoolEnv("CACHE_ENABLED", true),
 		CacheTTLCollections: getDurationEnv("CACHE_TTL_COLLECTIONS", 5*time.Minute),
@@ -159,6 +180,14 @@ func (c *Config) Validate() error {
 		if c.TokenEncryptionKey == "" {
 			log.Println("WARNING: TOKEN_ENCRYPTION_KEY is not set — Bungie tokens will not be encrypted at rest")
 		}
+	}
+	// A "*" entry combined with the credentialed CORS middleware would reflect
+	// any Origin with Allow-Credentials: true. Never allow it in production.
+	if slices.Contains(c.CORSAllowedOrigins, "*") {
+		if c.IsProduction() {
+			return fmt.Errorf("CORS_ALLOWED_ORIGINS must not contain \"*\" (credentialed CORS)")
+		}
+		log.Println("WARNING: CORS_ALLOWED_ORIGINS contains \"*\" — origins will NOT be reflected; list explicit origins")
 	}
 	return nil
 }
