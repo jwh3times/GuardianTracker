@@ -48,7 +48,7 @@ func newTokenStore(t *testing.T) *auth.TokenStore {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return auth.NewTokenStore(ctx, "cid", "secret", nil, nil)
+	return auth.NewTokenStore(ctx, "cid", "secret", "", nil, nil)
 }
 
 func storeValidToken(ts *auth.TokenStore, id string) {

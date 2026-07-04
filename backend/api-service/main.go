@@ -133,7 +133,7 @@ func main() {
 	if stores.Tokens != nil && tokenCipher != nil {
 		tokenRepo = &tokenRepoAdapter{s: stores.Tokens}
 	}
-	tokenStore := auth.NewTokenStore(ctx, cfg.BungieClientID, cfg.BungieClientSecret, tokenRepo, tokenCipher)
+	tokenStore := auth.NewTokenStore(ctx, cfg.BungieClientID, cfg.BungieClientSecret, cfg.BungieTokenURL, tokenRepo, tokenCipher)
 
 	// Bungie API client
 	bungieClient := bungie.NewClient(cfg.BungieAPIKey, cfg.BungieAPIBaseURL, cfg.RateLimitRPS, cfg.RateLimitBurst)
