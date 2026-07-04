@@ -18,6 +18,8 @@ import { useCharacters } from "../../contexts/CharacterContext";
 import { apiFetch } from "../../lib/api";
 import { collectionsQuery } from "../../lib/queries";
 import { toWishlistEntry } from "../../lib/adapters";
+import { isFirstRun, markFirstRunDone } from "../../lib/firstRun";
+import { GetStartedPanel } from "./GetStartedPanel";
 import type { DailyAction, SummaryCategory, Weekly } from "../../types/design";
 import type {
   ProfileResponse,
@@ -48,6 +50,14 @@ export function Dashboard() {
   const { activeCharacter } = useCharacters();
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
+
+  const [showGetStarted, setShowGetStarted] = React.useState(() =>
+    isFirstRun(user?.membershipId),
+  );
+  const dismissGetStarted = () => {
+    markFirstRunDone(user?.membershipId);
+    setShowGetStarted(false);
+  };
 
   const { data: profileData } = useQuery({
     queryKey: ["currentUser"],
@@ -136,7 +146,7 @@ export function Dashboard() {
   return (
     <div className="gt-page gt-dash">
       <PageHead
-        title={`Welcome back, ${displayName}`}
+        title={`${showGetStarted ? "Welcome" : "Welcome back"}, ${displayName}`}
         sub="Your collection at a glance"
         right={
           <CountdownChip
@@ -146,6 +156,8 @@ export function Dashboard() {
           />
         }
       />
+
+      {showGetStarted && <GetStartedPanel onDismiss={dismissGetStarted} />}
 
       {/* HERO COMPLETION */}
       <Panel pad={false} style={{ padding: "var(--s-5)" }}>

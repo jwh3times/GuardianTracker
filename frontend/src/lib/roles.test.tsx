@@ -29,6 +29,12 @@ const authed = () => {
   localStorage.setItem("guardian_token", "test-token");
   localStorage.setItem("guardian_refresh_token", "test-refresh");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
+  // Not an onboarding test — mark first-run done so the Dashboard greeting
+  // reads "Welcome back" as these assertions expect.
+  localStorage.setItem(
+    `guardian_first_run_done:${sampleUser.membershipId}`,
+    "2026-01-01",
+  );
 };
 
 beforeEach(() => {

@@ -718,3 +718,29 @@
 .gt-cosmetic-empty {
   color: var(--c-text-3);
 }
+
+/* ── Get started (first-run onboarding) ─────────────────────────────── */
+.gt-getstarted {
+  display: grid;
+  gap: var(--s-2);
+}
+.gt-getstarted-step {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  text-align: left;
+  cursor: pointer;
+}
+.gt-getstarted-step:hover {
+  border-color: var(--c-signal);
+}
+.gt-getstarted-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--s-1);
+}
