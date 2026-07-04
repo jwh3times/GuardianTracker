@@ -226,7 +226,7 @@ function Boom(): React.ReactElement {
 }
 
 describe("ErrorBoundary", () => {
-  it("renders the default fallback and shows the dev error message", () => {
+  it("renders the gt fallback and shows the dev error message", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <ErrorBoundary>
@@ -234,7 +234,12 @@ describe("ErrorBoundary", () => {
       </ErrorBoundary>,
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
-    expect(screen.getByText("kaboom")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "An unexpected error occurred. Reload the page to continue.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Error: kaboom")).toBeInTheDocument();
     spy.mockRestore();
   });
 
@@ -258,7 +263,7 @@ describe("ErrorBoundary", () => {
     expect(screen.getByText("safe-child")).toBeInTheDocument();
   });
 
-  it("wires the reset and reload actions", () => {
+  it("wires the reload action", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const reload = vi.fn();
     const original = window.location;
@@ -271,9 +276,8 @@ describe("ErrorBoundary", () => {
         <Boom />
       </ErrorBoundary>,
     );
-    fireEvent.click(screen.getByText("Reload Page"));
+    fireEvent.click(screen.getByText("Reload"));
     expect(reload).toHaveBeenCalled();
-    fireEvent.click(screen.getByText("Try Again"));
     Object.defineProperty(window, "location", {
       configurable: true,
       value: original,
