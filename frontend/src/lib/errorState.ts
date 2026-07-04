@@ -24,6 +24,13 @@ export function errorState(error: unknown): ErrorStateCopy {
         privacyLink: true,
       };
     }
+    if (error.code === "REFRESH_UNAVAILABLE") {
+      return {
+        icon: "refresh",
+        title: "Reconnecting…",
+        body: "Your session is refreshing. Give it a moment, then try again.",
+      };
+    }
     if (error.code === "MANIFEST_NOT_READY" || error.status === 503) {
       return {
         icon: "refresh",
