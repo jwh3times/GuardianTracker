@@ -1,14 +1,5 @@
 import React from "react";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-  afterEach,
-  vi,
-} from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -23,10 +14,6 @@ import { FlagsProvider } from "../contexts/FlagsContext";
 import { ToastProvider } from "./Toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoadingSpinner } from "./LoadingSpinner";
-
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
 
 const authed = () => {
   localStorage.setItem("guardian_token", "test-token");

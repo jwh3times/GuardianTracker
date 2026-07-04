@@ -6,7 +6,6 @@ import {
   vi,
   beforeAll,
   afterAll,
-  afterEach,
   beforeEach,
 } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
@@ -26,7 +25,6 @@ class ResizeObserverStub {
   disconnect() {}
 }
 beforeAll(() => {
-  server.listen({ onUnhandledRequest: "error" });
   vi.stubGlobal("ResizeObserver", ResizeObserverStub);
   Object.defineProperty(HTMLElement.prototype, "clientWidth", {
     configurable: true,
@@ -52,9 +50,7 @@ beforeAll(() => {
       toJSON: () => {},
     }) as DOMRect;
 });
-afterEach(() => server.resetHandlers());
 afterAll(() => {
-  server.close();
   vi.unstubAllGlobals();
 });
 

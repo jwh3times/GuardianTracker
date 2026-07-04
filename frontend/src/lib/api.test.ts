@@ -1,23 +1,11 @@
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeAll,
-  beforeEach,
-  afterEach,
-  afterAll,
-} from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { API, server } from "../test/testServer";
 import { apiFetch, ApiError } from "./api";
 
-// MSW lifecycle scoped to this file — the global lift across all test files
-// lands in Task 2.8. Only the "refresh handling" suite below uses MSW; the
-// "apiFetch" suite above stubs global fetch directly and is unaffected.
-beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
+// MSW lifecycle (listen/resetHandlers/close) is global — see test/setup.ts.
+// Only the "refresh handling" suite below uses MSW; the "apiFetch" suite
+// above stubs global fetch directly and is unaffected.
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {

@@ -1,13 +1,5 @@
 import React from "react";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-  afterEach,
-} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -18,10 +10,6 @@ import { CharacterProvider } from "../../contexts/CharacterContext";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
 import { ToastProvider } from "../../components/Toast";
 import { Dashboard } from "./Dashboard";
-
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
 
 beforeEach(() => {
   localStorage.clear();

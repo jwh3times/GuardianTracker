@@ -1,14 +1,5 @@
 import React from "react";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  beforeEach,
-  afterEach,
-  vi,
-} from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   render,
   screen,
@@ -30,9 +21,6 @@ import {
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import type { GTItem } from "../types/design";
 
-beforeAll(() => server.listen({ onUnhandledRequest: "bypass" }));
-afterEach(() => server.resetHandlers());
-afterAll(() => server.close());
 beforeEach(() => localStorage.clear());
 
 /* ---------------- errorState ---------------- */
