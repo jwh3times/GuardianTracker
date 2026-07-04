@@ -66,7 +66,7 @@ func TestHealthHandlers(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "manifest.sqlite")
 	ms := bungie.NewManifestService(bungie.NewClient("k", "http://x", 100, 100), dbPath, time.Hour)
-	h := NewHealthHandler(ms)
+	h := NewHealthHandler(ms, nil)
 
 	r := gin.New()
 	r.GET("/health", h.Health)
