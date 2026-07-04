@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"guardian-tracker/api-service/api/handlers"
+	"guardian-tracker/api-service/api/middleware"
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
@@ -269,6 +270,10 @@ func main() {
 		log.Printf("Warning: SetTrustedProxies(%v): %v", cfg.TrustedProxies, err)
 	}
 	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
+	router.Use(middleware.MaxBodyBytes(cfg.MaxBodyBytes))
+	// One shared limiter instance across the public auth endpoints (per-IP
+	// buckets are inside it) — constructed once so the sweeper isn't duplicated.
+	authLimiter := middleware.PerIPRateLimit(float64(cfg.AuthRateLimitRPS), cfg.AuthRateLimitBurst)
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/ready", healthHandler.Ready)
@@ -278,9 +283,9 @@ func main() {
 		api.GET("/manifest/status", healthHandler.ManifestStatus)
 
 		// Auth
-		api.GET("/auth/bungie", authHandler.GetBungieAuthURL)
-		api.POST("/auth/bungie/callback", authHandler.BungieCallback)
-		api.POST("/auth/refresh", authHandler.RefreshToken)
+		api.GET("/auth/bungie", authLimiter, authHandler.GetBungieAuthURL)
+		api.POST("/auth/bungie/callback", authLimiter, authHandler.BungieCallback)
+		api.POST("/auth/refresh", authLimiter, authHandler.RefreshToken)
 		api.GET("/auth/validate", jwtHelper.Middleware(revoker), authHandler.ValidateToken)
 		api.GET("/auth/profile", jwtHelper.Middleware(revoker), authHandler.GetProfile)
 		api.POST("/auth/logout", jwtHelper.Middleware(revoker), authHandler.Logout)
@@ -419,7 +424,7 @@ func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 		for _, allowed := range allowedOrigins {
-			if strings.TrimSpace(allowed) == origin || allowed == "*" {
+			if strings.TrimSpace(allowed) == origin {
 				c.Header("Access-Control-Allow-Origin", origin)
 				break
 			}
