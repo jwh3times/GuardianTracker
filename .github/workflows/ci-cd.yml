@@ -18,7 +18,7 @@ concurrency:
 
 env:
   NODE_VERSION: "26"
-  GO_VERSION: "1.25.11"
+  GO_VERSION: "1.26.5"
 
 jobs:
   format-check:
@@ -146,7 +146,7 @@ jobs:
         run: |
           go mod tidy
           go vet ./...
-          go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
           go test -race -coverprofile=coverage.out ./...
 
       # Floor for the current suite. CI runs with cgo (race) + Postgres, so the
