@@ -3,13 +3,17 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Guardian Tracker uses the target version in `VERSION`; merges to `main`
-are stamped with annotated version tags such as `v0.2.0`, `v0.2.1`, and
-`v0.2.2`.
+Guardian Tracker uses the SemVer target version in `VERSION`; merges to `main`
+are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
+`v0.2.1`, and `v0.2.2`.
 
 ## [Unreleased]
 
-_Nothing yet._
+### Changed
+
+- Versioning now creates a GitHub Release for each auto-incremented
+  `v<major>.<minor>.<build>` tag on `main`; fresh major/minor lines may start at
+  build `0`.
 
 ## [0.2.0] - 2026-07-09
 

@@ -14,6 +14,7 @@ By participating in this project you agree to abide by our
 - [Project layout](#project-layout)
 - [Branching & pull requests](#branching--pull-requests)
 - [Commit messages](#commit-messages)
+- [Versioning](#versioning)
 - [Formatting](#formatting)
 - [Tests & coverage](#tests--coverage)
 - [CI gates](#ci-gates)
@@ -114,6 +115,18 @@ Fix OAuth callback dropping the state parameter on retry
 
 - Keep the subject to ~72 characters; add a body when the _why_ isn't obvious.
 - One logical change per commit where practical.
+
+## Versioning
+
+The root `VERSION` file is the project version source of truth. It must contain a
+plain three-part SemVer value in `<major>.<minor>.<build>` form, such as
+`0.2.0`.
+
+Every merge to `main` creates an annotated tag and GitHub Release named
+`v<major>.<minor>.<build>`. The workflow auto-increments the build number within
+the current major/minor line. When bumping major or minor, build `0` is valid: if
+`VERSION` is `1.0.0` and no `v1.0.*` tag exists yet, the release remains
+`v1.0.0` instead of being forced to `v1.0.1`.
 
 ## Formatting
 

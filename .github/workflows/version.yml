@@ -1,15 +1,20 @@
 name: Version
 
-# Stamps every merge to main with a three-part version tag.
+# Stamps every merge to main with a three-part SemVer release.
 #
 # On each push to main this reads the target version from the root VERSION file,
-# treats the third component as the build number, and pushes an annotated tag
-# `v<major>.<minor>.<build>` (e.g. v1.2.0) pointing at the merge commit.
+# treats the third component as the project build number, pushes an annotated tag
+# `v<major>.<minor>.<build>` (e.g. v1.2.0) pointing at the merge commit, and
+# creates a GitHub Release from that tag.
 #
 # Why a tag instead of committing a bump back to main:
 #   - it works identically on protected branches (no bypass actor or bump-commit needed);
 #   - it never re-triggers CI or needs [skip ci] loops;
 #   - build numbers can restart at 0 whenever the major/minor version is bumped.
+#
+# If VERSION is bumped to a new major/minor line such as 2.0.0 and there are no
+# v2.0.* tags yet, the first release stays v2.0.0. It only increments to v2.0.1
+# after a v2.0.0 tag exists.
 #
 # To see which build a checkout corresponds to: git describe --tags
 
@@ -27,7 +32,7 @@ concurrency:
 
 jobs:
   tag-build:
-    name: Tag version
+    name: Tag and release version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -35,10 +40,11 @@ jobs:
           fetch-depth: 0 # full history + tags, needed to compute the next build number
 
       - name: Compute next version and push tag
+        id: version
         run: |
           target=$(tr -d '[:space:]' < VERSION)
-          if ! echo "$target" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-            echo "::error::VERSION '$target' is not a plain x.y.z version."
+          if ! echo "$target" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "::error::VERSION '$target' is not a plain SemVer x.y.z version."
             exit 1
           fi
 
@@ -46,25 +52,60 @@ jobs:
 
           prefix="v${major}.${minor}"
           escaped_prefix="v${major}\.${minor}"
-          last=$(git tag --list "${prefix}.*" | grep -E "^${escaped_prefix}\.[0-9]+$" | sed -E "s/^${escaped_prefix}\.//" | sort -n | tail -1 || true)
+          existing_for_commit=$(git tag --list "${prefix}.*" --points-at "$GITHUB_SHA" | grep -E "^${escaped_prefix}\.[0-9]+$" | sort -V | tail -1 || true)
 
-          if [ -z "$last" ]; then
-            build="$configured_build"
-          elif [ "$configured_build" -gt "$last" ]; then
-            build="$configured_build"
+          if [ -n "$existing_for_commit" ]; then
+            tag="$existing_for_commit"
+            version="${tag#v}"
+            build="${version##*.}"
+            echo "Commit already has ${tag}; reusing it instead of creating another build."
           else
-            build=$(( last + 1 ))
+            last=$(git tag --list "${prefix}.*" | grep -E "^${escaped_prefix}\.[0-9]+$" | sed -E "s/^${escaped_prefix}\.//" | sort -n | tail -1 || true)
+
+            if [ -z "$last" ]; then
+              build="$configured_build"
+            elif [ "$configured_build" -gt "$last" ]; then
+              build="$configured_build"
+            else
+              build=$(( last + 1 ))
+            fi
+
+            tag="${prefix}.${build}"
+            version="${major}.${minor}.${build}"
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Version ${version}"
+            git push origin "refs/tags/${tag}"
           fi
 
-          tag="${prefix}.${build}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "Version ${major}.${minor}.${build}"
-          git push origin "refs/tags/${tag}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "build=${build}" >> "$GITHUB_OUTPUT"
           {
-            echo "### Version stamped: \`${tag}\`"
+            echo "### Version tag: \`${tag}\`"
             echo ""
             echo "- Version line: \`${major}.${minor}\`"
             echo "- Build number: \`${build}\`"
             echo "- Commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; leaving it unchanged."
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+          {
+            echo "- GitHub Release: \`${TAG}\`"
+            echo "- SemVer: \`${VERSION}\`"
           } >> "$GITHUB_STEP_SUMMARY"
