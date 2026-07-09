@@ -21,15 +21,15 @@ frontend.
 
 ## Tech Stack
 
-| Concern | Choice |
-| --- | --- |
-| Frontend | React 19, TypeScript, Vite, React Router, TanStack Query |
-| Backend | Go, Gin |
-| User data | PostgreSQL |
-| Manifest data | Bungie manifest SQLite database |
-| Local runtime | Docker Compose |
-| Kubernetes validation | Minikube manifests under `k8s/` |
-| CI | GitHub Actions format, test, coverage, and Docker build validation |
+| Concern               | Choice                                                             |
+| --------------------- | ------------------------------------------------------------------ |
+| Frontend              | React 19, TypeScript, Vite, React Router, TanStack Query           |
+| Backend               | Go, Gin                                                            |
+| User data             | PostgreSQL                                                         |
+| Manifest data         | Bungie manifest SQLite database                                    |
+| Local runtime         | Docker Compose                                                     |
+| Kubernetes validation | Minikube manifests under `k8s/`                                    |
+| CI                    | GitHub Actions format, test, coverage, and Docker build validation |
 
 ## Architecture
 
@@ -98,7 +98,7 @@ database/init/            Postgres bootstrap SQL
 k8s/                      Minikube validation manifests and scripts
 docs/                     Public architecture docs and ADRs
 private/                  Gitignored private plans, runbooks, and research
-.github/workflows/        CI and version-tag workflows
+.github/workflows/        CI and version-release workflows
 ```
 
 ## Documentation

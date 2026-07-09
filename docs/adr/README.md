@@ -14,6 +14,6 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0002: Bungie OAuth and Token Storage](./0002-bungie-oauth-and-token-storage.md)
 - [ADR 0003: Manifest-Derived Data and Verify-First Changes](./0003-manifest-derived-data-and-verify-first-changes.md)
 - [ADR 0004: Local Development and Minikube Scope](./0004-local-development-and-minikube-scope.md)
-- [ADR 0005: Versioning with Build Tags](./0005-versioning-with-build-tags.md)
+- [ADR 0005: Versioning with Auto-Incremented Releases](./0005-versioning-with-build-tags.md)
 - [ADR 0006: Roles, Feature Flags, and Admin Authorization](./0006-roles-feature-flags-and-admin-authorization.md)
 - [ADR 0007: Bungie Public API Weekly and Vendor Limits](./0007-bungie-public-api-weekly-and-vendor-limits.md)
