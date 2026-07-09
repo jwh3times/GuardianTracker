@@ -8,6 +8,10 @@ If you discover a security vulnerability, **do not open a public issue**. Email 
 
 ## Credential Management
 
+This is a public repository. Keep production runbooks, incident notes,
+environment-specific commands, private security reviews, and raw research under
+gitignored `private/`; do not commit them to public docs.
+
 ### CRITICAL: Rotate Credentials If Ever Committed
 
 If you have previously committed credentials to this repository, you **must**:
@@ -91,7 +95,7 @@ rm .env.secrets
 - **Two logout scopes** — `POST /api/auth/logout` ends only the current device's session (others stay signed in; the access token is rejected within the cache window via the session check, and the account-wide Bungie token is preserved). `POST /api/auth/logout/all` bumps `token_version`, deletes every session, and evicts the Bungie token (sign out everywhere)
 - **JWT revocation** — sign-out-everywhere bumps `token_version` in Postgres; the access-token middleware verifies both `token_version` (account-wide) and session existence (per-device) via `RevocationChecker` with a 60-second cache window. The checks **fail open** on DB errors (availability over strict revocation — logout is not guaranteed during a DB outage)
 - **Token-type claims** — refresh tokens cannot be used as access tokens (enforced in middleware)
-- **Bungie tokens encrypted at rest** — AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and key-version rotation support
+- **Bungie tokens encrypted at rest** — AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and key-version metadata stored with each encrypted row
 - **Bungie token auto-refresh** — stored Bungie OAuth tokens are refreshed automatically before expiry (5-min buffer); refresh writes are compare-and-swap on `updated_at`, and a replica that loses the race adopts the winner's tokens instead of clobbering them
 
 ### Roles, Feature Flags & Admin Console
@@ -134,7 +138,7 @@ rm .env.secrets
 - [ ] Rate limiting enabled and tuned for expected traffic
 - [ ] TLS/HTTPS configured (terminate at load balancer or ingress)
 - [ ] Database connections use SSL (`sslmode=require`)
-- [ ] Health endpoints (`/health`, `/ready`) expose no sensitive data; safe to expose by design on the API ingress (see InfraTODO Phase 14)
+- [ ] Health endpoints (`/health`, `/ready`) expose no sensitive data; safe to expose by design on the API ingress
 - [ ] Logging does not include tokens, secrets, or full OAuth codes
 - [ ] Docker images built from pinned base image versions
 - [ ] Kubernetes secrets not stored in version control

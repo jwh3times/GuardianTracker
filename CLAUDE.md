@@ -20,7 +20,7 @@ Frontend (React/TS :5273)
     └─► API Service (Go/Gin :8081)  — OAuth, JWT, manifest, collections
 ```
 
-For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring — see **[Ports in README.md](./README.md#ports)**.
+For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring — see **[Ports in SETUP.md](./SETUP.md#ports)**.
 
 ### Key directories
 
@@ -43,6 +43,8 @@ credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
 - **Docker Compose** (Option A) — one command for the full stack; best default for local dev and integration testing.
 - **Minikube** (Option B) — validates Kubernetes manifests; dev-validation only (no Postgres).
 - **Individual services** (Option C) — fast hot reload during active single-service development.
+
+`SETUP.md` owns the human setup guide, environment table, ports, and test-command details. Keep this file focused on agent operating context.
 
 ### Option A: Docker Compose (full stack)
 
@@ -116,33 +118,40 @@ GitHub Actions (`.github/workflows/ci-cd.yml`) — four required jobs:
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
-**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with an auto-incrementing build number on the base version in the root `VERSION` file (`v<x.y.z>.<n>`, e.g. `v0.1.0.4`). Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit. Build numbers restart at 1 when `VERSION` is bumped.
+**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v0.2.0`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit.
 
 ### Branch protection (`main`)
 
-Ruleset id `17717600` (Settings → Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`), code-scanning gate (errors+warnings / medium+), no bypass actors.
+Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`), code-scanning gate (errors+warnings / medium+), no bypass actors.
 
-To change the gate: `gh api repos/jwh3times/GuardianTracker/rulesets/17717600` or GitHub UI. Required check names must match CI job `name:` exactly.
+To change the gate, update the repository ruleset through GitHub UI or the GitHub API. Required check names must match CI job `name:` exactly.
 
 ## Agent delegation
 
 For specialized work, invoke the appropriate subagent:
 
-| Task                                                                                                                 | Agent                       |
-| -------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| Go backend — Gin handlers, JWT/auth, Bungie OAuth, manifest, collections, records, weekly, search, roles/flags/admin | `go-services`               |
-| React frontend — pages, components, design system (`gt-*`), React Query, AuthContext, FlagsContext, Vitest tests     | `react-frontend`            |
-| PostgreSQL schema, migrations, token store, audit log; SQLite manifest queries                                       | `postgres-specialist`       |
-| Kubernetes manifests, Minikube, kubectl, secrets, configmaps                                                         | `kubernetes-infrastructure` |
-| Dockerfiles, image builds, layer caching                                                                             | `docker-containers`         |
-| Security testing — OAuth, JWT, CSRF, data isolation, XSS, CORS, admin endpoints                                      | `penetration-tester`        |
-| Code review — correctness, security, pattern violations                                                              | `code-reviewer`             |
-| Documentation sync — CLAUDE.md, README.md, SECURITY.md, all agent files                                              | `docs-updater`              |
+| Task                                                                                                                          | Agent                       |
+| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Go backend — Gin handlers, JWT/auth, Bungie OAuth, manifest, collections, records, weekly, search, roles/flags/admin          | `go-services`               |
+| React frontend — pages, components, design system (`gt-*`), React Query, AuthContext, FlagsContext, Vitest tests              | `react-frontend`            |
+| PostgreSQL schema, migrations, token store, audit log; SQLite manifest queries                                                | `postgres-specialist`       |
+| Kubernetes manifests, Minikube, kubectl, secrets, configmaps                                                                  | `kubernetes-infrastructure` |
+| Dockerfiles, image builds, layer caching                                                                                      | `docker-containers`         |
+| Security testing — OAuth, JWT, CSRF, data isolation, XSS, CORS, admin endpoints                                               | `penetration-tester`        |
+| Code review — correctness, security, pattern violations                                                                       | `code-reviewer`             |
+| Documentation sync — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, CLAUDE.md, agent files | `docs-updater`              |
 
 Docs freshness is auto-checked at the end of every response turn by a read-only Stop hook in
 `.claude/settings.json` (single pre-approved git command + Read/Grep/Glob — it never edits files).
 When it detects drift it blocks the stop with specifics and the main session invokes `docs-updater`
 to fix exactly that drift.
+
+## Documentation boundaries
+
+Public committed docs describe implemented behavior, local setup, durable decisions, security
+model, shipped changes, and gated future work. `private/` is gitignored and holds detailed
+implementation plans, deployment runbooks, private security reviews, raw Bungie/API research, and
+environment-specific operations notes. Do not move private operational detail into public docs.
 
 ### Running tests
 

@@ -7,7 +7,7 @@ model: sonnet
 
 You are managing the Guardian Tracker Kubernetes infrastructure running on Minikube. Know the cluster topology, secrets model, and deployment workflow exactly.
 
-**This is a dev-validation environment only.** It runs `GO_ENV: development` with no Postgres, so the api-service runs in degraded mode (in-memory Bungie token store, no wishlist/preferences persistence, no JWT revocation). It validates Kubernetes manifests and container builds — not production parity. Production deploys to Azure Container Apps (see `InfraTODO.md` Phase 10), where `GO_ENV=production` requires `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` secrets.
+**This is a dev-validation environment only.** It runs `GO_ENV: development` with no Postgres, so the api-service runs in degraded mode (in-memory Bungie token store, no wishlist/preferences persistence, no JWT revocation). It validates Kubernetes manifests and container builds — not production parity. Production deployment planning belongs in private runbooks; production `GO_ENV=production` requires `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` secrets.
 
 ## Cluster topology
 

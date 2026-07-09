@@ -41,7 +41,7 @@ Three breakpoints referenced throughout:
 └──────────────┴──────────────────────────────────────────────────────────────┘
 ```
 
-- **Search** (global, §Component `SearchBar`) and **data-freshness chip** (`«Updated 4m ago ↻»`) live in the top bar — the freshness chip is the production replacement for the debug `DataSourceBanner`.
+- **Search** (global, §Component `SearchBar`) and **data-freshness chip** (`«Updated 4m ago ↻»`) live in the top bar.
 - **Character switcher** is a dropdown off the account menu.
 - Active nav item gets a rarity-gold accent rail.
 
@@ -115,7 +115,7 @@ Three breakpoints referenced throughout:
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-**Replaces:** the current hardcoded vendor/activity mock blocks. Every time-limited element carries a countdown + `«Missing»`/`«New»` personalization badge.
+Every time-limited element carries a countdown + `«Missing»`/`«New»` personalization badge.
 **States:** loading (skeleton tiles) · partial (weekly data unavailable → hide module, keep completion) · error per-module (degrade gracefully, never blank the whole page).
 
 ---
@@ -316,7 +316,7 @@ Design these once as reusable templates; every screen references them:
 | -------------------------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **`AppShell`**                         | Sidebar + top bar + content region         | desktop / tablet-rail / mobile-tabs                                                                                                | —                                                            |
 | **`SearchBar`**                        | Global item search                         | inline / overlay (mobile)                                                                                                          | idle / typing / results / no-results                         |
-| **`DataFreshnessChip`**                | Replaces debug `DataSourceBanner`          | —                                                                                                                                  | fresh / stale / refreshing / error                           |
+| **`DataFreshnessChip`**                | Data freshness and manual refresh affordance | —                                                                                                                                  | fresh / stale / refreshing / error                           |
 | **`CharacterSwitcher`**                | Pick active Guardian                       | dropdown                                                                                                                           | loading / multi / single                                     |
 | **`ItemCard`**                         | The atomic collectible tile                | density: grid/list/compact; rarity frame; `progress` variant (catalysts/crafting)                                                  | default / missing / available-now / owned / loading-skeleton |
 | **`ItemDetailDrawer`**                 | Full item info + actions                   | drawer (desktop) / sheet (mobile)                                                                                                  | loading / loaded / error                                     |
@@ -359,5 +359,5 @@ AppShell
 2. **Badge vocabulary is the brand glue** — define the full set (rarity × difficulty × availability × completion) with color _and_ label/icon (never color alone — PRD §10).
 3. **Personalization badges (`«Missing»`, `«Completes set»`, `«Avail now»`) are the product's differentiator** — make them prominent and consistent across Dashboard, This Week, Collections, and Wishlist.
 4. **Replace placeholder emoji** (⚔️🛡️✨🎉📝) with a coherent icon set.
-5. **Design the freshness/refresh model visibly** — it replaces the debug banner and sets the (non-live) data expectation.
+5. **Design the freshness/refresh model visibly** — it sets the expectation that Bungie data is cache-backed, not live.
 6. Validate rarity colors for **WCAG AA on dark** and **color-blind** safety before locking the palette.
