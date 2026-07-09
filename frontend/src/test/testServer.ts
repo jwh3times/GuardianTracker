@@ -78,7 +78,7 @@ export const sampleCatalysts = {
       type: "Submachine Gun",
       icon: "/icons/riskrunner.png",
       status: "complete",
-      obj: { label: "Kills", cur: 500, max: 500 },
+      obj: null,
       source: "Strikes",
     },
     {

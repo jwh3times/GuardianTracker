@@ -111,13 +111,21 @@ func nodesWithoutItems(nodes []CollectionNode) []CollectionNode {
 
 // buildCategorySummary aggregates collectibles into the four summary buckets using
 // the shared manifest classifier. A pure projection over the same item set as the
-// tree (single source of truth).
-func buildCategorySummary(collectibles []manifest.CollectibleWithItem, collected map[uint32]bool) CategorySummary {
+// tree (single source of truth). owned is itemHash-keyed (see deriveOwnedItems):
+// the manifest carries multiple collectible rows for some re-issued itemHashes, so
+// counting is deduped by itemHash — Total counts distinct items, Collected counts
+// owned ones — rather than once per collectible row.
+func buildCategorySummary(collectibles []manifest.CollectibleWithItem, owned map[uint32]bool) CategorySummary {
 	var sum CategorySummary
+	seen := make(map[uint32]bool)
 	for _, cwi := range collectibles {
 		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
 			continue
 		}
+		if seen[cwi.Item.Hash] {
+			continue
+		}
+		seen[cwi.Item.Hash] = true
 		var cc *CategoryCount
 		switch manifest.CollectibleCategory(cwi.Item) {
 		case "weapons":
@@ -132,7 +140,7 @@ func buildCategorySummary(collectibles []manifest.CollectibleWithItem, collected
 			continue
 		}
 		cc.Total++
-		if collected[cwi.Collectible.Hash] {
+		if owned[cwi.Item.Hash] {
 			cc.Collected++
 		}
 	}
@@ -157,9 +165,29 @@ type DestinyItem struct {
 // analysis is the cached, per-user canonical dataset that both projections read.
 type analysis struct {
 	collectibles []manifest.CollectibleWithItem
-	collected    map[uint32]bool
+	collected    map[uint32]bool // collectible-hash-keyed, straight from the profile response
+	owned        map[uint32]bool // itemHash-keyed: true if ANY of the item's collectibles is acquired (see deriveOwnedItems)
 	tree         *TreeStructure
 	fetchedAt    time.Time
+}
+
+// deriveOwnedItems collapses collectible-hash-level acquisition to itemHash-level
+// ownership. The manifest carries multiple DestinyCollectibleDefinition rows for
+// some re-issued itemHashes (e.g. Choir of One), and the profile response only ever
+// marks the specific collectible row the player actually earned — never every
+// duplicate — so an item is owned if ANY collectible sharing its itemHash is
+// acquired.
+func deriveOwnedItems(collectibles []manifest.CollectibleWithItem, collected map[uint32]bool) map[uint32]bool {
+	owned := make(map[uint32]bool)
+	for _, cwi := range collectibles {
+		if cwi.Item == nil {
+			continue
+		}
+		if collected[cwi.Collectible.Hash] {
+			owned[cwi.Item.Hash] = true
+		}
+	}
+	return owned
 }
 
 func (s *Service) getAnalysis(ctx context.Context, membershipType int, membershipID, accessToken string) (*analysis, error) {
@@ -215,7 +243,9 @@ func (s *Service) getAnalysis(ctx context.Context, membershipType int, membershi
 		return nil, fmt.Errorf("collections: tree build failed: %w", err)
 	}
 
-	a := &analysis{collectibles: collectibles, collected: collected, tree: tree, fetchedAt: time.Now().UTC()}
+	owned := deriveOwnedItems(collectibles, collected)
+
+	a := &analysis{collectibles: collectibles, collected: collected, owned: owned, tree: tree, fetchedAt: time.Now().UTC()}
 	s.cache.Set(cacheKey, a, s.cacheTTL)
 	return a, nil
 }
@@ -257,10 +287,10 @@ func (s *Service) GetUserCollections(ctx context.Context, membershipType int, me
 		}
 	}
 	return &UserCollections{
-		Tree:            a.tree.overlay(a.collected),
+		Tree:            a.tree.overlay(a.owned),
 		Items:           a.tree.Items,
 		CollectedHashes: collectedHashes,
-		Summary:         buildCategorySummary(a.collectibles, a.collected),
+		Summary:         buildCategorySummary(a.collectibles, a.owned),
 		FetchedAt:       a.fetchedAt,
 	}, nil
 }
@@ -360,6 +390,8 @@ func matchesAnyKeyword(s string, keywords []string) bool {
 
 // GetMissingItemHashes returns not-collected weapon/armor/exotic item hashes
 // (cosmetics excluded), reusing the cached analysis — no extra Bungie call.
+// Ownership is itemHash-level (a.owned): an item hash is excluded from the missing
+// set if ANY of its (possibly several, re-issued) collectibles is acquired.
 func (s *Service) GetMissingItemHashes(ctx context.Context, membershipType int, membershipID, accessToken string) (map[uint32]struct{}, error) {
 	a, err := s.getAnalysis(ctx, membershipType, membershipID, accessToken)
 	if err != nil {
@@ -372,7 +404,7 @@ func (s *Service) GetMissingItemHashes(ctx context.Context, membershipType int, 
 		}
 		switch manifest.CollectibleCategory(cwi.Item) {
 		case "weapons", "armor", "exotics":
-			if !a.collected[cwi.Collectible.Hash] {
+			if !a.owned[cwi.Item.Hash] {
 				missing[cwi.Item.Hash] = struct{}{}
 			}
 		}

@@ -89,9 +89,9 @@ func TestBuildIndex_IndexesIncludedTypes(t *testing.T) {
 		t.Fatal("IsReady should be true after BuildIndex")
 	}
 
-	// Weapon resolves its sub-type name.
+	// Weapon resolves its sub-type name and carries its icon path.
 	res := svc.Search("fate", 10)
-	if len(res) != 1 || res[0].Type != "Hand Cannon" || res[0].Rarity != "Legendary" {
+	if len(res) != 1 || res[0].Type != "Hand Cannon" || res[0].Rarity != "Legendary" || res[0].Icon != "/fb.png" {
 		t.Errorf("search 'fate' = %+v", res)
 	}
 	// Armor resolves its slot name.

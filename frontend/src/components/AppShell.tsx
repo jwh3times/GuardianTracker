@@ -237,6 +237,7 @@ function SearchBar() {
                 <ItemTile
                   rarity={i.rarity.toLowerCase() as any}
                   type={i.type}
+                  icon={i.icon}
                   style={{ width: "1.8rem" }}
                 />
                 <span className="gt-search-opt-name">{i.name}</span>
