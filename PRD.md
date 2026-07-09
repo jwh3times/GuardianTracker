@@ -2,7 +2,7 @@
 
 > **Audience:** UX/UI design agent tasked with designing frontend improvements.
 > **Purpose:** Give a complete picture of what Guardian Tracker does today, what it is planned to do, what the Bungie API makes possible, and the experience we want to build — so you can design screens, flows, components, and a coherent design system.
-> **Scope note:** This document is product- and experience-focused. It references the backend only where it constrains or unlocks what the UI can show. You do not need to read the code; everything you need to design against is summarized here.
+> **Scope note:** This document is product- and experience-focused. It is not the implementation source of truth. For current architecture, setup, shipped work, and remaining work, see `docs/architecture.md`, `SETUP.md`, `CHANGELOG.md`, and `ROADMAP.md`.
 
 ---
 
@@ -36,36 +36,40 @@ Guardian Tracker exists to answer those questions with **clarity, prioritization
 
 ---
 
-## 3. Current State (What Exists Today)
+## 3. Current Product State
 
 ### 3.1 Implemented & Working
 
-- **Bungie OAuth login** — Player authorizes via Bungie.net, app stores JWT session, persists across reloads.
-- **Dashboard** — Collection progress cards for Weapons / Armor / Exotics (collected vs. total with progress bars), a "weekly reset" countdown timer, and Quick Actions. _Note: vendor & activity sections on the dashboard currently render hardcoded mock data._
-- **Collections page** — The most developed feature. Pulls the player's real collected items from Bungie, compares against the full game manifest, and shows **missing items** in three tabs (Weapons, Armor, Exotics). Each item card shows icon, name, type, description, rarity, an **acquisition difficulty rating** (Easy / Moderate / Challenging, inferred from its source), and source text. Items can be filtered by difficulty and added to a wishlist. Stats row shows Total / Collected / Missing counts.
-- **Wishlist page** — Lists wishlisted items grouped/filterable by priority (Low / Medium / High / Urgent), with per-item priority editing and removal. _Note: backend persistence is mock — see gaps._
-- **Design language (baseline)** — Dark theme, Destiny-flavored rarity card styling (exotic/legendary/rare variants, glow effects), rarity & difficulty color coding, toast notifications, loading spinners, lazy-loaded routes, error boundary.
+- **Bungie OAuth login** — Players authorize via Bungie.net; the API stores Bungie tokens encrypted server-side and issues Guardian Tracker access/refresh tokens.
+- **Dashboard** — Real account, collections, weekly, and wishlist queries power overall completion, per-category progress, character context, weekly preview, and wishlist availability.
+- **Collections** — A Bungie presentation-node category tree shows weapons, armor, exotics, and cosmetics with collected/missing counts, item cards, filters, sorting, data freshness, and item detail drawers.
+- **Wishlist** — User-scoped persisted wishlist CRUD with priority, notes, sorting, and availability badges.
+- **This Week** — Real weekly milestones, Xur inventory, daily actions, reset countdowns, missing/wishlist flags, and ranked recommendations.
+- **Catalysts, crafting, triumphs, and seals** — Real progress surfaces backed by Bungie records data.
+- **Cosmetics gallery** — Dedicated visual browsing for emblems, shaders, ghost shells, ships, sparrows, and emotes.
+- **Global search** — Manifest-backed search with deep links into item drawers.
+- **Settings, roles, flags, admin, and audit log** — User preferences, early-access role opt-in, admin management, feature flags, and audit trail are implemented.
+- **Design language** — Dark Destiny-flavored UI with rarity styling, `gt-*` classes, skeleton/error/empty states, toasts, and lazy-loaded routes.
 
-### 3.2 Known Gaps, Placeholders & Debt (things to design _around_ or _replace_)
+### 3.2 Known Gaps and Product Debt
 
-- **`DataSourceBanner`** on Collections is a debug component (a colored "Live/Mock data" strip). It must be removed or replaced with a proper, non-debug data-freshness indicator.
-- **Weekly Recommendations** (vendors, activities, pursuits) — schema and UI scaffolding exist, but data is **mock/empty**. This is a flagship feature waiting to be built.
-- **Wishlist persistence** — returns hardcoded mock data; no real database yet. Priority editing and notes are partially stubbed.
-- **Item search** — schema exists, returns empty. No search UI.
-- **`refreshUserData`** and **`logout`** are stubs.
-- **Only three collection categories** are surfaced (Weapons, Armor, Exotics). Bungie exposes far more (cosmetics, catalysts, triumphs — see §5).
-- **Difficulty rating** is keyword-inferred from source text and is approximate.
-- **Cosmetics, catalysts, crafting, triumphs, seals, vendors** — none surfaced yet despite being available via the API.
+- **Difficulty and availability are qualified signals** — Difficulty is inferred from source text and can be `Unrated`; "available now" reflects reliable live vendor signals, not a universal obtainable/unobtainable truth.
+- **Collection filters are not fully persistent yet** — Persisted filter state and more explicit obtainability filters remain roadmap work.
+- **Wishlist availability can become broader** — Wishlist availability should reuse the broader reliable vendor availability map where appropriate.
+- **Search index is in memory** — It rebuilds on startup and manifest swap; persistence is roadmap work.
+- **Character switcher is mostly display context** — Collection data is account-wide; deeper character-scoped surfaces remain future work.
+- **Some weekly facts are intentionally omitted** — Xur location and non-raid/dungeon missing counts are not shown unless a reliable Bungie data signal exists.
+- **No E2E/a11y/visual regression suite yet** — Unit/integration coverage exists; browser-level regression coverage is roadmap work.
 
 ### 3.3 Current Navigation
 
-Top navigation across three authenticated pages: **Dashboard**, **Collections**, **Wishlist**. Plus Login and OAuth callback. That's the entire current IA. Part of your job is to propose a richer, scalable IA (§6).
+Authenticated navigation includes **Dashboard**, **This Week**, **Collections**, **Cosmetics**, **Catalysts & Crafting**, **Triumphs & Seals**, **Wishlist**, **Settings**, and admin-only surfaces where applicable. Product/design work should preserve this broader information architecture unless deliberately proposing a replacement.
 
 ---
 
 ## 4. What the Bungie API Makes Possible
 
-This is the menu of data the app _can_ surface. The backend currently uses only a fraction (the Collectibles component). Design with the full menu in mind — call out which features each screen could use.
+This is the menu of data the app can surface or already surfaces. Design with the full menu in mind and call out which data source each screen uses.
 
 ### 4.1 Already wired up
 
@@ -106,7 +110,7 @@ Features are grouped by horizon. Each lists the **user value**, **data source** 
 **Data:** Collectibles (800), Manifest, Presentation Nodes (700).
 **Design needs:**
 
-- Replace the debug `DataSourceBanner` with a clean **collection summary header**: overall completion %, counts, and a subtle **"last updated · Refresh"** control.
+- Maintain a clean **collection summary header**: overall completion %, counts, and a subtle **"last updated · Refresh"** control.
 - Expand beyond 3 tabs. Mirror Bungie's **presentation-node tree** (e.g., Weapons by source: Raids, Dungeons, Trials, Nightfall, World, Vendors, Seasonal; Armor by class; plus Exotics). Support nested category browsing with per-category completion counts.
 - **Item card** redesign: rarity-framed, icon, name, type, source, difficulty badge, "obtainable now?" indicator, and quick actions (add to wishlist, view details).
 - **Item detail** view (drawer or modal): full description, all sources, difficulty rationale, related activity, and — where available — the perks/rolls possible on the item.
@@ -114,7 +118,7 @@ Features are grouped by horizon. Each lists the **user value**, **data source** 
 - **Search** within collections (P1 — backend search to be implemented).
 - States: loading (skeletons), empty ("all caught up" celebration), error (auth vs. Bungie outage vs. private profile), manifest-warming.
 
-### 5.2 Weekly Planner / "This Week" — P0 (flagship, currently mock)
+### 5.2 Weekly Planner / "This Week" — P0
 
 **Value:** The single most-requested optimizer feature — "what should I do this week?"
 **Data:** Public Milestones, Vendors (400–402), Activities (204), cross-referenced with the player's missing items.
@@ -132,7 +136,7 @@ Features are grouped by horizon. Each lists the **user value**, **data source** 
 **Data:** persisted wishlist + cross-reference with vendor/weekly data.
 **Design needs:**
 
-- Real persistence (backend work pending) — design assuming items, **priority (Low/Med/High/Urgent)**, and **freeform notes** persist.
+- Persistence for items, **priority (Low/Med/High/Urgent)**, and **freeform notes**.
 - **"Available now" surfacing:** when a wishlisted item is in a vendor's inventory or this week's activity rewards, highlight it on the wishlist and dashboard.
 - Add-to-wishlist from anywhere (collections, item detail, search).
 - Bulk management, sort by priority/date/availability, empty state that routes to Collections.
@@ -203,7 +207,7 @@ Secondary patterns to design:
 
 - **Global search** (items across all collections).
 - **Global filters** that read consistently across Collections / Wishlist / This Week.
-- A persistent **"data freshness + refresh"** affordance (replaces the debug banner).
+- A persistent **"data freshness + refresh"** affordance.
 - A **character switcher** in the header.
 
 ---
@@ -220,9 +224,9 @@ For each screen, design **all states**: loading (prefer skeletons over spinners)
 
 - **Hero summary:** overall collection completion %, plus per-category mini-stats. Make the headline answer "how complete am I?" instantly.
 - **"Best thing to do today"** callout (driven by This Week + wishlist availability).
-- **This-week preview** (real data, not mock): featured activity, Xûr-if-present, expiring items, with reset countdown.
+- **This-week preview:** featured activity, Xûr-if-present, expiring items, with reset countdown.
 - **Wishlist availability strip:** "3 wishlisted items available now."
-- **Character summary** (P2). Quick actions. Replace the current hardcoded vendor/activity mock blocks.
+- **Character summary** (P2). Quick actions. Keep weekly/vendor previews tied to real data and graceful empty states.
 
 ### 7.3 Collections
 
@@ -294,7 +298,7 @@ A reusable kit (some primitives exist: Button, Card, LoadingSpinner, Toast):
 - Stat tiles.
 - Character switcher.
 - **Skeleton loaders** for cards, lists, and detail.
-- Data-freshness indicator + refresh control (replaces debug banner).
+- Data-freshness indicator + refresh control.
 - Empty, error, and "warming up" state illustrations/messages.
 
 ### 8.4 Data density & hierarchy
@@ -341,11 +345,18 @@ A reusable kit (some primitives exist: Button, Card, LoadingSpinner, Toast):
 
 ## 12. Roadmap / Prioritization Summary
 
-| Phase            | Theme                    | Includes                                                                                                                                                                                                                                |
-| ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Phase 1 (P0)** | Polish the core loop     | Remove debug banner; redesign Collections (category tree, filters, item detail, states); real **This Week** planner with personalized "missing" highlighting; make **Wishlist** real with availability surfacing; redesigned Dashboard. |
-| **Phase 2 (P1)** | Depth for completionists | Catalyst & Crafting tracker; Triumphs/Seals; Cosmetics collections; global search; multi-character; onboarding.                                                                                                                         |
-| **Phase 3 (P2)** | Power features           | God-roll/owned-roll insights; character & loadout overview; notifications/digests; sharing.                                                                                                                                             |
+Completed product work is tracked in `CHANGELOG.md`; current remaining work is
+tracked in `ROADMAP.md`. At a product level, future work clusters into:
+
+| Horizon | Theme | Examples |
+| --- | --- | --- |
+| Near-term polish | Make shipped surfaces more durable and ergonomic | Persisted collection filters, broader wishlist availability, search-index persistence |
+| Quality gates | Improve confidence before broader release | E2E tests, accessibility checks, visual regression |
+| Account depth | Use more verified Bungie data | Character-scoped surfaces, owned-roll/god-roll insights |
+| Sharing and re-engagement | Expand beyond single-session use | Notifications/digests, shareable collection progress |
+
+Each item should be treated as gated until its data assumptions, security model,
+and test plan are explicit.
 
 ---
 

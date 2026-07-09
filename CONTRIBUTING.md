@@ -24,8 +24,9 @@ By participating in this project you agree to abide by our
 
 - **Report a bug** or **request a feature** via [GitHub Issues](https://github.com/jwh3times/GuardianTracker/issues)
   (use the provided templates).
-- **Improve documentation** — fixes to `README.md`, `CLAUDE.md`, this guide, or
-  inline comments are always welcome.
+- **Improve documentation** — fixes to `README.md`, `SETUP.md`, `docs/`, this
+  guide, or inline comments are always welcome. Keep private runbooks, security
+  reviews, raw research, and implementation handoffs under gitignored `private/`.
 - **Submit code** — pick up an open issue or propose a change. For anything large,
   open an issue first so we can align on the approach before you invest time.
 
@@ -45,8 +46,8 @@ By participating in this project you agree to abide by our
 ```
 
 Then fill in the required `BUNGIE_*`, `JWT_SECRET`, and `TOKEN_ENCRYPTION_KEY`
-secrets. See the [README](./README.md#2-configure-environment-variables) for the
-full table and [SECURITY.md](./SECURITY.md) for guidance on handling secrets.
+secrets. See [SETUP.md](./SETUP.md#2-create-environment-files) for the full
+table and [SECURITY.md](./SECURITY.md) for guidance on handling secrets.
 
 ### 2. Run the stack
 
@@ -60,9 +61,9 @@ docker compose up --build
 - API: <http://localhost:8081>
 
 For single-service work with hot reload, run services individually (Vite for the
-frontend, [Air](https://github.com/air-verse/air) for the API). See the
-[README](./README.md#3-start-services) and [CLAUDE.md](./CLAUDE.md#running-services)
-for all three run options (Compose, Minikube, individual).
+frontend, [Air](https://github.com/air-verse/air) for the API). See
+[SETUP.md](./SETUP.md) and [CLAUDE.md](./CLAUDE.md#running-services) for all
+three run options (Compose, Minikube, individual).
 
 > On first run the API service downloads the ~100MB Destiny 2 manifest. The
 > collections endpoint returns `503` until that completes.
@@ -77,8 +78,8 @@ k8s/                      # Kubernetes manifests + Minikube scripts
 .github/workflows/        # CI/CD pipeline
 ```
 
-For architecture, the auth/token flow, key files, and common tasks, read
-**[CLAUDE.md](./CLAUDE.md)** — it is the deep-dive developer guide.
+For public architecture, read [docs/architecture.md](./docs/architecture.md).
+For agent-specific operating context, read **[CLAUDE.md](./CLAUDE.md)**.
 
 ## Branching & pull requests
 

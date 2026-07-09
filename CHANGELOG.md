@@ -1,77 +1,94 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project aims to adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-> **No official releases yet.** Guardian Tracker is in active pre-release
-> development — no versioned tags have been published. Everything below is
-> unreleased and may change before the first tagged release (`0.1.0`). When that
-> release is cut, the items under **Unreleased** will move into a dated, versioned
-> section.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Guardian Tracker uses the target version in `VERSION`; merges to `main`
+are stamped with annotated version tags such as `v0.2.0`, `v0.2.1`, and
+`v0.2.2`.
 
 ## [Unreleased]
+
+_Nothing yet._
+
+## [0.2.0] - 2026-07-09
 
 ### Added
 
 - **Bungie OAuth login** with stateless, HMAC-signed CSRF protection.
-- **JWT authentication** — access/refresh tokens with revocation, per-device
-  refresh sessions, and refresh-token reuse detection.
-- **Collection analysis** — surfaces missing weapons, armor, and exotics,
-  classified by acquisition difficulty (Easy / Moderate / Challenging), plus
-  cosmetics.
-- **Browsable cosmetics gallery** — a dedicated `/cosmetics` page to browse all
-  cosmetics (emblems, shaders, ghosts, ships, sparrows, emotes) by type, with an
-  owned / missing / all filter, image-forward virtualized tiles, and a view-only
-  detail drawer. Shaders are now classified as cosmetics end-to-end.
-- **Wish list management** — add, prioritize, and annotate desired items, with an
-  "available now" cross-check against the current Xûr inventory.
-- **Destiny 2 manifest pipeline** — automatic download, version tracking, hourly
-  update checks, and SQLite extraction.
-- **This Week** — weekly milestones, Xûr inventory, daily recommended actions, and
-  reset countdowns.
-- **Catalysts, crafting & seals** — exotic catalyst progress, crafting pattern
-  unlocks, and triumph/seal completion from the Bungie records API.
-- **Item search** — in-memory manifest search index with async rebuild on manifest
-  updates.
-- **Roles & feature flags** — tiered access (standard / beta / alpha / admin),
-  self-service tier opt-in, and an admin console for user role and feature-flag
+- **JWT authentication** with access tokens, rotating per-device refresh sessions,
+  revocation checks, and refresh-token reuse detection.
+- **Collection analysis** for missing weapons, armor, exotics, and cosmetics.
+- **Nested Collections tree** from Bungie presentation nodes, with item cards,
+  details, filters, sorting, data freshness, and deep links.
+- **Browsable cosmetics gallery** for emblems, shaders, ghosts, ships, sparrows,
+  and emotes.
+- **Wish list management** with persisted priority, notes, sorting, and
+  availability surfacing.
+- **Destiny 2 manifest pipeline** with automatic download, version tracking,
+  hourly update checks, SQLite extraction, and manifest swap handling.
+- **This Week** with milestones, Xur inventory, daily actions, reset countdowns,
+  and ranked recommendations.
+- **Per-raid and per-dungeon milestone missing counts** where a reliable source
+  bucket can be matched.
+- **Catalysts, crafting, triumphs, and seals** from Bungie records data.
+- **Global item search** over a manifest-derived in-memory index.
+- **Read-only item views for deep-linked hashes** through `GET /api/items/:itemHash`.
+- **Weapon perk pools** in the item drawer from manifest socket and plug-set data.
+- **Dashboard** with real account, collection, weekly, wishlist, character, and
+  cosmetics data.
+- **Settings and preferences** with persisted user preferences and account context.
+- **Roles, feature flags, and admin console** for early-access rollout and user
   management.
-- **User preferences** — card style and personalization options.
-- **Infrastructure** — Docker Compose stack, Kubernetes (Minikube) manifests, and a
-  GitHub Actions CI pipeline (format, test, Docker build).
-- **Per-raid-milestone missing counts** — raid and dungeon milestones in This Week now
-  show how many of the player's missing items drop there, via
-  `efficiency.MissingForMilestone`. Non-raid/dungeon milestones still omit the count (no
-  manifest reward→collectible signal).
-- **Read-only item view for deep-linked hashes** — a `GET /api/items/:itemHash`
-  (manifest-only) endpoint and a matching `itemByHashQuery` + `toGTItemView` on the
-  frontend resolve a deep-link miss (`?item=<hash>` with no collectible entry) into a
-  read-only item drawer instead of dead-ending.
+- **Unified audit log** for auth, session, role, and flag events, including admin
+  UI access.
+- **Docker Compose, Minikube manifests, and GitHub Actions CI** for local
+  development and validation.
+- **Public documentation system** with setup guide, architecture overview,
+  public/private docs boundary, public roadmap, and ADRs.
 
 ### Changed
 
-- **Difficulty ratings** — `ClassifyDifficulty` is now a positive-match table; unmatched
-  sources return `"Unrated"` instead of a misleading "Easy". Items whose source string
-  indicates "cannot be reacquired" are additionally flagged as `farmOnly` and shown with
-  a "Farm only" chip in the item card and drawer.
-
-### Deprecated
-
-- _Nothing yet._
+- **Difficulty ratings** use positive-match classification; unmatched sources are
+  shown as `Unrated` instead of a misleading default.
+- **Farm-only items** are surfaced explicitly when source text indicates the item
+  cannot be reacquired.
+- **Refresh behavior** treats transient refresh failures as reconnectable instead
+  of immediately logging the user out.
+- **Production hardening** added rate limits, body caps, readiness checks,
+  streamed manifest downloads, config-driven Bungie URLs, stricter CORS, and Go
+  version pinning.
+- **Dashboard and Cosmetics states** now use explicit warming, privacy, error,
+  empty, and retry states rather than silently zeroed data.
+- **Documentation structure** now separates public committed docs from private
+  gitignored runbooks, reviews, research, and implementation handoffs.
 
 ### Removed
 
-- _Nothing yet._
+- Legacy mock-data paths and placeholder collection/dashboard data.
+- Public deep implementation handoff docs from `docs/`; detailed plans now belong
+  under `private/`.
 
 ### Fixed
 
-- _Nothing yet._
+- OAuth callback double-submit handling in React StrictMode.
+- Bungie token upsert race handling.
+- Manifest swap lifecycle on Windows by closing and reopening SQLite handles.
+- Cross-save login membership selection.
+- CORS wildcard plus credentials rejection in production.
+- Several accessibility issues in icon buttons, tabs, search inputs, and reduced
+  motion handling.
 
 ### Security
 
-- Bungie OAuth tokens stored AES-256-GCM encrypted at rest, with key-rotation
+- Bungie OAuth tokens are encrypted at rest with AES-256-GCM and key-rotation
   support.
+- Refresh-token reuse revokes the affected session.
+- Authorization reads current roles from the DB-backed revocation cache rather
+  than trusting JWT role hints.
+- Admin role and feature-flag changes are audited.
+- Last-admin demotion is blocked transactionally.
+- Audit rows capture client IP and User-Agent with configurable retention.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/commits/main
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jwh3times/GuardianTracker/compare/v0.1.0...v0.2.0

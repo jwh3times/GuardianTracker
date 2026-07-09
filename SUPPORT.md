@@ -6,10 +6,11 @@ so please be patient — but every report and question is read.
 
 ## Before you ask
 
-- Check the [README](README.md) for setup, ports, and the three ways to run the
+- Check [SETUP.md](SETUP.md) for setup, ports, and the three ways to run the
   stack (Docker Compose, Minikube, individual services).
 - Check [CONTRIBUTING.md](CONTRIBUTING.md) for build, test, and CI-gate
-  requirements, and [CLAUDE.md](CLAUDE.md) for the developer guide.
+  requirements, and [docs/architecture.md](docs/architecture.md) for the public
+  architecture overview.
 - Search [existing issues](https://github.com/jwh3times/GuardianTracker/issues?q=is%3Aissue)
   — your question may already be answered.
 
