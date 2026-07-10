@@ -23,6 +23,7 @@ type fakeRecordsManifest struct {
 	records       map[uint32]*manifestrepo.RecordDef
 	weaponTypes   map[string]string
 	exoticWeapons map[string]manifestrepo.ExoticWeapon
+	catalystLinks []manifestrepo.CatalystLink
 }
 
 func (f *fakeRecordsManifest) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32]*manifestrepo.PresentationNodeDef, error) {
@@ -57,6 +58,10 @@ func (f *fakeRecordsManifest) GetExoticWeaponsByName() (map[string]manifestrepo.
 		return map[string]manifestrepo.ExoticWeapon{}, nil
 	}
 	return f.exoticWeapons, nil
+}
+
+func (f *fakeRecordsManifest) GetCatalystLinks() ([]manifestrepo.CatalystLink, error) {
+	return f.catalystLinks, nil
 }
 
 func nodeFromJSON(t *testing.T, blob string) *manifestrepo.PresentationNodeDef {
@@ -454,5 +459,79 @@ func TestGetSeals_CompletionAndGilding(t *testing.T) {
 	}
 	if seal.Left != "1 triumph left" {
 		t.Errorf("left = %q", seal.Left)
+	}
+}
+
+// TestGetCatalysts_EffectLinkage covers the hash-first linkage chain: objective
+// overlap first, then stripped-name match, then catalyst-plug-name match, then
+// falling back to the record's own description when nothing links. It also
+// covers the record-side ambiguity guard — an objective hash claimed by more
+// than one record must never be used to link, even if it's unambiguous on the
+// weapon side.
+func TestGetCatalysts_EffectLinkage(t *testing.T) {
+	m := &fakeRecordsManifest{
+		nodes: map[uint32]*manifestrepo.PresentationNodeDef{
+			9000: nodeFromJSON(t, `{"hash":9000,
+				"displayProperties":{"name":"Exotic Catalysts"},
+				"children":{"records":[
+					{"recordHash":1001},{"recordHash":1002},{"recordHash":1003},
+					{"recordHash":1004},{"recordHash":1005},{"recordHash":1006}]}}`),
+		},
+		records: map[uint32]*manifestrepo.RecordDef{
+			// Objective-hash overlap with the "Sunshot" link (3107076149).
+			1001: recordFromJSON(t, `{"hash":1001,"recordTypeName":"Exotic Catalysts","objectiveHashes":[999,3107076149],"displayProperties":{"name":"Sunshot Catalyst","description":"Record fallback text one."}}`),
+			// No objective overlap; stripped name "Riskrunner" matches the
+			// "Riskrunner" link by weapon name.
+			1002: recordFromJSON(t, `{"hash":1002,"recordTypeName":"Exotic Catalysts","displayProperties":{"name":"Riskrunner Catalyst","description":"Record fallback text two."}}`),
+			// Name doesn't strip-match any weapon ("Thunderlord" != "Thunderlord
+			// Prime"), but matches a catalyst-plug name on that link.
+			1003: recordFromJSON(t, `{"hash":1003,"recordTypeName":"Exotic Catalysts","displayProperties":{"name":"Thunderlord Catalyst","description":"Record fallback text three."}}`),
+			// No link matches at all — falls back to the record's own description.
+			1004: recordFromJSON(t, `{"hash":1004,"recordTypeName":"Exotic Catalysts","displayProperties":{"name":"Mystery Catalyst","description":"Record fallback text four."}}`),
+			// Objective hash 777 is claimed by BOTH 1005 and 1006 — ambiguous on
+			// the record side even though only one weapon link (unrelated,
+			// non-name-matching "Whatever") declares it, so it must not be used.
+			1005: recordFromJSON(t, `{"hash":1005,"recordTypeName":"Exotic Catalysts","objectiveHashes":[777],"displayProperties":{"name":"Ambiguous Catalyst","description":"Record fallback text five."}}`),
+			1006: recordFromJSON(t, `{"hash":1006,"recordTypeName":"Exotic Catalysts","objectiveHashes":[777],"displayProperties":{"name":"Also Ambiguous Catalyst","description":"Record fallback text six."}}`),
+		},
+		catalystLinks: []manifestrepo.CatalystLink{
+			{WeaponName: "Sunshot", ObjectiveHashes: []uint32{3107076149},
+				Catalysts: []manifestrepo.WeaponCatalyst{{Name: "Sunshot Catalyst", Description: "Loose Change text."}}},
+			{WeaponName: "Riskrunner",
+				Catalysts: []manifestrepo.WeaponCatalyst{{Name: "Arc Conductor", Description: "Chain lightning text."}}},
+			{WeaponName: "Thunderlord Prime",
+				Catalysts: []manifestrepo.WeaponCatalyst{{Name: "Thunderlord Catalyst", Description: "Machine gun text."}}},
+			{WeaponName: "Whatever", ObjectiveHashes: []uint32{777}},
+		},
+	}
+	profile := `{"ErrorCode":1,"Response":{"profileRecords":{"data":{"records":{}}}}}`
+	s := newRecordsService(t, newBungieServer(t, profile), m)
+
+	cats, _, err := s.GetCatalysts(context.Background(), 3, "4611686018467260757", "token")
+	if err != nil {
+		t.Fatalf("GetCatalysts: %v", err)
+	}
+	byName := map[string]Catalyst{}
+	for _, c := range cats {
+		byName[c.Name] = c
+	}
+
+	if got := byName["Sunshot Catalyst"].Effect; got != "Loose Change text." {
+		t.Errorf("objective-overlap effect = %q, want %q", got, "Loose Change text.")
+	}
+	if got := byName["Riskrunner Catalyst"].Effect; got != "Chain lightning text." {
+		t.Errorf("name-strip effect = %q, want %q", got, "Chain lightning text.")
+	}
+	if got := byName["Thunderlord Catalyst"].Effect; got != "Machine gun text." {
+		t.Errorf("plug-name effect = %q, want %q", got, "Machine gun text.")
+	}
+	if got := byName["Mystery Catalyst"].Effect; got != "Record fallback text four." {
+		t.Errorf("no-link effect = %q, want the record's own description", got)
+	}
+	if got := byName["Ambiguous Catalyst"].Effect; got != "Record fallback text five." {
+		t.Errorf("record-ambiguous effect = %q, want the record's own description (hash must not link)", got)
+	}
+	if got := byName["Also Ambiguous Catalyst"].Effect; got != "Record fallback text six." {
+		t.Errorf("record-ambiguous effect = %q, want the record's own description (hash must not link)", got)
 	}
 }

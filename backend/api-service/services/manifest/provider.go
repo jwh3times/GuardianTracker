@@ -213,3 +213,19 @@ func (p *Provider) GetItemView(itemHash uint32) (*ItemView, error) {
 	}
 	return r.GetItemView(itemHash)
 }
+
+func (p *Provider) GetWeaponCatalysts(itemHash uint32) ([]WeaponCatalyst, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetWeaponCatalysts(itemHash)
+}
+
+func (p *Provider) GetCatalystLinks() ([]CatalystLink, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetCatalystLinks()
+}

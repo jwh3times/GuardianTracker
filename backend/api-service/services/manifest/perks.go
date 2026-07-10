@@ -16,15 +16,110 @@ const (
 
 // plugCategoryIdentifier values we special-case.
 const (
-	plugCatTracker = "v400.plugs.weapons.masterworks.trackers"
-	plugCatEmpty   = "crafting.recipes.empty_socket"
-	plugCatBarrels = "barrels"
-	plugCatMags    = "magazines"
-	plugCatFrames  = "frames"
-	plugCatOrigins = "origins"
+	plugCatTracker         = "v400.plugs.weapons.masterworks.trackers"
+	plugCatEmpty           = "crafting.recipes.empty_socket"
+	plugCatFrames          = "frames"
+	plugCatCatalysts       = "catalysts"
+	plugCatEmptyMasterwork = "v400.empty.exotic.masterwork"
 )
 
 const weaponItemType = 3
+
+// isJunkPCI reports whether a plug-category-identifier is never a real weapon
+// perk within the weapon-perks socket category and must be skipped — both when
+// classifying a column's role/label and when resolving its perk names. This is a
+// BLACKLIST (skip only known-junk plugs), not the allowlist the old code used:
+// every other pci is a real, displayable perk column and must be kept.
+//
+//   - masterworks.trackers / crafting.recipes.empty_socket: cosmetic kill
+//     trackers and the "no perk rolled yet" placeholder — never real perks.
+//   - "catalysts" / v400.empty.exotic.masterwork: the exotic-catalyst socket that
+//     16/145 catalyst-bearing exotics carry inside this same socket category.
+//     Catalysts are surfaced separately via GetWeaponCatalysts, not perkColumns.
+func isJunkPCI(pci string) bool {
+	if pci == plugCatCatalysts {
+		return true
+	}
+	return strings.Contains(pci, plugCatTracker) ||
+		strings.Contains(pci, plugCatEmpty) ||
+		strings.Contains(pci, plugCatEmptyMasterwork)
+}
+
+// pciLabels maps a known plug-category-identifier to its column display label.
+// classifyPCI also matches versioned suffix variants (e.g. "v950.new.sword0.blades"
+// matches "blades") so new weapon-version pcis don't need a table update.
+var pciLabels = map[string]string{
+	plugCatFrames:  "", // handled specially — numbered "Trait N"
+	"barrels":      "Barrel",
+	"magazines":    "Magazine",
+	"origins":      "Origin",
+	"scopes":       "Scope",
+	"tubes":        "Launcher Barrel",
+	"magazines_gl": "Magazine",
+	"batteries":    "Battery",
+	"stocks":       "Stock",
+	"blades":       "Blade",
+	"guards":       "Guard",
+	"arrows":       "Arrow",
+	"bowstrings":   "Bowstring",
+	"hafts":        "Haft",
+	"grips":        "Grip",
+	"rails":        "Rail",
+	"bolts":        "Bolt",
+	"launchers":    "Launcher",
+}
+
+// pciRoles mirrors pciLabels with the column's stable "role" identifier.
+var pciRoles = map[string]string{
+	plugCatFrames:  "trait",
+	"barrels":      "barrel",
+	"magazines":    "magazine",
+	"origins":      "origin",
+	"scopes":       "scope",
+	"tubes":        "barrel",
+	"magazines_gl": "magazine",
+	"batteries":    "battery",
+	"stocks":       "stock",
+	"blades":       "blade",
+	"guards":       "guard",
+	"arrows":       "arrow",
+	"bowstrings":   "bowstring",
+	"hafts":        "haft",
+	"grips":        "grip",
+	"rails":        "rail",
+	"bolts":        "bolt",
+	"launchers":    "barrel",
+}
+
+// basePCI resolves a plug-category-identifier to a known base category, matching
+// either exactly or by ".<base>" suffix (versioned variants, e.g. sword pcis like
+// "v950.new.sword0.blades" or "v950.new.sword0.guards").
+func basePCI(pci string) (string, bool) {
+	if _, ok := pciRoles[pci]; ok {
+		return pci, true
+	}
+	for base := range pciRoles {
+		if strings.HasSuffix(pci, "."+base) {
+			return base, true
+		}
+	}
+	return "", false
+}
+
+// classifyPCI assigns a column's role/label from a known (non-junk) plug's
+// plugCategoryIdentifier, falling back to a generic "Perks" label for any pci we
+// don't recognize rather than dropping the column.
+func classifyPCI(pci string, traitN *int) (role, label string) {
+	base, ok := basePCI(pci)
+	if !ok {
+		return "perk", "Perks"
+	}
+	if base == plugCatFrames {
+		*traitN++
+		return "trait", fmt.Sprintf("Trait %d", *traitN)
+	}
+	return pciRoles[base], pciLabels[base]
+}
 
 // PerkColumn is one socket column of a weapon's possible-perk pool, in display order.
 type PerkColumn struct {
@@ -50,8 +145,15 @@ type socketCategoryDef struct {
 }
 
 type weaponDef struct {
-	ItemType int `json:"itemType"`
-	Sockets  struct {
+	Hash              uint32 `json:"hash"`
+	DisplayProperties struct {
+		Name string `json:"name"`
+	} `json:"displayProperties"`
+	ItemType  int `json:"itemType"`
+	Inventory struct {
+		TierType int `json:"tierType"`
+	} `json:"inventory"`
+	Sockets struct {
 		SocketEntries    []socketEntryDef    `json:"socketEntries"`
 		SocketCategories []socketCategoryDef `json:"socketCategories"`
 	} `json:"sockets"`
@@ -66,11 +168,26 @@ type plugSetDef struct {
 
 type plugItemDef struct {
 	DisplayProperties struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	} `json:"displayProperties"`
+	ItemType int `json:"itemType"`
+	// Objectives.ObjectiveHashes carries a catalyst plug's unlock-progress
+	// objectives (used by the records service to link an exotic-catalyst record
+	// to its weapon via objective-hash overlap). Nested under "objectives" here —
+	// unlike DestinyRecordDefinition, where the same field sits at the top level.
+	Objectives struct {
+		ObjectiveHashes []uint32 `json:"objectiveHashes"`
+	} `json:"objectives"`
 	Plug struct {
 		PlugCategoryIdentifier string `json:"plugCategoryIdentifier"`
 	} `json:"plug"`
+	// Perks feeds catalyst effect-text resolution: the first displayable
+	// DestinySandboxPerkDefinition among these wins over the plug's own
+	// (often generic) description.
+	Perks []struct {
+		PerkHash uint32 `json:"perkHash"`
+	} `json:"perks"`
 }
 
 // GetWeaponPerks returns the ordered possible-perk columns for a weapon, or nil
@@ -183,46 +300,33 @@ func (r *Repository) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 	return cols, nil
 }
 
-// classifyColumn assigns a column's role/label from its first non-excluded plug
-// item, and reports skip for kill-tracker / empty / unresolvable columns.
+// classifyColumn assigns a column's role/label from its first non-junk plug item
+// (continuing past junk plugs rather than stopping the whole column at the first
+// one — see isJunkPCI), and reports skip only when every plug in the pool is
+// junk or unresolvable.
 func classifyColumn(isIntrinsic bool, hashes []uint32, items map[uint32]*plugItemDef, traitN *int) (role, label string, skip bool) {
 	if isIntrinsic {
 		return "intrinsic", "Intrinsic", false
 	}
 	for _, h := range hashes {
 		it := items[h]
-		if it == nil {
+		if it == nil || isJunkPCI(it.Plug.PlugCategoryIdentifier) {
 			continue
 		}
-		switch it.Plug.PlugCategoryIdentifier {
-		case plugCatTracker, plugCatEmpty:
-			return "", "", true
-		case plugCatBarrels:
-			return "barrel", "Barrel", false
-		case plugCatMags:
-			return "magazine", "Magazine", false
-		case plugCatFrames:
-			*traitN++
-			return "trait", fmt.Sprintf("Trait %d", *traitN), false
-		case plugCatOrigins:
-			return "origin", "Origin", false
-		}
+		role, label := classifyPCI(it.Plug.PlugCategoryIdentifier, traitN)
+		return role, label, false
 	}
-	return "", "", true // unknown / unresolved → skip
+	return "", "", true // every plug junk/unresolved → skip
 }
 
-// resolvePerkNames maps plug-item hashes to display names, excluding placeholder/
-// tracker plugs, deduping by name and preserving pool order.
+// resolvePerkNames maps plug-item hashes to display names, excluding junk plugs
+// (see isJunkPCI), deduping by name and preserving pool order.
 func resolvePerkNames(hashes []uint32, items map[uint32]*plugItemDef) []string {
 	seen := map[string]struct{}{}
 	var out []string
 	for _, h := range hashes {
 		it := items[h]
-		if it == nil {
-			continue
-		}
-		switch it.Plug.PlugCategoryIdentifier {
-		case plugCatTracker, plugCatEmpty:
+		if it == nil || isJunkPCI(it.Plug.PlugCategoryIdentifier) {
 			continue
 		}
 		name := it.DisplayProperties.Name
