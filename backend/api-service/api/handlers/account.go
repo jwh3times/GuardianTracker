@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"time"
 
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/cache"
@@ -13,11 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-// flagsCacheKey caches the full flag list so GET /api/flags is one DB read per
-// minute, not per request. Evicted on any admin flag change.
-const flagsCacheKey = "flags:all"
-const flagsCacheTTL = 60 * time.Second
 
 // roleSelfStore is the self opt-in slice of db.UserStore.
 type roleSelfStore interface {
@@ -31,14 +25,14 @@ type flagLister interface {
 
 // AccountHandler serves the per-user role opt-in and resolved feature-flag state.
 type AccountHandler struct {
-	users roleSelfStore // nil = degraded mode
-	flags flagLister    // nil = degraded mode
-	cache cache.Cache   // for evicting tver: entries + caching flag rows
-	audit AuditLogger   // nil = best-effort (no-op)
+	users    roleSelfStore // nil = degraded mode
+	resolver *FlagResolver
+	cache    cache.Cache // for evicting tver: entries
+	audit    AuditLogger // nil = best-effort (no-op)
 }
 
 func NewAccountHandler(users roleSelfStore, flags flagLister, c cache.Cache, audit AuditLogger) *AccountHandler {
-	return &AccountHandler{users: users, flags: flags, cache: c, audit: audit}
+	return &AccountHandler{users: users, resolver: NewFlagResolver(flags, c), cache: c, audit: audit}
 }
 
 // SetRole handles PUT /api/account/role — self-service tier opt-in.
@@ -106,20 +100,13 @@ type resolvedFlag struct {
 }
 
 // GetFlags handles GET /api/flags — resolved feature-flag state for the caller.
-// All flags are returned with per-caller accessible/locked so the frontend can
-// distinguish "disabled" (hide everywhere) from "locked" (upsell) from an unknown
-// key (fail-open: show). Actual access to gated APIs is enforced server-side with
-// RequireTier, not by this UI hint (TODO 13.4).
+// Fail-open: a DB hiccup or degraded mode returns an empty list so the frontend
+// treats every shipped feature as accessible (nothing hidden). Actual access to
+// gated APIs is enforced server-side by auth.RequireFlag (TODO 13.4, done).
 func (h *AccountHandler) GetFlags(c *gin.Context) {
 	role := c.GetInt("role")
 	resp := gin.H{"role": auth.RoleName(role), "flags": []resolvedFlag{}}
-	if h.flags == nil {
-		// Degraded mode — no flag table. An empty list makes the frontend treat
-		// every shipped feature as accessible (nothing hidden).
-		c.JSON(http.StatusOK, resp)
-		return
-	}
-	flags, err := h.cachedFlags(c.Request.Context())
+	flags, err := h.resolver.List(c.Request.Context())
 	if err != nil {
 		log.Printf("GetFlags: list: %v", err)
 		c.JSON(http.StatusOK, resp) // fail open — don't hide features on a DB hiccup
@@ -141,23 +128,4 @@ func (h *AccountHandler) GetFlags(c *gin.Context) {
 	}
 	resp["flags"] = out
 	c.JSON(http.StatusOK, resp)
-}
-
-// cachedFlags returns the flag list from a 60s cache, reading the DB on a miss.
-func (h *AccountHandler) cachedFlags(ctx context.Context) ([]db.FeatureFlag, error) {
-	if h.cache != nil {
-		if v, ok := h.cache.Get(flagsCacheKey); ok {
-			if flags, ok := v.([]db.FeatureFlag); ok {
-				return flags, nil
-			}
-		}
-	}
-	flags, err := h.flags.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if h.cache != nil {
-		h.cache.Set(flagsCacheKey, flags, flagsCacheTTL)
-	}
-	return flags, nil
 }
