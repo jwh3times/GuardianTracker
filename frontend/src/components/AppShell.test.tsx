@@ -176,20 +176,24 @@ describe("AppShell interactions", () => {
           {
             hash: 555,
             name: "Gjallarhorn",
-            icon: "",
+            icon: "/img/gjally.png",
             type: "Rocket Launcher",
             rarity: "Exotic",
           },
         ]),
       ),
     );
-    renderShell();
+    const { container } = renderShell();
     const input = screen.getByPlaceholderText("Search items…");
     fireEvent.change(input, { target: { value: "gjall" } });
     // Debounced 250ms query → result appears
     expect(
       await screen.findByText("Gjallarhorn", {}, { timeout: 2000 }),
     ).toBeInTheDocument();
+    // Result tile renders the Bungie CDN icon, not just the type glyph
+    const icon = container.querySelector("img.gt-tile-img") as HTMLImageElement;
+    expect(icon).not.toBeNull();
+    expect(icon.src).toBe("https://www.bungie.net/img/gjally.png");
     fireEvent.click(screen.getByText("Gjallarhorn"));
     expect(await screen.findByText("collections-stub")).toBeInTheDocument();
   });

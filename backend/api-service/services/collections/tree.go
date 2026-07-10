@@ -20,11 +20,15 @@ type CollectionNode struct {
 	Items     []string         `json:"items,omitempty"`
 }
 
-// leafRef pairs a collectible (for the collected check, keyed by collectible hash)
-// with its item hash (the frontend key for item detail + deep-link).
+// leafRef is one collections-grid leaf: the item hash (the frontend key for item
+// detail + deep-link) in both string (JSON output) and numeric (ownership lookup)
+// form. Ownership is itemHash-level (see deriveOwnedItems) — the manifest carries
+// multiple collectible rows for some re-issued itemHashes, so a leaf no longer
+// tracks a single collectible hash; buildTreeStructure dedupes by itemHash within
+// each node so a re-issued item contributes exactly one leaf per node.
 type leafRef struct {
-	CollectibleHash uint32
-	ItemHash        string
+	ItemHash    string
+	ItemHashNum uint32
 }
 
 // structNode is the user-independent skeleton of one presentation node.
@@ -166,13 +170,22 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 			}
 			sn.Children = append(sn.Children, build(ch, path))
 		}
+		// Dedupe by itemHash within this node: the manifest carries multiple
+		// collectible rows for some re-issued itemHashes (e.g. Choir of One), and a
+		// node listing both should still contribute a single leaf/count for the
+		// item. This is scoped to this node's own collectibles only — the same
+		// itemHash placed under a different node still gets its own leaf there.
+		seenItems := make(map[uint32]bool)
 		for _, c := range n.Children.Collectibles {
-			if cwi, ok := colByHash[c.CollectibleHash]; ok {
-				sn.Leaves = append(sn.Leaves, leafRef{
-					CollectibleHash: c.CollectibleHash,
-					ItemHash:        strconv.FormatUint(uint64(cwi.Item.Hash), 10),
-				})
+			cwi, ok := colByHash[c.CollectibleHash]
+			if !ok || seenItems[cwi.Item.Hash] {
+				continue
 			}
+			seenItems[cwi.Item.Hash] = true
+			sn.Leaves = append(sn.Leaves, leafRef{
+				ItemHash:    strconv.FormatUint(uint64(cwi.Item.Hash), 10),
+				ItemHashNum: cwi.Item.Hash,
+			})
 		}
 		delete(path, h)
 		return sn
@@ -222,31 +235,31 @@ func leafCount(n structNode) int {
 	return c
 }
 
-// overlay produces counted CollectionNodes for a user's collected set (keyed by
-// collectible hash).
-func (ts *TreeStructure) overlay(collected map[uint32]bool) []CollectionNode {
+// overlay produces counted CollectionNodes for a user's owned set (itemHash-keyed —
+// see deriveOwnedItems).
+func (ts *TreeStructure) overlay(owned map[uint32]bool) []CollectionNode {
 	out := make([]CollectionNode, 0, len(ts.Roots))
 	for _, r := range ts.Roots {
-		out = append(out, overlayNode(r, collected))
+		out = append(out, overlayNode(r, owned))
 	}
 	return out
 }
 
-func overlayNode(n structNode, collected map[uint32]bool) CollectionNode {
+func overlayNode(n structNode, owned map[uint32]bool) CollectionNode {
 	cn := CollectionNode{
 		Hash: strconv.FormatUint(uint64(n.Hash), 10),
 		Name: n.Name,
 		Icon: n.Icon,
 	}
 	for _, c := range n.Children {
-		child := overlayNode(c, collected)
+		child := overlayNode(c, owned)
 		cn.Children = append(cn.Children, child)
 		cn.Total += child.Total
 		cn.Collected += child.Collected
 	}
 	for _, lf := range n.Leaves {
 		cn.Total++
-		if collected[lf.CollectibleHash] {
+		if owned[lf.ItemHashNum] {
 			cn.Collected++
 		}
 		cn.Items = append(cn.Items, lf.ItemHash)

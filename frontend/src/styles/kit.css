@@ -701,6 +701,12 @@
 .gt-cosmetic-tile[data-collected="false"] {
   opacity: 0.42;
 }
+/* .gt-tile has no intrinsic size (aspect-ratio only, and the CDN icon img
+   is absolutely positioned) — without an explicit width it collapses to
+   0×0 whenever a real icon is present. */
+.gt-cosmetic-tile .gt-tile {
+  width: 64px;
+}
 .gt-cosmetic-tile-name {
   font-size: var(--t-2xs);
   color: var(--c-text-3);

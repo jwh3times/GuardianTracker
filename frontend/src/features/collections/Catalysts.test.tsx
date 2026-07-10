@@ -63,6 +63,59 @@ describe("Catalysts page", () => {
     expect(screen.queryByText("Riskrunner Catalyst")).not.toBeInTheDocument();
   });
 
+  it("shows a complete indicator (not 'Not yet acquired') for a completed catalyst, per backend contract obj:null on complete", async () => {
+    server.use(
+      http.get(`${API}/api/catalysts/:type/:id`, () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: "c-complete",
+              name: "Complete Catalyst",
+              type: "Bow",
+              icon: "",
+              status: "complete",
+              obj: null,
+              source: "Strikes",
+            },
+            {
+              id: "c-missing",
+              name: "Missing Catalyst",
+              type: "Auto Rifle",
+              icon: "",
+              status: "missing",
+              obj: null,
+              source: "World drops",
+            },
+            {
+              id: "c-progress",
+              name: "Progress Catalyst",
+              type: "Hand Cannon",
+              icon: "",
+              status: "in-progress",
+              obj: { label: "Kills", cur: 10, max: 100 },
+              source: "Crucible",
+            },
+          ],
+          fetchedAt: "",
+        }),
+      ),
+    );
+    const { container } = renderPage(<Catalysts />);
+
+    // Complete catalyst: shows a completion indicator, never "Not yet acquired"
+    await screen.findByText("Complete Catalyst");
+    expect(screen.getByText("Catalyst complete")).toBeInTheDocument();
+    expect(
+      container.querySelector('.gt-prog-fill[data-complete="true"]'),
+    ).not.toBeNull();
+
+    // Missing catalyst: still "Not yet acquired", and only one such element
+    expect(screen.getAllByText("Not yet acquired")).toHaveLength(1);
+
+    // In-progress catalyst: still renders its progress bar with real values
+    expect(screen.getByText("10/100")).toBeInTheDocument();
+  });
+
   it("shows the empty state when a catalyst filter matches nothing", async () => {
     server.use(
       http.get(`${API}/api/catalysts/:type/:id`, () =>
@@ -74,7 +127,7 @@ describe("Catalysts page", () => {
               type: "Bow",
               icon: "",
               status: "complete",
-              obj: { label: "Kills", cur: 1, max: 1 },
+              obj: null,
               source: "Strikes",
             },
           ],

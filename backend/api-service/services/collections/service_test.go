@@ -86,15 +86,33 @@ func TestBuildCategorySummary(t *testing.T) {
 		fabricate(2, 102, "Missing Gun", "Found in the raid", bungie.TierTypeLegendary),
 		fabricate(3, 103, "Missing Exotic", "", bungie.TierTypeExotic),
 	}
-	collected := map[uint32]bool{1: true}
+	owned := map[uint32]bool{101: true}
 
-	sum := buildCategorySummary(items, collected)
+	sum := buildCategorySummary(items, owned)
 
 	if sum.Weapons.Total != 2 || sum.Weapons.Collected != 1 {
 		t.Errorf("weapons = %d/%d, want 1/2", sum.Weapons.Collected, sum.Weapons.Total)
 	}
 	if sum.Exotics.Total != 1 || sum.Exotics.Collected != 0 {
 		t.Errorf("exotics = %d/%d, want 0/1", sum.Exotics.Collected, sum.Exotics.Total)
+	}
+}
+
+// TestBuildCategorySummary_DedupesDuplicateItemHash reproduces the re-issued-item
+// bug: two collectible rows share one itemHash (e.g. Choir of One's two collectible
+// hashes). Only one row is acquired, but ownership is itemHash-level and Total must
+// count the distinct item once, not once per collectible row.
+func TestBuildCategorySummary_DedupesDuplicateItemHash(t *testing.T) {
+	items := []manifest.CollectibleWithItem{
+		fabricate(1, 101, "Choir of One", "Found in the raid", bungie.TierTypeExotic),
+		fabricate(2, 101, "Choir of One", "Found in the raid", bungie.TierTypeExotic),
+	}
+	owned := map[uint32]bool{101: true}
+
+	sum := buildCategorySummary(items, owned)
+
+	if sum.Exotics.Total != 1 || sum.Exotics.Collected != 1 {
+		t.Errorf("exotics = %d/%d, want 1/1", sum.Exotics.Collected, sum.Exotics.Total)
 	}
 }
 
@@ -175,10 +193,11 @@ func TestGetUserCollections_Projects(t *testing.T) {
 	}
 	tree := buildTreeStructure(fixtureNodes, fixtureCols)
 
-	// Only Fatebringer (collectible hash 1000) is collected.
+	// Only Fatebringer (collectible hash 1000, item hash 100) is collected.
 	a := &analysis{
 		collectibles: fixtureCols,
 		collected:    map[uint32]bool{1000: true},
+		owned:        map[uint32]bool{100: true},
 		tree:         tree,
 		fetchedAt:    time.Now(),
 	}
@@ -335,6 +354,7 @@ func TestGetMissingItemHashes_ExcludesCosmetics(t *testing.T) {
 	a := &analysis{
 		collectibles: []manifest.CollectibleWithItem{weapon, cosmetic},
 		collected:    map[uint32]bool{}, // nothing collected
+		owned:        map[uint32]bool{},
 		fetchedAt:    time.Now(),
 	}
 	c.Set("collections:3:member-1", a, time.Minute)
@@ -352,4 +372,56 @@ func TestGetMissingItemHashes_ExcludesCosmetics(t *testing.T) {
 	if len(got) != 1 {
 		t.Errorf("len = %d, want 1", len(got))
 	}
+}
+
+// TestGetMissingItemHashes_DedupesDuplicateItemHash reproduces the re-issued-item
+// bug: two collectible rows share one itemHash. When either is acquired, ownership
+// is itemHash-level, so the item must NOT show up as missing. When neither is
+// acquired, the item hash appears in the missing set exactly once (map semantics).
+func TestGetMissingItemHashes_DedupesDuplicateItemHash(t *testing.T) {
+	weaponA := fabricate(1, 100, "Choir of One", "Found in the raid", bungie.TierTypeExotic)
+	weaponB := fabricate(2, 100, "Choir of One", "Found in the raid", bungie.TierTypeExotic)
+
+	t.Run("one acquired", func(t *testing.T) {
+		c := cache.NewMemoryCache(time.Minute, time.Minute)
+		s := &Service{cache: c}
+		a := &analysis{
+			collectibles: []manifest.CollectibleWithItem{weaponA, weaponB},
+			collected:    map[uint32]bool{1: true}, // only collectible 1 acquired
+			owned:        map[uint32]bool{100: true},
+			fetchedAt:    time.Now(),
+		}
+		c.Set("collections:3:member-dup-1", a, time.Minute)
+
+		got, err := s.GetMissingItemHashes(context.Background(), 3, "member-dup-1", "token")
+		if err != nil {
+			t.Fatalf("GetMissingItemHashes: %v", err)
+		}
+		if _, ok := got[100]; ok {
+			t.Errorf("item 100 owned via one of its duplicate collectibles must not be missing")
+		}
+	})
+
+	t.Run("neither acquired", func(t *testing.T) {
+		c := cache.NewMemoryCache(time.Minute, time.Minute)
+		s := &Service{cache: c}
+		a := &analysis{
+			collectibles: []manifest.CollectibleWithItem{weaponA, weaponB},
+			collected:    map[uint32]bool{},
+			owned:        map[uint32]bool{},
+			fetchedAt:    time.Now(),
+		}
+		c.Set("collections:3:member-dup-2", a, time.Minute)
+
+		got, err := s.GetMissingItemHashes(context.Background(), 3, "member-dup-2", "token")
+		if err != nil {
+			t.Fatalf("GetMissingItemHashes: %v", err)
+		}
+		if _, ok := got[100]; !ok {
+			t.Errorf("item 100 should be missing")
+		}
+		if len(got) != 1 {
+			t.Errorf("len = %d, want 1 (duplicate collectible rows for one itemHash must not double-count)", len(got))
+		}
+	})
 }
