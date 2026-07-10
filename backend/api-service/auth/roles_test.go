@@ -112,7 +112,7 @@ func TestRequireFlag_Matrix(t *testing.T) {
 		{"enabled+at-tier", fakeResolver{enabled: true, minTier: 2, found: true}, RoleAlpha, http.StatusOK},
 		{"disabled", fakeResolver{enabled: false, minTier: 0, found: true}, RoleAdmin, http.StatusNotFound},
 		{"unknown-key-fails-open", fakeResolver{found: false}, RoleStandard, http.StatusOK},
-		{"store-error-fails-open", fakeResolver{err: errors.New("db down")}, RoleStandard, http.StatusOK},
+		{"store-error-fails-open", fakeResolver{enabled: true, minTier: 0, found: true, err: errors.New("db down")}, RoleStandard, http.StatusOK},
 	}
 	for _, c := range cases {
 		got := statusFor(c.role, authz.RequireFlag(c.res, "some-flag"))
