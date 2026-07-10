@@ -541,6 +541,7 @@ export function Collections() {
           item={detail}
           perkColumns={perksQuery.data?.perkColumns}
           perksLoading={perksQuery.isLoading}
+          catalysts={perksQuery.data?.catalysts}
           onClose={() => setDetail(null)}
           onWish={onWish}
           wished={wished.has(detail.id)}

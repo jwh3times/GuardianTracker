@@ -13,6 +13,7 @@ import {
 import { DIFF_LABEL } from "../lib/constants";
 import type {
   GTItem,
+  ItemCatalyst,
   Milestone,
   PerkColumn,
   RecommendedAction,
@@ -426,6 +427,7 @@ export function ItemDetailDrawer({
   wished,
   perkColumns,
   perksLoading,
+  catalysts,
 }: {
   item: GTItem | null;
   onClose: () => void;
@@ -433,6 +435,7 @@ export function ItemDetailDrawer({
   wished: boolean;
   perkColumns?: PerkColumn[];
   perksLoading?: boolean;
+  catalysts?: ItemCatalyst[];
 }) {
   const [showWhy, setShowWhy] = useState(false);
   useEffect(() => {
@@ -570,6 +573,22 @@ export function ItemDetailDrawer({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {catalysts && catalysts.length > 0 && (
+          <div className="gt-drawer-block">
+            <div className="gt-section-title">Catalyst</div>
+            <ul className="gt-catalyst-list">
+              {catalysts.map((c) => (
+                <li key={c.name} className="gt-catalyst">
+                  <div className="gt-catalyst-name">{c.name}</div>
+                  {c.description && (
+                    <p className="gt-catalyst-desc">{c.description}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

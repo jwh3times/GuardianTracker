@@ -116,6 +116,46 @@ describe("Catalysts page", () => {
     expect(screen.getByText("10/100")).toBeInTheDocument();
   });
 
+  it("shows the catalyst effect text when present, and nothing extra when empty", async () => {
+    server.use(
+      http.get(`${API}/api/catalysts/:type/:id`, () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: "c-effect",
+              name: "Effect Catalyst",
+              type: "Hand Cannon",
+              icon: "",
+              status: "missing",
+              obj: null,
+              source: "World drops",
+              effect: "Kills with this weapon create a burst of solar light.",
+            },
+            {
+              id: "c-noeffect",
+              name: "No Effect Catalyst",
+              type: "Bow",
+              icon: "",
+              status: "missing",
+              obj: null,
+              source: "World drops",
+              effect: "",
+            },
+          ],
+          fetchedAt: "",
+        }),
+      ),
+    );
+    const { container } = renderPage(<Catalysts />);
+    expect(await screen.findByText("Effect Catalyst")).toBeInTheDocument();
+    expect(
+      screen.getByText("Kills with this weapon create a burst of solar light."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No Effect Catalyst")).toBeInTheDocument();
+    // Exactly one card renders effect copy — the empty-effect card adds nothing extra.
+    expect(container.querySelectorAll(".gt-catalyst-effect")).toHaveLength(1);
+  });
+
   it("shows the empty state when a catalyst filter matches nothing", async () => {
     server.use(
       http.get(`${API}/api/catalysts/:type/:id`, () =>

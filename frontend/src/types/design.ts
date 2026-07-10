@@ -14,6 +14,12 @@ export interface PerkColumn {
   perks: string[];
 }
 
+/** A weapon catalyst entry for the item drawer (same shape as APIItemCatalyst). */
+export interface ItemCatalyst {
+  name: string;
+  description: string;
+}
+
 export interface GTItem {
   id: string;
   name: string;
@@ -161,6 +167,8 @@ export interface Catalyst {
   status: CatalystStatus;
   obj: { label: string; cur: number; max: number } | null;
   source: string;
+  /** Catalyst perk/effect description from the manifest; may be empty. */
+  effect?: string;
 }
 
 export interface CraftPattern {

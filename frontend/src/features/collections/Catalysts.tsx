@@ -37,6 +37,7 @@ function CatalystCard({ c }: { c: Catalyst }) {
           </div>
         </div>
       </div>
+      {c.effect && <p className="gt-catalyst-effect">{c.effect}</p>}
       {c.status === "in-progress" && c.obj ? (
         <ProgressBar
           value={c.obj.cur}

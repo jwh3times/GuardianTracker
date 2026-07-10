@@ -66,10 +66,18 @@ export interface APIPerkColumn {
   perks: string[];
 }
 
+/** One catalyst entry attached to a weapon (mirrors manifest catalyst records). */
+export interface APIItemCatalyst {
+  name: string;
+  description: string; // may be empty — the manifest has at least one blank entry (Duality)
+}
+
 /** GET /api/items/:itemHash/perks */
 export interface APIItemPerks {
   itemHash: string;
   perkColumns: APIPerkColumn[];
+  /** Always present; empty array for non-exotics. Up to 4 entries for multi-catalyst exotics. */
+  catalysts: APIItemCatalyst[];
 }
 
 /** One presentation node in the collections tree (mirrors CollectionNode). */

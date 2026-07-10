@@ -27,9 +27,9 @@ backend/api-service/
   api/handlers/characters.go           ← HTTP handler for characters
   api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
                                            collections + characters + records caches via service methods
-  api/handlers/items.go                ← HTTP handlers for manifest-derived item detail: GetPerks (perk pool)
-                                           and GetItem (minimal item view for deep-linked non-collectible
-                                           items); no ownership check (public manifest data)
+  api/handlers/items.go                ← HTTP handlers for manifest-derived item detail: GetPerks (perk pool +
+                                           exotic catalyst pool) and GetItem (minimal item view for deep-linked
+                                           non-collectible items); no ownership check (public manifest data)
   api/handlers/wishlist.go             ← Wishlist CRUD; enriches with manifest defs, collectible source,
                                            and Xûr availability (via xurInventoryIface / weekly.Service)
   api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
@@ -45,8 +45,9 @@ backend/api-service/
   services/collections/service.go      ← Collection analysis + difficulty classification + cosmetics;
                                            uses ManifestRepo interface (satisfied by *manifest.Provider)
   services/characters/service.go       ← Character fetching; InvalidateCache method
-  services/items/service.go            ← Cached weapon-perks lookup (GetWeaponPerks) and item-view lookup
-                                           (GetItem); both caches cleared by InvalidateCache on manifest swap
+  services/items/service.go            ← Cached weapon-perks lookup (GetWeaponPerks), item-view lookup
+                                           (GetItem), and catalyst-pool lookup (GetCatalysts); all three caches
+                                           cleared by InvalidateCache on manifest swap
   services/manifest/repository.go      ← SQLite read-only queries against manifest DB
   services/manifest/provider.go        ← Shared lazy-opening repository; CloseForSwap/Reopen for
                                            hourly manifest swap; satisfies all consumer ManifestRepo interfaces
@@ -102,8 +103,8 @@ backend/api-service/
 | GET | `/api/weekly/recommendations` | JWT | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt |
 | GET | `/api/items/search?q=&limit=` | JWT | Manifest item search; 503 until index ready |
 | GET | `/api/items/:itemHash` | JWT | Minimal manifest item view for deep-linked non-collectible items; `{ itemHash, name, icon, itemType, tierType, rarity, description }`; 404 for unknown hash; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
-| GET | `/api/items/:itemHash/perks` | JWT | Weapon possible perk pool from manifest; `{ itemHash, perkColumns: [{role,label,perks}] }`; 200 + empty array for non-weapon/unknown hash; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
-| GET | `/api/catalysts/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon |
+| GET | `/api/items/:itemHash/perks` | JWT | Weapon possible perk pool + exotic catalyst pool from manifest; `{ itemHash, perkColumns: [{role,label,perks}], catalysts: [{name,description}] }`; 200 + empty arrays for non-weapon/unknown hash or non-exotic; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
+| GET | `/api/catalysts/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon/effect text |
 | GET | `/api/crafting/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` crafting pattern progress |
 | GET | `/api/seals/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` triumph/seal completion |
 | GET | `/health` | None | Liveness probe |
@@ -167,7 +168,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 
 - `services/manifest/repository.go` — raw SQLite queries. All public methods acquire `r.mu` (RWMutex); locked variants (`*Locked`) for composite operations that must hold the lock across multiple queries.
 - `services/manifest/provider.go` — single `*Provider` shared by all consumers. Opens lazily on first use; `CloseForSwap()` / `Reopen()` coordinate the hourly file swap. Returns `ErrNotReady` (503 `MANIFEST_NOT_READY`) while absent or swapping.
-- `services/bungie/manifest.go` — `RegisterSwapHooks(before, after)` fires around the file rename. The `after` hook calls `Reopen()`, evicts `records.WeaponTypesCacheKey`, and rebuilds the search index.
+- `services/bungie/manifest.go` — `RegisterSwapHooks(before, after)` fires around the file rename. The `after` hook calls `Reopen()`, evicts `records.WeaponTypesCacheKey` and `records.CatalystLinksCacheKey`, and rebuilds the search index.
 
 ## Notable manifest methods
 
@@ -175,14 +176,17 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 |---|---|
 | `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by itemHash (for wishlist source strings) |
 | `GetWeaponTypesByName()` | Lowercased weapon name → weapon type display name (table scan; callers cache) |
-| `GetWeaponPerks(itemHash)` | Socket-category → plug-set → plug-item traversal yielding ordered perk columns (Intrinsic/Barrel/Magazine/Trait N/Origin); weapon-only (itemType 3 + weapon socket categories); filters kill-tracker/empty/retired plugs, dedupes by name; also exposed via `services/items/service.go` cached wrapper |
+| `GetWeaponPerks(itemHash)` | Socket-category → plug-set → plug-item traversal yielding ordered perk columns across every weapon socket category (Intrinsic/Barrel/Magazine/Trait N/Origin plus Scope/Launcher Barrel/Battery/Stock/Blade/Guard/Arrow/Bowstring/Haft/Grip/Rail/Bolt, and a generic "Perks" fallback for unrecognized plug-category-identifiers); weapon-only (itemType 3 + weapon socket categories); `isJunkPCI` blacklist-filters kill-tracker/empty/catalyst-socket plugs (catalysts render separately via `GetWeaponCatalysts`) instead of allowlisting known categories, so no perk-bearing column is silently dropped; dedupes by name; also exposed via `services/items/service.go` cached wrapper |
 | `GetItemView(itemHash)` | Minimal item projection (`ItemView` — name, icon, itemType, tierType, rarity, description); returns `(nil, nil)` for unknown hash; no item-type restriction (all collectible/non-collectible items); also exposed via `services/items/service.go` cached wrapper |
+| `GetWeaponCatalysts(itemHash)` | Catalyst-socket plug-set traversal yielding an exotic weapon's catalyst name/description pool; `(nil, nil)` for non-weapons, non-exotics, or exotics without a detected catalyst socket; also exposed via `services/items/service.go` cached wrapper (`GetCatalysts`) |
+| `GetCatalystLinks()` | Full-manifest scan returning per-exotic-weapon catalyst text + unlock-objective hashes (`CatalystLink`); cached by `services/records` as `CatalystLinksCacheKey` for hash-first catalyst-record→weapon linkage |
 
 ## Records service
 
 - `GetCatalysts / GetCrafting / GetSeals` return `([]T, time.Time, error)` — second value is `fetchedAt`
-- `Catalyst` struct has `Type` (weapon type) and `Icon` (record icon) fields
-- `WeaponTypesCacheKey` exported for eviction from the after-swap hook
+- `Catalyst` struct has `Type` (weapon type), `Icon` (record icon), and `Effect` (catalyst-perk effect text) fields
+- `Effect` is resolved by `resolveCatalystEffect`: links the catalyst record to its weapon via `GetCatalystLinks()` objective-hash overlap first (unambiguous on both the weapon and record side), then a stripped-name match, then a catalyst-plug-name match, falling back to the record's own description and then `""`
+- `WeaponTypesCacheKey` / `CatalystLinksCacheKey` exported for eviction from the after-swap hook
 - `InvalidateCache(membershipType, membershipId)` drops cached profile records (called by RefreshCollections)
 
 ## Collections service

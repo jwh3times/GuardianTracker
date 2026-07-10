@@ -79,6 +79,59 @@ describe("ItemDetailDrawer perks", () => {
   });
 });
 
+describe("ItemDetailDrawer catalysts", () => {
+  it("renders a catalyst section with name and description", () => {
+    renderDrawer({
+      catalysts: [
+        {
+          name: "Sunshot Catalyst",
+          description:
+            "Applying an elemental debuff to a target increases this weapon's reload speed, aim assist, and movement while aiming down sights for a short duration.",
+        },
+      ],
+    });
+    expect(screen.getByText("Catalyst")).toBeInTheDocument();
+    expect(screen.getByText("Sunshot Catalyst")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Applying an elemental debuff/i),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the catalyst section when catalysts is empty or absent", () => {
+    renderDrawer({ catalysts: [] });
+    expect(screen.queryByText("Catalyst")).not.toBeInTheDocument();
+
+    renderDrawer({});
+    expect(screen.queryByText("Catalyst")).not.toBeInTheDocument();
+  });
+
+  it("renders all entries for a multi-catalyst exotic", () => {
+    renderDrawer({
+      catalysts: [
+        { name: "Catalyst One", description: "First effect." },
+        { name: "Catalyst Two", description: "Second effect." },
+        { name: "Catalyst Three", description: "" },
+        { name: "Catalyst Four", description: "Fourth effect." },
+      ],
+    });
+    expect(screen.getByText("Catalyst One")).toBeInTheDocument();
+    expect(screen.getByText("First effect.")).toBeInTheDocument();
+    expect(screen.getByText("Catalyst Two")).toBeInTheDocument();
+    expect(screen.getByText("Second effect.")).toBeInTheDocument();
+    expect(screen.getByText("Catalyst Three")).toBeInTheDocument();
+    expect(screen.getByText("Catalyst Four")).toBeInTheDocument();
+    expect(screen.getByText("Fourth effect.")).toBeInTheDocument();
+  });
+
+  it("shows just the name when a catalyst entry has an empty description", () => {
+    const { container } = renderDrawer({
+      catalysts: [{ name: "Duality Catalyst", description: "" }],
+    });
+    expect(screen.getByText("Duality Catalyst")).toBeInTheDocument();
+    expect(container.querySelectorAll(".gt-catalyst-desc").length).toBe(0);
+  });
+});
+
 describe("ItemDetailDrawer difficulty copy", () => {
   it("shows the unrated 'why' copy", async () => {
     renderDrawer({ item: { ...baseItem, diff: "unrated" } });
