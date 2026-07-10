@@ -51,8 +51,10 @@ const NAV: NavItem[] = [
 // with a lock when the user's tier is below the flag's minimum (the route then
 // renders the upsell). Mirrors NAV_FLAG in the design's app.jsx.
 const NAV_FLAG: Record<string, string> = {
+  week: "weekly-planner",
   catalysts: "catalysts-crafting",
   triumphs: "triumphs-seals",
+  cosmetics: "cosmetics",
 };
 const MOBILE_NAV: NavItem[] = [
   { id: "dashboard", label: "Home", icon: "dashboard", path: "/dashboard" },
@@ -258,7 +260,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout: authLogout } = useAuth();
-  const { flagState, isAdmin } = useFlags();
+  const { flagState, accessible, isAdmin } = useFlags();
   const [mobileNav, setMobileNav] = useState(false);
   const closeMobileNav = () => setMobileNav(false);
 
@@ -271,6 +273,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }).map((n) => {
     const fk = NAV_FLAG[n.id];
     return { ...n, locked: fk ? flagState(fk).locked : false };
+  });
+
+  // Drop bottom-tab items whose flag is disabled; mirrors the sidebar's drop rule.
+  // Locked items stay tappable (no lock affordance on the compact tab) and route to
+  // the upsell via FlaggedRoute — consistent with decision 3 of the design.
+  const visibleMobileNav = MOBILE_NAV.filter((n) => {
+    const fk = NAV_FLAG[n.id];
+    return !fk || flagState(fk).enabled;
   });
 
   const handleSignOut = () => {
@@ -342,9 +352,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Icon name="menu" size="1.2rem" />
           </button>
-          <div className="gt-topbar-search">
-            <SearchBar />
-          </div>
+          {accessible("global-search") && (
+            <div className="gt-topbar-search">
+              <SearchBar />
+            </div>
+          )}
           <div className="gt-topbar-right">
             <CharacterSwitcher displayName={user?.displayName} />
           </div>
@@ -358,7 +370,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* MOBILE BOTTOM TABS */}
       <nav className="gt-bottomnav">
-        {MOBILE_NAV.map((n) => (
+        {visibleMobileNav.map((n) => (
           <NavLink
             key={n.id}
             to={n.path}

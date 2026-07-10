@@ -63,6 +63,10 @@ backend/api-service/
   db/migrations/0002_roles_flags.sql   ← Adds role column to users, feature_flags table, role_audit
   db/migrations/0003_refresh_sessions.sql ← Adds refresh_sessions for per-device sessions + reuse detection
   db/migrations/0004_audit_log.sql     ← Unifies audit_log, drops role_audit
+  db/migrations/0005_logout_session.sql ← Renames "logout" audit event to "logout.session"
+                                           (matches the logout.* prefix filter)
+  db/migrations/0006_remove_unused_flags.sql ← Retires wishlist-alerts and ui-tweaks flags
+                                           seeded by 0002 (10 → 8 seeded flags)
   db/users.go                          ← UserStore — upsert, get, bump token_version, per-device sessions
                                            (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
   db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens

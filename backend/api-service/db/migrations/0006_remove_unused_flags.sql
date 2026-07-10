@@ -1,0 +1,13 @@
+-- Retire two feature flags that never gated real behavior.
+--
+--   ui-tweaks       — placeholder for an admin design-token panel that was never
+--                     built and has no roadmap backing; removed outright.
+--   wishlist-alerts — consolidated into the `notifications` flag, whose seeded
+--                     description already covers wishlist-available alerts.
+--                     Notifications (ROADMAP §7) is the single home for this
+--                     feature going forward.
+--
+-- Both were seeded by migration 0002 but honored by nothing in the UI. Deleting
+-- the rows is safe: no other table has a foreign key to feature_flags.key
+-- (flag.update audit rows record the key inside JSON details, not a reference).
+DELETE FROM feature_flags WHERE key IN ('wishlist-alerts', 'ui-tweaks');
