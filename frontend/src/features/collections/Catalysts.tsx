@@ -37,12 +37,21 @@ function CatalystCard({ c }: { c: Catalyst }) {
           </div>
         </div>
       </div>
-      {c.obj ? (
+      {c.status === "in-progress" && c.obj ? (
         <ProgressBar
           value={c.obj.cur}
           max={c.obj.max}
           label={c.obj.label}
           showVal
+          color={color}
+          size="tall"
+        />
+      ) : c.status === "complete" ? (
+        <ProgressBar
+          value={1}
+          max={1}
+          label="Catalyst complete"
+          complete
           color={color}
           size="tall"
         />

@@ -35,4 +35,18 @@ describe("CosmeticTile", () => {
     fireEvent.click(screen.getByRole("button"));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "1" }));
   });
+
+  it("renders the Bungie CDN icon image when the item has an icon", () => {
+    const { container } = render(
+      <CosmeticTile
+        item={{ ...item, icon: "/common/destiny2_content/icons/calus.png" }}
+        onOpen={() => {}}
+      />,
+    );
+    const img = container.querySelector("img.gt-tile-img") as HTMLImageElement;
+    expect(img).not.toBeNull();
+    expect(img.src).toBe(
+      "https://www.bungie.net/common/destiny2_content/icons/calus.png",
+    );
+  });
 });

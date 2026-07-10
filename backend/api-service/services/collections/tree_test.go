@@ -144,8 +144,8 @@ func TestOverlay_RollsUpCounts(t *testing.T) {
 	nodes, cols := anchorFixture()
 	ts := buildTreeStructure(nodes, cols)
 
-	// Collected (by COLLECTIBLE hash): Fatebringer(1000) + Helm(2000).
-	got := ts.overlay(map[uint32]bool{1000: true, 2000: true})
+	// Owned (by ITEM hash): Fatebringer(100) + Helm(200).
+	got := ts.overlay(map[uint32]bool{100: true, 200: true})
 
 	if len(got) != 2 {
 		t.Fatalf("roots = %d, want 2", len(got))
@@ -234,6 +234,64 @@ func TestBuildTreeStructure_SkipsNamelessNodes(t *testing.T) {
 	// The real leaf survives.
 	if len(w.Leaves) != 1 || w.Leaves[0].ItemHash != "100" {
 		t.Fatalf("Weapons leaves = %+v, want only item 100", w.Leaves)
+	}
+}
+
+// TestOverlay_DedupesDuplicateItemHashWithinNode reproduces the re-issued-item bug:
+// the manifest carries two DestinyCollectibleDefinition rows for one itemHash under
+// the same presentation node (e.g. Choir of One's two collectible hashes under one
+// node). Only one of the two collectible rows is acquired, but ownership is
+// itemHash-level, so the node must count this as a single owned leaf, not two leaves
+// with only one collected.
+func TestOverlay_DedupesDuplicateItemHashWithinNode(t *testing.T) {
+	nodes := map[uint32]*manifest.PresentationNodeDef{
+		1:  node(1, "Items", []uint32{20}, nil),
+		20: node(20, "Armor", nil, []uint32{2000, 2001}),
+	}
+	cols := []manifest.CollectibleWithItem{
+		col(2000, 200, "Choir of One"),
+		col(2001, 200, "Choir of One"),
+	}
+	ts := buildTreeStructure(nodes, cols)
+
+	// Owned (by ITEM hash): item 200 is owned, regardless of which of its two
+	// collectible rows the profile response happened to mark acquired.
+	got := ts.overlay(map[uint32]bool{200: true})
+
+	armor := findCounted(got, "Armor")
+	if armor == nil {
+		t.Fatalf("no Armor in overlay; got=%+v", got)
+	}
+	if armor.Total != 1 || armor.Collected != 1 {
+		t.Fatalf("Armor counts = %d/%d, want 1/1 (duplicate itemHash under one node must collapse to a single leaf)", armor.Collected, armor.Total)
+	}
+	if len(armor.Items) != 1 || armor.Items[0] != "200" {
+		t.Fatalf("Armor items = %+v, want [200]", armor.Items)
+	}
+}
+
+// TestOverlay_DedupesDuplicateItemHash_NeitherAcquired covers the un-owned duplicate
+// case: two collectible rows for one itemHash under a node, neither acquired, still
+// yields exactly one un-collected leaf (not two).
+func TestOverlay_DedupesDuplicateItemHash_NeitherAcquired(t *testing.T) {
+	nodes := map[uint32]*manifest.PresentationNodeDef{
+		1:  node(1, "Items", []uint32{20}, nil),
+		20: node(20, "Armor", nil, []uint32{2000, 2001}),
+	}
+	cols := []manifest.CollectibleWithItem{
+		col(2000, 200, "Choir of One"),
+		col(2001, 200, "Choir of One"),
+	}
+	ts := buildTreeStructure(nodes, cols)
+
+	got := ts.overlay(map[uint32]bool{}) // nothing owned
+
+	armor := findCounted(got, "Armor")
+	if armor == nil {
+		t.Fatalf("no Armor in overlay; got=%+v", got)
+	}
+	if armor.Total != 1 || armor.Collected != 0 {
+		t.Fatalf("Armor counts = %d/%d, want 0/1 (duplicate itemHash under one node must collapse to a single leaf)", armor.Collected, armor.Total)
 	}
 }
 

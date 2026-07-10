@@ -15,6 +15,18 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   `v<major>.<minor>.<build>` tag on `main`; fresh major/minor lines may start at
   build `0`.
 
+### Fixed
+
+- Collections no longer count owned, re-issued items as missing. Ownership is now
+  derived per item instead of per manifest collectible entry, fixing inflated
+  tree and summary counts, the "Missing" stat, and weekly recommendations that
+  suggested already-owned items.
+- Completed catalysts on the Catalysts page now show a full "Catalyst complete"
+  progress bar instead of "Not yet acquired".
+- Cosmetics gallery tiles now display item icons instead of collapsing to zero
+  size.
+- Global header search results now display item icons.
+
 ## [0.2.0] - 2026-07-09
 
 ### Added
