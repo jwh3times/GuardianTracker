@@ -196,6 +196,7 @@ func main() {
 			}
 			appCache.Delete(records.WeaponTypesCacheKey)
 			appCache.Delete(records.ExoticWeaponsCacheKey)
+			appCache.Delete(records.CatalystLinksCacheKey)
 			collectionsService.InvalidateTreeCache()
 			go searchService.BuildIndex()
 			go efficiencyEngine.BuildIndex()

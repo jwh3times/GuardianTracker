@@ -9,6 +9,17 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 ## [Unreleased]
 
+### Added
+
+- **Exotic weapon catalysts** in the item detail drawer: a new "Catalyst"
+  section lists each catalyst's name and effect, sourced from the manifest's
+  catalyst-socket text (multi-catalyst exotics show all of theirs). New
+  `catalysts` array on `GET /api/items/:itemHash/perks`.
+- **Catalyst effect text** on the Catalysts page: each card now shows what the
+  catalyst changes about the weapon. New `effect` field on the catalysts API
+  response, linked to its weapon via record objective-hash overlap with an
+  exact-name fallback instead of fuzzy name matching.
+
 ### Changed
 
 - Versioning now creates a GitHub Release for each auto-incremented
@@ -17,6 +28,11 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 ### Fixed
 
+- Weapon detail perk pools no longer drop perk columns for roughly half the
+  arsenal. Scopes, launcher barrels, grenade launcher magazines, batteries,
+  stocks, sword blades and guards, bow arrows and bowstrings, glaive hafts,
+  grips, rails, and bolts now render alongside the previously supported
+  barrels, magazines, traits, and origin traits.
 - Collections no longer count owned, re-issued items as missing. Ownership is now
   derived per item instead of per manifest collectible entry, fixing inflated
   tree and summary counts, the "Missing" stat, and weekly recommendations that

@@ -710,6 +710,11 @@
   font-size: var(--t-xs);
   text-align: center;
 }
+.gt-catalyst-effect {
+  font-size: var(--t-xs);
+  color: var(--c-text-3);
+  line-height: 1.5;
+}
 
 /* CATEGORY TREE */
 .gt-tree {
@@ -1120,6 +1125,28 @@
 .gt-perks-loading {
   font-size: var(--t-xs);
   color: var(--c-text-2);
+}
+.gt-catalyst-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.gt-catalyst {
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--c-surface-2);
+  border: 0.07rem solid var(--c-line-soft);
+}
+.gt-catalyst-name {
+  font-size: var(--t-sm);
+  font-weight: var(--w-med);
+  color: var(--c-text);
+}
+.gt-catalyst-desc {
+  margin-top: var(--s-1);
+  font-size: var(--t-xs);
+  color: var(--c-text-3);
+  line-height: 1.5;
 }
 .gt-drawer-actions {
   display: flex;

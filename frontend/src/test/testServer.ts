@@ -71,6 +71,8 @@ export const sampleCatalysts = {
       status: "in-progress",
       obj: { label: "Kills", cur: 200, max: 400 },
       source: "Crucible matches",
+      effect:
+        "Applying an elemental debuff to a target increases this weapon's reload speed, aim assist, and movement while aiming down sights for a short duration.",
     },
     {
       id: "cat-riskrunner",
@@ -80,6 +82,7 @@ export const sampleCatalysts = {
       status: "complete",
       obj: null,
       source: "Strikes",
+      effect: "",
     },
     {
       id: "cat-cerberus",
@@ -89,6 +92,7 @@ export const sampleCatalysts = {
       status: "missing",
       obj: null,
       source: "World drops",
+      effect: "Precision hits with this weapon create tracking Void Breaches.",
     },
   ],
   fetchedAt: new Date().toISOString(),
@@ -263,7 +267,11 @@ export const defaultHandlers = [
   http.get(`${API}/api/seals/:type/:id`, () => HttpResponse.json(sampleSeals)),
   http.get(`${API}/api/items/search`, () => HttpResponse.json([])),
   http.get(`${API}/api/items/:hash/perks`, ({ params }) =>
-    HttpResponse.json({ itemHash: String(params.hash), perkColumns: [] }),
+    HttpResponse.json({
+      itemHash: String(params.hash),
+      perkColumns: [],
+      catalysts: [],
+    }),
   ),
 ];
 

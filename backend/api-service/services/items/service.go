@@ -16,23 +16,26 @@ const maxCacheEntries = 4096
 type itemRepo interface {
 	GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
 	GetItemView(itemHash uint32) (*manifest.ItemView, error)
+	GetWeaponCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, error)
 }
 
-// Service caches weapon perk columns and item views keyed by item hash. Data
-// is static for a given manifest version, so entries live until the next
-// manifest swap calls InvalidateCache.
+// Service caches weapon perk columns, item views, and catalyst pools keyed by
+// item hash. Data is static for a given manifest version, so entries live until
+// the next manifest swap calls InvalidateCache.
 type Service struct {
-	repo      itemRepo
-	mu        sync.RWMutex
-	cache     map[uint32][]manifest.PerkColumn
-	viewCache map[uint32]*manifest.ItemView
+	repo          itemRepo
+	mu            sync.RWMutex
+	cache         map[uint32][]manifest.PerkColumn
+	viewCache     map[uint32]*manifest.ItemView
+	catalystCache map[uint32][]manifest.WeaponCatalyst
 }
 
 func NewService(repo itemRepo) *Service {
 	return &Service{
-		repo:      repo,
-		cache:     map[uint32][]manifest.PerkColumn{},
-		viewCache: map[uint32]*manifest.ItemView{},
+		repo:          repo,
+		cache:         map[uint32][]manifest.PerkColumn{},
+		viewCache:     map[uint32]*manifest.ItemView{},
+		catalystCache: map[uint32][]manifest.WeaponCatalyst{},
 	}
 }
 
@@ -97,10 +100,40 @@ func (s *Service) GetItem(itemHash uint32) (*manifest.ItemView, error) {
 	return v, nil
 }
 
-// InvalidateCache drops every cached entry in both caches. Wired to the manifest swap hook.
+// GetCatalysts returns a cached catalyst pool or computes and caches it.
+// (nil, nil) for non-exotics / weapons without a catalyst socket (cached, like
+// GetWeaponPerks's non-weapon case). Errors (incl. manifest-not-ready) are never
+// cached.
+func (s *Service) GetCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, error) {
+	s.mu.RLock()
+	cats, ok := s.catalystCache[itemHash]
+	s.mu.RUnlock()
+	if ok {
+		return cats, nil
+	}
+
+	cats, err := s.repo.GetWeaponCatalysts(itemHash)
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	if _, exists := s.catalystCache[itemHash]; !exists && len(s.catalystCache) >= maxCacheEntries {
+		for k := range s.catalystCache {
+			delete(s.catalystCache, k)
+			break
+		}
+	}
+	s.catalystCache[itemHash] = cats
+	s.mu.Unlock()
+	return cats, nil
+}
+
+// InvalidateCache drops every cached entry in all three caches. Wired to the manifest swap hook.
 func (s *Service) InvalidateCache() {
 	s.mu.Lock()
 	s.cache = map[uint32][]manifest.PerkColumn{}
 	s.viewCache = map[uint32]*manifest.ItemView{}
+	s.catalystCache = map[uint32][]manifest.WeaponCatalyst{}
 	s.mu.Unlock()
 }

@@ -398,10 +398,13 @@ type RecordDef struct {
 	StateInfo struct {
 		ObscuredDescription string `json:"obscuredDescription"`
 	} `json:"stateInfo"`
-	Objectives struct {
-		ObjectiveHashes   []uint32 `json:"objectiveHashes"`
-		PerkObjectiveHash uint32   `json:"perkObjectiveHash"`
-	} `json:"objectives"`
+	// ObjectiveHashes links a catalyst record to its unlock objective(s). This is
+	// a TOP-LEVEL field on DestinyRecordDefinition per the real manifest schema —
+	// unlike DestinyInventoryItemDefinition's plug objectives, which nest under an
+	// "objectives" key. The records service uses this to link an exotic-catalyst
+	// record to its weapon via objective-hash overlap with the weapon's
+	// catalyst-socket plug pool.
+	ObjectiveHashes    []uint32 `json:"objectiveHashes"`
 	IntervalObjectives []struct {
 		IntervalObjectiveHash uint32 `json:"intervalObjectiveHash"`
 	} `json:"intervalObjectives"`

@@ -71,8 +71,9 @@ frontend/src/
     primitives.tsx             ← Badge, Button, ProgressBar, RadialProgress, StatTile, EmptyState,
                                    Textarea, FilterChip, CountdownChip, DataFreshnessChip, Skeleton…
     composite.tsx              ← Panel, CategoryTree, ItemDetailDrawer (renders perk columns — label + chips —
-                                   with loading state; props: perkColumns?, perksLoading?; old flat item.perks
-                                   block removed), SealCard, Dropdown…
+                                   with loading state; props: perkColumns?, perksLoading?, catalysts?; renders a
+                                   "Catalyst" section (name + description) when catalysts is non-empty; old flat
+                                   item.perks block removed), SealCard, Dropdown…
     LoadingSpinner.tsx         ← (was components/ui/) shown while data loads
     Toast.tsx                  ← (was components/ui/) ToastProvider / useToast
                                  Import these directly (e.g. "../../../components/primitives") — the
@@ -83,7 +84,9 @@ frontend/src/
     auth/                      ← Login.tsx (OAuth initiation), OAuthCallback.tsx (code exchange)
     collections/               ← Collections.tsx (tree + grid/list + detail drawer; ?include=all for
                                    collected items; search deep-link ?item=<hash>; add/remove wishlist),
-                                   Catalysts.tsx, Triumphs.tsx ({ items, fetchedAt } envelopes),
+                                   Catalysts.tsx (cards render `effect` text when present; "complete" status
+                                   shows a full progress bar instead of "Not yet acquired"), Triumphs.tsx
+                                   ({ items, fetchedAt } envelopes),
                                    ItemCard.tsx (collection-only item card),
                                    collectionTree.ts (API node → TreeNode adapters, collection-specific)
     cosmetics/                 ← browsable /cosmetics gallery (Road to v1 §1). Cosmetics.tsx (type tabs +
@@ -106,10 +109,10 @@ frontend/src/
     api.ts                     ← API response types (APIUser, AuthTokenResponse, WishListItem with
                                    icon/availableNow/availableFrom, APIUserCollections with fetchedAt,
                                    APICollectionSummary with collectedItems, APIRecordsEnvelope<T>,
-                                   APIPerkColumn, APIItemPerks, APIItemView)
+                                   APIPerkColumn, APIItemCatalyst, APIItemPerks, APIItemView)
     design.ts                  ← Design-system domain types (GTItem — GTItem.perks field REMOVED, Seal,
                                    Weekly with resetAt/fetchedAt/degraded, Milestone.missing now optional,
-                                   WishlistEntry with icon, PerkColumn)
+                                   WishlistEntry with icon, PerkColumn, ItemCatalyst, Catalyst.effect)
   test/                        ← Shared test infra (referenced by vite.config setupFiles)
     setup.ts                   ← Vitest setup file
     testServer.ts              ← MSW server + shared fixtures
@@ -232,11 +235,14 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - `Weekly`: `+ resetAt`, `+ fetchedAt`, `+ degraded?`
 - `Milestone.missing`: now `number | undefined` — populated for raid/dungeon milestones; still omitted for non-raid/dungeon (no manifest reward→collectible signal)
 - `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool
-- `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[] }` — response envelope for `/api/items/:itemHash/perks`
+- `APIItemCatalyst`: `{ name: string; description: string }` — one exotic catalyst entry; `description` may be empty (the manifest has at least one blank entry — Duality)
+- `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[]; catalysts: APIItemCatalyst[] }` — response envelope for `/api/items/:itemHash/perks`; `catalysts` is always present (empty array for non-exotics), up to 4 entries for multi-catalyst exotics
 - `GTItem.perks`: REMOVED — the old dead flat perks field no longer exists on the design type; use `PerkColumn[]` from `itemPerksQuery` instead
 - `GTItem.farmOnly?: boolean` — set when the collectible source indicates "cannot be reacquired"; renders a "Farm only" chip in the item card and drawer
 - `APIItemView`: `{ itemHash, name, icon, itemType, tierType, rarity, description }` — response type for `GET /api/items/:itemHash`; used by `itemByHashQuery` + `toGTItemView` for the view-only deep-link drawer
 - `PerkColumn` (design.ts): `{ role: string; label: string; perks: string[] }` — design-layer parallel to `APIPerkColumn`
+- `ItemCatalyst` (design.ts): `{ name: string; description: string }` — design-layer parallel to `APIItemCatalyst`; passed to `ItemDetailDrawer`'s `catalysts` prop
+- `Catalyst.effect?: string` (design.ts) — catalyst perk/effect text on the `/api/catalysts/...` response; rendered on `Catalysts.tsx` cards when present
 
 ## Styling
 

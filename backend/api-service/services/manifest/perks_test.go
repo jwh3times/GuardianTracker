@@ -54,6 +54,62 @@ func writePerksFixtureDB(t *testing.T, path string) {
 			"socketCategories":[{"socketCategoryHash":3154740035,"socketIndexes":[0]}],
 			"socketEntries":[{"singleInitialItemHash":9999,"randomizedPlugSetHash":5006}]}}`,
 
+		// --- sniper 4000: intrinsic[0], scope[1] (pci "scopes", previously dropped) ---
+		4000: `{"hash":4000,"itemType":3,"inventory":{"tierType":5},"sockets":{
+			"socketCategories":[
+				{"socketCategoryHash":3956125808,"socketIndexes":[0]},
+				{"socketCategoryHash":4241085061,"socketIndexes":[1]}
+			],
+			"socketEntries":[
+				{"singleInitialItemHash":6100,"reusablePlugSetHash":7000},
+				{"singleInitialItemHash":6101,"reusablePlugSetHash":7001}
+			]}}`,
+		// --- sword 4001: intrinsic[0], blade[1] (pci "blades"), guard[2] (pci "guards") ---
+		4001: `{"hash":4001,"itemType":3,"inventory":{"tierType":5},"sockets":{
+			"socketCategories":[
+				{"socketCategoryHash":3956125808,"socketIndexes":[0]},
+				{"socketCategoryHash":4241085061,"socketIndexes":[1,2]}
+			],
+			"socketEntries":[
+				{"singleInitialItemHash":6200,"reusablePlugSetHash":7002},
+				{"singleInitialItemHash":6201,"reusablePlugSetHash":7003},
+				{"singleInitialItemHash":6202,"reusablePlugSetHash":7004}
+			]}}`,
+		// --- fusion rifle 4002: intrinsic[0], battery[1] (pci "batteries") ---
+		4002: `{"hash":4002,"itemType":3,"inventory":{"tierType":5},"sockets":{
+			"socketCategories":[
+				{"socketCategoryHash":3956125808,"socketIndexes":[0]},
+				{"socketCategoryHash":4241085061,"socketIndexes":[1]}
+			],
+			"socketEntries":[
+				{"singleInitialItemHash":6300,"reusablePlugSetHash":7005},
+				{"singleInitialItemHash":6301,"reusablePlugSetHash":7006}
+			]}}`,
+		// --- Dead-Messenger-style 4003: intrinsic[0], trait[1] whose pool has the
+		// empty-trait-socket placeholder FIRST, followed by 3 real frames perks ---
+		4003: `{"hash":4003,"itemType":3,"inventory":{"tierType":5},"sockets":{
+			"socketCategories":[
+				{"socketCategoryHash":3956125808,"socketIndexes":[0]},
+				{"socketCategoryHash":4241085061,"socketIndexes":[1]}
+			],
+			"socketEntries":[
+				{"singleInitialItemHash":6350,"reusablePlugSetHash":7007},
+				{"singleInitialItemHash":6400,"reusablePlugSetHash":7008}
+			]}}`,
+		// --- newer-style exotic 4004: intrinsic[0], trait[1], catalyst[2] — the
+		// catalyst socket lives INSIDE the weapon-perks category itself (16/145
+		// real exotics) and must never leak into perkColumns ---
+		4004: `{"hash":4004,"itemType":3,"inventory":{"tierType":6},"sockets":{
+			"socketCategories":[
+				{"socketCategoryHash":3956125808,"socketIndexes":[0]},
+				{"socketCategoryHash":4241085061,"socketIndexes":[1,2]}
+			],
+			"socketEntries":[
+				{"singleInitialItemHash":6500,"reusablePlugSetHash":7009},
+				{"singleInitialItemHash":6501,"reusablePlugSetHash":7010},
+				{"singleInitialItemHash":0,"randomizedPlugSetHash":7011}
+			]}}`,
+
 		// --- plug item defs (name + plugCategoryIdentifier) ---
 		5100: `{"hash":5100,"displayProperties":{"name":"Adaptive Frame"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
 		5101: `{"hash":5101,"displayProperties":{"name":"Arrowhead Brake"},"plug":{"plugCategoryIdentifier":"barrels"}}`,
@@ -65,6 +121,28 @@ func writePerksFixtureDB(t *testing.T, path string) {
 		5103: `{"hash":5103,"displayProperties":{"name":"Kill Tracker"},"plug":{"plugCategoryIdentifier":"v400.plugs.weapons.masterworks.trackers"}}`,
 		5200: `{"hash":5200,"displayProperties":{"name":"Impact Casing"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
 		5201: `{"hash":5201,"displayProperties":{"name":"Harbinger's Pulse"},"plug":{"plugCategoryIdentifier":"frames"}}`,
+
+		// --- sniper 4000 plugs ---
+		6100: `{"hash":6100,"displayProperties":{"name":"Rapid-Fire Frame"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
+		6101: `{"hash":6101,"displayProperties":{"name":"Perfect Fifth"},"plug":{"plugCategoryIdentifier":"scopes"}}`,
+		// --- sword 4001 plugs ---
+		6200: `{"hash":6200,"displayProperties":{"name":"Caster Frame"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
+		6201: `{"hash":6201,"displayProperties":{"name":"Hungry Edge"},"plug":{"plugCategoryIdentifier":"blades"}}`,
+		6202: `{"hash":6202,"displayProperties":{"name":"Balanced Guard"},"plug":{"plugCategoryIdentifier":"guards"}}`,
+		// --- fusion 4002 plugs ---
+		6300: `{"hash":6300,"displayProperties":{"name":"High-Impact Frame"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
+		6301: `{"hash":6301,"displayProperties":{"name":"Accelerated Coils"},"plug":{"plugCategoryIdentifier":"batteries"}}`,
+		// --- Dead-Messenger-style 4003 plugs: empty-trait-socket FIRST, then 3 real perks ---
+		6350: `{"hash":6350,"displayProperties":{"name":"Rapid-Fire Frame"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
+		6400: `{"hash":6400,"displayProperties":{"name":"Empty Traits Socket"},"plug":{"plugCategoryIdentifier":"crafting.recipes.empty_socket"}}`,
+		6401: `{"hash":6401,"displayProperties":{"name":"Rewind Rounds"},"plug":{"plugCategoryIdentifier":"frames"}}`,
+		6402: `{"hash":6402,"displayProperties":{"name":"Firefly"},"plug":{"plugCategoryIdentifier":"frames"}}`,
+		6403: `{"hash":6403,"displayProperties":{"name":"Demolitionist"},"plug":{"plugCategoryIdentifier":"frames"}}`,
+		// --- newer-style exotic 4004 plugs: trait col + catalyst col (empty + real) ---
+		6500: `{"hash":6500,"displayProperties":{"name":"Adaptive Frame"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
+		6501: `{"hash":6501,"displayProperties":{"name":"Desperado"},"plug":{"plugCategoryIdentifier":"frames"}}`,
+		6600: `{"hash":6600,"displayProperties":{"name":"Empty Catalyst Socket"},"plug":{"plugCategoryIdentifier":"v400.empty.exotic.masterwork"}}`,
+		6601: `{"hash":6601,"displayProperties":{"name":"Fake Catalyst Trigger"},"plug":{"plugCategoryIdentifier":"catalysts"}}`,
 	}
 	for hash, blob := range items {
 		if _, err := db.Exec(`INSERT INTO DestinyInventoryItemDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -80,6 +158,20 @@ func writePerksFixtureDB(t *testing.T, path string) {
 		5003: `{"reusablePlugItems":[{"plugItemHash":5103}]}`,
 		5004: `{"reusablePlugItems":[{"plugItemHash":5200}]}`,
 		5005: `{"reusablePlugItems":[{"plugItemHash":5201}]}`,
+
+		7000: `{"reusablePlugItems":[{"plugItemHash":6100}]}`,
+		7001: `{"reusablePlugItems":[{"plugItemHash":6101}]}`,
+		7002: `{"reusablePlugItems":[{"plugItemHash":6200}]}`,
+		7003: `{"reusablePlugItems":[{"plugItemHash":6201}]}`,
+		7004: `{"reusablePlugItems":[{"plugItemHash":6202}]}`,
+		7005: `{"reusablePlugItems":[{"plugItemHash":6300}]}`,
+		7006: `{"reusablePlugItems":[{"plugItemHash":6301}]}`,
+		7007: `{"reusablePlugItems":[{"plugItemHash":6350}]}`,
+		// Empty-trait-socket placeholder FIRST, then 3 real frames perks behind it.
+		7008: `{"reusablePlugItems":[{"plugItemHash":6400},{"plugItemHash":6401},{"plugItemHash":6402},{"plugItemHash":6403}]}`,
+		7009: `{"reusablePlugItems":[{"plugItemHash":6500}]}`,
+		7010: `{"reusablePlugItems":[{"plugItemHash":6501}]}`,
+		7011: `{"reusablePlugItems":[{"plugItemHash":6600},{"plugItemHash":6601}]}`,
 	}
 	for hash, blob := range plugSets {
 		if _, err := db.Exec(`INSERT INTO DestinyPlugSetDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -178,5 +270,89 @@ func TestGetWeaponPerks_UnknownHashReturnsNil(t *testing.T) {
 	}
 	if cols != nil {
 		t.Errorf("unknown hash columns = %+v, want nil", cols)
+	}
+}
+
+// TestGetWeaponPerks_Scope covers a previously-dropped column: a sniper's scope
+// slot (pci "scopes") was neither barrels/magazines/frames/origins, so the old
+// first-plug allowlist silently discarded it.
+func TestGetWeaponPerks_Scope(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4000)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	scope, ok := colByLabel(cols, "Scope")
+	if !ok || scope.Role != "scope" || len(scope.Perks) != 1 || scope.Perks[0] != "Perfect Fifth" {
+		t.Errorf("scope column = %+v (cols=%+v)", scope, cols)
+	}
+}
+
+// TestGetWeaponPerks_SwordBladeGuard covers swords' blade/guard columns (pcis
+// "blades"/"guards"), also previously dropped.
+func TestGetWeaponPerks_SwordBladeGuard(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4001)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	blade, ok := colByLabel(cols, "Blade")
+	if !ok || blade.Role != "blade" || len(blade.Perks) != 1 || blade.Perks[0] != "Hungry Edge" {
+		t.Errorf("blade column = %+v (cols=%+v)", blade, cols)
+	}
+	guard, ok := colByLabel(cols, "Guard")
+	if !ok || guard.Role != "guard" || len(guard.Perks) != 1 || guard.Perks[0] != "Balanced Guard" {
+		t.Errorf("guard column = %+v (cols=%+v)", guard, cols)
+	}
+}
+
+// TestGetWeaponPerks_Battery covers fusion rifles / linear fusion rifles' battery
+// column (pci "batteries"), also previously dropped.
+func TestGetWeaponPerks_Battery(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4002)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	battery, ok := colByLabel(cols, "Battery")
+	if !ok || battery.Role != "battery" || len(battery.Perks) != 1 || battery.Perks[0] != "Accelerated Coils" {
+		t.Errorf("battery column = %+v (cols=%+v)", battery, cols)
+	}
+}
+
+// TestGetWeaponPerks_EmptySocketFirstKeepsColumn is the Dead Messenger
+// regression: 'Empty Traits Socket' (crafting.recipes.empty_socket) is FIRST in
+// the pool, but classification must skip past it (continue, never break) to find
+// the 3 real frames perks behind it.
+func TestGetWeaponPerks_EmptySocketFirstKeepsColumn(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4003)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	trait, ok := colByLabel(cols, "Trait 1")
+	if !ok {
+		t.Fatalf("trait column dropped entirely; got %+v", cols)
+	}
+	if len(trait.Perks) != 3 || trait.Perks[0] != "Rewind Rounds" || trait.Perks[1] != "Firefly" || trait.Perks[2] != "Demolitionist" {
+		t.Errorf("trait perks = %+v, want 3 real perks (empty-socket excluded)", trait.Perks)
+	}
+}
+
+// TestGetWeaponPerks_CatalystColumnExcluded: 16/145 catalyst-bearing exotics
+// carry their catalyst socket inside the WEAPON PERKS category itself (not the
+// separate WEAPON MODS category). GetWeaponPerks must not surface it as a normal
+// perk column — catalysts are exposed separately via GetWeaponCatalysts.
+func TestGetWeaponPerks_CatalystColumnExcluded(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4004)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	if len(cols) != 2 {
+		t.Fatalf("columns = %d (%+v), want 2 (Intrinsic + Trait 1; catalyst column excluded)", len(cols), cols)
+	}
+	if _, ok := colByLabel(cols, "Perks"); ok {
+		t.Errorf("catalyst column leaked into perkColumns under the generic fallback label")
 	}
 }

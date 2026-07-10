@@ -46,6 +46,10 @@ type Catalyst struct {
 	Status string  `json:"status"` // "missing" | "in-progress" | "complete"
 	Obj    *CatObj `json:"obj"`    // non-nil only when status = "in-progress"
 	Source string  `json:"source"`
+	// Effect describes what the catalyst does once unlocked, resolved from the
+	// linked weapon's catalyst-perk text (see resolveCatalystEffect); falls back
+	// to the record's own description, then "" if nothing resolves.
+	Effect string `json:"effect"`
 }
 
 // CatObj holds progress info for an in-progress catalyst.
@@ -98,6 +102,7 @@ type ManifestRepo interface {
 	GetRecordDefinitions(hashes []uint32) (map[uint32]*manifestrepo.RecordDef, error)
 	GetWeaponTypesByName() (map[string]string, error)
 	GetExoticWeaponsByName() (map[string]manifestrepo.ExoticWeapon, error)
+	GetCatalystLinks() ([]manifestrepo.CatalystLink, error)
 }
 
 // Service handles catalysts, crafting, and seals data.
@@ -201,6 +206,146 @@ func resolveCatalystWeapon(catalystName, description string, exotics map[string]
 		}
 	}
 	return manifestrepo.ExoticWeapon{}
+}
+
+// CatalystLinksCacheKey is the cache key for the exotic-weapon catalyst linkage
+// data (weapon name, unlock-objective hashes, resolved catalyst-perk text).
+// Exported for the same after-swap eviction reason as WeaponTypesCacheKey.
+const CatalystLinksCacheKey = "manifest:catalystLinks"
+
+// catalystLinks returns the cached per-weapon catalyst linkage data. Failures
+// return nil (every record then falls back to its own description) and are not
+// cached.
+func (s *Service) catalystLinks() []manifestrepo.CatalystLink {
+	if cached, ok := s.cache.Get(CatalystLinksCacheKey); ok {
+		if l, ok := cached.([]manifestrepo.CatalystLink); ok {
+			return l
+		}
+	}
+	links, err := s.manifest.GetCatalystLinks()
+	if err != nil || len(links) == 0 {
+		return nil
+	}
+	s.cache.Set(CatalystLinksCacheKey, links, time.Hour)
+	return links
+}
+
+// catalystObjectiveIndex maps an unlock-objective hash to the single weapon
+// link that (unambiguously, on the weapon side) references it. Hashes shared by
+// more than one weapon's catalyst-socket pool are omitted — callers must also
+// check the record-side count (an objective hash reused by more than one
+// catalyst record is equally unusable even when a single weapon claims it).
+func catalystObjectiveIndex(links []manifestrepo.CatalystLink) map[uint32]*manifestrepo.CatalystLink {
+	byHash := map[uint32][]*manifestrepo.CatalystLink{}
+	for i := range links {
+		l := &links[i]
+		seen := map[uint32]bool{}
+		for _, oh := range l.ObjectiveHashes {
+			if seen[oh] {
+				continue
+			}
+			seen[oh] = true
+			byHash[oh] = append(byHash[oh], l)
+		}
+	}
+	out := map[uint32]*manifestrepo.CatalystLink{}
+	for oh, ls := range byHash {
+		if len(ls) == 1 {
+			out[oh] = ls[0]
+		}
+	}
+	return out
+}
+
+// catalystNameIndex maps a lowercased exotic-weapon name to its catalyst link.
+func catalystNameIndex(links []manifestrepo.CatalystLink) map[string]*manifestrepo.CatalystLink {
+	out := map[string]*manifestrepo.CatalystLink{}
+	for i := range links {
+		out[strings.ToLower(links[i].WeaponName)] = &links[i]
+	}
+	return out
+}
+
+// catalystPlugNameIndex maps a resolved catalyst-perk name (old-style
+// "<Weapon> Catalyst" plugs) to its weapon's link.
+func catalystPlugNameIndex(links []manifestrepo.CatalystLink) map[string]*manifestrepo.CatalystLink {
+	out := map[string]*manifestrepo.CatalystLink{}
+	for i := range links {
+		for _, c := range links[i].Catalysts {
+			out[c.Name] = &links[i]
+		}
+	}
+	return out
+}
+
+// catalystRecordObjectiveCounts counts, among the given catalyst records, how
+// many DISTINCT records reference each objective hash — an objective hash
+// claimed by more than one record can't safely link either of them, even if
+// it's unambiguous on the weapon side (verified real-manifest case: Wavesplitter
+// and Cerberus+1's catalyst records happen to share a generic objective hash).
+func catalystRecordObjectiveCounts(recordDefs map[uint32]*manifestrepo.RecordDef) map[uint32]int {
+	out := map[uint32]int{}
+	for _, def := range recordDefs {
+		if def.RecordTypeName != recordTypeCatalyst {
+			continue
+		}
+		seen := map[uint32]bool{}
+		for _, oh := range def.ObjectiveHashes {
+			if seen[oh] {
+				continue
+			}
+			seen[oh] = true
+			out[oh]++
+		}
+	}
+	return out
+}
+
+// resolveCatalystEffect links a catalyst record to its weapon — via
+// objective-hash overlap, then a stripped-name match, then a catalyst-plug-name
+// match — and returns the linked weapon's resolved catalyst-perk text (joining
+// multiple entries for multi-catalyst exotics). Falls back to the record's own
+// description when nothing links or the linked weapon has no displayable text
+// (verified real-manifest case: Duality Catalyst), and to "" if that is empty too.
+func resolveCatalystEffect(
+	def *manifestrepo.RecordDef,
+	byObjHash map[uint32]*manifestrepo.CatalystLink,
+	recordObjCounts map[uint32]int,
+	byName, byPlugName map[string]*manifestrepo.CatalystLink,
+) string {
+	var link *manifestrepo.CatalystLink
+	for _, oh := range def.ObjectiveHashes {
+		if recordObjCounts[oh] > 1 {
+			continue // claimed by more than one record — ambiguous, unusable
+		}
+		if l, ok := byObjHash[oh]; ok {
+			link = l
+			break
+		}
+	}
+	if link == nil {
+		stripped := strings.ToLower(strings.TrimSuffix(def.DisplayProperties.Name, " Catalyst"))
+		if l, ok := byName[stripped]; ok {
+			link = l
+		}
+	}
+	if link == nil {
+		if l, ok := byPlugName[def.DisplayProperties.Name]; ok {
+			link = l
+		}
+	}
+	if link != nil {
+		var parts []string
+		for _, c := range link.Catalysts {
+			if d := strings.TrimSpace(c.Description); d != "" {
+				parts = append(parts, d)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, "; ")
+		}
+	}
+	return strings.TrimSpace(def.DisplayProperties.Description)
 }
 
 // cachedRecords pairs the profile records response with its fetch time (B8).
@@ -342,6 +487,17 @@ func (s *Service) GetCatalysts(ctx context.Context, membershipType int, membersh
 	}
 	sort.Slice(namesByLen, func(i, j int) bool { return len(namesByLen[i]) > len(namesByLen[j]) })
 
+	// Hash-first linkage for the effect-text field: an exotic weapon's catalyst
+	// text is derived from the manifest's catalyst-socket plugs (see
+	// manifest.GetWeaponCatalysts), then linked to this record by objective-hash
+	// overlap first (unambiguous on both the weapon and record side), falling
+	// back to name-based matching.
+	links := s.catalystLinks()
+	byObjHash := catalystObjectiveIndex(links)
+	byName := catalystNameIndex(links)
+	byPlugName := catalystPlugNameIndex(links)
+	recordObjCounts := catalystRecordObjectiveCounts(recordDefs)
+
 	catalysts := make([]Catalyst, 0, len(recordHashes))
 	for _, hash := range recordHashes {
 		// The catalysts root is the combined "Patterns & Catalysts" node, so it
@@ -360,10 +516,11 @@ func (s *Service) GetCatalysts(ctx context.Context, membershipType int, membersh
 		weapon := resolveCatalystWeapon(name, def.DisplayProperties.Description, exotics, namesByLen)
 
 		cat := Catalyst{
-			ID:   fmt.Sprintf("c-%d", hash),
-			Name: name,
-			Type: weapon.Type,
-			Icon: weapon.Icon,
+			ID:     fmt.Sprintf("c-%d", hash),
+			Name:   name,
+			Type:   weapon.Type,
+			Icon:   weapon.Icon,
+			Effect: resolveCatalystEffect(def, byObjHash, recordObjCounts, byName, byPlugName),
 		}
 
 		switch {
