@@ -106,6 +106,21 @@ rm .env.secrets
 - **Last-admin protection** — demoting the final admin is refused inside the same transaction (all admin rows are `SELECT … FOR UPDATE`-locked so concurrent demotions can't race the system to zero admins).
 - **Audit trail** — authentication events (login success/failure, logout, logout-all, token refresh), session security events (refresh-token reuse, session termination), self opt-in role changes, admin role changes, and feature-flag changes are persisted to the unified `audit_log` table and exposed to admins via `GET /api/admin/audit` and the `/admin` Audit Log UI panel. Role and flag changes are written in their mutation transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). **Client IP address and User-Agent are captured and stored** for security forensics, retained for `AUDIT_RETENTION_DAYS` (default 180), and pruned hourly once past expiry. IP addresses are trusted only from `TRUSTED_PROXIES` (gin `SetTrustedProxies`) so they cannot be spoofed by a client; configure this in production to your platform's ingress range.
 
+### Feature-flag enforcement
+
+Feature flags are enforced server-side by the `RequireFlag` middleware
+(`auth/roles.go`) on the routes whose features the UI gates: `weekly-planner`
+(`/api/weekly/recommendations`), `global-search` (`/api/items/search`),
+`catalysts-crafting` (`/api/catalysts`, `/api/crafting`), and `triumphs-seals`
+(`/api/seals`). A disabled flag returns `404 FEATURE_DISABLED`; an enabled flag
+above the caller's tier returns `403 TIER_LOCKED`.
+
+`RequireFlag` **fails open**: if the flag store is unavailable (degraded/DB-less
+mode), a lookup errors, or the key is unknown, the request is allowed. Feature
+flags are rollout and upsell controls, not security boundaries — a flag-table
+hiccup must not take down core pages. Real access boundaries (the admin console)
+use `RequireAdmin`, which fails closed (503) when roles cannot be resolved.
+
 ### Input Validation
 
 - **Membership ID validation**: numeric-only, 10–25 chars

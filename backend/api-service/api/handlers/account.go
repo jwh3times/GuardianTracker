@@ -102,7 +102,7 @@ type resolvedFlag struct {
 // GetFlags handles GET /api/flags — resolved feature-flag state for the caller.
 // Fail-open: a DB hiccup or degraded mode returns an empty list so the frontend
 // treats every shipped feature as accessible (nothing hidden). Actual access to
-// gated APIs is enforced server-side by auth.RequireFlag, not by this UI hint (TODO 13.4).
+// gated APIs is enforced server-side by auth.RequireFlag, not by this UI hint (TODO 13.4, done).
 func (h *AccountHandler) GetFlags(c *gin.Context) {
 	role := c.GetInt("role")
 	resp := gin.H{"role": auth.RoleName(role), "flags": []resolvedFlag{}}
