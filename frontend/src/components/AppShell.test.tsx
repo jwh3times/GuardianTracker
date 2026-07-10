@@ -424,6 +424,30 @@ describe("AppShell interactions", () => {
     );
   });
 
+  it("keeps the Week bottom-tab present when weekly-planner is tier-locked", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "standard",
+          flags: [
+            {
+              key: "weekly-planner",
+              name: "Weekly Planner",
+              desc: "Weekly reset planning and recommendations.",
+              category: "Planning",
+              minTier: "alpha",
+              enabled: true,
+              accessible: false,
+              locked: true,
+            },
+          ],
+        }),
+      ),
+    );
+    renderShell();
+    expect(await screen.findByText("Week")).toBeInTheDocument();
+  });
+
   it("hides the global search widget when global-search is disabled", async () => {
     server.use(
       http.get(`${API}/api/flags`, () =>
