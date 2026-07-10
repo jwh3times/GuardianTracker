@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -77,6 +78,48 @@ func (a *Authz) RequireTier(minTier int) gin.HandlerFunc {
 				msg = "Admin access required."
 			}
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": msg, "code": code})
+			return
+		}
+		c.Next()
+	}
+}
+
+// FlagResolver reports a feature flag's state for the caller. Implemented by the
+// handlers package (which owns the flag store + cache); declared here with only
+// primitive returns so auth does not import db.
+type FlagResolver interface {
+	Resolve(ctx context.Context, key string) (enabled bool, minTier int, found bool, err error)
+}
+
+// RequireFlag aborts the request unless the named feature flag is enabled and the
+// caller's role meets its min tier. Unlike RequireTier it FAILS OPEN whenever the
+// flag cannot be resolved (nil resolver, degraded mode, store error, or unknown
+// key): feature flags are rollout/upsell controls, not security boundaries, so a
+// flag-table hiccup must not 503 core pages. Admin endpoints stay hard-gated by
+// RequireAdmin. Must compose after JWT.Middleware, which sets "role" in the context.
+func (a *Authz) RequireFlag(flags FlagResolver, key string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if flags == nil {
+			c.Next()
+			return
+		}
+		enabled, minTier, found, err := flags.Resolve(c.Request.Context(), key)
+		if err != nil || !found {
+			c.Next() // fail open
+			return
+		}
+		if !enabled {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				"error": "This feature isn't available.",
+				"code":  "FEATURE_DISABLED",
+			})
+			return
+		}
+		if c.GetInt("role") < minTier {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "You don't have access to this feature yet.",
+				"code":  "TIER_LOCKED",
+			})
 			return
 		}
 		c.Next()
