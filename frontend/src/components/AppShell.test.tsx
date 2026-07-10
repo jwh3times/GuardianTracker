@@ -316,6 +316,113 @@ describe("AppShell interactions", () => {
       await screen.findByText(/Welcome back, TestGuardian/),
     ).toBeInTheDocument();
   });
+
+  it("hides the This Week sidebar nav item when weekly-planner is disabled", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "admin",
+          flags: [
+            {
+              key: "weekly-planner",
+              name: "Weekly Planner",
+              desc: "Weekly reset planning and recommendations.",
+              category: "Planning",
+              minTier: "standard",
+              enabled: false,
+              accessible: false,
+              locked: false,
+            },
+          ],
+        }),
+      ),
+    );
+    renderShell();
+    await waitFor(() =>
+      expect(screen.queryByText("This Week")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("marks the This Week sidebar item locked when weekly-planner is tier-locked", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "standard",
+          flags: [
+            {
+              key: "weekly-planner",
+              name: "Weekly Planner",
+              desc: "Weekly reset planning and recommendations.",
+              category: "Planning",
+              minTier: "alpha",
+              enabled: true,
+              accessible: false,
+              locked: true,
+            },
+          ],
+        }),
+      ),
+    );
+    renderShell();
+    await waitFor(() =>
+      expect(screen.getByText("This Week").closest("a")).toHaveAttribute(
+        "data-locked",
+        "true",
+      ),
+    );
+  });
+
+  it("hides the Cosmetics sidebar nav item when cosmetics is disabled", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "admin",
+          flags: [
+            {
+              key: "cosmetics",
+              name: "Cosmetics",
+              desc: "Browsable cosmetics gallery.",
+              category: "Collection",
+              minTier: "standard",
+              enabled: false,
+              accessible: false,
+              locked: false,
+            },
+          ],
+        }),
+      ),
+    );
+    renderShell();
+    await waitFor(() =>
+      expect(screen.queryByText("Cosmetics")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("drops the Week bottom-tab when weekly-planner is disabled", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "admin",
+          flags: [
+            {
+              key: "weekly-planner",
+              name: "Weekly Planner",
+              desc: "Weekly reset planning and recommendations.",
+              category: "Planning",
+              minTier: "standard",
+              enabled: false,
+              accessible: false,
+              locked: false,
+            },
+          ],
+        }),
+      ),
+    );
+    renderShell();
+    await waitFor(() =>
+      expect(screen.queryByText("Week")).not.toBeInTheDocument(),
+    );
+  });
 });
 
 function Boom(): React.ReactElement {
