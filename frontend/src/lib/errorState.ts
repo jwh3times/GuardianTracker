@@ -11,8 +11,12 @@ export interface ErrorStateCopy {
 /**
  * Maps an unknown query error to the failure-panel copy, branching on the
  * backend's machine-readable `code` (PRIVACY_RESTRICTION, MANIFEST_NOT_READY,
- * BUNGIE_ERROR, FEATURE_DISABLED, TIER_LOCKED). Shared by every page that hits
- * a Bungie-backed endpoint so the copy and branching stay consistent.
+ * BUNGIE_ERROR, FEATURE_DISABLED, TIER_LOCKED). FEATURE_DISABLED and
+ * TIER_LOCKED match on `code` only (never bare status) — the backend always
+ * sets these codes when gating a flag, and other endpoints legitimately
+ * return bare 404/403 (e.g. ACCOUNT_NOT_FOUND) that must not be mislabeled
+ * as a disabled/locked feature. Shared by every page that hits a
+ * Bungie-backed endpoint so the copy and branching stay consistent.
  */
 export function errorState(error: unknown): ErrorStateCopy {
   if (error instanceof ApiError) {
@@ -45,14 +49,14 @@ export function errorState(error: unknown): ErrorStateCopy {
         body: "Bungie's servers didn't respond. They may be down for maintenance — try again in a few minutes.",
       };
     }
-    if (error.code === "FEATURE_DISABLED" || error.status === 404) {
+    if (error.code === "FEATURE_DISABLED") {
       return {
         icon: "info",
         title: "This feature is not available",
         body: "This part of Guardian Tracker is turned off right now. Check back later.",
       };
     }
-    if (error.code === "TIER_LOCKED" || error.status === 403) {
+    if (error.code === "TIER_LOCKED") {
       return {
         icon: "lock",
         title: "Feature locked",

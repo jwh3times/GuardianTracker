@@ -82,4 +82,12 @@ describe("errorState feature-flag codes", () => {
     const copy = errorState(new ApiError("locked", 403, "TIER_LOCKED"));
     expect(copy.title).toMatch(/locked|access/i);
   });
+
+  it("does NOT treat a non-flag 404 (ACCOUNT_NOT_FOUND) as a disabled feature", () => {
+    const copy = errorState(
+      new ApiError("no profile", 404, "ACCOUNT_NOT_FOUND"),
+    );
+    expect(copy.title).toMatch(/couldn't load/i);
+    expect(copy.title).not.toBe("This feature is not available");
+  });
 });
