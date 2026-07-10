@@ -11,8 +11,8 @@ export interface ErrorStateCopy {
 /**
  * Maps an unknown query error to the failure-panel copy, branching on the
  * backend's machine-readable `code` (PRIVACY_RESTRICTION, MANIFEST_NOT_READY,
- * BUNGIE_ERROR). Shared by every page that hits a Bungie-backed endpoint so the
- * copy and branching stay consistent.
+ * BUNGIE_ERROR, FEATURE_DISABLED, TIER_LOCKED). Shared by every page that hits
+ * a Bungie-backed endpoint so the copy and branching stay consistent.
  */
 export function errorState(error: unknown): ErrorStateCopy {
   if (error instanceof ApiError) {
@@ -43,6 +43,20 @@ export function errorState(error: unknown): ErrorStateCopy {
         icon: "info",
         title: "Bungie API unavailable",
         body: "Bungie's servers didn't respond. They may be down for maintenance — try again in a few minutes.",
+      };
+    }
+    if (error.code === "FEATURE_DISABLED" || error.status === 404) {
+      return {
+        icon: "info",
+        title: "This feature is not available",
+        body: "This part of Guardian Tracker is turned off right now. Check back later.",
+      };
+    }
+    if (error.code === "TIER_LOCKED" || error.status === 403) {
+      return {
+        icon: "lock",
+        title: "Feature locked",
+        body: "You don't have access to this feature yet. It may be limited to a higher access tier.",
       };
     }
   }

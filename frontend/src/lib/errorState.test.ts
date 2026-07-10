@@ -71,3 +71,15 @@ describe("errorState", () => {
     expect(result.title).toBe("Couldn't load data");
   });
 });
+
+describe("errorState feature-flag codes", () => {
+  it("maps FEATURE_DISABLED to an unavailable-feature panel", () => {
+    const copy = errorState(new ApiError("gone", 404, "FEATURE_DISABLED"));
+    expect(copy.title).toMatch(/not available|unavailable/i);
+  });
+
+  it("maps TIER_LOCKED to an upsell panel", () => {
+    const copy = errorState(new ApiError("locked", 403, "TIER_LOCKED"));
+    expect(copy.title).toMatch(/locked|access/i);
+  });
+});
