@@ -15,9 +15,10 @@ func TestFlagStore_SeedAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	// Migration 0002 seeds the design's flag list.
-	if len(list) < 9 {
-		t.Fatalf("seeded flags = %d, want >= 9", len(list))
+	// Migration 0002 seeds the flag catalog; 0006 retires wishlist-alerts and
+	// ui-tweaks, leaving 8 flags.
+	if len(list) < 8 {
+		t.Fatalf("seeded flags = %d, want >= 8", len(list))
 	}
 	byKey := map[string]FeatureFlag{}
 	for _, f := range list {
