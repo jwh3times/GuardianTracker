@@ -152,9 +152,23 @@ const AppContent: React.FC = () => {
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/collections" element={<Collections />} />
-          <Route path="/cosmetics" element={<Cosmetics />} />
+          <Route
+            path="/cosmetics"
+            element={
+              <FlaggedRoute flagKey="cosmetics">
+                <Cosmetics />
+              </FlaggedRoute>
+            }
+          />
           <Route path="/wishlist" element={<WishList />} />
-          <Route path="/this-week" element={<ThisWeek />} />
+          <Route
+            path="/this-week"
+            element={
+              <FlaggedRoute flagKey="weekly-planner">
+                <ThisWeek />
+              </FlaggedRoute>
+            }
+          />
           <Route
             path="/catalysts"
             element={

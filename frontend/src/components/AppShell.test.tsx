@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
 import App from "../App";
+import { queryClient } from "../lib/api";
 import { AppShell } from "./AppShell";
 import { AuthProvider } from "../contexts/AuthContext";
 import { CharacterProvider } from "../contexts/CharacterContext";
@@ -222,6 +223,98 @@ describe("AppShell interactions", () => {
     fireEvent.click(screen.getAllByText("Sign out")[0]);
     expect(await screen.findByText("login-stub")).toBeInTheDocument();
     expect(localStorage.getItem("guardian_token")).toBeNull();
+  });
+
+  it("redirects to the dashboard when weekly-planner is disabled", async () => {
+    queryClient.clear();
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "admin",
+          flags: [
+            {
+              key: "weekly-planner",
+              name: "Weekly Planner",
+              desc: "Weekly reset planning and recommendations.",
+              category: "Planning",
+              minTier: "standard",
+              enabled: false,
+              accessible: false,
+              locked: false,
+            },
+          ],
+        }),
+      ),
+    );
+    render(
+      <MemoryRouter initialEntries={["/this-week"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByText(/Welcome back, TestGuardian/),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the locked upsell for /this-week when weekly-planner is tier-locked", async () => {
+    queryClient.clear();
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "standard",
+          flags: [
+            {
+              key: "weekly-planner",
+              name: "Weekly Planner",
+              desc: "Weekly reset planning and recommendations.",
+              category: "Planning",
+              minTier: "alpha",
+              enabled: true,
+              accessible: false,
+              locked: true,
+            },
+          ],
+        }),
+      ),
+    );
+    render(
+      <MemoryRouter initialEntries={["/this-week"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Change access tier")).toBeInTheDocument();
+    expect(screen.getByText("Weekly Planner")).toBeInTheDocument();
+  });
+
+  it("redirects to the dashboard when cosmetics is disabled", async () => {
+    queryClient.clear();
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "admin",
+          flags: [
+            {
+              key: "cosmetics",
+              name: "Cosmetics",
+              desc: "Browsable cosmetics gallery.",
+              category: "Collection",
+              minTier: "standard",
+              enabled: false,
+              accessible: false,
+              locked: false,
+            },
+          ],
+        }),
+      ),
+    );
+    render(
+      <MemoryRouter initialEntries={["/cosmetics"]}>
+        <App />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByText(/Welcome back, TestGuardian/),
+    ).toBeInTheDocument();
   });
 });
 
