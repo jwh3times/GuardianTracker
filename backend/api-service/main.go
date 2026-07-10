@@ -271,6 +271,16 @@ func main() {
 		auditHandler = handlers.NewAuditHandler(nil)
 	}
 
+	// Shared flag resolver for server-side enforcement. Uses the same appCache and
+	// flags:all key as AccountHandler's resolver, so both read one cache entry
+	// (evicted together by AdminHandler.UpdateFlag). True-nil store in degraded mode.
+	var enforceFlags *handlers.FlagResolver
+	if stores.Flags != nil {
+		enforceFlags = handlers.NewFlagResolver(stores.Flags, appCache)
+	} else {
+		enforceFlags = handlers.NewFlagResolver(nil, appCache)
+	}
+
 	// Router
 	router := gin.Default()
 	// Trust only configured proxies for X-Forwarded-For so the audit-logged client
@@ -332,17 +342,17 @@ func main() {
 		api.POST("/collections/:membershipType/:membershipId/refresh", jwtHelper.Middleware(revoker), collectionsHandler.RefreshCollections)
 
 		// Weekly recommendations
-		api.GET("/weekly/recommendations", jwtHelper.Middleware(revoker), weeklyHandler.GetWeekly)
+		api.GET("/weekly/recommendations", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagWeeklyPlanner), weeklyHandler.GetWeekly)
 
 		// Item search (in-memory index from manifest)
-		api.GET("/items/search", jwtHelper.Middleware(revoker), searchHandler.Search)
+		api.GET("/items/search", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagGlobalSearch), searchHandler.Search)
 		api.GET("/items/:itemHash", jwtHelper.Middleware(revoker), itemsHandler.GetItem)
 		api.GET("/items/:itemHash/perks", jwtHelper.Middleware(revoker), itemsHandler.GetPerks)
 
 		// Catalysts, crafting patterns, and seals
-		api.GET("/catalysts/:membershipType/:membershipId", jwtHelper.Middleware(revoker), recordsHandler.GetCatalysts)
-		api.GET("/crafting/:membershipType/:membershipId", jwtHelper.Middleware(revoker), recordsHandler.GetCrafting)
-		api.GET("/seals/:membershipType/:membershipId", jwtHelper.Middleware(revoker), recordsHandler.GetSeals)
+		api.GET("/catalysts/:membershipType/:membershipId", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagCatalystsCrafting), recordsHandler.GetCatalysts)
+		api.GET("/crafting/:membershipType/:membershipId", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagCatalystsCrafting), recordsHandler.GetCrafting)
+		api.GET("/seals/:membershipType/:membershipId", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagTriumphsSeals), recordsHandler.GetSeals)
 	}
 
 	server := &http.Server{

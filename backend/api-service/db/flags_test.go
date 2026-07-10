@@ -75,3 +75,30 @@ func TestFlagStore_UpdateUnknown(t *testing.T) {
 		t.Fatalf("Update unknown: got %v, want pgx.ErrNoRows", err)
 	}
 }
+
+func TestSeededFlagsIncludeEnforced(t *testing.T) {
+	// Keep in sync with handlers.Flag* (server-side enforcement, Task 3). Duplicated
+	// here deliberately as a tripwire: this fails if a migration ever drops a flag
+	// that a route still enforces (which would silently fail open in production).
+	enforced := []string{"weekly-planner", "global-search", "catalysts-crafting", "triumphs-seals"}
+
+	pool := testPool(t)
+	list, err := NewFlagStore(pool).List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	byKey := map[string]FeatureFlag{}
+	for _, f := range list {
+		byKey[f.Key] = f
+	}
+	for _, key := range enforced {
+		f, ok := byKey[key]
+		if !ok {
+			t.Errorf("enforced flag %q missing from seed — the route would fail open", key)
+			continue
+		}
+		if !f.Enabled || f.MinTier != 0 {
+			t.Errorf("enforced flag %q = {enabled:%v min_tier:%d}, want enabled min_tier=0 (no current user loses access)", key, f.Enabled, f.MinTier)
+		}
+	}
+}

@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -82,5 +84,46 @@ func TestRoleNameParseRoundTrip(t *testing.T) {
 	}
 	if RoleName(99) != "standard" {
 		t.Errorf("RoleName(99) = %q, want standard fallback", RoleName(99))
+	}
+}
+
+// fakeResolver drives RequireFlag tests without a DB.
+type fakeResolver struct {
+	enabled bool
+	minTier int
+	found   bool
+	err     error
+}
+
+func (f fakeResolver) Resolve(ctx context.Context, key string) (bool, int, bool, error) {
+	return f.enabled, f.minTier, f.found, f.err
+}
+
+func TestRequireFlag_Matrix(t *testing.T) {
+	authz := NewAuthz(true)
+	cases := []struct {
+		name string
+		res  fakeResolver
+		role int
+		want int
+	}{
+		{"enabled+tier-ok", fakeResolver{enabled: true, minTier: 0, found: true}, RoleStandard, http.StatusOK},
+		{"enabled+under-tier", fakeResolver{enabled: true, minTier: 2, found: true}, RoleStandard, http.StatusForbidden},
+		{"enabled+at-tier", fakeResolver{enabled: true, minTier: 2, found: true}, RoleAlpha, http.StatusOK},
+		{"disabled", fakeResolver{enabled: false, minTier: 0, found: true}, RoleAdmin, http.StatusNotFound},
+		{"unknown-key-fails-open", fakeResolver{found: false}, RoleStandard, http.StatusOK},
+		{"store-error-fails-open", fakeResolver{enabled: true, minTier: 0, found: true, err: errors.New("db down")}, RoleStandard, http.StatusOK},
+	}
+	for _, c := range cases {
+		got := statusFor(c.role, authz.RequireFlag(c.res, "some-flag"))
+		if got != c.want {
+			t.Errorf("%s: got %d, want %d", c.name, got, c.want)
+		}
+	}
+}
+
+func TestRequireFlag_NilResolverFailsOpen(t *testing.T) {
+	if got := statusFor(RoleStandard, NewAuthz(true).RequireFlag(nil, "some-flag")); got != http.StatusOK {
+		t.Errorf("nil resolver: got %d, want 200 (fail open)", got)
 	}
 }

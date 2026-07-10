@@ -71,3 +71,23 @@ describe("errorState", () => {
     expect(result.title).toBe("Couldn't load data");
   });
 });
+
+describe("errorState feature-flag codes", () => {
+  it("maps FEATURE_DISABLED to an unavailable-feature panel", () => {
+    const copy = errorState(new ApiError("gone", 404, "FEATURE_DISABLED"));
+    expect(copy.title).toMatch(/not available|unavailable/i);
+  });
+
+  it("maps TIER_LOCKED to an upsell panel", () => {
+    const copy = errorState(new ApiError("locked", 403, "TIER_LOCKED"));
+    expect(copy.title).toMatch(/locked|access/i);
+  });
+
+  it("does NOT treat a non-flag 404 (ACCOUNT_NOT_FOUND) as a disabled feature", () => {
+    const copy = errorState(
+      new ApiError("no profile", 404, "ACCOUNT_NOT_FOUND"),
+    );
+    expect(copy.title).toMatch(/couldn't load/i);
+    expect(copy.title).not.toBe("This feature is not available");
+  });
+});

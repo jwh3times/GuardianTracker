@@ -104,17 +104,17 @@ backend/api-service/
 | GET | `/api/collections/:membershipType/:membershipId` | JWT | Collections + fetchedAt; `?include=all` adds collectedItems |
 | POST | `/api/collections/:membershipType/:membershipId/refresh` | JWT | Invalidate cache (collections + characters + records) |
 | GET | `/api/manifest/status` | None | Manifest version and readiness |
-| GET | `/api/weekly/recommendations` | JWT | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt |
-| GET | `/api/items/search?q=&limit=` | JWT | Manifest item search; 503 until index ready |
+| GET | `/api/weekly/recommendations` | JWT + flag | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt |
+| GET | `/api/items/search?q=&limit=` | JWT + flag | Manifest item search; 503 until index ready |
 | GET | `/api/items/:itemHash` | JWT | Minimal manifest item view for deep-linked non-collectible items; `{ itemHash, name, icon, itemType, tierType, rarity, description }`; 404 for unknown hash; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
 | GET | `/api/items/:itemHash/perks` | JWT | Weapon possible perk pool + exotic catalyst pool from manifest; `{ itemHash, perkColumns: [{role,label,perks}], catalysts: [{name,description}] }`; 200 + empty arrays for non-weapon/unknown hash or non-exotic; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
-| GET | `/api/catalysts/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon/effect text |
-| GET | `/api/crafting/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` crafting pattern progress |
-| GET | `/api/seals/:membershipType/:membershipId` | JWT | `{ items, fetchedAt }` triumph/seal completion |
+| GET | `/api/catalysts/:membershipType/:membershipId` | JWT + flag | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon/effect text |
+| GET | `/api/crafting/:membershipType/:membershipId` | JWT + flag | `{ items, fetchedAt }` crafting pattern progress |
+| GET | `/api/seals/:membershipType/:membershipId` | JWT + flag | `{ items, fetchedAt }` triumph/seal completion |
 | GET | `/health` | None | Liveness probe |
 | GET | `/ready` | None | Readiness probe |
 
-Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`, `FORBIDDEN`, `TIER_LOCKED`, `DB_UNAVAILABLE`, `LAST_ADMIN`, `ROLE_NOT_ALLOWED`, `ADMIN_OPT_IN`.
+Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`, `FORBIDDEN`, `TIER_LOCKED`, `DB_UNAVAILABLE`, `LAST_ADMIN`, `ROLE_NOT_ALLOWED`, `ADMIN_OPT_IN`, `FEATURE_DISABLED`.
 
 ## Bungie OAuth flow
 
@@ -144,6 +144,8 @@ Sentinel errors:
 
 `auth.RequireAdmin` / `auth.RequireTier(tier)` — role-gating middleware placed after `jwtHelper.Middleware`. **Role is always read from the DB-backed RevocationChecker cache, never from the JWT claim** — so role changes propagate within the 60s window without requiring a new token.
 
+`authz.RequireFlag(enforceFlags, handlers.Flag*)` — composes after `jwtHelper.Middleware` on the weekly, search, catalysts, crafting, and seals routes (`FlagWeeklyPlanner`, `FlagGlobalSearch`, `FlagCatalystsCrafting`, `FlagTriumphsSeals`). **Fails open**: a disabled flag returns 404 `FEATURE_DISABLED`, an enabled flag above the caller's tier returns 403 `TIER_LOCKED`, but a nil resolver, degraded mode, store error, or unknown key allows the request through instead of blocking it.
+
 ## Roles & feature flags
 
 Tiers: `standard(0) < beta(1) < alpha(2) < admin(3)` stored in `users.role`.
@@ -151,7 +153,7 @@ Tiers: `standard(0) < beta(1) < alpha(2) < admin(3)` stored in `users.role`.
 - **Admin bootstrap**: `ADMIN_MEMBERSHIP_IDS` env var pins specified accounts to admin on every login. Additional admins are granted by existing admins from the admin console; there is no self-service path to admin.
 - **Self opt-in**: `PUT /api/account/role` (standard/beta/alpha only; admin role rejected; admin callers blocked). Evicts the caller's RevocationChecker cache entry with **no** token_version bump (session preserved).
 - **Admin-driven changes**: `PUT /api/admin/users/:id/role` bumps target's `token_version` + evicts their cache entry (forced re-sync) + writes an audit row inside the same transaction. Last-admin protection enforced in-transaction.
-- **Feature flags**: stored in `feature_flags` table (`key`, `enabled`, `min_tier`). `GET /api/flags` returns resolved state (`enabled`/`accessible`/`locked`) based on caller's role. Admin toggles via `PUT /api/admin/flags/:key`. `RequireAdmin`/`RequireTier` gate server-side — UI flag hiding is not enforcement.
+- **Feature flags**: stored in `feature_flags` table (`key`, `enabled`, `min_tier`). `GET /api/flags` returns resolved state (`enabled`/`accessible`/`locked`) based on caller's role — a UI hint. Server-side enforcement on the flag-gated routes (weekly, search, catalysts, crafting, seals) is `authz.RequireFlag` (see Middleware); it fails open when the flag can't be resolved. Admin toggles via `PUT /api/admin/flags/:key`. `RequireAdmin`/`RequireTier` remain the (fail-closed) gate for admin and tier-locked endpoints.
 
 ## Per-device refresh sessions
 
