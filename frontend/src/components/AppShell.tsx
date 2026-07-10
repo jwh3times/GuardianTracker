@@ -260,7 +260,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout: authLogout } = useAuth();
-  const { flagState, isAdmin } = useFlags();
+  const { flagState, accessible, isAdmin } = useFlags();
   const [mobileNav, setMobileNav] = useState(false);
   const closeMobileNav = () => setMobileNav(false);
 
@@ -352,9 +352,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Icon name="menu" size="1.2rem" />
           </button>
-          <div className="gt-topbar-search">
-            <SearchBar />
-          </div>
+          {accessible("global-search") && (
+            <div className="gt-topbar-search">
+              <SearchBar />
+            </div>
+          )}
           <div className="gt-topbar-right">
             <CharacterSwitcher displayName={user?.displayName} />
           </div>

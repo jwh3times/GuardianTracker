@@ -423,6 +423,58 @@ describe("AppShell interactions", () => {
       expect(screen.queryByText("Week")).not.toBeInTheDocument(),
     );
   });
+
+  it("hides the global search widget when global-search is disabled", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "admin",
+          flags: [
+            {
+              key: "global-search",
+              name: "Global search",
+              desc: "Top-bar item search.",
+              category: "Navigation",
+              minTier: "standard",
+              enabled: false,
+              accessible: false,
+              locked: false,
+            },
+          ],
+        }),
+      ),
+    );
+    renderShell();
+    await waitFor(() =>
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("hides the global search widget when global-search is tier-locked", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({
+          role: "standard",
+          flags: [
+            {
+              key: "global-search",
+              name: "Global search",
+              desc: "Top-bar item search.",
+              category: "Navigation",
+              minTier: "alpha",
+              enabled: true,
+              accessible: false,
+              locked: true,
+            },
+          ],
+        }),
+      ),
+    );
+    renderShell();
+    await waitFor(() =>
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument(),
+    );
+  });
 });
 
 function Boom(): React.ReactElement {
