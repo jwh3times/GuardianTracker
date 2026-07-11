@@ -315,6 +315,7 @@ func main() {
 		api.POST("/wishlist", jwtHelper.Middleware(revoker), wishlistHandler.AddToWishlist)
 		api.PUT("/wishlist/:id", jwtHelper.Middleware(revoker), wishlistHandler.UpdateWishlistItem)
 		api.DELETE("/wishlist/:id", jwtHelper.Middleware(revoker), wishlistHandler.RemoveFromWishlist)
+		api.POST("/wishlist/bulk", jwtHelper.Middleware(revoker), wishlistHandler.BulkUpdate)
 
 		// Preferences
 		api.GET("/preferences", jwtHelper.Middleware(revoker), wishlistHandler.GetPreferences)

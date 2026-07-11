@@ -29,6 +29,8 @@ type wishlistStoreIface interface {
 	Add(ctx context.Context, userID int64, hash uint32, prio int16, notes string) (*db.WishlistItem, error)
 	Update(ctx context.Context, userID, id int64, prio *int16, notes *string) (*db.WishlistItem, error)
 	Delete(ctx context.Context, userID, id int64) (bool, error)
+	BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error)
+	BulkSetPriority(ctx context.Context, userID int64, ids []int64, prio int16) (int64, error)
 }
 
 type manifestLookupIface interface {
@@ -248,6 +250,75 @@ func (h *WishlistHandler) RemoveFromWishlist(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusNoContent)
+}
+
+const bulkMaxIDs = 100
+
+// BulkUpdate handles POST /api/wishlist/bulk — delete or set-priority on a set of
+// items in one request. Partial success: foreign/missing ids are silently skipped
+// and counted. Body: {action, ids, priority?}; response: {updated, skipped}.
+func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
+	if h.store == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not configured"})
+		return
+	}
+	var body struct {
+		Action   string  `json:"action"`
+		IDs      []int64 `json:"ids"`
+		Priority string  `json:"priority"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	// Dedupe ids, preserving nothing but uniqueness.
+	seen := make(map[int64]struct{}, len(body.IDs))
+	ids := make([]int64, 0, len(body.IDs))
+	for _, id := range body.IDs {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ids must be a non-empty list"})
+		return
+	}
+	if len(ids) > bulkMaxIDs {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("at most %d ids per request", bulkMaxIDs)})
+		return
+	}
+
+	membershipID := c.GetString("membership_id")
+	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
+	if err != nil {
+		log.Printf("BulkUpdate: GetUserID(%s): %v", membershipID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	var updated int64
+	switch body.Action {
+	case "delete":
+		updated, err = h.store.BulkDelete(c.Request.Context(), userID, ids)
+	case "set_priority":
+		prio, ok := priorityToInt[body.Priority]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "priority must be LOW, MEDIUM, HIGH, or URGENT"})
+			return
+		}
+		updated, err = h.store.BulkSetPriority(c.Request.Context(), userID, ids, prio)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete' or 'set_priority'"})
+		return
+	}
+	if err != nil {
+		log.Printf("BulkUpdate(%s): %v", body.Action, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"updated": updated, "skipped": int64(len(ids)) - updated})
 }
 
 // GetPreferences handles GET /api/preferences

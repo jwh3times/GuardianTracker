@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,10 +23,11 @@ import (
 // --- mock wishlist store ---
 
 type mockWishlistStore struct {
-	userID   int64
-	items    []db.WishlistItem
-	addErr   error
-	delFound bool
+	userID       int64
+	items        []db.WishlistItem
+	addErr       error
+	delFound     bool
+	bulkAffected *int64
 }
 
 func (m *mockWishlistStore) GetUserID(_ context.Context, _ string) (int64, error) {
@@ -59,6 +61,20 @@ func (m *mockWishlistStore) Update(_ context.Context, _, id int64, prio *int16, 
 
 func (m *mockWishlistStore) Delete(_ context.Context, _, _ int64) (bool, error) {
 	return m.delFound, nil
+}
+
+func (m *mockWishlistStore) BulkDelete(_ context.Context, _ int64, ids []int64) (int64, error) {
+	if m.bulkAffected != nil {
+		return *m.bulkAffected, nil
+	}
+	return int64(len(ids)), nil
+}
+
+func (m *mockWishlistStore) BulkSetPriority(_ context.Context, _ int64, ids []int64, _ int16) (int64, error) {
+	if m.bulkAffected != nil {
+		return *m.bulkAffected, nil
+	}
+	return int64(len(ids)), nil
 }
 
 // --- mock prefs store ---
@@ -147,6 +163,7 @@ func newTestRouter(h *WishlistHandler) *gin.Engine {
 	r.POST("/api/wishlist", h.AddToWishlist)
 	r.PUT("/api/wishlist/:id", h.UpdateWishlistItem)
 	r.DELETE("/api/wishlist/:id", h.RemoveFromWishlist)
+	r.POST("/api/wishlist/bulk", h.BulkUpdate)
 	r.GET("/api/preferences", h.GetPreferences)
 	r.PUT("/api/preferences", h.UpdatePreferences)
 	return r
@@ -240,6 +257,12 @@ func (s *membershipIDSpy) Update(ctx context.Context, userID, id int64, prio *in
 }
 func (s *membershipIDSpy) Delete(ctx context.Context, userID, id int64) (bool, error) {
 	return s.inner.Delete(ctx, userID, id)
+}
+func (s *membershipIDSpy) BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error) {
+	return s.inner.BulkDelete(ctx, userID, ids)
+}
+func (s *membershipIDSpy) BulkSetPriority(ctx context.Context, userID int64, ids []int64, prio int16) (int64, error) {
+	return s.inner.BulkSetPriority(ctx, userID, ids, prio)
 }
 
 func TestAddToWishlist_Duplicate_Returns409(t *testing.T) {
@@ -690,5 +713,85 @@ func TestEnrichItems_TokenErrorBestEffort(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("token error should not fail request; got %d", w.Code)
+	}
+}
+
+// --- bulk update tests ---
+
+func bulkReq(body string) (*http.Request, *httptest.ResponseRecorder) {
+	req := httptest.NewRequest(http.MethodPost, "/api/wishlist/bulk", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	return req, httptest.NewRecorder()
+}
+
+func TestBulkUpdate_Delete_PartialSuccess(t *testing.T) {
+	two := int64(2)
+	store := &mockWishlistStore{userID: 42, bulkAffected: &two} // only 2 of 3 owned
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	req, w := bulkReq(`{"action":"delete","ids":[1,2,999]}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct{ Updated, Skipped int }
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Updated != 2 || resp.Skipped != 1 {
+		t.Errorf("got updated=%d skipped=%d, want 2/1", resp.Updated, resp.Skipped)
+	}
+}
+
+func TestBulkUpdate_SetPriority(t *testing.T) {
+	store := &mockWishlistStore{userID: 42}
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	req, w := bulkReq(`{"action":"set_priority","ids":[1,2],"priority":"HIGH"}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct{ Updated, Skipped int }
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Updated != 2 || resp.Skipped != 0 {
+		t.Errorf("got updated=%d skipped=%d, want 2/0", resp.Updated, resp.Skipped)
+	}
+}
+
+func TestBulkUpdate_Validation(t *testing.T) {
+	store := &mockWishlistStore{userID: 42}
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	cases := []string{
+		`{"action":"nope","ids":[1]}`,                               // bad action
+		`{"action":"delete","ids":[]}`,                              // empty ids
+		`{"action":"set_priority","ids":[1]}`,                       // missing priority
+		`{"action":"set_priority","ids":[1],"priority":"CRITICAL"}`, // bad priority
+	}
+	for _, body := range cases {
+		req, w := bulkReq(body)
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("body %s: got %d, want 400", body, w.Code)
+		}
+	}
+	// Over-cap ids (101) → 400
+	ids := make([]string, 101)
+	for i := range ids {
+		ids[i] = strconv.Itoa(i + 1)
+	}
+	req, w := bulkReq(`{"action":"delete","ids":[` + strings.Join(ids, ",") + `]}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("over-cap: got %d, want 400", w.Code)
+	}
+}
+
+func TestBulkUpdate_DegradedMode_Returns503(t *testing.T) {
+	h := NewWishlistHandler(nil, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	req, w := bulkReq(`{"action":"delete","ids":[1]}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
 	}
 }
