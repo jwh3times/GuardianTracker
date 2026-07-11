@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,9 +29,15 @@ type mockWishlistStore struct {
 	addErr       error
 	delFound     bool
 	bulkAffected *int64
+	lastBulkIDs  []int64
+	getUserIDErr error
+	bulkErr      error
 }
 
 func (m *mockWishlistStore) GetUserID(_ context.Context, _ string) (int64, error) {
+	if m.getUserIDErr != nil {
+		return 0, m.getUserIDErr
+	}
 	return m.userID, nil
 }
 
@@ -64,6 +71,10 @@ func (m *mockWishlistStore) Delete(_ context.Context, _, _ int64) (bool, error) 
 }
 
 func (m *mockWishlistStore) BulkDelete(_ context.Context, _ int64, ids []int64) (int64, error) {
+	m.lastBulkIDs = ids
+	if m.bulkErr != nil {
+		return 0, m.bulkErr
+	}
 	if m.bulkAffected != nil {
 		return *m.bulkAffected, nil
 	}
@@ -71,6 +82,10 @@ func (m *mockWishlistStore) BulkDelete(_ context.Context, _ int64, ids []int64) 
 }
 
 func (m *mockWishlistStore) BulkSetPriority(_ context.Context, _ int64, ids []int64, _ int16) (int64, error) {
+	m.lastBulkIDs = ids
+	if m.bulkErr != nil {
+		return 0, m.bulkErr
+	}
 	if m.bulkAffected != nil {
 		return *m.bulkAffected, nil
 	}
@@ -793,5 +808,47 @@ func TestBulkUpdate_DegradedMode_Returns503(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestBulkUpdate_DedupesIDs(t *testing.T) {
+	store := &mockWishlistStore{userID: 42}
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	req, w := bulkReq(`{"action":"delete","ids":[1,1,2]}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	want := []int64{1, 2}
+	if len(store.lastBulkIDs) != len(want) || store.lastBulkIDs[0] != want[0] || store.lastBulkIDs[1] != want[1] {
+		t.Fatalf("store.lastBulkIDs = %v, want %v (duplicates must be collapsed before reaching the store)", store.lastBulkIDs, want)
+	}
+	var resp struct{ Updated, Skipped int }
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Updated != 2 || resp.Skipped != 0 {
+		t.Errorf("got updated=%d skipped=%d, want 2/0 (skipped must be computed from deduped count, not raw count)", resp.Updated, resp.Skipped)
+	}
+}
+
+func TestBulkUpdate_GetUserIDError_Returns500(t *testing.T) {
+	store := &mockWishlistStore{userID: 42, getUserIDErr: errors.New("db down")}
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	req, w := bulkReq(`{"action":"delete","ids":[1]}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestBulkUpdate_StoreError_Returns500(t *testing.T) {
+	store := &mockWishlistStore{userID: 42, bulkErr: errors.New("db down")}
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	req, w := bulkReq(`{"action":"delete","ids":[1]}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
