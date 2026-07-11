@@ -103,6 +103,35 @@ func (s *WishlistStore) Delete(ctx context.Context, userID, id int64) (bool, err
 	return tag.RowsAffected() > 0, nil
 }
 
+// BulkDelete removes every wishlist item in ids that the user owns. Foreign or
+// missing ids are silently skipped. Returns the number of rows deleted.
+func (s *WishlistStore) BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM wishlist_items WHERE id = ANY($1) AND user_id = $2`, ids, userID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// BulkSetPriority sets priority on every wishlist item in ids that the user owns.
+// Foreign or missing ids are silently skipped. Returns the number of rows updated.
+func (s *WishlistStore) BulkSetPriority(ctx context.Context, userID int64, ids []int64, prio int16) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE wishlist_items SET priority = $3, updated_at = now()
+		 WHERE id = ANY($1) AND user_id = $2`, ids, userID, prio)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // IsDuplicate returns true when the error is a unique-constraint violation on (user_id, item_hash).
 func IsDuplicate(err error) bool {
 	var pgErr *pgconn.PgError

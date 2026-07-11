@@ -91,3 +91,67 @@ func TestWishlistStore_ListOrdering(t *testing.T) {
 			items[0].ItemHash, items[1].ItemHash, items[2].ItemHash)
 	}
 }
+
+func TestWishlistStore_BulkDelete_OwnershipScoped(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	s := NewWishlistStore(pool)
+
+	_, me := createTestUser(t, pool)
+	_, other := createTestUser(t, pool)
+	a, _ := s.Add(ctx, me, 1001, 1, "")
+	b, _ := s.Add(ctx, me, 1002, 1, "")
+	foreign, _ := s.Add(ctx, other, 1003, 1, "")
+
+	// Delete two owned + one foreign id; only the two owned are removed.
+	updated, err := s.BulkDelete(ctx, me, []int64{a.ID, b.ID, foreign.ID})
+	if err != nil {
+		t.Fatalf("BulkDelete: %v", err)
+	}
+	if updated != 2 {
+		t.Errorf("updated = %d, want 2 (foreign id skipped)", updated)
+	}
+	remaining, _ := s.List(ctx, me)
+	if len(remaining) != 0 {
+		t.Errorf("owned items remaining = %d, want 0", len(remaining))
+	}
+	stillForeign, _ := s.List(ctx, other)
+	if len(stillForeign) != 1 {
+		t.Errorf("foreign item wrongly deleted; remaining = %d, want 1", len(stillForeign))
+	}
+}
+
+func TestWishlistStore_BulkSetPriority_OwnershipScoped(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	s := NewWishlistStore(pool)
+
+	_, me := createTestUser(t, pool)
+	_, other := createTestUser(t, pool)
+	a, _ := s.Add(ctx, me, 2001, 0, "")
+	_, _ = s.Add(ctx, other, 2002, 0, "")
+
+	updated, err := s.BulkSetPriority(ctx, me, []int64{a.ID}, 3)
+	if err != nil {
+		t.Fatalf("BulkSetPriority: %v", err)
+	}
+	if updated != 1 {
+		t.Errorf("updated = %d, want 1", updated)
+	}
+	mine, _ := s.List(ctx, me)
+	if len(mine) != 1 || mine[0].Priority != 3 {
+		t.Errorf("owned item priority = %+v, want priority 3", mine)
+	}
+	theirs, _ := s.List(ctx, other)
+	if len(theirs) != 1 || theirs[0].Priority != 0 {
+		t.Errorf("foreign item priority changed: %+v", theirs)
+	}
+}
+
+func TestWishlistStore_BulkDelete_EmptyIDs(t *testing.T) {
+	pool := testPool(t)
+	updated, err := NewWishlistStore(pool).BulkDelete(context.Background(), 1, []int64{})
+	if err != nil || updated != 0 {
+		t.Fatalf("empty ids: updated=%d err=%v, want 0, nil", updated, err)
+	}
+}
