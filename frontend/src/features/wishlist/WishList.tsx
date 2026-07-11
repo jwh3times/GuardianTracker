@@ -135,6 +135,79 @@ export function WishList() {
     showToast(`Removed ${name}`, "info");
   };
 
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+
+  const toggleSelected = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelected(new Set());
+  };
+
+  const bulkMutation = useMutation({
+    mutationFn: (vars: {
+      action: "delete" | "set_priority";
+      ids: string[];
+      priority?: string;
+    }) =>
+      apiFetch<{ updated: number; skipped: number }>("/api/wishlist/bulk", {
+        method: "POST",
+        body: JSON.stringify({
+          action: vars.action,
+          ids: vars.ids.map(Number),
+          ...(vars.priority ? { priority: vars.priority } : {}),
+        }),
+      }),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
+      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
+      const ids = new Set(vars.ids);
+      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) => {
+        if (!old) return [];
+        if (vars.action === "delete") return old.filter((i) => !ids.has(i.id));
+        return old.map((i) =>
+          ids.has(i.id) ? { ...i, priority: vars.priority! } : i,
+        );
+      });
+      return { previous };
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(["wishlist"], ctx.previous);
+      showToast("Bulk action failed", "error");
+    },
+    onSuccess: (res, vars) => {
+      const verb = vars.action === "delete" ? "removed" : "updated";
+      showToast(
+        res.skipped > 0
+          ? `${res.updated} ${verb}, ${res.skipped} skipped`
+          : `${res.updated} ${verb}`,
+        "info",
+      );
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
+  });
+
+  const bulkDelete = () => {
+    if (selected.size === 0) return;
+    bulkMutation.mutate({ action: "delete", ids: Array.from(selected) });
+    exitSelectMode();
+  };
+  const bulkSetPriority = (p: Priority) => {
+    if (selected.size === 0) return;
+    bulkMutation.mutate({
+      action: "set_priority",
+      ids: Array.from(selected),
+      priority: p.toUpperCase(),
+    });
+    exitSelectMode();
+  };
+
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: list.length };
     PRIORITY_ORDER.forEach(
@@ -207,21 +280,32 @@ export function WishList() {
           </span>
         }
         right={
-          <Dropdown
-            label="Sort: Availability"
-            value={
-              {
-                availability: "Sort: Availability",
-                priority: "Sort: Priority",
-              }[sort]
-            }
-            noClear
-            options={[
-              { v: "availability", l: "Sort: Availability" },
-              { v: "priority", l: "Sort: Priority" },
-            ]}
-            onPick={(v) => v && setSort(v as SortKey)}
-          />
+          <>
+            <Button
+              variant={selectMode ? "primary" : "ghost"}
+              sm
+              onClick={() =>
+                selectMode ? exitSelectMode() : setSelectMode(true)
+              }
+            >
+              {selectMode ? "Done" : "Select"}
+            </Button>
+            <Dropdown
+              label="Sort: Availability"
+              value={
+                {
+                  availability: "Sort: Availability",
+                  priority: "Sort: Priority",
+                }[sort]
+              }
+              noClear
+              options={[
+                { v: "availability", l: "Sort: Availability" },
+                { v: "priority", l: "Sort: Priority" },
+              ]}
+              onPick={(v) => v && setSort(v as SortKey)}
+            />
+          </>
         }
       />
 
@@ -236,9 +320,68 @@ export function WishList() {
         ))}
       </div>
 
+      {selectMode && (
+        <div
+          className="gt-card"
+          role="region"
+          aria-label="Bulk actions"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--s-2)",
+            padding: "var(--s-2)",
+            marginBottom: "var(--s-2)",
+          }}
+        >
+          <label
+            style={{ display: "flex", alignItems: "center", gap: "var(--s-1)" }}
+          >
+            <input
+              type="checkbox"
+              checked={shown.length > 0 && selected.size === shown.length}
+              onChange={(e) =>
+                setSelected(
+                  e.target.checked
+                    ? new Set(shown.map((i) => i.id))
+                    : new Set(),
+                )
+              }
+              aria-label="Select all shown"
+            />
+            <span className="mono">{selected.size} selected</span>
+          </label>
+          <Dropdown
+            label="Set priority"
+            value="Set priority"
+            noClear
+            options={PRIORITY_ORDER.map((p) => ({
+              v: p,
+              l: PRIORITY_LABEL[p],
+            }))}
+            onPick={(p) => p && bulkSetPriority(p as Priority)}
+          />
+          <button
+            className="gt-link gt-link--danger"
+            onClick={bulkDelete}
+            disabled={selected.size === 0}
+          >
+            <Icon name="close" size="0.8rem" /> Delete
+          </button>
+        </div>
+      )}
+
       <div className="gt-wl-list">
         {shown.map((i) => (
           <div key={i.id} className="gt-wl-item gt-card" data-rarity={i.rarity}>
+            {selectMode && (
+              <input
+                type="checkbox"
+                checked={selected.has(i.id)}
+                onChange={() => toggleSelected(i.id)}
+                aria-label={`Select ${i.name}`}
+                style={{ alignSelf: "center", marginRight: "var(--s-1)" }}
+              />
+            )}
             <ItemTile
               rarity={i.rarity}
               type={i.type}

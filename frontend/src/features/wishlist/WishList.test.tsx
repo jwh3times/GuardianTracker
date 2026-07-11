@@ -175,3 +175,91 @@ describe("WishList page", () => {
     await waitFor(() => expect(putBody).toEqual({ priority: "URGENT" }));
   });
 });
+
+describe("WishList bulk actions", () => {
+  it("enters select mode and bulk-deletes a selected item", async () => {
+    // Stateful handler so the post-delete refetch (onSettled) reflects the
+    // removal — same pattern as the single-item "removes an item
+    // optimistically" test above.
+    let items = [
+      {
+        id: "1",
+        itemHash: 111,
+        name: "Gjallarhorn",
+        itemType: "Rocket Launcher",
+        rarity: "Exotic",
+        icon: "",
+        priority: "HIGH",
+        notes: "",
+        sources: [],
+        availableNow: false,
+        dateAdded: new Date().toISOString(),
+      },
+      {
+        id: "2",
+        itemHash: 222,
+        name: "Fatebringer",
+        itemType: "Hand Cannon",
+        rarity: "Legendary",
+        icon: "",
+        priority: "LOW",
+        notes: "",
+        sources: ["Vault of Glass"],
+        availableNow: false,
+        dateAdded: new Date().toISOString(),
+      },
+    ];
+    server.use(
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json(items)),
+      http.post(`${API}/api/wishlist/bulk`, async ({ request }) => {
+        const body = (await request.json()) as {
+          action: string;
+          ids: number[];
+        };
+        if (body.action === "delete") {
+          items = items.filter((i) => !body.ids.includes(Number(i.id)));
+        }
+        return HttpResponse.json({ updated: 1, skipped: 0 });
+      }),
+    );
+    renderPage(<WishList />, "/wishlist");
+    await screen.findByText("Gjallarhorn");
+
+    fireEvent.click(screen.getByRole("button", { name: /select/i }));
+    const check = await screen.findByRole("checkbox", {
+      name: /select gjallarhorn/i,
+    });
+    fireEvent.click(check);
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // optimistic removal → Gjallarhorn disappears from the list
+    await waitFor(() =>
+      expect(screen.queryByText("Gjallarhorn")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("renders a non-Xûr vendor availability label", async () => {
+    server.use(
+      http.get(`${API}/api/wishlist`, () =>
+        HttpResponse.json([
+          {
+            id: "1",
+            itemHash: 111,
+            name: "Gjallarhorn",
+            itemType: "Rocket Launcher",
+            rarity: "Exotic",
+            icon: "",
+            priority: "HIGH",
+            notes: "",
+            sources: [],
+            availableNow: true,
+            availableFrom: "Banshee-44",
+            dateAdded: new Date().toISOString(),
+          },
+        ]),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+    expect(await screen.findByText("Banshee-44")).toBeInTheDocument();
+  });
+});
