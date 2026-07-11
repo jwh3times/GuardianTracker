@@ -19,12 +19,16 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   catalyst changes about the weapon. New `effect` field on the catalysts API
   response, linked to its weapon via record objective-hash overlap with an
   exact-name fallback instead of fuzzy name matching.
+- Bulk wishlist actions: select multiple items to delete or re-prioritize in
+  one request (`POST /api/wishlist/bulk`).
 
 ### Changed
 
 - Versioning now creates a GitHub Release for each auto-incremented
   `v<major>.<minor>.<build>` tag on `main`; fresh major/minor lines may start at
   build `0`.
+- Wishlist availability now covers all rotating vendors (Xûr, Banshee-44,
+  Ada-1, and ritual vendors), matching Collections — previously Xûr-only.
 
 ### Fixed
 

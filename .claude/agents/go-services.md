@@ -30,8 +30,9 @@ backend/api-service/
   api/handlers/items.go                ← HTTP handlers for manifest-derived item detail: GetPerks (perk pool +
                                            exotic catalyst pool) and GetItem (minimal item view for deep-linked
                                            non-collectible items); no ownership check (public manifest data)
-  api/handlers/wishlist.go             ← Wishlist CRUD; enriches with manifest defs, collectible source,
-                                           and Xûr availability (via xurInventoryIface / weekly.Service)
+  api/handlers/wishlist.go             ← Wishlist CRUD + bulk delete/set_priority; enriches with manifest
+                                           defs, collectible source, and all-rotating-vendor availability
+                                           (via liveVendorIface → weekly.Service.LiveVendorItemHashes)
   api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
                                            resolved feature-flag state (GET /api/flags)
   api/handlers/admin.go                ← Admin console: user roster, role management, feature-flag
@@ -53,6 +54,8 @@ backend/api-service/
                                            hourly manifest swap; satisfies all consumer ManifestRepo interfaces
   services/weekly/service.go           ← Weekly recommendations; Xûr inventory + XurItemHashes();
                                            milestone data; reset time math; ManifestRepo interface
+  services/weekly/availability.go      ← LiveVendorItemHashes: best-effort all-rotating-vendor item
+                                           availability (Xûr, Banshee-44, Ada-1, ritual vendors) for wishlist
   services/search/service.go           ← In-memory manifest item search index; async rebuild on update
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; WeaponTypesCacheKey
@@ -91,6 +94,7 @@ backend/api-service/
 | POST | `/api/wishlist` | JWT | Add wishlist item |
 | PUT | `/api/wishlist/:id` | JWT | Update wishlist item priority/notes |
 | DELETE | `/api/wishlist/:id` | JWT | Remove wishlist item |
+| POST | `/api/wishlist/bulk` | JWT | Bulk `delete` / `set_priority` over selected ids; partial-success `{updated, skipped}` |
 | GET | `/api/preferences` | JWT | Get user preferences |
 | PUT | `/api/preferences` | JWT | Update user preferences |
 | PUT | `/api/account/role` | JWT | Self-service opt-in to standard/beta/alpha; admin rejected, admin callers rejected |
@@ -210,7 +214,8 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 
 - `Weekly` struct has `ResetAt`, `FetchedAt`, `Degraded` fields
 - `Milestone.Missing` is `*int` (omitempty) — populated by `buildMilestones` for raid/dungeon milestones via `efficiency.MissingForMilestone`; non-raid/dungeon milestones still omit it (no manifest reward→collectible signal)
-- `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells (used by wishlist handler)
+- `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells
+- `LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)` (`services/weekly/availability.go`) returns item hash → vendor display name across all rotating vendors (Xûr, Banshee-44, Ada-1, ritual vendors); best-effort with the caller's Bungie token — used by the wishlist handler for availability instead of the Xûr-only `XurItemHashes`
 
 ## Go patterns
 

@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse, delay } from "msw";
 import { API, sampleUser, sampleWishlist, server } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
@@ -173,5 +173,217 @@ describe("WishList page", () => {
     fireEvent.click(screen.getByRole("button", { name: "High" }));
     fireEvent.click(screen.getByRole("button", { name: "Urgent" }));
     await waitFor(() => expect(putBody).toEqual({ priority: "URGENT" }));
+  });
+});
+
+describe("WishList bulk actions", () => {
+  it("enters select mode and bulk-deletes a selected item", async () => {
+    // Stateful handler so the post-delete refetch (onSettled) reflects the
+    // removal — same pattern as the single-item "removes an item
+    // optimistically" test above. The POST is deliberately delayed so it
+    // (and thus onSettled's refetch) cannot possibly have completed by the
+    // time we assert the removal — the disappearance can only be explained
+    // by the optimistic onMutate path.
+    let items = [
+      {
+        id: "1",
+        itemHash: 111,
+        name: "Gjallarhorn",
+        itemType: "Rocket Launcher",
+        rarity: "Exotic",
+        icon: "",
+        priority: "HIGH",
+        notes: "",
+        sources: [],
+        availableNow: false,
+        dateAdded: new Date().toISOString(),
+      },
+      {
+        id: "2",
+        itemHash: 222,
+        name: "Fatebringer",
+        itemType: "Hand Cannon",
+        rarity: "Legendary",
+        icon: "",
+        priority: "LOW",
+        notes: "",
+        sources: ["Vault of Glass"],
+        availableNow: false,
+        dateAdded: new Date().toISOString(),
+      },
+    ];
+    let postResolved = false;
+    server.use(
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json(items)),
+      http.post(`${API}/api/wishlist/bulk`, async ({ request }) => {
+        const body = (await request.json()) as {
+          action: string;
+          ids: number[];
+        };
+        await delay(100);
+        postResolved = true;
+        if (body.action === "delete") {
+          items = items.filter((i) => !body.ids.includes(Number(i.id)));
+        }
+        return HttpResponse.json({ updated: 1, skipped: 0 });
+      }),
+    );
+    renderPage(<WishList />, "/wishlist");
+    await screen.findByText("Gjallarhorn");
+
+    fireEvent.click(screen.getByRole("button", { name: /select/i }));
+    const check = await screen.findByRole("checkbox", {
+      name: /select gjallarhorn/i,
+    });
+    fireEvent.click(check);
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // optimistic removal → Gjallarhorn disappears from the list before the
+    // delayed POST (and its onSettled refetch) has resolved.
+    await waitFor(() =>
+      expect(screen.queryByText("Gjallarhorn")).not.toBeInTheDocument(),
+    );
+    expect(postResolved).toBe(false);
+  });
+
+  it("bulk-sets priority on selected items", async () => {
+    let items = [
+      {
+        id: "1",
+        itemHash: 111,
+        name: "Gjallarhorn",
+        itemType: "Rocket Launcher",
+        rarity: "Exotic",
+        icon: "",
+        priority: "LOW",
+        notes: "",
+        sources: [],
+        availableNow: false,
+        dateAdded: new Date().toISOString(),
+      },
+    ];
+    let postBody: unknown = null;
+    server.use(
+      // GET stays stateful so the onSettled refetch is consistent with the
+      // optimistic update rather than clobbering it back to Low.
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json(items)),
+      http.post(`${API}/api/wishlist/bulk`, async ({ request }) => {
+        const body = (await request.json()) as {
+          action: string;
+          ids: number[];
+          priority?: string;
+        };
+        postBody = body;
+        if (body.action === "set_priority" && body.priority) {
+          items = items.map((i) =>
+            body.ids.includes(Number(i.id))
+              ? { ...i, priority: body.priority! }
+              : i,
+          );
+        }
+        return HttpResponse.json({ updated: 1, skipped: 0 });
+      }),
+    );
+    renderPage(<WishList />, "/wishlist");
+    await screen.findByText("Gjallarhorn");
+
+    fireEvent.click(screen.getByRole("button", { name: /select/i }));
+    const check = await screen.findByRole("checkbox", {
+      name: /select gjallarhorn/i,
+    });
+    fireEvent.click(check);
+
+    // Open the action bar's "Set priority" dropdown and pick High — same
+    // open/pick interaction as the single-item "changes priority through
+    // the row dropdown" test above.
+    fireEvent.click(screen.getByRole("button", { name: "Set priority" }));
+    fireEvent.click(screen.getByRole("button", { name: "High" }));
+
+    // Optimistic update: the item's priority badge flips to High before the
+    // request settles.
+    await waitFor(() =>
+      expect(
+        screen.getByText("High", { selector: ".gt-badge" }),
+      ).toBeInTheDocument(),
+    );
+    expect(postBody).toEqual({
+      action: "set_priority",
+      ids: [1],
+      priority: "HIGH",
+    });
+  });
+
+  it("rolls back a failed bulk delete", async () => {
+    server.use(
+      http.post(
+        `${API}/api/wishlist/bulk`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+    await screen.findByText("Gjallarhorn");
+
+    fireEvent.click(screen.getByRole("button", { name: /select/i }));
+    const check = await screen.findByRole("checkbox", {
+      name: /select gjallarhorn/i,
+    });
+    fireEvent.click(check);
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // onError rolls the optimistic removal back → Gjallarhorn returns.
+    expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
+  });
+
+  it("keeps selection on a failed bulk action", async () => {
+    server.use(
+      http.post(
+        `${API}/api/wishlist/bulk`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+    await screen.findByText("Gjallarhorn");
+
+    fireEvent.click(screen.getByRole("button", { name: /select/i }));
+    const check = await screen.findByRole("checkbox", {
+      name: /select gjallarhorn/i,
+    });
+    fireEvent.click(check);
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // onError rolls the optimistic removal back → Gjallarhorn returns.
+    expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
+    // Select mode was NOT exited on failure — the "Done" toggle (select mode
+    // is on) and the row checkbox are both still present, so the user can
+    // retry the same selection.
+    expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /select gjallarhorn/i }),
+    ).toBeChecked();
+  });
+
+  it("renders a non-Xûr vendor availability label", async () => {
+    server.use(
+      http.get(`${API}/api/wishlist`, () =>
+        HttpResponse.json([
+          {
+            id: "1",
+            itemHash: 111,
+            name: "Gjallarhorn",
+            itemType: "Rocket Launcher",
+            rarity: "Exotic",
+            icon: "",
+            priority: "HIGH",
+            notes: "",
+            sources: [],
+            availableNow: true,
+            availableFrom: "Banshee-44",
+            dateAdded: new Date().toISOString(),
+          },
+        ]),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+    expect(await screen.findByText("Banshee-44")).toBeInTheDocument();
   });
 });

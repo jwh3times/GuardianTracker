@@ -239,7 +239,7 @@ func main() {
 		auditLogger = stores.Audit
 	}
 	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger)
-	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService)
+	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore)
 	// Pass the DB pool as a true-nil interface in degraded mode so /ready's
 	// nil-guard engages (a typed-nil *pgxpool.Pool would make `!= nil` true
 	// and panic on Ping) — same trap as the audit logger above.
@@ -315,6 +315,7 @@ func main() {
 		api.POST("/wishlist", jwtHelper.Middleware(revoker), wishlistHandler.AddToWishlist)
 		api.PUT("/wishlist/:id", jwtHelper.Middleware(revoker), wishlistHandler.UpdateWishlistItem)
 		api.DELETE("/wishlist/:id", jwtHelper.Middleware(revoker), wishlistHandler.RemoveFromWishlist)
+		api.POST("/wishlist/bulk", jwtHelper.Middleware(revoker), wishlistHandler.BulkUpdate)
 
 		// Preferences
 		api.GET("/preferences", jwtHelper.Middleware(revoker), wishlistHandler.GetPreferences)

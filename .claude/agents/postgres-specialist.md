@@ -97,7 +97,7 @@ PostgreSQL is the primary persistence layer for all user data. The api-service c
 | `db/stores.go` | `Stores` struct aggregating all store types |
 | `db/users.go` | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions) |
 | `db/tokens.go` | `BungieTokenStore` — encrypted Bungie OAuth tokens |
-| `db/wishlist.go` | `WishlistStore` — wishlist CRUD, user-scoped |
+| `db/wishlist.go` | `WishlistStore` — wishlist CRUD, user-scoped; `BulkDelete`/`BulkSetPriority` for `POST /api/wishlist/bulk` (user-scoped `id = ANY($1)`; foreign/missing ids silently skipped; `RowsAffected()` drives the handler's partial-success `{updated, skipped}` response) |
 | `db/prefs.go` | `PrefsStore` — user preferences |
 | `db/audit.go` | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune |
 | `db/flags.go` | `FlagsStore` — feature flag get/list/upsert |
