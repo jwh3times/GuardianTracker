@@ -36,10 +36,18 @@ type manifestLookupIface interface {
 	GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error)
 }
 
-// xurInventoryIface is satisfied by *weekly.Service — used to flag wishlist
-// items Xûr currently sells (B6).
-type xurInventoryIface interface {
-	XurItemHashes(ctx context.Context) map[uint32]struct{}
+// liveVendorIface returns itemHash → selling-vendor display name for items
+// obtainable right now from rotating vendors (Xûr + Banshee-44 + Ada-1 + ritual
+// vendors). Satisfied by *weekly.Service — the same source Collections uses.
+type liveVendorIface interface {
+	LiveVendorItemHashes(ctx context.Context, membershipType int, membershipID, bungieToken string) map[uint32]string
+}
+
+// tokenProvider yields a user's current Bungie access token for the authed
+// vendor fetch. Satisfied by *auth.TokenStore. Best-effort: an error means we
+// resolve public-only availability (Xûr).
+type tokenProvider interface {
+	GetValidToken(membershipID string) (string, error)
 }
 
 type prefsStoreIface interface {
@@ -49,15 +57,16 @@ type prefsStoreIface interface {
 
 // WishlistHandler handles wishlist and preferences endpoints.
 type WishlistHandler struct {
-	store    wishlistStoreIface  // nil = degraded mode
-	manifest manifestLookupIface // nil = no enrichment
-	prefs    prefsStoreIface     // nil = degraded mode
-	xur      xurInventoryIface   // nil = availability always false
+	store       wishlistStoreIface  // nil = degraded mode
+	manifest    manifestLookupIface // nil = no enrichment
+	prefs       prefsStoreIface     // nil = degraded mode
+	liveVendors liveVendorIface     // nil = availability always false
+	tokens      tokenProvider       // nil = public-only availability
 }
 
 // NewWishlistHandler creates a handler. Any argument may be nil for degraded-mode operation.
-func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, prefs prefsStoreIface, xur xurInventoryIface) *WishlistHandler {
-	return &WishlistHandler{store: store, manifest: manifest, prefs: prefs, xur: xur}
+func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, prefs prefsStoreIface, liveVendors liveVendorIface, tokens tokenProvider) *WishlistHandler {
+	return &WishlistHandler{store: store, manifest: manifest, prefs: prefs, liveVendors: liveVendors, tokens: tokens}
 }
 
 // wishlistResponse is the JSON shape returned to clients.
@@ -95,7 +104,7 @@ func (h *WishlistHandler) GetWishlist(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, h.enrichItems(c.Request.Context(), items))
+	c.JSON(http.StatusOK, h.enrichItems(items, h.liveVendorMap(c)))
 }
 
 // AddToWishlist handles POST /api/wishlist
@@ -155,7 +164,7 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusCreated, h.enrichOne(c.Request.Context(), *item))
+	c.JSON(http.StatusCreated, h.enrichOne(*item, h.liveVendorMap(c)))
 }
 
 // UpdateWishlistItem handles PUT /api/wishlist/:id
@@ -207,7 +216,7 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, h.enrichOne(c.Request.Context(), *item))
+	c.JSON(http.StatusOK, h.enrichOne(*item, h.liveVendorMap(c)))
 }
 
 // RemoveFromWishlist handles DELETE /api/wishlist/:id
@@ -323,7 +332,7 @@ func (h *WishlistHandler) getUserID(ctx context.Context, membershipID string) (i
 	return 0, fmt.Errorf("no store available")
 }
 
-func (h *WishlistHandler) enrichItems(ctx context.Context, items []db.WishlistItem) []wishlistResponse {
+func (h *WishlistHandler) enrichItems(items []db.WishlistItem, live map[uint32]string) []wishlistResponse {
 	if len(items) == 0 {
 		return []wishlistResponse{}
 	}
@@ -341,16 +350,14 @@ func (h *WishlistHandler) enrichItems(ctx context.Context, items []db.WishlistIt
 			cols = cs
 		}
 	}
-	xur := h.xurHashes(ctx)
 	resp := make([]wishlistResponse, len(items))
 	for i, it := range items {
-		_, atXur := xur[it.ItemHash]
-		resp[i] = buildResponse(it, defs[it.ItemHash], cols[it.ItemHash], atXur)
+		resp[i] = buildResponse(it, defs[it.ItemHash], cols[it.ItemHash], live[it.ItemHash])
 	}
 	return resp
 }
 
-func (h *WishlistHandler) enrichOne(ctx context.Context, it db.WishlistItem) wishlistResponse {
+func (h *WishlistHandler) enrichOne(it db.WishlistItem, live map[uint32]string) wishlistResponse {
 	var def *bungie.InventoryItemDefinition
 	var col *bungie.CollectibleDefinition
 	if h.manifest != nil {
@@ -361,21 +368,27 @@ func (h *WishlistHandler) enrichOne(ctx context.Context, it db.WishlistItem) wis
 			col = cs[it.ItemHash]
 		}
 	}
-	_, atXur := h.xurHashes(ctx)[it.ItemHash]
-	return buildResponse(it, def, col, atXur)
+	return buildResponse(it, def, col, live[it.ItemHash])
 }
 
-// xurHashes returns Xûr's current inventory hashes, or empty in degraded mode.
-// Served from the weekly service's reset-aligned cache; the first call after a
-// reset fetches public vendors inline (bounded by Bungie's response time).
-func (h *WishlistHandler) xurHashes(ctx context.Context) map[uint32]struct{} {
-	if h.xur == nil {
-		return map[uint32]struct{}{}
+// liveVendorMap resolves item→vendor-name availability for the calling user.
+// Best-effort: empty on degraded mode or token failure; never errors.
+func (h *WishlistHandler) liveVendorMap(c *gin.Context) map[uint32]string {
+	if h.liveVendors == nil {
+		return map[uint32]string{}
 	}
-	return h.xur.XurItemHashes(ctx)
+	membershipID := c.GetString("membership_id")
+	membershipType := c.GetInt("membership_type")
+	bungieToken := ""
+	if h.tokens != nil {
+		if t, err := h.tokens.GetValidToken(membershipID); err == nil {
+			bungieToken = t
+		}
+	}
+	return h.liveVendors.LiveVendorItemHashes(c.Request.Context(), membershipType, membershipID, bungieToken)
 }
 
-func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, col *bungie.CollectibleDefinition, atXur bool) wishlistResponse {
+func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, col *bungie.CollectibleDefinition, vendor string) wishlistResponse {
 	name, itemTypeStr, rarity, icon := "Unknown Item", "Item", "Common", ""
 	sources := []string{}
 	if def != nil {
@@ -397,11 +410,11 @@ func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, col 
 		Priority:     priorityToStr[it.Priority],
 		Notes:        it.Notes,
 		Sources:      sources,
-		AvailableNow: atXur,
+		AvailableNow: vendor != "",
 		DateAdded:    it.CreatedAt.UTC().Format(time.RFC3339),
 	}
-	if atXur {
-		resp.AvailableFrom = "Xûr"
+	if vendor != "" {
+		resp.AvailableFrom = vendor
 	}
 	return resp
 }

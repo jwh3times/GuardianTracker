@@ -111,18 +111,27 @@ func (m *mockManifest) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]
 	return out, nil
 }
 
-// --- mock Xûr inventory ---
+// --- mock live-vendor availability ---
 
-type mockXur struct {
-	hashes map[uint32]struct{}
+type mockLiveVendors struct {
+	hashes map[uint32]string
 }
 
-func (m *mockXur) XurItemHashes(_ context.Context) map[uint32]struct{} {
+func (m *mockLiveVendors) LiveVendorItemHashes(_ context.Context, _ int, _, _ string) map[uint32]string {
 	if m.hashes == nil {
-		return map[uint32]struct{}{}
+		return map[uint32]string{}
 	}
 	return m.hashes
 }
+
+// --- mock token provider ---
+
+type mockTokens struct {
+	token string
+	err   error
+}
+
+func (m *mockTokens) GetValidToken(_ string) (string, error) { return m.token, m.err }
 
 // --- router setup helper ---
 
@@ -131,6 +140,7 @@ func newTestRouter(h *WishlistHandler) *gin.Engine {
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		c.Set("membership_id", "test-member-123")
+		c.Set("membership_type", 3)
 		c.Next()
 	})
 	r.GET("/api/wishlist", h.GetWishlist)
@@ -151,7 +161,7 @@ func TestGetWishlist_ReturnsItems(t *testing.T) {
 			{ID: 1, UserID: 42, ItemHash: 1234, Priority: 2, Notes: "nice roll", CreatedAt: time.Now()},
 		},
 	}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
@@ -177,7 +187,7 @@ func TestGetWishlist_ReturnsItems(t *testing.T) {
 }
 
 func TestGetWishlist_DegradedMode_Returns503(t *testing.T) {
-	h := NewWishlistHandler(nil, nil, nil, nil)
+	h := NewWishlistHandler(nil, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
@@ -194,7 +204,7 @@ func TestGetWishlist_UsesJWTMembershipID(t *testing.T) {
 	store := &mockWishlistStore{userID: 7, items: []db.WishlistItem{}}
 	// Override GetUserID to capture what was passed
 	spy := &membershipIDSpy{inner: store, captured: &capturedMembershipID}
-	h := NewWishlistHandler(spy, nil, nil, nil)
+	h := NewWishlistHandler(spy, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
@@ -237,7 +247,7 @@ func TestAddToWishlist_Duplicate_Returns409(t *testing.T) {
 		userID: 42,
 		addErr: &pgconn.PgError{Code: "23505"},
 	}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"itemHash": 1234567}`
@@ -253,7 +263,7 @@ func TestAddToWishlist_Duplicate_Returns409(t *testing.T) {
 
 func TestAddToWishlist_NotesTooLong_Returns400(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	longNotes := strings.Repeat("x", 501)
@@ -273,7 +283,7 @@ func TestAddToWishlist_NotesTooLong_Returns400(t *testing.T) {
 
 func TestAddToWishlist_InvalidPriority_Returns400(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"itemHash": 1234567, "priority": "CRITICAL"}`
@@ -289,7 +299,7 @@ func TestAddToWishlist_InvalidPriority_Returns400(t *testing.T) {
 
 func TestAddToWishlist_MissingItemHash_Returns400(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"priority": "HIGH"}`
@@ -306,7 +316,7 @@ func TestAddToWishlist_MissingItemHash_Returns400(t *testing.T) {
 func TestAddToWishlist_ManifestValidation_UnknownHash_Returns400(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
 	manifest := &mockManifest{defs: map[uint32]*bungie.InventoryItemDefinition{}} // empty — hash not found
-	h := NewWishlistHandler(store, manifest, nil, nil)
+	h := NewWishlistHandler(store, manifest, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"itemHash": 9999999}`
@@ -334,7 +344,7 @@ func TestAddToWishlist_PriorityMapping(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.priority, func(t *testing.T) {
 			store := &mockWishlistStore{userID: 42}
-			h := NewWishlistHandler(store, nil, nil, nil)
+			h := NewWishlistHandler(store, nil, nil, nil, nil)
 			r := newTestRouter(h)
 
 			body := fmt.Sprintf(`{"itemHash": 1234567, "priority": "%s"}`, tc.priority)
@@ -359,7 +369,7 @@ func TestAddToWishlist_PriorityMapping(t *testing.T) {
 
 func TestAddToWishlist_DefaultPriorityIsMedium(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"itemHash": 1234567}`
@@ -380,7 +390,7 @@ func TestAddToWishlist_DefaultPriorityIsMedium(t *testing.T) {
 
 func TestRemoveFromWishlist_NotFound_Returns404(t *testing.T) {
 	store := &mockWishlistStore{userID: 42, delFound: false}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/wishlist/99", nil)
@@ -394,7 +404,7 @@ func TestRemoveFromWishlist_NotFound_Returns404(t *testing.T) {
 
 func TestRemoveFromWishlist_Success_Returns204(t *testing.T) {
 	store := &mockWishlistStore{userID: 42, delFound: true}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/wishlist/1", nil)
@@ -408,7 +418,7 @@ func TestRemoveFromWishlist_Success_Returns204(t *testing.T) {
 
 func TestRemoveFromWishlist_InvalidID_Returns400(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/wishlist/abc", nil)
@@ -425,7 +435,7 @@ func TestUpdateWishlistItem_InvalidPriority_Returns400(t *testing.T) {
 		userID: 42,
 		items:  []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 1234, Priority: 1}},
 	}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"priority": "LEGENDARY"}`
@@ -441,7 +451,7 @@ func TestUpdateWishlistItem_InvalidPriority_Returns400(t *testing.T) {
 
 func TestUpdateWishlistItem_NotFound_Returns404(t *testing.T) {
 	store := &mockWishlistStore{userID: 42, items: []db.WishlistItem{}} // empty = ErrNoRows
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"priority": "HIGH"}`
@@ -460,7 +470,7 @@ func TestUpdateWishlistItem_NotesTooLong_Returns400(t *testing.T) {
 		userID: 42,
 		items:  []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 1234, Priority: 1}},
 	}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	longNotes := strings.Repeat("y", 501)
@@ -480,7 +490,7 @@ func TestUpdateWishlistItem_Success(t *testing.T) {
 		userID: 42,
 		items:  []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 1234, Priority: 1, Notes: "original", CreatedAt: time.Now()}},
 	}
-	h := NewWishlistHandler(store, nil, nil, nil)
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"priority": "URGENT", "notes": "updated"}`
@@ -503,7 +513,7 @@ func TestUpdateWishlistItem_Success(t *testing.T) {
 }
 
 func TestGetPreferences_DegradedMode_ReturnsDefaults(t *testing.T) {
-	h := NewWishlistHandler(nil, nil, nil, nil)
+	h := NewWishlistHandler(nil, nil, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/preferences", nil)
@@ -526,7 +536,7 @@ func TestGetPreferences_DegradedMode_ReturnsDefaults(t *testing.T) {
 func TestUpdatePreferences_InvalidCardStyle_Returns400(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
 	prefs := &mockPrefsStore{}
-	h := NewWishlistHandler(store, nil, prefs, nil)
+	h := NewWishlistHandler(store, nil, prefs, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"cardStyle": "giant"}`
@@ -543,7 +553,7 @@ func TestUpdatePreferences_InvalidCardStyle_Returns400(t *testing.T) {
 func TestUpdatePreferences_Success(t *testing.T) {
 	store := &mockWishlistStore{userID: 42}
 	prefs := &mockPrefsStore{}
-	h := NewWishlistHandler(store, nil, prefs, nil)
+	h := NewWishlistHandler(store, nil, prefs, nil, nil)
 	r := newTestRouter(h)
 
 	body := `{"cardStyle": "compact", "personalize": false}`
@@ -585,7 +595,7 @@ func TestEnrichItems_WithManifest(t *testing.T) {
 			},
 		},
 	}
-	h := NewWishlistHandler(store, manifest, nil, nil)
+	h := NewWishlistHandler(store, manifest, nil, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
@@ -614,8 +624,8 @@ func TestEnrichItems_WithManifest(t *testing.T) {
 	}
 }
 
-// TestEnrichItems_AvailabilityAndSources is the B6 test: items Xûr sells are
-// flagged availableNow, and sources come from the collectible's sourceString.
+// TestEnrichItems_AvailabilityAndSources: items sold by any rotating vendor are
+// flagged availableNow with that vendor's name; sources come from the collectible.
 func TestEnrichItems_AvailabilityAndSources(t *testing.T) {
 	store := &mockWishlistStore{
 		userID: 42,
@@ -635,8 +645,9 @@ func TestEnrichItems_AvailabilityAndSources(t *testing.T) {
 			6666: {ItemHash: 6666, SourceString: "Vault of Glass raid"},
 		},
 	}
-	xur := &mockXur{hashes: map[uint32]struct{}{5555: {}}}
-	h := NewWishlistHandler(store, manifest, nil, xur)
+	// 5555 sold by Banshee-44 (a non-Xûr vendor); 6666 not currently sold.
+	live := &mockLiveVendors{hashes: map[uint32]string{5555: "Banshee-44"}}
+	h := NewWishlistHandler(store, manifest, nil, live, &mockTokens{token: "tok"})
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
@@ -650,28 +661,34 @@ func TestEnrichItems_AvailabilityAndSources(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(resp))
-	}
-
 	byHash := map[uint32]wishlistResponse{}
 	for _, it := range resp {
 		byHash[it.ItemHash] = it
 	}
+	atVendor := byHash[5555]
+	if !atVendor.AvailableNow || atVendor.AvailableFrom != "Banshee-44" {
+		t.Errorf("vendor item = availableNow %v from %q; want true, Banshee-44", atVendor.AvailableNow, atVendor.AvailableFrom)
+	}
+	notSold := byHash[6666]
+	if notSold.AvailableNow || notSold.AvailableFrom != "" {
+		t.Errorf("unsold item flagged available: %+v", notSold)
+	}
+	if len(notSold.Sources) != 1 || notSold.Sources[0] != "Vault of Glass raid" {
+		t.Errorf("sources = %v, want [Vault of Glass raid]", notSold.Sources)
+	}
+}
 
-	atXur := byHash[5555]
-	if !atXur.AvailableNow || atXur.AvailableFrom != "Xûr" {
-		t.Errorf("Xûr-stocked item = availableNow %v from %q; want true, Xûr", atXur.AvailableNow, atXur.AvailableFrom)
-	}
-	if atXur.Icon != "/icons/gjally.png" {
-		t.Errorf("icon = %q", atXur.Icon)
-	}
-
-	notAtXur := byHash[6666]
-	if notAtXur.AvailableNow || notAtXur.AvailableFrom != "" {
-		t.Errorf("non-Xûr item flagged available: %+v", notAtXur)
-	}
-	if len(notAtXur.Sources) != 1 || notAtXur.Sources[0] != "Vault of Glass raid" {
-		t.Errorf("sources = %v, want [Vault of Glass raid]", notAtXur.Sources)
+// TestEnrichItems_TokenErrorBestEffort: a token-store error must not fail the
+// request — availability just falls back to whatever the provider returns.
+func TestEnrichItems_TokenErrorBestEffort(t *testing.T) {
+	store := &mockWishlistStore{userID: 42, items: []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 5555, Priority: 1, CreatedAt: time.Now()}}}
+	live := &mockLiveVendors{hashes: map[uint32]string{5555: "Xûr"}}
+	h := NewWishlistHandler(store, nil, nil, live, &mockTokens{err: fmt.Errorf("no token")})
+	r := newTestRouter(h)
+	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("token error should not fail request; got %d", w.Code)
 	}
 }

@@ -239,7 +239,7 @@ func main() {
 		auditLogger = stores.Audit
 	}
 	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger)
-	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService)
+	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore)
 	// Pass the DB pool as a true-nil interface in degraded mode so /ready's
 	// nil-guard engages (a typed-nil *pgxpool.Pool would make `!= nil` true
 	// and panic on Ping) — same trap as the audit logger above.
