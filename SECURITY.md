@@ -108,18 +108,8 @@ rm .env.secrets
 
 ### Feature-flag enforcement
 
-Feature flags are enforced server-side by the `RequireFlag` middleware
-(`auth/roles.go`) on the routes whose features the UI gates: `weekly-planner`
-(`/api/weekly/recommendations`), `global-search` (`/api/items/search`),
-`catalysts-crafting` (`/api/catalysts`, `/api/crafting`), and `triumphs-seals`
-(`/api/seals`). A disabled flag returns `404 FEATURE_DISABLED`; an enabled flag
-above the caller's tier returns `403 TIER_LOCKED`.
-
-`RequireFlag` **fails open**: if the flag store is unavailable (degraded/DB-less
-mode), a lookup errors, or the key is unknown, the request is allowed. Feature
-flags are rollout and upsell controls, not security boundaries — a flag-table
-hiccup must not take down core pages. Real access boundaries (the admin console)
-use `RequireAdmin`, which fails closed (503) when roles cannot be resolved.
+- **Enforced routes** — `RequireFlag` (`auth/roles.go`) gates the routes whose features the UI also gates: `weekly-planner` (`/api/weekly/recommendations`), `global-search` (`/api/items/search`), `catalysts-crafting` (`/api/catalysts`, `/api/crafting`), and `triumphs-seals` (`/api/seals`). A disabled flag returns `404 FEATURE_DISABLED`; an enabled flag above the caller's tier returns `403 TIER_LOCKED`.
+- **Fail-open** — if the flag store is unavailable (degraded/DB-less mode), a lookup errors, or the key is unknown, the request is allowed. Feature flags are rollout and upsell controls, not security boundaries — a flag-table hiccup must not take down core pages. Real access boundaries (the admin console) use `RequireAdmin`, which fails closed (503) when roles cannot be resolved.
 
 ### Input Validation
 

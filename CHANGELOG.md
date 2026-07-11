@@ -48,7 +48,7 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 - Feature flags are now enforced server-side (`RequireFlag` middleware) on the
   weekly, search, catalysts, crafting, and seals routes — previously JWT-only, so
   the UI gating was cosmetic. Disabled → 404, under-tier → 403; fails open in
-  degraded mode (TODO 13.4).
+  degraded mode.
 
 ## [0.2.0] - 2026-07-09
 
