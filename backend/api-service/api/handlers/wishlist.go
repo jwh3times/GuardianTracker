@@ -290,6 +290,24 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 		return
 	}
 
+	// Validate the action (and priority) before resolving the user, so a malformed
+	// request doesn't cost a DB lookup.
+	var prio int16
+	switch body.Action {
+	case "delete":
+		// no priority needed
+	case "set_priority":
+		p, ok := priorityToInt[body.Priority]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "priority must be LOW, MEDIUM, HIGH, or URGENT"})
+			return
+		}
+		prio = p
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete' or 'set_priority'"})
+		return
+	}
+
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
@@ -303,15 +321,7 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 	case "delete":
 		updated, err = h.store.BulkDelete(c.Request.Context(), userID, ids)
 	case "set_priority":
-		prio, ok := priorityToInt[body.Priority]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "priority must be LOW, MEDIUM, HIGH, or URGENT"})
-			return
-		}
 		updated, err = h.store.BulkSetPriority(c.Request.Context(), userID, ids, prio)
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete' or 'set_priority'"})
-		return
 	}
 	if err != nil {
 		log.Printf("BulkUpdate(%s): %v", body.Action, err)
