@@ -189,6 +189,7 @@ export function WishList() {
           : `${res.updated} ${verb}`,
         "info",
       );
+      exitSelectMode();
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
   });
@@ -196,7 +197,6 @@ export function WishList() {
   const bulkDelete = () => {
     if (selected.size === 0) return;
     bulkMutation.mutate({ action: "delete", ids: Array.from(selected) });
-    exitSelectMode();
   };
   const bulkSetPriority = (p: Priority) => {
     if (selected.size === 0) return;
@@ -205,7 +205,6 @@ export function WishList() {
       ids: Array.from(selected),
       priority: p.toUpperCase(),
     });
-    exitSelectMode();
   };
 
   const counts = useMemo(() => {

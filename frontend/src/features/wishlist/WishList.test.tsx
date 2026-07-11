@@ -334,6 +334,34 @@ describe("WishList bulk actions", () => {
     expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
   });
 
+  it("keeps selection on a failed bulk action", async () => {
+    server.use(
+      http.post(
+        `${API}/api/wishlist/bulk`,
+        () => new HttpResponse(null, { status: 500 }),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+    await screen.findByText("Gjallarhorn");
+
+    fireEvent.click(screen.getByRole("button", { name: /select/i }));
+    const check = await screen.findByRole("checkbox", {
+      name: /select gjallarhorn/i,
+    });
+    fireEvent.click(check);
+    fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // onError rolls the optimistic removal back → Gjallarhorn returns.
+    expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
+    // Select mode was NOT exited on failure — the "Done" toggle (select mode
+    // is on) and the row checkbox are both still present, so the user can
+    // retry the same selection.
+    expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: /select gjallarhorn/i }),
+    ).toBeChecked();
+  });
+
   it("renders a non-Xûr vendor availability label", async () => {
     server.use(
       http.get(`${API}/api/wishlist`, () =>
