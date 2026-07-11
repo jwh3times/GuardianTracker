@@ -362,6 +362,41 @@ describe("WishList bulk actions", () => {
     ).toBeChecked();
   });
 
+  it("disables Set priority until an item is selected", async () => {
+    server.use(
+      http.get(`${API}/api/wishlist`, () =>
+        HttpResponse.json([
+          {
+            id: "1",
+            itemHash: 111,
+            name: "Gjallarhorn",
+            itemType: "Rocket Launcher",
+            rarity: "Exotic",
+            icon: "",
+            priority: "HIGH",
+            notes: "",
+            sources: [],
+            availableNow: false,
+            dateAdded: new Date().toISOString(),
+          },
+        ]),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+    await screen.findByText("Gjallarhorn");
+
+    fireEvent.click(screen.getByRole("button", { name: /select/i }));
+    // Nothing selected yet → Set priority is disabled, mirroring Delete.
+    expect(
+      screen.getByRole("button", { name: /set priority/i }),
+    ).toBeDisabled();
+
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: /select gjallarhorn/i }),
+    );
+    expect(screen.getByRole("button", { name: /set priority/i })).toBeEnabled();
+  });
+
   it("renders a non-Xûr vendor availability label", async () => {
     server.use(
       http.get(`${API}/api/wishlist`, () =>

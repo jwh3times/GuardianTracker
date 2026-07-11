@@ -353,6 +353,7 @@ export function WishList() {
             label="Set priority"
             value="Set priority"
             noClear
+            disabled={selected.size === 0}
             options={PRIORITY_ORDER.map((p) => ({
               v: p,
               l: PRIORITY_LABEL[p],

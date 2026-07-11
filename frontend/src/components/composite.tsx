@@ -634,6 +634,7 @@ export function Dropdown({
   onPick,
   note,
   noClear,
+  disabled,
 }: {
   label: string;
   value?: string | null;
@@ -641,6 +642,7 @@ export function Dropdown({
   onPick: (v: string | null) => void;
   note?: string;
   noClear?: boolean;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -657,6 +659,7 @@ export function Dropdown({
       <button
         className="gt-fchip"
         data-on={!!value}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
       >
         {value || label}

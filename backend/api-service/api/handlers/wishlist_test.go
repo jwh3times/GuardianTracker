@@ -852,3 +852,17 @@ func TestBulkUpdate_StoreError_Returns500(t *testing.T) {
 		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+// TestBulkUpdate_ValidatesBeforeUserLookup proves action/priority validation runs
+// before GetUserID: a bad action still returns 400 even when GetUserID would error
+// (if validation ran after the lookup, this would be a 500).
+func TestBulkUpdate_ValidatesBeforeUserLookup(t *testing.T) {
+	store := &mockWishlistStore{userID: 42, getUserIDErr: errors.New("db down")}
+	h := NewWishlistHandler(store, nil, nil, nil, nil)
+	r := newTestRouter(h)
+	req, w := bulkReq(`{"action":"nope","ids":[1]}`)
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 (validation before user lookup), got %d: %s", w.Code, w.Body.String())
+	}
+}

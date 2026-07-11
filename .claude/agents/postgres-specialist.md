@@ -133,7 +133,7 @@ bungie_tokens (id, user_id FK, access_token_enc, refresh_token_enc,
 refresh_sessions (id, user_id FK, jti, expires_at, created_at, updated_at)
 
 -- Wishlist: user-scoped, enriched with manifest data at read time
-wishlist (id, user_id FK, item_hash, priority, notes, created_at, updated_at)
+wishlist_items (id, user_id FK, item_hash, priority, notes, created_at, updated_at)
 
 -- User preferences
 user_preferences (id, user_id FK, card_style, personalize, created_at, updated_at)
