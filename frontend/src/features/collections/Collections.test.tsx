@@ -487,4 +487,22 @@ describe("Collections default-root seeding (regression)", () => {
       expect(screen.getByTestId("path").textContent).toBe("/elsewhere");
     });
   });
+
+  it("falls back to the first root when ?node= points at an unknown node", async () => {
+    server.use(treeCollectionsHandler);
+    renderPage(
+      <>
+        <Collections />
+        <LocationProbe />
+      </>,
+      "/collections?node=doesnotexist",
+    );
+    // A stale/tampered node hash is replaced with the first root (10) so the grid
+    // isn't stuck empty with no way to recover.
+    await waitFor(() => {
+      const search = screen.getByTestId("search").textContent ?? "";
+      expect(search).toContain("node=10");
+      expect(search).not.toContain("doesnotexist");
+    });
+  });
 });

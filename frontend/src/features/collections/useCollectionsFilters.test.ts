@@ -97,6 +97,29 @@ describe("useCollectionsFilters — atomic setFilters", () => {
     expect(result.current.node).toBe("5");
     expect(result.current.missing).toBe(false);
   });
+
+  it("keeps node from the URL even if a legacy localStorage payload contains node", () => {
+    localStorage.clear();
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: ["/?node=11"] },
+        children,
+      );
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+    // Simulate a hand-edited / legacy stored payload that (wrongly) includes node.
+    // The persist effect normally strips node, so seed it after mount.
+    localStorage.setItem(
+      "gt.collections.filters",
+      JSON.stringify({ node: "999", rarity: "exotic" }),
+    );
+    act(() => {
+      result.current.setRarity("legendary");
+    });
+    // write's base re-asserts node from the URL, so the stored "999" can't leak in.
+    expect(result.current.node).toBe("11");
+    localStorage.clear();
+  });
 });
 
 function defaults() {
