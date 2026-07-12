@@ -118,7 +118,13 @@ export function useCollectionsFilters() {
         (prev) => {
           const base = urlHasFilterParams(prev)
             ? parseFilters(prev)
-            : { ...parseFilters(prev), ...(loadStoredFilters() ?? {}) };
+            : {
+                ...parseFilters(prev),
+                ...(loadStoredFilters() ?? {}),
+                // node is URL-only: re-assert it from the URL so a hand-edited /
+                // legacy localStorage payload containing `node` can't leak into it.
+                node: parseFilters(prev).node,
+              };
           const next = { ...base, ...patch };
           const out = serializeFilters(next);
           for (const [k, v] of prev) {
