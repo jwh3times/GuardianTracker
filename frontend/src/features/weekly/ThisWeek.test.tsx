@@ -98,6 +98,7 @@ describe("ThisWeek page", () => {
                 type: "Rocket Launcher",
                 rarity: "exotic",
                 missing: true,
+                icon: "/icons/gjallarhorn.png",
                 cost: "29 Strange Coins",
               },
               {
@@ -130,12 +131,17 @@ describe("ThisWeek page", () => {
         }),
       ),
     );
-    renderPage(<ThisWeek />);
+    const { container } = renderPage(<ThisWeek />);
     expect(
       await screen.findByText(/Item names are still loading/),
     ).toBeInTheDocument();
     expect(screen.getByText("Tower Hangar")).toBeInTheDocument();
     expect(screen.getByText("Gjallarhorn")).toBeInTheDocument();
+    expect(
+      container.querySelector(
+        'img[src="https://www.bungie.net/icons/gjallarhorn.png"]',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("Vanguard Ops")).toBeInTheDocument();
   });
 
