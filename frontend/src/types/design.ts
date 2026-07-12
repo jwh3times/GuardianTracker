@@ -85,6 +85,8 @@ export interface XurItem {
   hash: string;
   name: string;
   type: string;
+  /** Bungie CDN icon path; empty when the manifest has no icon. */
+  icon: string;
   rarity: Rarity;
   missing: boolean;
   cost: string;

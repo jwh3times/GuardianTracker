@@ -45,6 +45,7 @@ func weeklyService(t *testing.T, body string, m ManifestRepo) *Service {
 func TestFetchXurInventory_EnrichesFromManifest(t *testing.T) {
 	gjally := &bungie.InventoryItemDefinition{Hash: 100, ItemType: 3, ItemSubType: 10}
 	gjally.DisplayProperties.Name = "Gjallarhorn"
+	gjally.DisplayProperties.Icon = "/icons/gjallarhorn.png"
 	gjally.Inventory.TierType = 6 // Exotic
 	mani := &richManifest{items: map[uint32]*bungie.InventoryItemDefinition{100: gjally}}
 
@@ -57,7 +58,7 @@ func TestFetchXurInventory_EnrichesFromManifest(t *testing.T) {
 		t.Fatalf("XurItems = %+v, want 1", pub.XurItems)
 	}
 	it := pub.XurItems[0]
-	if it.Name != "Gjallarhorn" || it.Rarity != "exotic" || it.Type != "Rocket Launcher" {
+	if it.Name != "Gjallarhorn" || it.Icon != "/icons/gjallarhorn.png" || it.Rarity != "exotic" || it.Type != "Rocket Launcher" {
 		t.Errorf("enriched item = %+v", it)
 	}
 	if it.Cost != "29 Strange Coin" {

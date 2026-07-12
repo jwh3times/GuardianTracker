@@ -285,6 +285,7 @@ export function XurModule({
             <ItemTile
               rarity={it.rarity}
               type={it.type}
+              icon={it.icon}
               style={{ width: "2.4rem" }}
             />
             <div className="gt-vendor-main">

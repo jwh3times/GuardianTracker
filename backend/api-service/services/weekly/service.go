@@ -49,6 +49,7 @@ type XurItem struct {
 	Hash    string `json:"hash"`
 	Name    string `json:"name"`
 	Type    string `json:"type"`
+	Icon    string `json:"icon"`
 	Rarity  string `json:"rarity"`
 	Missing bool   `json:"missing"`
 	Cost    string `json:"cost"`
@@ -116,6 +117,7 @@ type xurItemEnriched struct {
 	Hash   uint32
 	Name   string
 	Type   string
+	Icon   string
 	Rarity string
 	Cost   string
 }
@@ -314,6 +316,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 				Hash:    strconv.FormatUint(uint64(xi.Hash), 10),
 				Name:    xi.Name,
 				Type:    xi.Type,
+				Icon:    xi.Icon,
 				Rarity:  xi.Rarity,
 				Missing: isMissing,
 				Cost:    xi.Cost,
@@ -674,6 +677,7 @@ func (s *Service) fetchXurInventory(ctx context.Context, pub *publicWeeklyCache)
 				Hash:   hash,
 				Name:   def.DisplayProperties.Name,
 				Type:   bungie.ItemTypeName(def.ItemType, def.ItemSubType),
+				Icon:   def.DisplayProperties.Icon,
 				Rarity: rarity,
 				Cost:   hashToCost[hash],
 			})
