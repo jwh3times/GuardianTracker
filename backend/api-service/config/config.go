@@ -28,7 +28,7 @@ type Config struct {
 	BungieCDNBaseURL   string
 
 	JWTSecret            string
-	JWTExpiryHours       int
+	JWTAccessTTL         time.Duration
 	JWTRefreshExpiryDays int
 
 	ManifestDBPath        string
@@ -83,7 +83,7 @@ func Load() *Config {
 		BungieCDNBaseURL:   getEnv("BUNGIE_CDN_BASE_URL", "https://www.bungie.net"),
 
 		JWTSecret:            os.Getenv("JWT_SECRET"),
-		JWTExpiryHours:       getIntEnv("JWT_EXPIRY_HOURS", 24),
+		JWTAccessTTL:         getJWTAccessTTL(),
 		JWTRefreshExpiryDays: getIntEnv("JWT_REFRESH_EXPIRY_DAYS", 30),
 
 		ManifestDBPath:        getEnv("MANIFEST_DB_PATH", "./data/manifest.sqlite"),
@@ -231,6 +231,21 @@ func getBoolEnv(key string, fallback bool) bool {
 		}
 	}
 	return fallback
+}
+
+const defaultJWTAccessTTL = 30 * time.Minute
+
+// getJWTAccessTTL prefers the duration-based setting so access tokens can be
+// configured in minutes. JWT_EXPIRY_HOURS remains a compatibility fallback
+// for existing deployments that have not migrated their environment yet.
+func getJWTAccessTTL() time.Duration {
+	if ttl := getDurationEnv("JWT_ACCESS_TTL", 0); ttl > 0 {
+		return ttl
+	}
+	if hours := getIntEnv("JWT_EXPIRY_HOURS", 0); hours > 0 {
+		return time.Duration(hours) * time.Hour
+	}
+	return defaultJWTAccessTTL
 }
 
 func getDurationEnv(key string, fallback time.Duration) time.Duration {

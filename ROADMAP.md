@@ -22,23 +22,7 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ## Product Backlog
 
-### 1. Search Index Persistence
-
-**Status:** Not implemented
-**Gate:** Backend design
-**Likely size:** Medium
-
-The manifest search index is rebuilt in memory after startup and manifest swaps.
-Persist a versioned snapshot beside the manifest so restarts can become ready
-faster when the manifest version has not changed.
-
-Decisions to settle:
-
-- Snapshot format and version key.
-- Corrupt or stale snapshot fallback behavior.
-- Whether snapshots are pruned on manifest swap.
-
-### 2. E2E, Accessibility, and Visual Regression
+### 1. E2E, Accessibility, and Visual Regression
 
 **Status:** Not implemented
 **Gate:** Test infrastructure spec
@@ -55,7 +39,7 @@ Initial target flows:
 - search deep links
 - This Week, catalysts, crafting, triumphs, settings, and admin smoke paths
 
-### 3. Character-Scoped Surfaces
+### 2. Character-Scoped Surfaces
 
 **Status:** Not implemented
 **Gate:** Bungie response-shape verification
@@ -72,7 +56,7 @@ Expected shape:
 - character-scoped UI routes or panels
 - clear distinction between account-wide collection data and per-character data
 
-### 4. God-Roll and Owned-Roll Insights
+### 3. God-Roll and Owned-Roll Insights
 
 **Status:** Not implemented
 **Gate:** Bungie item-instance verification plus data-source decision
@@ -88,7 +72,7 @@ Decisions to settle:
   third-party wishlist format.
 - Licensing and freshness expectations for any external roll source.
 
-### 5. Notifications and Digests
+### 4. Notifications and Digests
 
 **Status:** Not implemented
 **Gate:** Product and provider decision
@@ -103,7 +87,7 @@ Decisions to settle:
 - User preference model and unsubscribe flow.
 - Whether the app should run scheduled jobs before production deployment exists.
 
-### 6. Shareable Collection Progress
+### 5. Shareable Collection Progress
 
 **Status:** Not implemented
 **Gate:** Security and privacy review
@@ -121,17 +105,7 @@ Expected shape:
 
 ## Operations Backlog
 
-### 7. Remove or Adopt Redis
-
-**Status:** Not implemented
-**Gate:** Infrastructure decision
-**Likely size:** Small
-
-Redis is present in Docker Compose but not actively used by the API. Either
-remove it from local infrastructure and docs, or adopt it deliberately for a
-defined multi-replica cache use case.
-
-### 8. Production Deployment Path
+### 7. Production Deployment Path
 
 **Status:** Deferred
 **Gate:** Maintainer deployment decision
@@ -142,7 +116,7 @@ cloud resources, and deploying production infrastructure should be implemented
 only after the target hosting model is accepted. Environment-specific runbooks
 belong in `private/` until then.
 
-### 9. Structured Logging and Metrics
+### 8. Structured Logging and Metrics
 
 **Status:** Not implemented
 **Gate:** Production observability decision

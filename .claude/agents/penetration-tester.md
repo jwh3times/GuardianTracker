@@ -31,7 +31,7 @@ Code exchange happens server-side. The authorization code is never exposed to th
 
 ### JWT configuration
 
-Algorithm: HS256. `token_type` claim distinguishes access (`"access"`) from refresh (`"refresh"`) tokens. Claims include `tver` (token_version) and `jti`. Access expiry: 24h.
+Algorithm: HS256. `token_type` claim distinguishes access (`"access"`) from refresh (`"refresh"`) tokens. Claims include `tver` (token_version) and `jti`. Access expiry: 30m by default, configurable via `JWT_ACCESS_TTL`.
 
 - Test: forge a token with `alg: none` — must be rejected (401)
 - Test: use a refresh token (`token_type: "refresh"`) in `Authorization: Bearer` on a protected endpoint — must be rejected by middleware
@@ -171,6 +171,6 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 
 - OAuth state is replayable within its 10-minute TTL — stateless HMAC design cannot enforce one-time use; mitigated by Bungie's single-use authorization code
 - Revocation fails open — a DB outage during the `token_version` check allows the request; closes when DB returns
-- Access tokens remain valid up to 24h after logout (revocation cache window is 60s, not instant)
+- If revocation cannot be observed immediately after logout, access tokens remain valid up to the configured lifetime (30m by default) plus the 60s revocation cache window
 - Per-device session reuse detection revokes only the replayed session — a stolen refresh token that is used *before* the legitimate client rotates it would not be detected until a subsequent rotation attempt
 - Auth/session audit events are best-effort — a DB outage during login/logout can drop an audit record (role/flag changes are atomic and cannot be dropped)

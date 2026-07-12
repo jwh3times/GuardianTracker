@@ -34,7 +34,7 @@ Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API
 Bungie tokens **AES-256-GCM encrypted** in Postgres (`TOKEN_ENCRYPTION_KEY`, with
 `TOKEN_ENCRYPTION_KEY_PREVIOUS` supporting rotation) and issues its own JWTs: short-lived access
 tokens plus per-device rotating refresh sessions with revocation and reuse detection (all
-Postgres-backed — Redis is not used). Role tiers (standard / beta / alpha / admin) and feature
+Postgres-backed). Role tiers (standard / beta / alpha / admin) and feature
 flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login. Security details and the
 credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
 
@@ -54,13 +54,13 @@ docker compose up --build
 ```
 
 - Frontend `http://localhost:5273`, API `http://localhost:8081`, pgAdmin `http://localhost:5150`
-- Postgres `:5532`, Redis `:6379` (Redis in compose but not actively used)
+- Postgres `:5532`
 - Bungie manifest persists in the `manifest-data` named volume.
 - `database/init/01-init.sql` auto-loads into Postgres on first run.
 
 ```powershell
 docker compose down        # stop (keeps volumes)
-docker compose down -v     # stop and wipe Postgres/Redis/manifest volumes
+docker compose down -v     # stop and wipe Postgres/manifest volumes
 ```
 
 ### Option B: Kubernetes (Minikube)
@@ -178,7 +178,6 @@ the test container afterwards. Migrations are embedded and applied automatically
 ## Known Limitations
 
 - Character switcher drives display only; collection data is account-wide (character-scoped surfaces are P2)
-- Redis is in docker-compose but not actively used (JWT revocation and token persistence are Postgres-backed)
-- Search index is in-memory — lost on restart; rebuilds automatically (~30s after manifest is ready)
+- Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready)
 - Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
 - Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones still omit the field (no manifest reward→collectible signal)

@@ -162,7 +162,7 @@ const { data } = useQuery({
 
 Auth state lives entirely in `AuthContext` (`contexts/AuthContext.tsx`):
 
-- Access token stored in `localStorage` under `guardian_token` (JWT, 24h expiry)
+- Access token stored in `localStorage` under `guardian_token` (JWT, 30-minute default expiry)
 - Refresh token stored in `localStorage` under `guardian_refresh_token` (30d)
 - `useAuth()` returns `{ user, loading, login, logout, logoutAll, isAuthenticated }`
 - On mount, `AuthContext` checks if the stored JWT is expired and silently refreshes using the stored refresh token
@@ -270,7 +270,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 
 ## Known limitations / TODOs
 
-- `logout()` ends only the current session; other devices remain signed in. `logoutAll()` ends all sessions and evicts the Bungie token. The old access token stays valid server-side until expiry (up to 24h) — revocation cache window is 60s, not instant
-- Search index is built in-memory on the server — lost on restart; pages show a "warming up" error state while it rebuilds (~30s)
+- `logout()` ends only the current session; other devices remain signed in. `logoutAll()` ends all sessions and evicts the Bungie token. If revocation cannot be observed immediately, the old access token expires within the configured lifetime (30 minutes by default) plus the 60-second cache window
+- Search index snapshots persist beside the manifest by version; pages can still show a "warming up" error state while a missing or new-version snapshot rebuilds (~30s)
 - Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
 - Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones still omit the field (no manifest reward→collectible signal)

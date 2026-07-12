@@ -169,10 +169,6 @@ Get-Content database/init/01-init.sql | docker exec -i guardian-pg psql -U postg
 # Application schema is applied automatically at startup via db.Migrate()
 ```
 
-### Redis
-
-Redis is in docker-compose but is not actively used. JWT revocation and token persistence are Postgres-backed. Redis would be needed for multi-replica distributed caching — not yet implemented.
-
 ## When to use which database
 
 | Use case | Database |

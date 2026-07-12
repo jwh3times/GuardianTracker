@@ -66,6 +66,7 @@ Optional values:
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS` | Previous encryption key during key rotation |
 | `ADMIN_MEMBERSHIP_IDS` | Comma-separated Bungie membership IDs pinned to admin at login |
 | `CORS_ALLOWED_ORIGINS` | Explicit browser origins allowed to call the API |
+| `JWT_ACCESS_TTL` | Access-token lifetime as a Go duration (default `30m`) |
 
 Do not commit `.env`, generated secrets, manifest databases, cloud credentials, or
 production runbooks.
@@ -84,8 +85,10 @@ Open:
 - API: <http://localhost:8081>
 - pgAdmin: <http://localhost:5150>
 
-On first startup, the API downloads the Destiny 2 manifest SQLite database. The
-collections and search surfaces can return warming responses until that finishes.
+On first startup, the API downloads the Destiny 2 manifest SQLite database. A
+matching search-index snapshot is restored when available; collections and other
+manifest-dependent surfaces can still return warming responses during a new
+manifest download or rebuild.
 
 Stop the stack without deleting data:
 
@@ -139,14 +142,12 @@ projects. Container ports stay fixed.
 | API service | `8081` | `8081` | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
 | Postgres | `5432` | `5532` | `docker-compose.yml`, `.env.example` |
 | pgAdmin | `80` | `5150` | `docker-compose.yml`, `.env.example` |
-| Redis | `6379` | `6379` | `docker-compose.yml`, `.env.example` |
 
 Compose mappings:
 
 ```text
 postgres        ${POSTGRES_PORT:-5532}      -> 5432
 pgadmin         ${PGADMIN_PORT:-5150}       -> 80
-redis           ${REDIS_PORT:-6379}         -> 6379
 api-service     ${API_SERVICE_PORT:-8081}   -> 8081
 frontend        ${FRONTEND_PORT:-5273}      -> 8080
 test-postgres   ${TEST_POSTGRES_PORT:-5533} -> 5432

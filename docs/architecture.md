@@ -25,7 +25,8 @@ React/Vite frontend (:5273)
 - **SQLite:** local copy of the Bungie Destiny 2 manifest, downloaded and
   swapped by the API service.
 - **Cache:** in-memory service caches for collection results, weekly data,
-  manifest-derived indexes, and role/revocation checks.
+  manifest-derived indexes, and role/revocation checks; the search index also
+  persists as a versioned snapshot beside the manifest.
 
 ## Authentication and Sessions
 
@@ -68,8 +69,10 @@ extracts the SQLite database, opens it through the manifest provider, and notifi
 dependent services to rebuild manifest-derived indexes.
 
 Collections, cosmetics, catalysts, crafting, triumphs, search, and item detail
-views all depend on the manifest. During cold start or manifest swap, affected
-endpoints can return warming responses.
+views all depend on the manifest. The search index restores a matching versioned
+snapshot from beside the manifest on startup, then rebuilds asynchronously when
+the snapshot is missing or the manifest changes. Other affected endpoints can
+return warming responses during cold start or manifest swap.
 
 ## API Surface
 
@@ -91,8 +94,7 @@ See `backend/api-service/main.go` for the authoritative route registration.
 ## Local Infrastructure
 
 Docker Compose is the recommended full-stack development path. It starts the
-frontend, API service, Postgres, pgAdmin, Redis, and a test Postgres profile.
-Redis is currently present in Compose but not used by the API.
+frontend, API service, Postgres, pgAdmin, and a test Postgres profile.
 
 Minikube manifests under `k8s/` validate container and Kubernetes wiring. That
 environment runs in development mode and is not production parity.

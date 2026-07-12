@@ -128,7 +128,7 @@ func main() {
 	}
 
 	// Auth — pass DB repo + cipher when both are available
-	jwtHelper := auth.NewJWT(cfg.JWTSecret, cfg.JWTExpiryHours, cfg.JWTRefreshExpiryDays)
+	jwtHelper := auth.NewJWTWithTTL(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshExpiryDays)
 	var tokenRepo auth.TokenRepo
 	if stores.Tokens != nil && tokenCipher != nil {
 		tokenRepo = &tokenRepoAdapter{s: stores.Tokens}
@@ -149,7 +149,8 @@ func main() {
 	manifestProvider := manifestrepo.NewProvider(cfg.ManifestDBPath)
 	itemsService := items.NewService(manifestProvider)
 
-	// Search service — builds its index asynchronously after the manifest is available
+	// Search service — restores a matching on-disk snapshot synchronously when
+	// available, then builds asynchronously after the manifest is available.
 	searchService := search.NewService(manifestService, cfg.ManifestDBPath)
 
 	// Efficiency engine — scores items by acquisition difficulty; index built async

@@ -25,6 +25,9 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 ### Changed
 
+- Manifest-derived search now restores a versioned gzip snapshot from the
+  persistent manifest volume on restart; missing or new-version snapshots fall
+  back to the existing asynchronous rebuild.
 - Versioning now creates a GitHub Release for each auto-incremented
   `v<major>.<minor>.<build>` tag on `main`; fresh major/minor lines may start at
   build `0`.
@@ -48,8 +51,17 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   size.
 - Global header search results now display item icons.
 
+### Removed
+
+- Unused Redis service, host port, volume, and environment variables from the
+  local Docker Compose stack; caching and authentication remain Postgres- and
+  process-backed.
+
 ### Security
 
+- Access tokens now default to a 30-minute lifetime via the duration-based
+  `JWT_ACCESS_TTL` setting; existing deployments may continue using the legacy
+  `JWT_EXPIRY_HOURS` setting until they migrate.
 - Feature flags are now enforced server-side (`RequireFlag` middleware) on the
   weekly, search, catalysts, crafting, and seals routes — previously JWT-only, so
   the UI gating was cosmetic. Disabled → 404, under-tier → 403; fails open in

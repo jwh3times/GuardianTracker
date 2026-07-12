@@ -145,7 +145,7 @@ updates:
           - "minor"
           - "patch"
 
-  # ── Docker Compose images (docker-compose.yml — postgres, redis, pgadmin) ──
+  # ── Docker Compose images (docker-compose.yml — postgres, pgadmin) ──
   # Separate ecosystem from `docker`; the docker scanner only reads Dockerfiles.
   - package-ecosystem: "docker-compose"
     directory: "/"
