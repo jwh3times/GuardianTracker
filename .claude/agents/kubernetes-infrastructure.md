@@ -56,7 +56,7 @@ Non-sensitive values that change per environment:
 | `BUNGIE_API_BURST` | `20` | |
 | `CACHE_ENABLED` | `true` | |
 | `CACHE_TTL_COLLECTIONS` | `300` | Seconds |
-| `JWT_EXPIRY_HOURS` | `24` | |
+| `JWT_ACCESS_TTL` | `30m` | Go duration; `JWT_EXPIRY_HOURS` remains a legacy fallback |
 | `JWT_REFRESH_EXPIRY_DAYS` | `30` | |
 
 Update `k8s/api-service-configmap.yaml` and apply when the ngrok URL changes:

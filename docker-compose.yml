@@ -50,19 +50,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  redis:
-    image: redis:8-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
   api-service:
     build:
       context: ./backend/api-service
@@ -77,7 +64,7 @@ services:
       BUNGIE_CLIENT_SECRET: ${BUNGIE_CLIENT_SECRET:-}
       AUTH_REDIRECT_URI: ${AUTH_REDIRECT_URI:-http://localhost:5273/auth/callback}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me_minimum_32_characters_long}
-      JWT_EXPIRY_HOURS: "24"
+      JWT_ACCESS_TTL: "30m"
       JWT_REFRESH_EXPIRY_DAYS: "30"
       MANIFEST_DB_PATH: /app/data/manifest.sqlite
       BUNGIE_API_RPS: "10"
@@ -92,8 +79,6 @@ services:
       - manifest-data:/app/data
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -139,5 +124,4 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:
   manifest-data:

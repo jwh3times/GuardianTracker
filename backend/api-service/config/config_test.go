@@ -60,7 +60,8 @@ func TestValidate_DevelopmentNeverErrors(t *testing.T) {
 func TestLoad_EnvParsing(t *testing.T) {
 	t.Setenv("PORT", "9999")
 	t.Setenv("GO_ENV", "production")
-	t.Setenv("JWT_EXPIRY_HOURS", "12")
+	t.Setenv("JWT_ACCESS_TTL", "45m")
+	t.Setenv("JWT_EXPIRY_HOURS", "12") // legacy value must lose to the duration setting
 	t.Setenv("CACHE_ENABLED", "false")
 	t.Setenv("CACHE_TTL_COLLECTIONS", "120")  // bare seconds
 	t.Setenv("MANIFEST_CHECK_INTERVAL", "2h") // duration string
@@ -75,8 +76,8 @@ func TestLoad_EnvParsing(t *testing.T) {
 	if !cfg.IsProduction() {
 		t.Error("IsProduction() = false")
 	}
-	if cfg.JWTExpiryHours != 12 {
-		t.Errorf("JWTExpiryHours = %d", cfg.JWTExpiryHours)
+	if cfg.JWTAccessTTL != 45*time.Minute {
+		t.Errorf("JWTAccessTTL = %v", cfg.JWTAccessTTL)
 	}
 	if cfg.CacheEnabled {
 		t.Error("CacheEnabled = true, want false")
@@ -96,20 +97,31 @@ func TestLoad_EnvParsing(t *testing.T) {
 }
 
 func TestLoad_FallbacksOnInvalidValues(t *testing.T) {
+	t.Setenv("JWT_ACCESS_TTL", "not-a-duration")
 	t.Setenv("JWT_EXPIRY_HOURS", "not-a-number")
 	t.Setenv("CACHE_ENABLED", "not-a-bool")
 	t.Setenv("MANIFEST_CHECK_INTERVAL", "not-a-duration")
 
 	cfg := Load()
 
-	if cfg.JWTExpiryHours != 24 {
-		t.Errorf("JWTExpiryHours = %d, want fallback 24", cfg.JWTExpiryHours)
+	if cfg.JWTAccessTTL != defaultJWTAccessTTL {
+		t.Errorf("JWTAccessTTL = %v, want fallback %v", cfg.JWTAccessTTL, defaultJWTAccessTTL)
 	}
 	if !cfg.CacheEnabled {
 		t.Error("CacheEnabled = false, want fallback true")
 	}
 	if cfg.ManifestCheckInterval != time.Hour {
 		t.Errorf("ManifestCheckInterval = %v, want fallback 1h", cfg.ManifestCheckInterval)
+	}
+}
+
+func TestLoad_LegacyJWTExpiryHoursFallback(t *testing.T) {
+	t.Setenv("JWT_ACCESS_TTL", "")
+	t.Setenv("JWT_EXPIRY_HOURS", "12")
+
+	cfg := Load()
+	if cfg.JWTAccessTTL != 12*time.Hour {
+		t.Errorf("JWTAccessTTL = %v, want legacy fallback 12h", cfg.JWTAccessTTL)
 	}
 }
 

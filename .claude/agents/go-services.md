@@ -13,7 +13,7 @@ You are working inside the Guardian Tracker Go backend. There is **one** service
 backend/api-service/
   main.go                              ← Gin router, dependency wiring, manifest startup + swap hooks
   config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
-  auth/jwt.go                          ← JWT generation and validation (access 24h, refresh 30d)
+  auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
   auth/middleware.go                   ← JWT middleware for protected routes
   auth/state.go                        ← Stateless HMAC-signed OAuth state (CSRF, multi-replica safe)
   auth/tokenstore.go                   ← DB-backed encrypted Bungie OAuth token store; CAS refresh writes
@@ -56,7 +56,7 @@ backend/api-service/
                                            milestone data; reset time math; ManifestRepo interface
   services/weekly/availability.go      ← LiveVendorItemHashes: best-effort all-rotating-vendor item
                                            availability (Xûr, Banshee-44, Ada-1, ritual vendors) for wishlist
-  services/search/service.go           ← In-memory manifest item search index; async rebuild on update
+  services/search/service.go           ← Manifest item search index with versioned disk snapshots; async rebuild on update
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; WeaponTypesCacheKey
   cache/cache.go                       ← In-memory cache (and no-op cache interface)
@@ -131,7 +131,7 @@ Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_R
 - Algorithm: HS256, secret from `JWT_SECRET` env var
 - Claims: `sub` (membershipId), `membership_type`, `display_name`, `platform`, `token_type`, `tver` (token_version), `jti`, `sid` (session ID — matches a `refresh_sessions.id` row)
 - `token_type` must be `"access"` for access tokens and `"refresh"` for refresh tokens
-- Access expiry: configurable via `JWT_EXPIRY_HOURS` (default 24h)
+- Access expiry: configurable via duration-based `JWT_ACCESS_TTL` (default 30m); legacy `JWT_EXPIRY_HOURS` is accepted when the new setting is absent
 - Refresh expiry: configurable via `JWT_REFRESH_EXPIRY_DAYS` (default 30d)
 
 ## Token store (`auth/tokenstore.go`)
@@ -231,7 +231,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 
 ```
 PORT, GO_ENV, BUNGIE_API_KEY, BUNGIE_CLIENT_ID, BUNGIE_CLIENT_SECRET
-AUTH_REDIRECT_URI, JWT_SECRET, JWT_EXPIRY_HOURS, JWT_REFRESH_EXPIRY_DAYS
+AUTH_REDIRECT_URI, JWT_SECRET, JWT_ACCESS_TTL, JWT_EXPIRY_HOURS (legacy), JWT_REFRESH_EXPIRY_DAYS
 DATABASE_URL, TOKEN_ENCRYPTION_KEY, TOKEN_ENCRYPTION_KEY_PREVIOUS
 ADMIN_MEMBERSHIP_IDS, AUDIT_RETENTION_DAYS, TRUSTED_PROXIES
 BUNGIE_API_BASE_URL, BUNGIE_API_RPS, BUNGIE_API_BURST

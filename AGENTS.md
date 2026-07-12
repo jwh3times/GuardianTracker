@@ -166,7 +166,6 @@ If your agent environment supports specialized subagents, use the local instruct
 ## Known Limitations
 
 - Character switcher is display-only in the current implementation.
-- Redis appears in Docker Compose but is not currently used by the application.
-- Search index state is in memory.
+- Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds asynchronously.
 - Xur location is not exposed by Bungie API responses and is represented as unknown unless sourced elsewhere.
 - Missing-count summaries intentionally omit non-raid/dungeon categories for now.

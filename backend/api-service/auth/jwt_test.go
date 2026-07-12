@@ -3,6 +3,7 @@ package auth
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 const jwtTestSecret = "test-jwt-secret-at-least-32-chars!!"
@@ -43,6 +44,24 @@ func TestJWT_AccessTokenRoundTrip(t *testing.T) {
 	}
 	if claims.ID == "" {
 		t.Error("jti claim missing")
+	}
+}
+
+func TestJWT_AccessTokenUsesConfiguredTTL(t *testing.T) {
+	const accessTTL = 30 * time.Minute
+	j := NewJWTWithTTL(jwtTestSecret, accessTTL, 30)
+	tok, err := j.GenerateAccessToken(testProfile(), 1, "sess-ttl")
+	if err != nil {
+		t.Fatalf("GenerateAccessToken: %v", err)
+	}
+
+	claims, err := j.ValidateToken(tok)
+	if err != nil {
+		t.Fatalf("ValidateToken: %v", err)
+	}
+	got := claims.ExpiresAt.Time.Sub(claims.IssuedAt.Time)
+	if got < accessTTL-time.Second || got > accessTTL+time.Second {
+		t.Errorf("access token lifetime = %v, want approximately %v", got, accessTTL)
 	}
 }
 

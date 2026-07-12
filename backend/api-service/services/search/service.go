@@ -1,9 +1,13 @@
 package search
 
 import (
+	"compress/gzip"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -27,10 +31,23 @@ type Entry struct {
 type Service struct {
 	manifestService *bungie.ManifestService
 	dbPath          string
+	snapshotDir     string
 	mu              sync.RWMutex
 	entries         []Entry
 	builtVersion    string
 	building        bool
+}
+
+const (
+	searchSnapshotPrefix = "search_index_"
+	searchSnapshotSuffix = ".json.gz"
+	searchSnapshotFormat = 1
+)
+
+type indexSnapshot struct {
+	Format  int     `json:"format"`
+	Version string  `json:"version"`
+	Entries []Entry `json:"entries"`
 }
 
 // Search result limit bounds. A caller-supplied limit is clamped into
@@ -48,14 +65,23 @@ var includedItemTypes = map[int]struct{}{
 
 // NewService creates a search service backed by the given manifest service and db path.
 func NewService(ms *bungie.ManifestService, dbPath string) *Service {
-	return &Service{manifestService: ms, dbPath: dbPath}
+	s := &Service{
+		manifestService: ms,
+		dbPath:          dbPath,
+		snapshotDir:     filepath.Dir(dbPath),
+	}
+	if ms != nil && s.loadSnapshot(ms.Version()) {
+		log.Printf("search: restored index snapshot for manifest %s", ms.Version())
+	}
+	return s
 }
 
-// IsReady returns true when the search index has been built at least once.
+// IsReady returns true when the search index has been built or restored for a
+// manifest version.
 func (s *Service) IsReady() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return len(s.entries) > 0
+	return s.builtVersion != ""
 }
 
 // Search returns up to limit entries matching q (case-insensitive substring).
@@ -179,7 +205,147 @@ func (s *Service) BuildIndex() {
 	s.entries = entries
 	s.builtVersion = version
 	s.mu.Unlock()
+	if err := s.saveSnapshot(version, entries); err != nil {
+		log.Printf("search: save snapshot for manifest %s: %v", version, err)
+	}
 	log.Printf("search: index built — %d items (manifest %s)", len(entries), version)
+}
+
+// loadSnapshot restores a snapshot only when its embedded manifest version
+// exactly matches the currently installed manifest. Any missing, stale, or
+// corrupt snapshot is treated as a cache miss so the normal async rebuild can
+// recover the index.
+func (s *Service) loadSnapshot(expectedVersion string) bool {
+	if expectedVersion == "" {
+		return false
+	}
+
+	path := s.snapshotPath(expectedVersion)
+	file, err := os.Open(path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Printf("search: open snapshot %s: %v", path, err)
+		}
+		return false
+	}
+	defer file.Close()
+
+	reader, err := gzip.NewReader(file)
+	if err != nil {
+		log.Printf("search: ignore corrupt snapshot %s: %v", path, err)
+		return false
+	}
+	defer reader.Close()
+
+	var snapshot indexSnapshot
+	if err := json.NewDecoder(reader).Decode(&snapshot); err != nil {
+		log.Printf("search: ignore corrupt snapshot %s: %v", path, err)
+		return false
+	}
+	if snapshot.Format != searchSnapshotFormat || snapshot.Version != expectedVersion {
+		log.Printf("search: ignore stale or unsupported snapshot %s", path)
+		return false
+	}
+	for i := range snapshot.Entries {
+		snapshot.Entries[i].nameLower = strings.ToLower(snapshot.Entries[i].Name)
+	}
+
+	s.mu.Lock()
+	s.entries = snapshot.Entries
+	s.builtVersion = snapshot.Version
+	s.mu.Unlock()
+	return true
+}
+
+// saveSnapshot writes a versioned gzip-JSON index beside the manifest. The
+// temporary file plus rename keeps readers from observing a partial snapshot;
+// the remove-and-retry fallback handles replacement on Windows.
+func (s *Service) saveSnapshot(version string, entries []Entry) error {
+	if version == "" {
+		return nil
+	}
+	if err := os.MkdirAll(s.snapshotDir, 0755); err != nil {
+		return fmt.Errorf("create snapshot directory: %w", err)
+	}
+
+	path := s.snapshotPath(version)
+	tmp, err := os.CreateTemp(s.snapshotDir, ".search-index-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create snapshot temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+
+	writer := gzip.NewWriter(tmp)
+	snapshot := indexSnapshot{
+		Format:  searchSnapshotFormat,
+		Version: version,
+		Entries: entries,
+	}
+	if err := json.NewEncoder(writer).Encode(snapshot); err != nil {
+		writer.Close()
+		tmp.Close()
+		return fmt.Errorf("encode snapshot: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("close snapshot gzip: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close snapshot: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			return fmt.Errorf("replace snapshot: %w", err)
+		}
+		if err := os.Rename(tmpPath, path); err != nil {
+			return fmt.Errorf("rename snapshot: %w", err)
+		}
+	}
+
+	if err := s.pruneSnapshots(path); err != nil {
+		return fmt.Errorf("prune snapshots: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) pruneSnapshots(keepPath string) error {
+	paths, err := filepath.Glob(filepath.Join(s.snapshotDir, searchSnapshotPrefix+"*"+searchSnapshotSuffix))
+	if err != nil {
+		return err
+	}
+	keepPath = filepath.Clean(keepPath)
+	for _, path := range paths {
+		if filepath.Clean(path) == keepPath {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove stale snapshot %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+func (s *Service) snapshotPath(version string) string {
+	return filepath.Join(s.snapshotDir, searchSnapshotPrefix+sanitizeVersion(version)+searchSnapshotSuffix)
+}
+
+func sanitizeVersion(version string) string {
+	var b strings.Builder
+	for _, r := range version {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	cleaned := strings.Trim(b.String(), ".-_")
+	if cleaned == "" {
+		return "unknown"
+	}
+	return cleaned
 }
 
 // ensureIndex kicks an async rebuild if the manifest version changed since last build.

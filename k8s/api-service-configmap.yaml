@@ -21,7 +21,7 @@ data:
   BUNGIE_API_BURST: "20"
   CACHE_ENABLED: "true"
   CACHE_TTL_COLLECTIONS: "300"
-  JWT_EXPIRY_HOURS: "24"
+  JWT_ACCESS_TTL: "30m"
   JWT_REFRESH_EXPIRY_DAYS: "30"
   # Comma-separated Bungie membership IDs pinned to the admin role at login.
   # Inert in this dev-validation stack (no Postgres → roles run degraded as

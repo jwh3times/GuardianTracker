@@ -25,15 +25,22 @@ type JWTClaims struct {
 // JWT handles token generation and validation for the application.
 type JWT struct {
 	secret            string
-	expiryHours       int
+	accessTTL         time.Duration
 	refreshExpiryDays int
 }
 
-// NewJWT creates a JWT helper with the given secret and expiry settings.
+// NewJWT creates a JWT helper with the legacy hour-based access-token setting.
+// New code should use NewJWTWithTTL so sub-hour lifetimes can be configured.
 func NewJWT(secret string, expiryHours, refreshExpiryDays int) *JWT {
+	return NewJWTWithTTL(secret, time.Duration(expiryHours)*time.Hour, refreshExpiryDays)
+}
+
+// NewJWTWithTTL creates a JWT helper with the given secret and access-token
+// duration. Refresh-token lifetime remains configured in whole days.
+func NewJWTWithTTL(secret string, accessTTL time.Duration, refreshExpiryDays int) *JWT {
 	return &JWT{
 		secret:            secret,
-		expiryHours:       expiryHours,
+		accessTTL:         accessTTL,
 		refreshExpiryDays: refreshExpiryDays,
 	}
 }
@@ -52,7 +59,7 @@ func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int, ses
 		SessionID:      sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * time.Duration(j.expiryHours))),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(j.accessTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "guardian-tracker",
