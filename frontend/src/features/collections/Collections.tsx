@@ -297,10 +297,15 @@ export function Collections() {
   // which pushes) because seeding a default is URL canonicalization, not a
   // user navigation — it shouldn't create a Back-button stop.
   useEffect(() => {
-    if (active || itemParam || !collections?.tree?.length) return;
-    setFilters({ node: collections.tree[0].hash }, { replace: true });
+    if (itemParam || !collections?.tree?.length) return;
+    // Seed the first root when nothing is selected, OR when a restored/shared
+    // `?node=` points at a hash that isn't in the current tree (stale or tampered
+    // URL) — otherwise the grid would be stuck empty with no way to recover.
+    if (!active || !nodeByHash.has(active)) {
+      setFilters({ node: collections.tree[0].hash }, { replace: true });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, active, itemParam]);
+  }, [collections, active, itemParam, nodeByHash]);
 
   // Reveal a node restored directly from a `?node=` URL (a bookmarked link, or
   // a persisted/shared filter state) so the sidebar opens down to it — mirrors
