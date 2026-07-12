@@ -1,6 +1,6 @@
 # Roadmap
 
-**Updated:** 2026-07-08
+**Updated:** 2026-07-11
 
 This public roadmap lists work that is not implemented yet. Completed work is
 tracked in [CHANGELOG.md](./CHANGELOG.md), and durable architecture decisions are
@@ -22,40 +22,7 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ## Product Backlog
 
-### 1. Collections Filters and Obtainability
-
-**Status:** Not implemented
-**Gate:** Dedicated frontend spec
-**Likely size:** Medium
-
-Persist collection filters across navigation and reloads, preferably through URL
-search params with localStorage defaults. Add filters for "available now" and a
-clearer "hide farm-only" or unobtainable proxy using already-exposed item
-metadata.
-
-Decisions to settle:
-
-- URL-only versus URL plus localStorage fallback.
-- Exact wording for farm-only/unobtainable states.
-- Whether a true sunset/unobtainable signal exists in current manifest data.
-
-### 2. Wishlist Availability Breadth and Bulk Actions
-
-**Status:** Not implemented
-**Gate:** Backend and frontend spec
-**Likely size:** Medium
-
-Wishlist availability currently focuses on Xur-oriented availability. Extend the
-cross-check to the broader live-vendor availability map already used by
-Collections where the data is reliable. Add bulk wishlist operations for remove
-and priority updates.
-
-Decisions to settle:
-
-- Which vendor availability sources are reliable enough for wishlist alerts.
-- Whether bulk edits are all-or-nothing or partial-success.
-
-### 3. Search Index Persistence
+### 1. Search Index Persistence
 
 **Status:** Not implemented
 **Gate:** Backend design
@@ -71,7 +38,7 @@ Decisions to settle:
 - Corrupt or stale snapshot fallback behavior.
 - Whether snapshots are pruned on manifest swap.
 
-### 4. E2E, Accessibility, and Visual Regression
+### 2. E2E, Accessibility, and Visual Regression
 
 **Status:** Not implemented
 **Gate:** Test infrastructure spec
@@ -88,7 +55,7 @@ Initial target flows:
 - search deep links
 - This Week, catalysts, crafting, triumphs, settings, and admin smoke paths
 
-### 5. Character-Scoped Surfaces
+### 3. Character-Scoped Surfaces
 
 **Status:** Not implemented
 **Gate:** Bungie response-shape verification
@@ -105,7 +72,7 @@ Expected shape:
 - character-scoped UI routes or panels
 - clear distinction between account-wide collection data and per-character data
 
-### 6. God-Roll and Owned-Roll Insights
+### 4. God-Roll and Owned-Roll Insights
 
 **Status:** Not implemented
 **Gate:** Bungie item-instance verification plus data-source decision
@@ -121,7 +88,7 @@ Decisions to settle:
   third-party wishlist format.
 - Licensing and freshness expectations for any external roll source.
 
-### 7. Notifications and Digests
+### 5. Notifications and Digests
 
 **Status:** Not implemented
 **Gate:** Product and provider decision
@@ -136,7 +103,7 @@ Decisions to settle:
 - User preference model and unsubscribe flow.
 - Whether the app should run scheduled jobs before production deployment exists.
 
-### 8. Shareable Collection Progress
+### 6. Shareable Collection Progress
 
 **Status:** Not implemented
 **Gate:** Security and privacy review
@@ -154,7 +121,7 @@ Expected shape:
 
 ## Operations Backlog
 
-### 9. Remove or Adopt Redis
+### 7. Remove or Adopt Redis
 
 **Status:** Not implemented
 **Gate:** Infrastructure decision
@@ -164,7 +131,7 @@ Redis is present in Docker Compose but not actively used by the API. Either
 remove it from local infrastructure and docs, or adopt it deliberately for a
 defined multi-replica cache use case.
 
-### 10. Production Deployment Path
+### 8. Production Deployment Path
 
 **Status:** Deferred
 **Gate:** Maintainer deployment decision
@@ -175,7 +142,7 @@ cloud resources, and deploying production infrastructure should be implemented
 only after the target hosting model is accepted. Environment-specific runbooks
 belong in `private/` until then.
 
-### 11. Structured Logging and Metrics
+### 9. Structured Logging and Metrics
 
 **Status:** Not implemented
 **Gate:** Production observability decision

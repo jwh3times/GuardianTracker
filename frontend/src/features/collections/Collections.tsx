@@ -33,16 +33,15 @@ import {
   gatherItemHashes,
   findNodePath,
 } from "./collectionTree";
+import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../../lib/constants";
-import type { Difficulty, GTItem, Rarity, TreeNode } from "../../types/design";
+import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
 import type {
   ProfileResponse,
   APICollectionNode,
   APICacheRefreshResponse,
   WishListItem,
 } from "../../types/api";
-
-type SortKey = "rarity" | "name" | "difficulty" | "avail";
 
 const RARITY_RANK: Record<Rarity, number> = {
   exotic: 0,
@@ -58,23 +57,64 @@ const DIFF_RANK: Record<Difficulty, number> = {
   unrated: 3,
 };
 
+// Root→node hash path to the node whose own hash is `nodeHash` (distinct from
+// `findNodePath`, which locates the node owning an *item* hash). Used to
+// reveal a category restored directly from a `?node=` URL. Root-level nodes
+// are always visible in the sidebar without opening anything, so callers only
+// need to act on paths longer than one entry.
+function findPathToNode(
+  nodes: APICollectionNode[],
+  nodeHash: string,
+): string[] | null {
+  const dfs = (node: APICollectionNode, trail: string[]): string[] | null => {
+    const here = [...trail, node.hash];
+    if (node.hash === nodeHash) return here;
+    for (const c of node.children ?? []) {
+      const found = dfs(c, here);
+      if (found) return found;
+    }
+    return null;
+  };
+  for (const root of nodes) {
+    const found = dfs(root, []);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function Collections() {
   const { showToast } = useToast();
   const { cardStyle, personalize } = usePreferences();
 
-  // active = selected presentation-node hash ("" until the tree loads → first root).
-  const [active, setActive] = useState<string>("");
-  // Ancestor node-hash path to reveal in the sidebar tree (deep-link seed).
+  // Ancestor node-hash path to reveal in the sidebar tree (deep-link seed, or a
+  // node restored from a persisted/URL selection).
   const [expandPath, setExpandPath] = useState<string[]>([]);
-  const [rarity, setRarity] = useState<Rarity | null>(null);
-  const [diff, setDiff] = useState<Difficulty | null>(null);
-  const [sort, setSort] = useState<SortKey>("rarity");
-  const [view, setView] = useState<"grid" | "list">("grid");
-  const [missingOnly, setMissingOnly] = useState(true);
   const [detail, setDetail] = useState<GTItem | null>(null);
 
+  const {
+    node: active,
+    rarity,
+    diff,
+    sort,
+    view,
+    missing: missingOnly,
+    avail,
+    farm,
+    setNode: setActive,
+    setRarity,
+    setDiff,
+    setSort,
+    setView,
+    setMissing: setMissingOnly,
+    setAvail,
+    setFarm,
+    setFilters,
+    clearFilters,
+    hasFilters,
+  } = useCollectionsFilters();
+
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const itemParam = searchParams.get("item");
 
   const { data: profileData } = useQuery({
@@ -180,14 +220,11 @@ export function Collections() {
     const d = collections.items[itemParam];
     const path = findNodePath(collections.tree, itemParam);
     if (d && path) {
-      setActive(path[path.length - 1]);
-      // Reveal the full root→node path in the sidebar so the user sees where
-      // in the hierarchy the deep-linked item lives.
+      const owningNode = path[path.length - 1];
       setExpandPath(path);
       const isCollected = (collections.collectedHashes ?? []).includes(
         itemParam,
       );
-      if (isCollected) setMissingOnly(false);
       const vendor = collections.availableNow?.[itemParam];
       setDetail({
         ...toGTItem(d),
@@ -195,10 +232,18 @@ export function Collections() {
         obtainable: !!vendor,
         availFrom: vendor,
       });
+      // One atomic URL write: select the owning node (reveal collected items too)
+      // and consume the item param, preserving existing filters.
+      setFilters(
+        isCollected
+          ? { node: owningNode, missing: false }
+          : { node: owningNode },
+        { replace: true, drop: ["item"] },
+      );
     } else {
       setViewOnlyHash(itemParam);
+      setFilters({}, { replace: true, drop: ["item"] });
     }
-    setSearchParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemParam, collections]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -242,12 +287,32 @@ export function Collections() {
     [collections],
   );
 
-  // Default the selection to the first root once data arrives.
+  // Default the selection to the first root once data arrives. Guarded on
+  // `itemParam` so this doesn't race the deep-link effect above: without the
+  // guard, both effects can fire on the same bare `?item=` load, and since
+  // react-router's functional updater snapshots `prev` per call, whichever
+  // effect's `setSearchParams` call runs second wins with a stale snapshot —
+  // silently reintroducing `item=` after the deep-link effect already
+  // consumed it. Uses `setFilters(..., { replace: true })` (not `setActive`,
+  // which pushes) because seeding a default is URL canonicalization, not a
+  // user navigation — it shouldn't create a Back-button stop.
+  useEffect(() => {
+    if (active || itemParam || !collections?.tree?.length) return;
+    setFilters({ node: collections.tree[0].hash }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collections, active, itemParam]);
+
+  // Reveal a node restored directly from a `?node=` URL (a bookmarked link, or
+  // a persisted/shared filter state) so the sidebar opens down to it — mirrors
+  // the deep-link effect's own `setExpandPath(path)`. Root-level selections
+  // (including the "default to first root" effect above) need no reveal since
+  // roots are already visible without opening anything.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!active && collections?.tree?.length)
-      setActive(collections.tree[0].hash);
-  }, [collections, active]);
+    if (!active || expandPath.length > 0 || !collections?.tree?.length) return;
+    const path = findPathToNode(collections.tree, active);
+    if (path && path.length > 1) setExpandPath(path);
+  }, [active, expandPath, collections]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const activeNode = active ? nodeByHash.get(active) : undefined;
@@ -275,6 +340,8 @@ export function Collections() {
     let list = baseItems.slice();
     if (rarity) list = list.filter((i) => i.rarity === rarity);
     if (diff) list = list.filter((i) => i.diff === diff);
+    if (avail) list = list.filter((i) => i.obtainable);
+    if (farm) list = list.filter((i) => !i.farmOnly);
     if (sort === "rarity")
       list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
     else if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
@@ -283,13 +350,7 @@ export function Collections() {
     else if (sort === "avail")
       list.sort((a, b) => (b.obtainable ? 1 : 0) - (a.obtainable ? 1 : 0));
     return list;
-  }, [baseItems, rarity, diff, sort]);
-
-  const clearFilters = () => {
-    setRarity(null);
-    setDiff(null);
-  };
-  const hasFilters = !!(rarity || diff);
+  }, [baseItems, rarity, diff, avail, farm, sort]);
 
   const onWish = (item: GTItem) => {
     // Ignore clicks while a mutation for this item is still settling — `wished`
@@ -366,9 +427,15 @@ export function Collections() {
             <div className="gt-filterbar">
               <FilterChip
                 on={missingOnly}
-                onClick={() => setMissingOnly((v) => !v)}
+                onClick={() => setMissingOnly(!missingOnly)}
               >
                 Missing only
+              </FilterChip>
+              <FilterChip on={avail} onClick={() => setAvail(!avail)}>
+                Available now
+              </FilterChip>
+              <FilterChip on={farm} onClick={() => setFarm(!farm)}>
+                Hide farm-only
               </FilterChip>
               <Dropdown
                 label="Rarity"

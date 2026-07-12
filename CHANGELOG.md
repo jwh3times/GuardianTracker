@@ -21,6 +21,7 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   exact-name fallback instead of fuzzy name matching.
 - Bulk wishlist actions: select multiple items to delete or re-prioritize in
   one request (`POST /api/wishlist/bulk`).
+- Collections filters (rarity, difficulty, sort, view, missing-only, plus new "Available now" and "Hide farm-only") and the selected category now persist in the URL — shareable and surviving navigation/reload — with a localStorage default.
 
 ### Changed
 
