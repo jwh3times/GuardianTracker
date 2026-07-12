@@ -88,7 +88,9 @@ frontend/src/
                                    shows a full progress bar instead of "Not yet acquired"), Triumphs.tsx
                                    ({ items, fetchedAt } envelopes),
                                    ItemCard.tsx (collection-only item card),
-                                   collectionTree.ts (API node → TreeNode adapters, collection-specific)
+                                   collectionTree.ts (API node → TreeNode adapters, collection-specific),
+                                   useCollectionsFilters.ts (URL-sourced filter/category state — see
+                                   "Collections page features" below)
     cosmetics/                 ← browsable /cosmetics gallery (Road to v1 §1). Cosmetics.tsx (type tabs +
                                    owned/missing/all filter over ?include=all data), CosmeticTile.tsx
                                    (image-forward tile + owned/missing state), CosmeticsGrid.tsx
@@ -219,6 +221,7 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected) and opens the detail drawer; if no collectible entry exists, falls back to `itemByHashQuery` → `toGTItemView` for a read-only view drawer
 - Cosmetics is a full top-level category alongside Weapons, Armor, Exotics
 - Add-to-wishlist and remove-from-wishlist mutations with pending-state guard (prevents double-click races)
+- Filter/category state (rarity, difficulty, sort, view, missing-only, "available now", "hide farm-only", and the selected category) is owned by `useCollectionsFilters` (`features/collections/useCollectionsFilters.ts`), which makes the URL the source of truth: `parseFilters`/`serializeFilters` read and write `?node=&rarity=&diff=&sort=&view=&missing=&avail=&farm=`, keeping the URL shareable and reload-safe. Filter fields (not `node`) also mirror to a `gt.collections.filters` localStorage entry, which supplies defaults only when the URL carries no filter params (e.g. a fresh visit) — `node` is always URL-only, never persisted to storage. History behavior differs by field: `setNode` pushes a history entry so Back returns to the previous category; every filter setter (`setRarity`, `setDiff`, `setSort`, `setView`, `setMissing`, `setAvail`, `setFarm`) replaces, so toggling a filter doesn't spam history. Callers that must change multiple fields atomically (e.g. restoring node + missing together from a deep link) go through `setFilters`, not sequential single-field setters — `useSearchParams`'s functional updater snapshots `prev` per call, so two `write` calls in the same tick would clobber each other.
 
 ## Wishlist page features
 
