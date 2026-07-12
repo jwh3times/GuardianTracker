@@ -95,7 +95,8 @@ export interface XurItem {
 export interface Xur {
   present: boolean;
   leavesIn: Duration;
-  location: string;
+  /** Omitted when Bungie does not provide a resolvable live vendor location. */
+  location?: string;
   items: XurItem[];
 }
 

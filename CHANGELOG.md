@@ -9,7 +9,19 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- Xûr's location now resolves best-effort from authenticated vendor and manifest
+  data and is displayed as "The Tower"; the location row is omitted when Bungie
+  cannot resolve it.
+- Non-raid/dungeon milestone missing counts remain intentionally omitted after
+  current Bungie reward definitions were verified to contain no collectible-linked
+  items.
+
+### Fixed
+
+- Milestone definitions with Bungie's mapping-shaped `rewards` data no longer fail
+  to parse and disappear from the weekly response.
 
 ## [0.3.12] - 2026-07-12
 

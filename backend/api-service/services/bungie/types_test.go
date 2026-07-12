@@ -5,6 +5,23 @@ import (
 	"testing"
 )
 
+func TestMilestoneDefinition_ParsesRewardMappings(t *testing.T) {
+	var def MilestoneDefinition
+	err := json.Unmarshal([]byte(`{
+		"hash":4253138191,
+		"displayProperties":{"name":"Weekly Clan Engrams"},
+		"milestoneType":3,
+		"rewards":{"1":{"rewardEntries":{"2":{"items":[{"itemHash":4039143015,"quantity":1}]}}}}
+	}`), &def)
+	if err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	entry := def.Rewards["1"].RewardEntries["2"]
+	if len(entry.Items) != 1 || entry.Items[0].ItemHash != 4039143015 {
+		t.Fatalf("reward items = %+v", entry.Items)
+	}
+}
+
 func TestIsCollected(t *testing.T) {
 	// State bit 0 (NotAcquired) set → not collected; clear → collected.
 	if (CollectibleComponent{State: 0}).IsCollected() != true {

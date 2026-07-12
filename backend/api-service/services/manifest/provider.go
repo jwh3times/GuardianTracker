@@ -118,6 +118,14 @@ func (p *Provider) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.Invento
 	return r.GetItemsByHashes(hashes)
 }
 
+func (p *Provider) ResolveVendorLocation(vendorHash uint32, locationIndex int) (uint32, string, error) {
+	r, err := p.get()
+	if err != nil {
+		return 0, "", err
+	}
+	return r.ResolveVendorLocation(vendorHash, locationIndex)
+}
+
 func (p *Provider) GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungie.MilestoneDefinition, error) {
 	r, err := p.get()
 	if err != nil {

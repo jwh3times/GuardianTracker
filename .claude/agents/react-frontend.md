@@ -236,7 +236,8 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - `APICollectionSummary`: `+ collectedItems?: APIDestinyItem[]`
 - `APIRecordsEnvelope<T>`: `{ items: T[]; fetchedAt: string }` — envelope for catalysts/crafting/seals
 - `Weekly`: `+ resetAt`, `+ fetchedAt`, `+ degraded?`
-- `Milestone.missing`: now `number | undefined` — populated for raid/dungeon milestones; still omitted for non-raid/dungeon (no manifest reward→collectible signal)
+- `Milestone.missing`: `number | undefined` — populated for raid/dungeon milestones;
+  verified current non-raid rewards contain no collectible-linked items, so others omit it.
 - `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool
 - `APIItemCatalyst`: `{ name: string; description: string }` — one exotic catalyst entry; `description` may be empty (the manifest has at least one blank entry — Duality)
 - `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[]; catalysts: APIItemCatalyst[] }` — response envelope for `/api/items/:itemHash/perks`; `catalysts` is always present (empty array for non-exotics), up to 4 entries for multi-catalyst exotics
@@ -272,5 +273,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 
 - `logout()` ends only the current session; other devices remain signed in. `logoutAll()` ends all sessions and evicts the Bungie token. If revocation cannot be observed immediately, the old access token expires within the configured lifetime (30 minutes by default) plus the 60-second cache window
 - Search index snapshots persist beside the manifest by version; pages can still show a "warming up" error state while a missing or new-version snapshot rebuilds (~30s)
-- Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
-- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones still omit the field (no manifest reward→collectible signal)
+- Xûr location is optional — the backend resolves the authenticated vendor location to
+  `The Tower` and omits the field when Bungie or manifest data is unavailable.
+- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones
+  omit it because verified current reward definitions contain no collectible-linked items.

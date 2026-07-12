@@ -13,14 +13,19 @@ import (
 
 // richManifest is a configurable ManifestRepo for the public-weekly fetch paths.
 type richManifest struct {
-	items      map[uint32]*bungie.InventoryItemDefinition
-	milestones map[uint32]*bungie.MilestoneDefinition
-	activities map[uint32]*bungie.ActivityDefinition
-	modifiers  map[uint32]*bungie.ActivityModifierDefinition
+	items           map[uint32]*bungie.InventoryItemDefinition
+	milestones      map[uint32]*bungie.MilestoneDefinition
+	activities      map[uint32]*bungie.ActivityDefinition
+	modifiers       map[uint32]*bungie.ActivityModifierDefinition
+	destinationHash uint32
+	destinationName string
 }
 
 func (f *richManifest) GetItemsByHashes([]uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
 	return f.items, nil
+}
+func (f *richManifest) ResolveVendorLocation(uint32, int) (uint32, string, error) {
+	return f.destinationHash, f.destinationName, nil
 }
 func (f *richManifest) GetMilestoneDefinitions([]uint32) (map[uint32]*bungie.MilestoneDefinition, error) {
 	return f.milestones, nil

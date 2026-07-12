@@ -264,7 +264,9 @@ export function XurModule({
         <CountdownChip prefix="Leaves" time={xur.leavesIn} soon icon="clock" />
       }
     >
-      <div className="gt-xur-loc mono">{xur.location}</div>
+      {xur.location ? (
+        <div className="gt-xur-loc mono">{xur.location}</div>
+      ) : null}
       <ul className="gt-vendor-list">
         {xur.items.map((it) => (
           <li

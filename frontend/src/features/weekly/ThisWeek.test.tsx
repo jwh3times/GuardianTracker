@@ -90,7 +90,7 @@ describe("ThisWeek page", () => {
           xur: {
             present: true,
             leavesIn: { d: 1, h: 2, m: 0 },
-            location: "Tower Hangar",
+            location: "The Tower",
             items: [
               {
                 hash: "9001",
@@ -135,7 +135,7 @@ describe("ThisWeek page", () => {
     expect(
       await screen.findByText(/Item names are still loading/),
     ).toBeInTheDocument();
-    expect(screen.getByText("Tower Hangar")).toBeInTheDocument();
+    expect(screen.getByText("The Tower")).toBeInTheDocument();
     expect(screen.getByText("Gjallarhorn")).toBeInTheDocument();
     expect(
       container.querySelector(
@@ -143,6 +143,36 @@ describe("ThisWeek page", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Vanguard Ops")).toBeInTheDocument();
+  });
+
+  it("omits the Xûr location row when the backend cannot resolve it", async () => {
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json({
+          ...sampleWeekly,
+          xur: {
+            present: true,
+            leavesIn: { d: 1, h: 2 },
+            items: [
+              {
+                hash: "9001",
+                name: "Gjallarhorn",
+                type: "Rocket Launcher",
+                rarity: "exotic",
+                missing: true,
+                icon: "/icons/gjallarhorn.png",
+                cost: "29 Strange Coins",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    const { container } = renderPage(<ThisWeek />);
+    expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
+    expect(container.querySelector(".gt-xur-loc")).toBeNull();
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
   });
 
   it("purges checkmarks from previous reset weeks on load", async () => {
@@ -180,7 +210,7 @@ describe("ThisWeek page", () => {
           xur: {
             present: true,
             leavesIn: { d: 1, h: 2, m: 0 },
-            location: "Tower Hangar",
+            location: "The Tower",
             items: [
               {
                 hash: "100",
