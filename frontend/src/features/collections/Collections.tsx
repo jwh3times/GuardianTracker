@@ -287,16 +287,20 @@ export function Collections() {
     [collections],
   );
 
-  // Default the selection to the first root once data arrives. `setActive` is
-  // the hook's node setter (a new function reference each render, not a
-  // stable `useState` setter), so it's intentionally left out of the deps —
-  // the effect's own `!active` guard prevents any redundant call once a node
-  // is selected.
+  // Default the selection to the first root once data arrives. Guarded on
+  // `itemParam` so this doesn't race the deep-link effect above: without the
+  // guard, both effects can fire on the same bare `?item=` load, and since
+  // react-router's functional updater snapshots `prev` per call, whichever
+  // effect's `setSearchParams` call runs second wins with a stale snapshot —
+  // silently reintroducing `item=` after the deep-link effect already
+  // consumed it. Uses `setFilters(..., { replace: true })` (not `setActive`,
+  // which pushes) because seeding a default is URL canonicalization, not a
+  // user navigation — it shouldn't create a Back-button stop.
   useEffect(() => {
-    if (!active && collections?.tree?.length)
-      setActive(collections.tree[0].hash);
+    if (active || itemParam || !collections?.tree?.length) return;
+    setFilters({ node: collections.tree[0].hash }, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, active]);
+  }, [collections, active, itemParam]);
 
   // Reveal a node restored directly from a `?node=` URL (a bookmarked link, or
   // a persisted/shared filter state) so the sidebar opens down to it — mirrors

@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../../test/testServer";
@@ -47,6 +47,23 @@ function renderCollections(search = "") {
 function LocationProbe() {
   const loc = useLocation();
   return <div data-testid="search">{loc.search}</div>;
+}
+
+// Renders the live router pathname — used alongside a BackButton to prove a
+// URL write was a history *replace* (Back skips over it) rather than a push
+// (Back would land on it).
+function PathProbe() {
+  const loc = useLocation();
+  return <div data-testid="path">{loc.pathname}</div>;
+}
+
+function BackButton() {
+  const nav = useNavigate();
+  return (
+    <button onClick={() => nav(-1)} type="button">
+      go back
+    </button>
+  );
 }
 
 // Tree-shaped ?include=all payload: a "Weapons" root with a single
@@ -380,6 +397,94 @@ describe("Collections filters persistence + obtainability", () => {
       expect(search).toContain("node=11");
       expect(search).toContain("avail=1");
       expect(search).not.toContain("item=");
+    });
+  });
+});
+
+// Regression coverage for the "default to first root" effect racing the
+// `?item=` deep-link effect: both fire on a bare `/collections?item=<hash>`
+// load, and react-router's functional `setSearchParams` updater snapshots
+// `prev` per call — so an unguarded default-root write can silently
+// re-preserve `item=` and stomp the owning node the deep-link effect just
+// selected. The fix guards the default-root effect on a pending `itemParam`
+// and writes via `setFilters(..., { replace: true })` instead of the node
+// setter's push.
+describe("Collections default-root seeding (regression)", () => {
+  it("a bare ?item= deep-link consumes item and selects the OWNING node, not the root", async () => {
+    server.use(treeCollectionsHandler);
+    renderPage(
+      <>
+        <Collections />
+        <LocationProbe />
+      </>,
+      "/collections?item=100",
+    );
+
+    // Drawer opens for the deep-linked item (100 = Fatebringer, owned by leaf
+    // node "11", nested under root "10").
+    expect(
+      await screen.findByRole("dialog", { name: "Fatebringer" }),
+    ).toBeInTheDocument();
+
+    await waitFor(() => {
+      const search = screen.getByTestId("search").textContent ?? "";
+      // Owning node wins — NOT the root the buggy default-root effect used to
+      // stomp it with.
+      expect(search).toContain("node=11");
+      expect(search).not.toContain("node=10");
+      // The deep-link's own write consumed item= — the default-root effect
+      // must not have re-added it.
+      expect(search).not.toContain("item=");
+    });
+  });
+
+  it("a cold /collections load canonicalizes to the first root via a REPLACE (Back isn't trapped)", async () => {
+    server.use(treeCollectionsHandler);
+    const qc = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider>
+          <PreferencesProvider>
+            <CharacterProvider>
+              <ToastProvider>
+                <MemoryRouter
+                  initialEntries={["/elsewhere", "/collections"]}
+                  initialIndex={1}
+                >
+                  <Collections />
+                  <LocationProbe />
+                  <PathProbe />
+                  <BackButton />
+                </MemoryRouter>
+              </ToastProvider>
+            </CharacterProvider>
+          </PreferencesProvider>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    // No node/filters in the URL, so the default-root effect seeds node=10
+    // (the first, and only, root in the fixture).
+    await waitFor(() => {
+      const search = screen.getByTestId("search").textContent ?? "";
+      expect(search).toContain("node=10");
+    });
+
+    // Prove the seed was a history REPLACE, not a push: from here, Back should
+    // land on the entry that was already behind "/collections" before the
+    // effect ran ("/elsewhere"). A push would have inserted a new entry ahead
+    // of the paramless "/collections", so Back would land back on paramless
+    // "/collections" instead — re-triggering (and re-pushing) the same
+    // canonicalization effect.
+    fireEvent.click(screen.getByText("go back"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("path").textContent).toBe("/elsewhere");
     });
   });
 });

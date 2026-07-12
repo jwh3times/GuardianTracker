@@ -1,6 +1,6 @@
 # Roadmap
 
-**Updated:** 2026-07-08
+**Updated:** 2026-07-11
 
 This public roadmap lists work that is not implemented yet. Completed work is
 tracked in [CHANGELOG.md](./CHANGELOG.md), and durable architecture decisions are
