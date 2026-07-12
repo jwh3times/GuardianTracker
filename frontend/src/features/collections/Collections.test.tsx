@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../../test/testServer";
@@ -39,6 +39,14 @@ function renderPage(ui: React.ReactNode, route = "/") {
 
 function renderCollections(search = "") {
   return renderPage(<Collections />, `/collections${search}`);
+}
+
+// Renders the live router search string so tests can assert on it directly
+// (e.g. that a deep-link's item= param was stripped in the same write that
+// preserved node/avail).
+function LocationProbe() {
+  const loc = useLocation();
+  return <div data-testid="search">{loc.search}</div>;
 }
 
 // Tree-shaped ?include=all payload: a "Weapons" root with a single
@@ -345,5 +353,33 @@ describe("Collections filters persistence + obtainability", () => {
     await waitFor(() =>
       expect(screen.queryByText("Imperial Decree")).not.toBeInTheDocument(),
     );
+  });
+
+  it("reveals the restored node in the sidebar on ?node= load", async () => {
+    server.use(treeCollectionsHandler);
+    renderCollections("?node=11");
+    // Without the reveal (findPathToNode + expandPath), the "Weapons" root
+    // stays collapsed and "Hand Cannons" is absent.
+    expect(await screen.findByText("Hand Cannons")).toBeInTheDocument();
+  });
+
+  it("strips item= from the URL while keeping node/avail after the deep-link drawer opens", async () => {
+    serveFilterFixture();
+    renderPage(
+      <>
+        <Collections />
+        <LocationProbe />
+      </>,
+      "/collections?node=11&avail=1&item=100",
+    );
+    // Drawer opens for the deep-linked item…
+    await screen.findByText("Fatebringer");
+    // …and the same write that strips item= keeps node/avail intact.
+    await waitFor(() => {
+      const search = screen.getByTestId("search").textContent ?? "";
+      expect(search).toContain("node=11");
+      expect(search).toContain("avail=1");
+      expect(search).not.toContain("item=");
+    });
   });
 });
