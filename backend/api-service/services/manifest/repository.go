@@ -111,6 +111,62 @@ func (r *Repository) GetInventoryItemDefinition(hash uint32) (*bungie.InventoryI
 	return &def, nil
 }
 
+// ResolveVendorLocation resolves a live vendor location index through the
+// vendor and destination manifest definitions. Missing definitions and invalid
+// indexes are represented by zero values so best-effort callers can omit the
+// location without failing their larger response.
+func (r *Repository) ResolveVendorLocation(vendorHash uint32, locationIndex int) (uint32, string, error) {
+	if locationIndex < 0 {
+		return 0, "", nil
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var vendorBlob string
+	err := r.db.QueryRow(
+		"SELECT json FROM DestinyVendorDefinition WHERE id = ?",
+		hashToDBKey(vendorHash),
+	).Scan(&vendorBlob)
+	if err == sql.ErrNoRows {
+		return 0, "", nil
+	}
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to query vendor location: %w", err)
+	}
+
+	var vendor bungie.VendorDefinition
+	if err := json.Unmarshal([]byte(vendorBlob), &vendor); err != nil {
+		return 0, "", fmt.Errorf("failed to parse vendor location JSON: %w", err)
+	}
+	if locationIndex >= len(vendor.Locations) {
+		return 0, "", nil
+	}
+
+	destinationHash := vendor.Locations[locationIndex].DestinationHash
+	if destinationHash == 0 {
+		return 0, "", nil
+	}
+
+	var destinationBlob string
+	err = r.db.QueryRow(
+		"SELECT json FROM DestinyDestinationDefinition WHERE id = ?",
+		hashToDBKey(destinationHash),
+	).Scan(&destinationBlob)
+	if err == sql.ErrNoRows {
+		return destinationHash, "", nil
+	}
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to query vendor destination: %w", err)
+	}
+
+	var destination bungie.DestinationDefinition
+	if err := json.Unmarshal([]byte(destinationBlob), &destination); err != nil {
+		return 0, "", fmt.Errorf("failed to parse vendor destination JSON: %w", err)
+	}
+	return destinationHash, destination.DisplayProperties.Name, nil
+}
+
 // ItemView is a minimal, manifest-only item projection for the item-by-hash endpoint
 // (deep-linked non-collectible items). No user/collection state.
 type ItemView struct {

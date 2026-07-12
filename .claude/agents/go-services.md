@@ -213,7 +213,12 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 ## Weekly service
 
 - `Weekly` struct has `ResetAt`, `FetchedAt`, `Degraded` fields
-- `Milestone.Missing` is `*int` (omitempty) — populated by `buildMilestones` for raid/dungeon milestones via `efficiency.MissingForMilestone`; non-raid/dungeon milestones still omit it (no manifest reward→collectible signal)
+- `Xur.Location` is optional and best-effort: character-vendor component 400 supplies
+  `vendorLocationIndex`, the manifest resolves its destination, and the known Last City
+  destination is presented as `The Tower`; failures omit the field.
+- `Milestone.Missing` is `*int` (omitempty) — populated by `buildMilestones` for
+  raid/dungeon milestones via `efficiency.MissingForMilestone`; verified current
+  non-raid reward definitions contain no collectible-linked items, so others omit it.
 - `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells
 - `LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)` (`services/weekly/availability.go`) returns item hash → vendor display name across all rotating vendors (Xûr, Banshee-44, Ada-1, ritual vendors); best-effort with the caller's Bungie token — used by the wishlist handler for availability instead of the Xûr-only `XurItemHashes`
 

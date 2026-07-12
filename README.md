@@ -12,8 +12,8 @@ frontend.
 - **Collection analysis** for weapons, armor, exotics, and cosmetics using the
   Bungie manifest and player collection state.
 - **Wishlist management** with priority, notes, and availability surfacing.
-- **This Week** with milestones, Xur, daily actions, reset timing, and
-  recommendation ranking.
+- **This Week** with milestones, Xur inventory and best-effort Tower location,
+  daily actions, reset timing, and recommendation ranking.
 - **Catalysts, crafting, triumphs, and seals** from Bungie records data.
 - **Global item search** over a manifest-derived index.
 - **Roles, feature flags, admin console, and audit log** for controlled rollout

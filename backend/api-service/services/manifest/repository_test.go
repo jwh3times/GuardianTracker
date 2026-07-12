@@ -38,6 +38,9 @@ func writeFixtureDB(t *testing.T, path string) {
 	for _, ddl := range []string{
 		`CREATE TABLE DestinyInventoryItemDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
 		`CREATE TABLE DestinyCollectibleDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
+		`CREATE TABLE DestinyVendorDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
+		`CREATE TABLE DestinyDestinationDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
+		`CREATE TABLE DestinyMilestoneDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
 	} {
 		if _, err := db.Exec(ddl); err != nil {
 			t.Fatalf("fixture ddl: %v", err)
@@ -73,6 +76,30 @@ func writeFixtureDB(t *testing.T, path string) {
 		if _, err := db.Exec(`INSERT INTO DestinyCollectibleDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
 			t.Fatalf("fixture collectible %d: %v", hash, err)
 		}
+	}
+
+	vendorHash := uint32(2190858386)
+	if _, err := db.Exec(
+		`INSERT INTO DestinyVendorDefinition (id, json) VALUES (?, ?)`,
+		int32(vendorHash),
+		`{"hash":2190858386,"locations":[{"destinationHash":1737926756}]}`,
+	); err != nil {
+		t.Fatalf("fixture vendor: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO DestinyDestinationDefinition (id, json) VALUES (?, ?)`,
+		int32(uint32(1737926756)),
+		`{"hash":1737926756,"displayProperties":{"name":"The Last City"}}`,
+	); err != nil {
+		t.Fatalf("fixture destination: %v", err)
+	}
+	milestoneHash := uint32(4253138191)
+	if _, err := db.Exec(
+		`INSERT INTO DestinyMilestoneDefinition (id, json) VALUES (?, ?)`,
+		int32(milestoneHash),
+		`{"hash":4253138191,"displayProperties":{"name":"Weekly Clan Engrams"},"milestoneType":3,"rewards":{"1":{"rewardEntries":{"2":{"items":[{"itemHash":4039143015,"quantity":1}]}}}}}`,
+	); err != nil {
+		t.Fatalf("fixture milestone: %v", err)
 	}
 
 	if _, err := db.Exec(`CREATE TABLE DestinyPresentationNodeDefinition (id INTEGER PRIMARY KEY, json TEXT)`); err != nil {
@@ -116,6 +143,46 @@ func TestRepository_GetItemsByHashes(t *testing.T) {
 	}
 	if defs[200].Inventory.TierType != bungie.TierTypeExotic {
 		t.Errorf("item 200 tier = %d", defs[200].Inventory.TierType)
+	}
+}
+
+func TestRepository_ResolveVendorLocation(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+
+	hash, name, err := repo.ResolveVendorLocation(2190858386, 0)
+	if err != nil {
+		t.Fatalf("ResolveVendorLocation: %v", err)
+	}
+	if hash != 1737926756 || name != "The Last City" {
+		t.Fatalf("location = (%d, %q), want (1737926756, The Last City)", hash, name)
+	}
+
+	for _, index := range []int{-1, 1} {
+		hash, name, err = repo.ResolveVendorLocation(2190858386, index)
+		if err != nil || hash != 0 || name != "" {
+			t.Errorf("index %d = (%d, %q, %v), want zero values", index, hash, name, err)
+		}
+	}
+
+	hash, name, err = repo.ResolveVendorLocation(999, 0)
+	if err != nil || hash != 0 || name != "" {
+		t.Errorf("missing vendor = (%d, %q, %v), want zero values", hash, name, err)
+	}
+}
+
+func TestRepository_GetMilestoneDefinitions_ParsesRewardMappings(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	defs, err := repo.GetMilestoneDefinitions([]uint32{4253138191})
+	if err != nil {
+		t.Fatalf("GetMilestoneDefinitions: %v", err)
+	}
+	def := defs[4253138191]
+	if def == nil {
+		t.Fatal("mapping-shaped milestone definition was skipped")
+	}
+	items := def.Rewards["1"].RewardEntries["2"].Items
+	if len(items) != 1 || items[0].ItemHash != 4039143015 {
+		t.Fatalf("reward items = %+v", items)
 	}
 }
 

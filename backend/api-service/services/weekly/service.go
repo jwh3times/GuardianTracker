@@ -40,7 +40,7 @@ type Duration struct {
 type Xur struct {
 	Present  bool      `json:"present"`
 	LeavesIn Duration  `json:"leavesIn"`
-	Location string    `json:"location"`
+	Location string    `json:"location,omitempty"`
 	Items    []XurItem `json:"items"`
 }
 
@@ -158,6 +158,7 @@ type Service struct {
 // which callers treat the same as a nil repo (fallback labels, no enrichment).
 type ManifestRepo interface {
 	GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error)
+	ResolveVendorLocation(vendorHash uint32, locationIndex int) (uint32, string, error)
 	GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungie.MilestoneDefinition, error)
 	GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error)
 	GetActivityModifierDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModifierDefinition, error)
@@ -267,6 +268,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 	var (
 		missingHashes map[uint32]struct{}
 		dailyVendors  []dailyVendorItem
+		xurLocation   string
 	)
 	if bungieToken != "" {
 		var wg sync.WaitGroup
@@ -284,6 +286,9 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 			defer wg.Done()
 			// Daily vendor items (Ada-1, Banshee-44) — shared cache, populated by first authed request
 			dailyVendors = s.getDailyVendorItems(ctx, membershipType, membershipID, bungieToken, now)
+			if pub.XurPresent {
+				xurLocation = s.getXurLocation(ctx, membershipType, membershipID, bungieToken)
+			}
 		}()
 		wg.Wait()
 	}
@@ -325,7 +330,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		xurBlock = &Xur{
 			Present:  true,
 			LeavesIn: leavesIn,
-			Location: "Unknown",
+			Location: xurLocation,
 			Items:    items,
 		}
 	}
@@ -838,14 +843,8 @@ func (s *Service) getDailyVendorItems(ctx context.Context, membershipType int, m
 		}
 	}
 
-	characterID := s.resolvePrimaryCharacter(ctx, membershipType, membershipID, bungieToken)
-	if characterID == "" {
-		return nil
-	}
-
-	resp, err := s.bungie.GetCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
-	if err != nil {
-		log.Printf("weekly: GetCharacterVendors: %v", err)
+	resp := s.getCharacterVendors(ctx, membershipType, membershipID, bungieToken)
+	if resp == nil {
 		return nil
 	}
 
@@ -858,6 +857,41 @@ func (s *Service) getDailyVendorItems(ctx context.Context, membershipType int, m
 		s.cache.Set(cacheKey, items, ttl)
 	}
 	return items
+}
+
+const xurTowerDestinationHash uint32 = 1737926756
+
+// getXurLocation resolves Xûr's character-scoped live location through the
+// manifest. Location is best-effort: failures return an empty string so the
+// weekly payload can omit the field while preserving inventory and schedule.
+func (s *Service) getXurLocation(ctx context.Context, membershipType int, membershipID, bungieToken string) string {
+	resp := s.getCharacterVendors(ctx, membershipType, membershipID, bungieToken)
+	if resp == nil || s.manifest == nil {
+		return ""
+	}
+
+	xurKey := strconv.FormatUint(uint64(bungie.XurVendorHash), 10)
+	vendor, ok := resp.Response.Vendors.Data[xurKey]
+	if !ok || !vendor.Enabled || vendor.VendorLocationIndex < 0 {
+		return ""
+	}
+
+	destinationHash, destinationName, err := s.manifest.ResolveVendorLocation(
+		bungie.XurVendorHash,
+		vendor.VendorLocationIndex,
+	)
+	if err != nil {
+		log.Printf("weekly: resolve Xur location: %v", err)
+		return ""
+	}
+	return xurLocationLabel(destinationHash, destinationName)
+}
+
+func xurLocationLabel(destinationHash uint32, destinationName string) string {
+	if destinationHash == xurTowerDestinationHash {
+		return "The Tower"
+	}
+	return destinationName
 }
 
 // resolvePrimaryCharacter returns the most recently played character ID for the given membership.

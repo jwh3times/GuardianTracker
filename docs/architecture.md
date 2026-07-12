@@ -81,7 +81,8 @@ Primary route groups:
 - auth: Bungie login, callback, refresh, logout, logout-all
 - account: profile, role opt-in, feature flags
 - collections: collection tree, refresh, item views, item perk pools
-- weekly: recommendations, Xur, milestones, reset countdowns
+- weekly: recommendations, Xur inventory and authenticated location, milestones,
+  reset countdowns
 - wishlist: user-scoped CRUD
 - preferences: user preferences
 - records: catalysts, crafting, seals

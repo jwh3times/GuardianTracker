@@ -204,10 +204,11 @@ func (c *Client) GetPublicMilestones(ctx context.Context) (map[string]PublicMile
 	return r.Response, nil
 }
 
-// GetCharacterVendors fetches vendor inventory for a specific character (requires auth; component 402).
+// GetCharacterVendors fetches vendor summaries and inventory for a specific
+// character (requires auth; components 400 and 402).
 func (c *Client) GetCharacterVendors(ctx context.Context, membershipType int, membershipID, characterID, accessToken string) (*CharacterVendorsResponse, error) {
-	url := fmt.Sprintf("%s/Destiny2/%d/Profile/%s/Character/%s/Vendors/?components=%d",
-		c.baseURL, membershipType, membershipID, characterID, ComponentVendorSales)
+	url := fmt.Sprintf("%s/Destiny2/%d/Profile/%s/Character/%s/Vendors/?components=%d,%d",
+		c.baseURL, membershipType, membershipID, characterID, ComponentVendors, ComponentVendorSales)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("GetCharacterVendors: %w", err)
@@ -345,5 +346,6 @@ const (
 	ComponentCollectibles         = 800
 	ComponentRecords              = 900
 	ComponentMetrics              = 1100
+	ComponentVendors              = 400
 	ComponentVendorSales          = 402
 )

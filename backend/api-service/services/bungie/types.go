@@ -367,6 +367,9 @@ type ActivityDefinition struct {
 // CharacterVendorsResponse wraps the per-character vendor API response.
 type CharacterVendorsResponse struct {
 	Response struct {
+		Vendors struct {
+			Data map[string]VendorComponent `json:"data"`
+		} `json:"vendors"`
 		Sales struct {
 			Data map[string]VendorSales `json:"data"`
 		} `json:"sales"`
@@ -374,6 +377,13 @@ type CharacterVendorsResponse struct {
 	ErrorCode   int    `json:"ErrorCode"`
 	ErrorStatus string `json:"ErrorStatus"`
 	Message     string `json:"Message"`
+}
+
+// VendorComponent contains the live, character-scoped summary for one vendor.
+type VendorComponent struct {
+	VendorHash          uint32 `json:"vendorHash"`
+	VendorLocationIndex int    `json:"vendorLocationIndex"`
+	Enabled             bool   `json:"enabled"`
 }
 
 // PublicVendorsResponse wraps the multi-vendor Bungie response.
@@ -404,6 +414,12 @@ type VendorSaleItem struct {
 
 // VendorItemCost is the currency cost for one item.
 type VendorItemCost struct {
+	ItemHash uint32 `json:"itemHash"`
+	Quantity int    `json:"quantity"`
+}
+
+// ItemQuantity is Bungie's generic item-hash and quantity pair.
+type ItemQuantity struct {
 	ItemHash uint32 `json:"itemHash"`
 	Quantity int    `json:"quantity"`
 }
@@ -469,17 +485,35 @@ type CoreSettings struct {
 
 // MilestoneDefinition is a DestinyMilestoneDefinition entry from the manifest.
 type MilestoneDefinition struct {
+	Hash              uint32                                       `json:"hash"`
+	DisplayProperties DisplayProperties                            `json:"displayProperties"`
+	MilestoneType     int                                          `json:"milestoneType"`
+	Rewards           map[string]MilestoneRewardCategoryDefinition `json:"rewards"`
+}
+
+// MilestoneRewardCategoryDefinition groups reward entries within a milestone.
+type MilestoneRewardCategoryDefinition struct {
+	RewardEntries map[string]MilestoneRewardEntryDefinition `json:"rewardEntries"`
+}
+
+// MilestoneRewardEntryDefinition describes the items represented by one reward entry.
+type MilestoneRewardEntryDefinition struct {
+	Items []ItemQuantity `json:"items"`
+}
+
+// VendorDefinition is the location-bearing subset of DestinyVendorDefinition.
+type VendorDefinition struct {
+	Hash      uint32                     `json:"hash"`
+	Locations []VendorLocationDefinition `json:"locations"`
+}
+
+// VendorLocationDefinition points from a vendor location slot to a destination.
+type VendorLocationDefinition struct {
+	DestinationHash uint32 `json:"destinationHash"`
+}
+
+// DestinationDefinition is the display subset of DestinyDestinationDefinition.
+type DestinationDefinition struct {
 	Hash              uint32            `json:"hash"`
 	DisplayProperties DisplayProperties `json:"displayProperties"`
-	MilestoneType     int               `json:"milestoneType"`
-	QuestItems        []struct {
-		QuestItemHash uint32 `json:"questItemHash"`
-	} `json:"questItems"`
-	Rewards []struct {
-		RewardEntries map[string]struct {
-			RewardItems []struct {
-				ItemHash uint32 `json:"itemHash"`
-			} `json:"rewardItems"`
-		} `json:"rewardEntries"`
-	} `json:"rewards"`
 }

@@ -2,6 +2,7 @@ package weekly
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -10,10 +11,12 @@ import (
 )
 
 // liveVendorItemsCacheKey is the shared daily-cache key for the rotating
-// character-402 vendors' sale items (getLiveVendorItems + tests).
+// character-vendor sale items (getLiveVendorItems + tests).
 const liveVendorItemsCacheKey = "live:vendoritems"
 
-// liveVendorAllowlist maps the character-402 rotating vendors we surface as
+const characterVendorsCacheTTL = 5 * time.Minute
+
+// liveVendorAllowlist maps the character-scoped rotating vendors we surface as
 // "available now" to their display names. Xûr is handled separately (public
 // vendor fetch), so it is not in this map.
 var liveVendorAllowlist = map[uint32]string{
@@ -75,7 +78,42 @@ func (s *Service) liveVendorItemHashesAt(ctx context.Context, membershipType int
 	return out
 }
 
-// getLiveVendorItems fetches the allowlisted character-402 vendors' sale items,
+// getCharacterVendors returns the authenticated 400+402 vendor response for a
+// user's most recently played character. The short membership-scoped cache lets
+// Xûr location, daily actions, and availability enrichment share one response
+// without treating potentially account-specific vendor state as global.
+func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, membershipID, bungieToken string) *bungie.CharacterVendorsResponse {
+	if bungieToken == "" {
+		return nil
+	}
+	cacheKey := fmt.Sprintf("vendors:character:%d:%s", membershipType, membershipID)
+	if s.cache != nil {
+		if cached, ok := s.cache.Get(cacheKey); ok {
+			if resp, ok := cached.(*bungie.CharacterVendorsResponse); ok {
+				return resp
+			}
+		}
+	}
+	if s.bungie == nil {
+		return nil
+	}
+
+	characterID := s.resolvePrimaryCharacter(ctx, membershipType, membershipID, bungieToken)
+	if characterID == "" {
+		return nil
+	}
+	resp, err := s.bungie.GetCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
+	if err != nil {
+		log.Printf("weekly: GetCharacterVendors: %v", err)
+		return nil
+	}
+	if s.cache != nil {
+		s.cache.Set(cacheKey, resp, characterVendorsCacheTTL)
+	}
+	return resp
+}
+
+// getLiveVendorItems fetches the allowlisted character vendors' sale items,
 // cached daily (shared across users — the rotation is identical for everyone).
 // Returns nil when the fetch is impossible (no client/token/character) or fails.
 func (s *Service) getLiveVendorItems(ctx context.Context, membershipType int, membershipID, bungieToken string, now time.Time) map[uint32]string {
@@ -85,16 +123,8 @@ func (s *Service) getLiveVendorItems(ctx context.Context, membershipType int, me
 			return m
 		}
 	}
-	if s.bungie == nil || bungieToken == "" {
-		return nil
-	}
-	characterID := s.resolvePrimaryCharacter(ctx, membershipType, membershipID, bungieToken)
-	if characterID == "" {
-		return nil
-	}
-	resp, err := s.bungie.GetCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
-	if err != nil {
-		log.Printf("weekly: LiveVendorItemHashes GetCharacterVendors: %v", err)
+	resp := s.getCharacterVendors(ctx, membershipType, membershipID, bungieToken)
+	if resp == nil {
 		return nil
 	}
 	items := extractVendorItems(resp, liveVendorAllowlist)
