@@ -293,3 +293,57 @@ describe("Collections", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
+
+describe("Collections filters persistence + obtainability", () => {
+  // Serve the Hand Cannons leaf with 100 obtainable-now and 200 farm-only, both missing.
+  function serveFilterFixture() {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json({
+          ...treeCollections,
+          items: {
+            "100": { ...treeCollections.items["100"], farmOnly: false },
+            "200": { ...treeCollections.items["200"], farmOnly: true },
+          },
+          collectedHashes: [], // both missing → both visible under missing-only
+          availableNow: { "100": "Banshee-44" }, // 100 obtainable now
+        }),
+      ),
+    );
+  }
+
+  it("restores the Available-now filter from the URL on load", async () => {
+    serveFilterFixture();
+    renderCollections("?node=11&avail=1");
+    // avail=1 keeps only the obtainable item (Fatebringer); Imperial Decree drops.
+    expect(await screen.findByText("Fatebringer")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByText("Imperial Decree")).not.toBeInTheDocument(),
+    );
+  });
+
+  it("Hide farm-only excludes farm-only items when toggled", async () => {
+    serveFilterFixture();
+    renderCollections("?node=11");
+    // Both visible by default.
+    await screen.findByText("Fatebringer");
+    expect(screen.getByText("Imperial Decree")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /hide farm-only/i }));
+    await waitFor(() =>
+      expect(screen.queryByText("Imperial Decree")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("Fatebringer")).toBeInTheDocument();
+  });
+
+  it("preserves filter params when an ?item= deep-link opens the drawer", async () => {
+    serveFilterFixture();
+    renderCollections("?node=11&avail=1&item=100");
+    // Drawer opens for the deep-linked item…
+    await screen.findByText("Fatebringer");
+    // …and avail=1 survives (the deep-link only strips item=), so Imperial Decree
+    // stays filtered out rather than reappearing.
+    await waitFor(() =>
+      expect(screen.queryByText("Imperial Decree")).not.toBeInTheDocument(),
+    );
+  });
+});

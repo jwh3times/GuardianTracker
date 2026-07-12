@@ -110,20 +110,30 @@ export function useCollectionsFilters() {
   // missing) MUST go through `setFilters`, which patches all fields in a single
   // `write` call, not sequential single-field setter calls.
   const write = useCallback(
-    (patch: Partial<CollectionsFilters>, opts?: { replace?: boolean }) => {
-      setSearchParams((prev) => {
-        const base = urlHasFilterParams(prev)
-          ? parseFilters(prev)
-          : { ...parseFilters(prev), ...(loadStoredFilters() ?? {}) };
-        const next = { ...base, ...patch };
-        const out = serializeFilters(next);
-        for (const [k, v] of prev) {
-          if (k === "node" || (FILTER_KEYS as readonly string[]).includes(k))
-            continue;
-          out.set(k, v);
-        }
-        return out;
-      }, opts);
+    (
+      patch: Partial<CollectionsFilters>,
+      opts?: { replace?: boolean; drop?: string[] },
+    ) => {
+      setSearchParams(
+        (prev) => {
+          const base = urlHasFilterParams(prev)
+            ? parseFilters(prev)
+            : { ...parseFilters(prev), ...(loadStoredFilters() ?? {}) };
+          const next = { ...base, ...patch };
+          const out = serializeFilters(next);
+          for (const [k, v] of prev) {
+            if (
+              k === "node" ||
+              (FILTER_KEYS as readonly string[]).includes(k) ||
+              opts?.drop?.includes(k)
+            )
+              continue;
+            out.set(k, v);
+          }
+          return out;
+        },
+        opts?.replace ? { replace: true } : undefined,
+      );
     },
     [setSearchParams],
   );
@@ -135,7 +145,7 @@ export function useCollectionsFilters() {
     // replace-style navigation (e.g. deep-link restore) unless told otherwise.
     setFilters: (
       patch: Partial<CollectionsFilters>,
-      opts: { replace?: boolean } = { replace: true },
+      opts: { replace?: boolean; drop?: string[] } = { replace: true },
     ) => write(patch, opts),
     setNode: (node: string) => write({ node }), // push (Back returns to prev category)
     setRarity: (rarity: Rarity | null) => write({ rarity }, { replace: true }),
