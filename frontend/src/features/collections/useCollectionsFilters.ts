@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Difficulty, Rarity } from "../../types/design";
+import { DIFFS, RARITIES } from "../../lib/constants";
 
 export type SortKey = "rarity" | "name" | "difficulty" | "avail";
 
@@ -35,8 +36,10 @@ export function parseFilters(p: URLSearchParams): CollectionsFilters {
   const sort = p.get("sort");
   return {
     node: p.get("node") ?? "",
-    rarity: rarity ? (rarity as Rarity) : null,
-    diff: diff ? (diff as Difficulty) : null,
+    rarity:
+      rarity && RARITIES.includes(rarity as Rarity) ? (rarity as Rarity) : null,
+    diff:
+      diff && DIFFS.includes(diff as Difficulty) ? (diff as Difficulty) : null,
     sort:
       sort === "name" || sort === "difficulty" || sort === "avail"
         ? sort
@@ -98,9 +101,14 @@ export function useCollectionsFilters() {
     }
   }, [filters]);
 
-  // write applies a patch via the functional updater so concurrent setter calls
-  // (e.g. the deep-link effect setting node + missing) compose correctly, and it
-  // preserves any non-filter/non-node params already in the URL (e.g. item=).
+  // write applies a patch to the current URL params and preserves any
+  // non-filter/non-node params already present (e.g. item=). Note: react-router's
+  // functional updater snapshots `prev` from the current render, not a live ref —
+  // so two `write` calls in the same synchronous tick each start from the same
+  // stale snapshot and the second silently clobbers the first. Callers that need
+  // to change multiple fields together (e.g. the deep-link effect setting node +
+  // missing) MUST go through `setFilters`, which patches all fields in a single
+  // `write` call, not sequential single-field setter calls.
   const write = useCallback(
     (patch: Partial<CollectionsFilters>, opts?: { replace?: boolean }) => {
       setSearchParams((prev) => {
@@ -122,6 +130,13 @@ export function useCollectionsFilters() {
 
   return {
     ...filters,
+    // Atomic multi-field setter — routes through a single `write` call so all
+    // patched fields land together (see note on `write` above). Defaults to a
+    // replace-style navigation (e.g. deep-link restore) unless told otherwise.
+    setFilters: (
+      patch: Partial<CollectionsFilters>,
+      opts: { replace?: boolean } = { replace: true },
+    ) => write(patch, opts),
     setNode: (node: string) => write({ node }), // push (Back returns to prev category)
     setRarity: (rarity: Rarity | null) => write({ rarity }, { replace: true }),
     setDiff: (diff: Difficulty | null) => write({ diff }, { replace: true }),

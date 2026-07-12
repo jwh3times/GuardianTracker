@@ -1,5 +1,12 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { parseFilters, serializeFilters } from "./useCollectionsFilters";
+import React from "react";
+import { describe, expect, it } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import {
+  parseFilters,
+  serializeFilters,
+  useCollectionsFilters,
+} from "./useCollectionsFilters";
 
 describe("collections filter (de)serialization", () => {
   it("parses defaults from an empty param set", () => {
@@ -58,6 +65,37 @@ describe("collections filter (de)serialization", () => {
     expect(serializeFilters({ ...defaults(), avail: false }).has("avail")).toBe(
       false,
     );
+  });
+
+  it("drops an invalid rarity instead of round-tripping garbage", () => {
+    const f = parseFilters(new URLSearchParams("rarity=oops"));
+    expect(f.rarity).toBeNull();
+  });
+
+  it("drops an invalid diff instead of round-tripping garbage", () => {
+    const f = parseFilters(new URLSearchParams("diff=nope"));
+    expect(f.diff).toBeNull();
+  });
+
+  it("still parses a valid rarity", () => {
+    const f = parseFilters(new URLSearchParams("rarity=exotic"));
+    expect(f.rarity).toBe("exotic");
+  });
+});
+
+describe("useCollectionsFilters — atomic setFilters", () => {
+  it("applies a multi-field patch without losing either field (lost-update guard)", () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(MemoryRouter, null, children);
+
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+
+    act(() => {
+      result.current.setFilters({ node: "5", missing: false });
+    });
+
+    expect(result.current.node).toBe("5");
+    expect(result.current.missing).toBe(false);
   });
 });
 
