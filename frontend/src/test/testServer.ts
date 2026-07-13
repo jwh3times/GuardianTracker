@@ -138,7 +138,16 @@ export const sampleSeals = {
       left: "2 triumphs left",
       triumphs: [
         { label: "Complete a GM", done: true, cur: 1, max: 1 },
-        { label: "Flawless card", done: false, cur: 0, max: 1 },
+        {
+          label: "Flawless card",
+          done: false,
+          cur: 0,
+          max: 1,
+          objectives: [
+            { label: "Win 7 Trials matches", done: false, cur: 3, max: 7 },
+            { label: "No deaths in the run", done: true, cur: 1, max: 1 },
+          ],
+        },
       ],
     },
     {

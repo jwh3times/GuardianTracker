@@ -187,11 +187,21 @@ export interface CraftPattern {
   source: string;
 }
 
+export interface TriumphObjective {
+  label: string;
+  done: boolean;
+  cur: number;
+  max: number;
+}
+
 export interface Triumph {
   label: string;
   done: boolean;
   cur: number;
   max: number;
+  /** Per-objective drill-down for the triumph's progress bar; absent (not an
+   * empty array) when the triumph has no objective data. */
+  objectives?: TriumphObjective[];
 }
 
 export interface Seal {
