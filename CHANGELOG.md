@@ -11,6 +11,11 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 ### Added
 
+- Structured application and access logs with server-owned request UUIDs,
+  route-template records, privacy-safe identifier pseudonyms, and
+  `X-Request-ID` response/CORS propagation.
+- Staticcheck 2026.1 to the required Go CI job, alongside `go vet`,
+  `govulncheck`, race-enabled tests, and coverage enforcement.
 - Collectible ornaments and finishers to the Cosmetics gallery after verifying
   their manifest item type/subtype classification.
 - A first-run guided tour of Dashboard, This Week, and Collections. Completion

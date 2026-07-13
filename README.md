@@ -34,7 +34,7 @@ frontend.
 | Manifest data         | Bungie manifest SQLite database                                    |
 | Local runtime         | Docker Compose                                                     |
 | Kubernetes validation | Minikube manifests under `k8s/`                                    |
-| CI                    | GitHub Actions format, test, coverage, and Docker build validation |
+| CI                    | GitHub Actions format, Staticcheck, test, coverage, and Docker build validation |
 
 ## Architecture
 
@@ -76,6 +76,7 @@ docker compose up --build
 # Backend tests
 cd backend/api-service
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 
 # Frontend tests
 cd frontend
@@ -93,6 +94,10 @@ For CI-equivalent Go coverage with cgo and test Postgres, run:
 cd backend/api-service
 ./test-local.ps1
 ```
+
+Every pull request requires Format Check, Test Frontend, Test Go Services, and
+Build Docker Images. The Go job includes the pinned Staticcheck command above;
+see [CONTRIBUTING.md](./CONTRIBUTING.md#ci-gates) for the complete gate details.
 
 ## Project Layout
 

@@ -152,6 +152,7 @@ npm run lint
 # Go service (from backend/api-service/)
 go test ./...
 go vet ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ```
 
 Coverage thresholds are enforced in CI:
@@ -180,7 +181,7 @@ Every PR must pass these GitHub Actions jobs before it can merge:
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | **Format Check**        | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted                                                      |
 | **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                        |
-| **Test Go Services**    | `go vet`, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against a Postgres service container |
+| **Test Go Services**    | `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against Postgres |
 | **Build Docker Images** | builds both production Docker images (build validation; no push)                                                           |
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it

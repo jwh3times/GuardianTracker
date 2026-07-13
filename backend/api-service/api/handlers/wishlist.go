@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 
 	"github.com/gin-gonic/gin"
@@ -96,13 +96,15 @@ func (h *WishlistHandler) GetWishlist(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		log.Printf("GetWishlist: GetUserID(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	items, err := h.store.List(c.Request.Context(), userID)
 	if err != nil {
-		log.Printf("GetWishlist: List(%d): %v", userID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist listing failed",
+			observability.IntID("user", userID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -129,7 +131,8 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 		defs, err := h.manifest.GetItemsByHashes([]uint32{body.ItemHash})
 		if err != nil || defs[body.ItemHash] == nil {
 			if err != nil {
-				log.Printf("AddToWishlist: manifest lookup error for hash %d: %v", body.ItemHash, err)
+				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "wishlist manifest lookup failed",
+					"item_hash", body.ItemHash, observability.Err(err))
 			} else {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown item hash"})
 				return
@@ -152,7 +155,8 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		log.Printf("AddToWishlist: GetUserID(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -162,7 +166,8 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "item already in wishlist"})
 			return
 		}
-		log.Printf("AddToWishlist: Add: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist item creation failed",
+			observability.IntID("user", userID), "item_hash", body.ItemHash, observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -204,7 +209,8 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		log.Printf("UpdateWishlistItem: GetUserID(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -214,7 +220,8 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "wishlist item not found"})
 			return
 		}
-		log.Printf("UpdateWishlistItem: Update: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist item update failed",
+			observability.IntID("user", userID), "wishlist_item_id", id, observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -235,13 +242,15 @@ func (h *WishlistHandler) RemoveFromWishlist(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		log.Printf("RemoveFromWishlist: GetUserID(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	found, err := h.store.Delete(c.Request.Context(), userID, id)
 	if err != nil {
-		log.Printf("RemoveFromWishlist: Delete: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist item deletion failed",
+			observability.IntID("user", userID), "wishlist_item_id", id, observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -311,7 +320,8 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		log.Printf("BulkUpdate: GetUserID(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -324,7 +334,8 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 		updated, err = h.store.BulkSetPriority(c.Request.Context(), userID, ids, prio)
 	}
 	if err != nil {
-		log.Printf("BulkUpdate(%s): %v", body.Action, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist bulk update failed",
+			observability.IntID("user", userID), "action", body.Action, observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -341,13 +352,15 @@ func (h *WishlistHandler) GetPreferences(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.getUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		log.Printf("GetPreferences: getUserID(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference user lookup failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	p, err := h.prefs.Get(c.Request.Context(), userID)
 	if err != nil {
-		log.Printf("GetPreferences: Get(%d): %v", userID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference listing failed",
+			observability.IntID("user", userID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -380,14 +393,16 @@ func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.getUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		log.Printf("UpdatePreferences: getUserID(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference user lookup failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	// Read current prefs to fill in defaults for missing fields
 	current, err := h.prefs.Get(c.Request.Context(), userID)
 	if err != nil {
-		log.Printf("UpdatePreferences: Get(%d): %v", userID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "current preference lookup failed",
+			observability.IntID("user", userID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -402,7 +417,8 @@ func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
 	completeOnboarding := body.OnboardingComplete != nil && *body.OnboardingComplete
 	p, err := h.prefs.Upsert(c.Request.Context(), userID, cardStyle, personalize, completeOnboarding)
 	if err != nil {
-		log.Printf("UpdatePreferences: Upsert(%d): %v", userID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference update failed",
+			observability.IntID("user", userID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}

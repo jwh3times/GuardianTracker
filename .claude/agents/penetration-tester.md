@@ -175,6 +175,13 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 - Test: trigger various error conditions (invalid membershipId, bad JWT, missing Bungie token) — verify responses don't include stack traces, internal file paths, connection strings, or other internal details
 - Confirm: the `code` field uses only the defined machine-readable values (`PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`)
 
+### Request IDs and application-log privacy
+
+- Test: every response, including 4xx, 5xx, and panic recovery, has a server-generated UUID in `X-Request-ID`; an attacker-supplied request-ID header must not become the canonical value
+- Test: allowed cross-origin responses expose `X-Request-ID`
+- Audit access records for route templates rather than raw URLs and verify query strings, bodies, authorization values, User-Agent values, and routine client IPs are absent
+- Audit application errors involving users/sessions/characters: identifiers must be deterministic 24-hex pseudonyms, while the separate PostgreSQL audit trail may retain exact identifiers for security forensics
+
 ## Known intentional gaps (document, do not escalate as vulnerabilities)
 
 - OAuth state is replayable within its 10-minute TTL — stateless HMAC design cannot enforce one-time use; mitigated by Bungie's single-use authorization code

@@ -19,7 +19,8 @@ React/Vite frontend (:5273)
   custom `gt-*` design system.
 - **API:** Go + Gin HTTP service with Bungie OAuth, JWT access/refresh tokens,
   manifest management, collection analysis, weekly recommendations, search,
-  wishlist, preferences, roles, flags, and admin endpoints.
+  wishlist, preferences, roles, flags, admin endpoints, and structured request
+  logging.
 - **Postgres:** users, wishlist, preferences and onboarding completion, encrypted
   Bungie tokens, refresh sessions, roles, feature flags, and audit log.
 - **SQLite:** local copy of the Bungie Destiny 2 manifest, downloaded and
@@ -99,6 +100,20 @@ Primary route groups:
 
 See `backend/api-service/main.go` for the authoritative route registration.
 
+## Request Logging
+
+The API generates a UUID for every request, exposes it as `X-Request-ID`, and
+attaches a request-scoped `log/slog` logger to the Go context. Access records use
+the matched route template rather than the raw URL and include method, status,
+duration, and response bytes. Successful health probes are debug records;
+successful application requests are info, 4xx are warning, and 5xx are error.
+
+Application logs never include query strings, bodies, authorization headers,
+User-Agent values, or routine client IPs. Membership, session, user, and
+character identifiers use deterministic 24-hex pseudonyms derived from the
+first 12 SHA-256 bytes. Exact identifiers remain only in the existing Postgres
+audit trail.
+
 ## Local Infrastructure
 
 Docker Compose is the recommended full-stack development path. It starts the
@@ -127,8 +142,8 @@ See [SECURITY.md](../SECURITY.md) for the security guide and checklist.
 ## Tests
 
 - Frontend: Vitest, Testing Library, MSW, type-check, lint, build.
-- Backend: Go unit and integration tests, `go vet`, `govulncheck`, race detector
-  in CI, Postgres-backed integration tests.
+- Backend: Go unit and integration tests, `go vet`, Staticcheck 2026.1,
+  `govulncheck`, race detector in CI, Postgres-backed integration tests.
 - Docker: CI builds production images for validation.
 
 ## Related Decisions

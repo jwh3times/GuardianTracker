@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"context"
-	"log"
 	"net/http"
 
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/weekly"
 
 	"github.com/gin-gonic/gin"
@@ -37,14 +37,20 @@ func (h *WeeklyHandler) GetWeekly(c *gin.Context) {
 
 	bungieToken, err := h.tokenStore.GetValidToken(membershipID)
 	if err != nil {
-		log.Printf("weekly: GetValidToken for %s: %v", membershipID, err)
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "weekly personalization token unavailable",
+			observability.ID("membership", membershipID), observability.Err(err))
 		// Don't fail — weekly content is partly public; serve without per-user flags
 		bungieToken = ""
 	}
 
 	result, err := h.service.GetWeekly(c.Request.Context(), membershipType, membershipID, bungieToken, characterID)
 	if err != nil {
-		log.Printf("weekly: GetWeekly for %s: %v", membershipID, err)
+		logger := observability.Logger(c.Request.Context())
+		if characterID != "" {
+			logger = logger.With(observability.ID("character", characterID))
+		}
+		logger.ErrorContext(c.Request.Context(), "weekly recommendations failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch weekly data"})
 		return
 	}

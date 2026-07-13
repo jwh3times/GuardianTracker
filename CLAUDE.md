@@ -100,6 +100,8 @@ Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`
 | Variable                                | Purpose                                                                                               |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | `GO_ENV`                                | Required; exactly `development` or `production`                                                       |
+| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                               |
+| `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                              |
 | `BUNGIE_API_KEY`                | From <https://www.bungie.net/en/Application>                                                          |
 | `BUNGIE_CLIENT_ID`              | Bungie app settings                                                                                   |
 | `BUNGIE_CLIENT_SECRET`          | Bungie app settings                                                                                   |
@@ -111,13 +113,24 @@ Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
 | `ADMIN_MEMBERSHIP_IDS`          | (optional) comma-separated Bungie membership IDs pinned to admin role at login                        |
 
+### Application logging
+
+The API uses `log/slog` and assigns every request a server-generated UUID exposed
+as `X-Request-ID`. Access records use Gin route templates and include method,
+status, duration, and response bytes. They never include raw URLs/query strings,
+bodies, authorization headers, User-Agent values, or routine client IPs.
+Membership, session, user, and character identifiers are deterministic 24-hex
+pseudonyms in application logs; exact values remain only in the PostgreSQL audit
+trail. Successful app requests log at info, 4xx at warn, 5xx at error, and
+successful health probes at debug.
+
 ## CI/CD
 
 GitHub Actions (`.github/workflows/ci-cd.yml`) — four required jobs:
 
 1. **format-check** — `npm run format:check` (Prettier) + `gofmt`. Fix: `npm run format` from `frontend/` or `gofmt -w .` from `backend/api-service/`.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
-3. **test-go-services** — `go vet`, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
+3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
@@ -162,6 +175,7 @@ environment-specific operations notes. Do not move private operational detail in
 ```powershell
 # Go (from backend/api-service/)
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
 # Frontend (from frontend/)

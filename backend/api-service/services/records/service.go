@@ -3,13 +3,14 @@ package records
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"guardian-tracker/api-service/cache"
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
 )
@@ -468,7 +469,11 @@ func (s *Service) GetCatalysts(ctx context.Context, membershipType int, membersh
 
 	recordDefs, err := s.manifest.GetRecordDefinitions(recordHashes)
 	if err != nil {
-		log.Printf("records: GetRecordDefinitions (catalysts): %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "catalyst record definitions lookup failed",
+			slog.Int("membership_type", membershipType),
+			observability.ID("membership", membershipID),
+			observability.Err(err),
+		)
 		recordDefs = map[uint32]*manifestrepo.RecordDef{}
 	}
 
@@ -586,7 +591,11 @@ func (s *Service) GetCrafting(ctx context.Context, membershipType int, membershi
 
 	recordDefs, err := s.manifest.GetRecordDefinitions(recordHashes)
 	if err != nil {
-		log.Printf("records: GetRecordDefinitions (crafting): %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "crafting record definitions lookup failed",
+			slog.Int("membership_type", membershipType),
+			observability.ID("membership", membershipID),
+			observability.Err(err),
+		)
 		recordDefs = map[uint32]*manifestrepo.RecordDef{}
 	}
 
@@ -685,8 +694,21 @@ func (s *Service) GetSeals(ctx context.Context, membershipType int, membershipID
 		}
 
 		rootDefs, err := s.manifest.GetPresentationNodeDefinitions([]uint32{rootHash})
-		if err != nil || rootDefs[rootHash] == nil {
-			log.Printf("records: GetPresentationNodeDefinitions root %d: %v", rootHash, err)
+		if err != nil {
+			observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "seal root presentation node lookup failed",
+				slog.Uint64("root_hash", uint64(rootHash)),
+				slog.Int("membership_type", membershipType),
+				observability.ID("membership", membershipID),
+				observability.Err(err),
+			)
+			continue
+		}
+		if rootDefs[rootHash] == nil {
+			observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "seal root presentation node missing",
+				slog.Uint64("root_hash", uint64(rootHash)),
+				slog.Int("membership_type", membershipType),
+				observability.ID("membership", membershipID),
+			)
 			continue
 		}
 		root := rootDefs[rootHash]
@@ -701,7 +723,12 @@ func (s *Service) GetSeals(ctx context.Context, membershipType int, membershipID
 
 		sealDefs, err := s.manifest.GetPresentationNodeDefinitions(sealHashes)
 		if err != nil {
-			log.Printf("records: GetPresentationNodeDefinitions seals: %v", err)
+			observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "seal presentation nodes lookup failed",
+				slog.Int("seal_count", len(sealHashes)),
+				slog.Int("membership_type", membershipType),
+				observability.ID("membership", membershipID),
+				observability.Err(err),
+			)
 			continue
 		}
 

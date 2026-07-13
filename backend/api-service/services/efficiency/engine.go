@@ -1,9 +1,10 @@
 package efficiency
 
 import (
-	"log"
+	"log/slog"
 	"sync"
 
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/manifest"
 )
 
@@ -80,7 +81,10 @@ func (e *Engine) BuildIndex() {
 	}
 	rows, err := e.source.GetAllCollectiblesWithItems()
 	if err != nil {
-		log.Printf("efficiency: GetAllCollectiblesWithItems: %v", err)
+		slog.Error("efficiency index collectible lookup failed",
+			slog.String("manifest_version", version),
+			observability.Err(err),
+		)
 		return
 	}
 	buckets := buildBuckets(rows)
@@ -89,5 +93,8 @@ func (e *Engine) BuildIndex() {
 	e.buckets = buckets
 	e.builtVersion = version
 	e.mu.Unlock()
-	log.Printf("efficiency: index built — %d source buckets (manifest %s)", len(buckets), version)
+	slog.Info("efficiency index built",
+		slog.Int("source_bucket_count", len(buckets)),
+		slog.String("manifest_version", version),
+	)
 }

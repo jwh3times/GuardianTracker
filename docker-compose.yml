@@ -58,6 +58,8 @@ services:
     environment:
       PORT: "8081"
       GO_ENV: ${GO_ENV:?set GO_ENV to development or production}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      LOG_FORMAT: ${LOG_FORMAT:-}
       BUNGIE_API_KEY: ${BUNGIE_API_KEY:-}
       BUNGIE_API_BASE_URL: https://www.bungie.net/Platform
       BUNGIE_CLIENT_ID: ${BUNGIE_CLIENT_ID:-}

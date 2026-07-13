@@ -81,6 +81,8 @@ Important local variables:
 | Variable                                | Purpose                                                              |
 | --------------------------------------- | -------------------------------------------------------------------- |
 | `GO_ENV`                                | Required runtime mode: exactly `development` or `production`         |
+| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error` (`info` default)                  |
+| `LOG_FORMAT`                            | `text` or `json` (development text; production JSON by default)       |
 | `BUNGIE_CLIENT_ID`                      | Bungie OAuth client ID                                               |
 | `BUNGIE_CLIENT_SECRET`                  | Bungie OAuth client secret                                           |
 | `BUNGIE_API_KEY`                        | Bungie API key                                                       |
@@ -105,6 +107,13 @@ Auth and security behavior to preserve:
 
 See `SECURITY.md` for public security posture and reporting guidance.
 
+Logging behavior to preserve:
+
+- Every request receives a server-owned UUID returned as `X-Request-ID` and attached to the request context.
+- Access logs use route templates, method, status, duration, and response bytes; health-probe successes log at debug.
+- Application logs pseudonymize membership, session, user, and character identifiers as deterministic 24-hex values. Exact identifiers belong only in the PostgreSQL audit trail.
+- Never log query strings, bodies, authorization headers, User-Agent values, or routine client IPs.
+
 ## Testing and Validation
 
 Use the narrowest relevant test first, then run broader checks when the change crosses module boundaries.
@@ -115,6 +124,7 @@ Common commands:
 # Backend tests
 cd backend/api-service
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 
 # Frontend checks
 cd frontend

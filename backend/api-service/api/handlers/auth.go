@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -78,7 +78,7 @@ func NewAuthHandler(j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userSt
 func (h *AuthHandler) GetBungieAuthURL(c *gin.Context) {
 	state, err := h.state.Generate()
 	if err != nil {
-		log.Printf("Error generating CSRF state: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "OAuth state generation failed", observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize authentication"})
 		return
 	}
@@ -112,7 +112,7 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 
 	tokenResp, err := h.exchangeCode(c.Request.Context(), code)
 	if err != nil {
-		log.Printf("Error exchanging code for token: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "OAuth code exchange failed", observability.Err(err))
 		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
 			Details: map[string]any{"reason": "code_exchange"}})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete authentication"})
@@ -121,7 +121,7 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 
 	profile, err := h.getBungieProfile(c.Request.Context(), tokenResp.AccessToken)
 	if err != nil {
-		log.Printf("Error getting user profile: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "Bungie profile lookup failed", observability.Err(err))
 		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
 			Details: map[string]any{"reason": "profile_fetch"}})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user profile"})
@@ -137,7 +137,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		forceAdmin := h.cfg.IsBootstrapAdmin(profile.MembershipID)
 		id, tv, r, err := h.userStore.Upsert(c.Request.Context(), profile.MembershipID, int16(profile.MembershipType), profile.DisplayName, forceAdmin)
 		if err != nil {
-			log.Printf("user upsert failed for %s: %v", profile.MembershipID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "login user persistence failed",
+				observability.ID("membership", profile.MembershipID), observability.Err(err))
 		} else {
 			tokenVersion = tv
 			role = int(r)
@@ -163,13 +164,15 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	sessionID := uuid.NewString()
 	accessToken, err := h.jwt.GenerateAccessToken(profile, tokenVersion, sessionID)
 	if err != nil {
-		log.Printf("Error generating access token: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "access token generation failed",
+			observability.ID("membership", profile.MembershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
 	refreshToken, refreshJTI, err := h.jwt.GenerateRefreshToken(profile, tokenVersion, sessionID)
 	if err != nil {
-		log.Printf("Error generating refresh token: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "refresh token generation failed",
+			observability.ID("membership", profile.MembershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
@@ -181,7 +184,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	if h.userStore != nil {
 		expiresAt := now.Add(h.jwt.RefreshTokenTTL())
 		if err := h.userStore.CreateSession(c.Request.Context(), sessionID, profile.MembershipID, refreshJTI, c.Request.UserAgent(), expiresAt); err != nil {
-			log.Printf("create session failed for %s: %v", profile.MembershipID, err)
+			observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "refresh session creation failed",
+				observability.ID("membership", profile.MembershipID), observability.ID("session", sessionID), observability.Err(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 			return
 		}
@@ -274,7 +278,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			// The adopted session is load-bearing for the new access token, so a failed
 			// write must fail the refresh rather than hand back a dead-on-arrival session.
 			if cerr := h.userStore.CreateSession(c.Request.Context(), sessionID, claims.MembershipID, newJTI, c.Request.UserAgent(), expiresAt); cerr != nil {
-				log.Printf("adopt legacy session failed for %s: %v", claims.MembershipID, cerr)
+				observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "legacy refresh session adoption failed",
+					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID), observability.Err(cerr))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
 				return
 			}
@@ -284,14 +289,16 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			case reused:
 				h.logAudit(c, db.AuditEvent{EventType: "refresh.reuse", Outcome: "failure",
 					ActorMembershipID: claims.MembershipID, SessionID: sessionID})
-				log.Printf("refresh-token reuse detected for %s (session %s) — session revoked", claims.MembershipID, sessionID)
+				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "refresh token reuse detected; session revoked",
+					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID))
 				h.expireRefreshCookie(c)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session ended for security reasons. Please log in again."})
 				return
 			case rerr != nil:
 				// Genuine DB error (not reuse): fail open, consistent with the revocation
 				// check above — the new jti goes unrecorded, so the next refresh may re-login.
-				log.Printf("rotate session failed for %s: %v — allowing refresh", claims.MembershipID, rerr)
+				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "refresh session rotation failed open",
+					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID), observability.Err(rerr))
 			case !rotated:
 				h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 					ActorMembershipID: claims.MembershipID, SessionID: sessionID,
@@ -352,7 +359,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	if h.userStore != nil && sessionID != "" {
 		if err := h.userStore.DeleteSession(c.Request.Context(), sessionID); err != nil {
-			log.Printf("logout: delete session %s failed: %v", sessionID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "logout session deletion failed",
+				observability.ID("session", sessionID), observability.Err(err))
 		}
 	}
 	// Evict the session cache entry so this device's access token is rejected on its
@@ -374,10 +382,12 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 
 	if h.userStore != nil {
 		if err := h.userStore.BumpTokenVersion(c.Request.Context(), membershipID); err != nil {
-			log.Printf("logout-all: bump token_version failed for %s: %v", membershipID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account token revocation failed",
+				observability.ID("membership", membershipID), observability.Err(err))
 		}
 		if err := h.userStore.DeleteUserSessions(c.Request.Context(), membershipID); err != nil {
-			log.Printf("logout-all: delete sessions failed for %s: %v", membershipID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account session deletion failed",
+				observability.ID("membership", membershipID), observability.Err(err))
 		}
 	}
 
@@ -428,7 +438,8 @@ func (h *AuthHandler) logAudit(c *gin.Context, ev db.AuditEvent) {
 	ev.IP = c.ClientIP()
 	ev.UserAgent = c.Request.UserAgent()
 	if err := h.audit.Log(c.Request.Context(), ev); err != nil {
-		log.Printf("audit %s: %v", ev.EventType, err)
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "audit event persistence failed",
+			"event_type", ev.EventType, observability.Err(err))
 	}
 }
 
