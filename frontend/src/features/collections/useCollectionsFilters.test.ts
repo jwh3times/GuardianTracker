@@ -71,6 +71,16 @@ describe("collections filter (de)serialization", () => {
     expect(f.q).toBe("a".repeat(100));
   });
 
+  // Finding D regression: serializeFilters is a write path independent of
+  // parseFilters' read-path clamp — a future caller (e.g. setFilters({ q }))
+  // could otherwise write an over-long q straight into the URL.
+  it("clamps an over-long q to 100 characters on write, not just on read", () => {
+    const long = "b".repeat(150);
+    const p = serializeFilters({ ...defaults(), q: long });
+    expect(p.get("q")).toHaveLength(100);
+    expect(p.get("q")).toBe("b".repeat(100));
+  });
+
   it("emits missing=0 only when off, avail/farm=1 only when on", () => {
     expect(
       serializeFilters({ ...defaults(), missing: false }).get("missing"),
@@ -208,6 +218,23 @@ describe("useCollectionsFilters — atomic setFilters", () => {
 
     expect(result.current.node).toBe("7");
     expect(result.current.q).toBe("foo");
+  });
+
+  // Finding B regression: a whitespace-only q must not count as "the user
+  // has filters set" — otherwise a fully-collected category with a stray
+  // space in the search box shows a misleading "no items match" empty state
+  // instead of "All caught up!" (see Collections.tsx's mirrored guard).
+  it("hasFilters is false for a whitespace-only q", () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: ["/?q=%20%20"] },
+        children,
+      );
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+
+    expect(result.current.q).toBe("  ");
+    expect(result.current.hasFilters).toBe(false);
   });
 
   it("clearFilters clears q; hasFilters is true for a search-only state", () => {

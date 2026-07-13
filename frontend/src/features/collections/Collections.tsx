@@ -115,6 +115,11 @@ export function Collections() {
     hasFilters,
   } = useCollectionsFilters();
 
+  // Whitespace-only search input behaves as no search at all — both for item
+  // matching below and for the empty-state branch (see hasFilters in
+  // useCollectionsFilters, which applies the same trim).
+  const qTrimmed = q.trim().toLowerCase();
+
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const itemParam = searchParams.get("item");
@@ -349,9 +354,8 @@ export function Collections() {
     if (diff) list = list.filter((i) => i.diff === diff);
     if (avail) list = list.filter((i) => i.obtainable);
     if (farm) list = list.filter((i) => !i.farmOnly);
-    const needle = q.trim().toLowerCase();
-    if (needle)
-      list = list.filter((i) => i.name.toLowerCase().includes(needle));
+    if (qTrimmed)
+      list = list.filter((i) => i.name.toLowerCase().includes(qTrimmed));
     if (sort === "rarity")
       list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
     else if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
@@ -360,7 +364,7 @@ export function Collections() {
     else if (sort === "avail")
       list.sort((a, b) => (b.obtainable ? 1 : 0) - (a.obtainable ? 1 : 0));
     return list;
-  }, [baseItems, rarity, diff, avail, farm, q, sort]);
+  }, [baseItems, rarity, diff, avail, farm, qTrimmed, sort]);
 
   const onWish = (item: GTItem) => {
     // Ignore clicks while a mutation for this item is still settling — `wished`
@@ -582,14 +586,14 @@ export function Collections() {
                 icon={hasFilters ? "filter" : "check"}
                 color={hasFilters ? "var(--c-text-3)" : "var(--c-complete)"}
                 title={
-                  q
+                  qTrimmed
                     ? `No items match "${q}"`
                     : hasFilters
                       ? "No items match these filters"
                       : "All caught up!"
                 }
                 body={
-                  q
+                  qTrimmed
                     ? "Try a different search term, or clear the search to see this category's full list."
                     : hasFilters
                       ? "Try loosening a filter to see more of this category."

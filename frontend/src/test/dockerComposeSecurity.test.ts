@@ -106,6 +106,9 @@ describe("docker-compose backing-service port bindings", () => {
     for (const serviceName of ["api-service", "frontend"]) {
       const mappings = getPortMappings(getServiceBlock(compose, serviceName));
       expect(mappings.length).toBeGreaterThan(0);
+      for (const mapping of mappings) {
+        expect(mapping.startsWith("127.0.0.1:")).toBe(false);
+      }
     }
   });
 });

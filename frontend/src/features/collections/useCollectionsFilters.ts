@@ -27,6 +27,35 @@ const MAX_Q_LENGTH = 100;
 // param must not be treated as "the user has filters set" and must not be
 // overwritten by a hand-edited/legacy stored payload.
 const URL_ONLY_KEYS = ["node", "q"] as const;
+type UrlOnlyKey = (typeof URL_ONLY_KEYS)[number];
+
+// Strips URL-only keys (see URL_ONLY_KEYS) from a full filter state — the
+// single source of truth for "what gets persisted to localStorage". Adding a
+// key to URL_ONLY_KEYS automatically excludes it here too.
+function omitUrlOnly(
+  f: CollectionsFilters,
+): Omit<CollectionsFilters, UrlOnlyKey> {
+  const rest: Partial<CollectionsFilters> = { ...f };
+  for (const key of URL_ONLY_KEYS) {
+    delete rest[key];
+  }
+  return rest as Omit<CollectionsFilters, UrlOnlyKey>;
+}
+
+// Overwrites `base`'s URL-only keys (see URL_ONLY_KEYS) with the values from
+// `fromUrl` — the single source of truth for "stored/legacy filter state can
+// never leak a URL-only field". Adding a key to URL_ONLY_KEYS automatically
+// re-asserts it here too.
+function reassertUrlOnly(
+  base: CollectionsFilters,
+  fromUrl: CollectionsFilters,
+): CollectionsFilters {
+  const out = { ...base };
+  for (const key of URL_ONLY_KEYS) {
+    out[key] = fromUrl[key];
+  }
+  return out;
+}
 
 // Keys that count as "filters" — presence of any of these in the URL means
 // the URL is the source of truth and stored defaults are ignored. Keys in
@@ -70,7 +99,7 @@ export function parseFilters(p: URLSearchParams): CollectionsFilters {
 export function serializeFilters(f: CollectionsFilters): URLSearchParams {
   const p = new URLSearchParams();
   if (f.node) p.set("node", f.node);
-  if (f.q) p.set("q", f.q);
+  if (f.q) p.set("q", f.q.slice(0, MAX_Q_LENGTH));
   if (f.rarity) p.set("rarity", f.rarity);
   if (f.diff) p.set("diff", f.diff);
   if (f.sort !== "rarity") p.set("sort", f.sort);
@@ -107,15 +136,14 @@ export function useCollectionsFilters() {
     if (urlHasFilterParams(searchParams)) return fromUrl;
     const stored = loadStoredFilters();
     return stored
-      ? { ...fromUrl, ...stored, node: fromUrl.node, q: fromUrl.q }
+      ? reassertUrlOnly({ ...fromUrl, ...stored }, fromUrl)
       : fromUrl;
   }, [searchParams]);
 
-  // Persist filter fields (not node/q) whenever they change.
+  // Persist filter fields (not node/q — see URL_ONLY_KEYS) whenever they change.
   useEffect(() => {
-    const { node: _node, q: _q, ...rest } = filters;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(omitUrlOnly(filters)));
     } catch {
       /* ignore quota/availability errors */
     }
@@ -139,15 +167,10 @@ export function useCollectionsFilters() {
           const parsedFromUrl = parseFilters(prev);
           const base = urlHasFilterParams(prev)
             ? parsedFromUrl
-            : {
-                ...parsedFromUrl,
-                ...(loadStoredFilters() ?? {}),
-                // node/q are URL-only: re-assert them from the URL so a
-                // hand-edited / legacy localStorage payload containing either
-                // key can't leak into it.
-                node: parsedFromUrl.node,
-                q: parsedFromUrl.q,
-              };
+            : reassertUrlOnly(
+                { ...parsedFromUrl, ...(loadStoredFilters() ?? {}) },
+                parsedFromUrl,
+              );
           const next = { ...base, ...patch };
           const out = serializeFilters(next);
           for (const [k, v] of prev) {
@@ -191,12 +214,15 @@ export function useCollectionsFilters() {
         { rarity: null, diff: null, avail: false, farm: false, q: "" },
         { replace: true },
       ),
+    // A whitespace-only `q` behaves as no search at all — mirrors the
+    // trim-before-matching guard in Collections.tsx's item filter, so a
+    // stray space doesn't hijack the "all caught up" empty state.
     hasFilters: !!(
       filters.rarity ||
       filters.diff ||
       filters.avail ||
       filters.farm ||
-      filters.q
+      filters.q.trim()
     ),
   };
 }

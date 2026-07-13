@@ -746,6 +746,24 @@ describe("Collections search field", () => {
     ).toBeInTheDocument();
   });
 
+  // Finding B regression: a whitespace-only q must behave as no search at
+  // all, so a fully-collected category still shows "All caught up!" instead
+  // of a search-specific "no items match" empty state.
+  it("does not let a whitespace-only search hijack the empty state", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json({
+          ...treeCollections,
+          collectedHashes: ["100", "200"], // fully collected under this node
+        }),
+      ),
+    );
+    renderCollections("?node=11&q=%20");
+
+    expect(await screen.findByText("All caught up!")).toBeInTheDocument();
+    expect(screen.queryByText(/no items match/i)).not.toBeInTheDocument();
+  });
+
   it("Clear filters clears the search field and restores the full grid", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
