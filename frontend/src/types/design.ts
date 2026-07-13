@@ -90,6 +90,8 @@ export interface XurItem {
   rarity: Rarity;
   missing: boolean;
   cost: string;
+  /** Present only for class-specific armor verified from the manifest. */
+  className?: string;
 }
 
 export interface Xur {

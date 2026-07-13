@@ -48,6 +48,8 @@ func TestItemTypeName(t *testing.T) {
 		{ItemTypeArmor, 0, "Armor"},
 		{ItemTypeMod, 0, "Mod"},
 		{ItemTypeMod, ItemSubTypeShader, "Shader"},
+		{ItemTypeMod, ItemSubTypeOrnament, "Ornament"},
+		{ItemTypeFinisher, 0, "Finisher"},
 		{14, 0, "Emblem"},
 		{21, 0, "Ship"},
 		{22, 0, "Sparrow"},

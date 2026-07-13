@@ -1,6 +1,6 @@
 # Roadmap
 
-**Updated:** 2026-07-11
+**Updated:** 2026-07-12
 
 This public roadmap lists work that is not implemented yet. Completed work is
 tracked in [CHANGELOG.md](./CHANGELOG.md), and durable architecture decisions are
@@ -39,16 +39,16 @@ Initial target flows:
 - search deep links
 - This Week, catalysts, crafting, triumphs, settings, and admin smoke paths
 
-### 2. Character-Scoped Surfaces
+### 2. Deeper Character-Scoped Surfaces
 
 **Status:** Not implemented
 **Gate:** Bungie response-shape verification
 **Likely size:** Large
 
-The character switcher currently drives display context. Future character-scoped
-surfaces should use verified Bungie character, equipment, progression, and
-activity data rather than assuming account-wide collection data can be safely
-reinterpreted per character.
+The character switcher now drives authenticated weekly vendor context, including
+inventory that can vary by class. Collections remain account-wide. Future
+character-scoped surfaces should use verified Bungie equipment, progression,
+and activity data rather than reinterpreting account-wide collection data.
 
 Expected shape:
 

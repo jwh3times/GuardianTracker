@@ -64,10 +64,10 @@ func TestLiveVendorItemHashes_MergesXurAndVendors(t *testing.T) {
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 111}, {Hash: 222}},
 	}, time.Minute)
-	c.Set(liveVendorItemsCacheKey, map[uint32]string{333: "Banshee-44"}, time.Minute)
+	c.Set("live:vendoritems:3:member-1:char-1", map[uint32]string{333: "Banshee-44"}, time.Minute)
 	s := &Service{cache: c}
 
-	got := s.liveVendorItemHashesAt(context.Background(), 3, "member-1", "token", friday)
+	got := s.liveVendorItemHashesAtCharacter(context.Background(), 3, "member-1", "char-1", "token", friday)
 
 	if got[111] != "Xûr" || got[222] != "Xûr" {
 		t.Errorf("Xûr items = %+v, want both labeled Xûr", got)
@@ -89,10 +89,10 @@ func TestLiveVendorItemHashes_XurWinsTie(t *testing.T) {
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 555}},
 	}, time.Minute)
-	c.Set(liveVendorItemsCacheKey, map[uint32]string{555: "Banshee-44"}, time.Minute)
+	c.Set("live:vendoritems:3:member-1:char-1", map[uint32]string{555: "Banshee-44"}, time.Minute)
 	s := &Service{cache: c}
 
-	got := s.liveVendorItemHashesAt(context.Background(), 3, "member-1", "token", friday)
+	got := s.liveVendorItemHashesAtCharacter(context.Background(), 3, "member-1", "char-1", "token", friday)
 
 	if got[555] != "Xûr" {
 		t.Errorf("shared hash label = %q, want Xûr (Xûr wins ties)", got[555])
@@ -110,5 +110,42 @@ func TestLiveVendorItemHashes_Degraded(t *testing.T) {
 	got := s.liveVendorItemHashesAt(context.Background(), 3, "member-1", "", wednesday)
 	if len(got) != 0 {
 		t.Errorf("degraded path = %+v, want empty", got)
+	}
+}
+
+func TestLiveVendorItemsCacheIsolatedByCharacter(t *testing.T) {
+	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
+	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	hunterResponse := &bungie.CharacterVendorsResponse{}
+	warlockResponse := &bungie.CharacterVendorsResponse{}
+	c.Set("vendors:character:3:member-1:char-hunter", hunterResponse, time.Minute)
+	c.Set("vendors:character:3:member-1:char-warlock", warlockResponse, time.Minute)
+	c.Set("live:vendoritems:3:member-1:char-hunter", map[uint32]string{101: "Banshee-44"}, time.Minute)
+	c.Set("live:vendoritems:3:member-1:char-warlock", map[uint32]string{202: "Banshee-44"}, time.Minute)
+	c.Set("daily:vendors:3:member-1:char-hunter", []dailyVendorItem{{ItemHash: 101}}, time.Minute)
+	c.Set("daily:vendors:3:member-1:char-warlock", []dailyVendorItem{{ItemHash: 202}}, time.Minute)
+	s := &Service{cache: c}
+
+	if got := s.getCharacterVendors(context.Background(), 3, "member-1", "char-hunter", "token"); got != hunterResponse {
+		t.Error("hunter 400/402 response crossed character cache boundary")
+	}
+	if got := s.getCharacterVendors(context.Background(), 3, "member-1", "char-warlock", "token"); got != warlockResponse {
+		t.Error("warlock 400/402 response crossed character cache boundary")
+	}
+	hunter := s.getLiveVendorItems(context.Background(), 3, "member-1", "char-hunter", "token", now)
+	warlock := s.getLiveVendorItems(context.Background(), 3, "member-1", "char-warlock", "token", now)
+	if _, ok := hunter[101]; !ok || len(hunter) != 1 {
+		t.Errorf("hunter cache = %+v, want only item 101", hunter)
+	}
+	if _, ok := warlock[202]; !ok || len(warlock) != 1 {
+		t.Errorf("warlock cache = %+v, want only item 202", warlock)
+	}
+	hunterDaily := s.getDailyVendorItems(context.Background(), 3, "member-1", "char-hunter", "token", now)
+	warlockDaily := s.getDailyVendorItems(context.Background(), 3, "member-1", "char-warlock", "token", now)
+	if len(hunterDaily) != 1 || hunterDaily[0].ItemHash != 101 {
+		t.Errorf("hunter daily cache = %+v, want only item 101", hunterDaily)
+	}
+	if len(warlockDaily) != 1 || warlockDaily[0].ItemHash != 202 {
+		t.Errorf("warlock daily cache = %+v, want only item 202", warlockDaily)
 	}
 }

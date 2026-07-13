@@ -998,6 +998,89 @@
   justify-content: flex-end;
   animation: gt-fade var(--dur) var(--ease);
 }
+
+/* ---------------- ONBOARDING TOUR ---------------- */
+.gt-tour-scrim,
+.gt-tour-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: var(--s-4);
+}
+
+.gt-tour-scrim {
+  background: oklch(0 0 0 / 0.72);
+  backdrop-filter: blur(0.25rem);
+}
+
+.gt-tour-layer {
+  align-items: end;
+  background: oklch(0 0 0 / 0.16);
+}
+
+.gt-tour-card {
+  width: min(34rem, 100%);
+  padding: clamp(var(--s-5), 4vw, var(--s-7));
+  border: 0.08rem solid var(--c-line);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--c-text-1);
+}
+
+.gt-tour-card h2 {
+  margin: var(--s-2) 0 var(--s-3);
+}
+
+.gt-tour-card p {
+  color: var(--c-text-2);
+  line-height: 1.6;
+}
+
+.gt-tour-welcome > svg {
+  color: var(--c-signal);
+}
+
+.gt-tour-step {
+  pointer-events: auto;
+  margin-bottom: var(--s-5);
+}
+
+.gt-tour-progress {
+  padding: var(--s-3);
+  border-left: 0.16rem solid var(--c-signal);
+  background: var(--c-signal-dim);
+}
+
+.gt-tour-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-5);
+}
+
+.gt-tour-error {
+  color: var(--c-danger) !important;
+}
+
+.gt-tour-target-active {
+  position: relative;
+  z-index: 99;
+  border-radius: var(--r-lg);
+  box-shadow:
+    0 0 0 0.2rem var(--c-signal),
+    0 0 0 100vmax oklch(0 0 0 / 0.72);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gt-tour-card,
+  .gt-tour-target-active {
+    animation: none;
+    transition: none;
+  }
+}
 @keyframes gt-fade {
   from {
     opacity: 0;

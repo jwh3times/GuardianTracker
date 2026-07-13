@@ -114,7 +114,6 @@ func TestGetXurLocation_UsesCharacterVendorCache(t *testing.T) {
 	defer srv.Close()
 
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
-	c.Set("char:primary:member-1", "char-1", time.Minute)
 	s := NewService(
 		bungie.NewClient("k", srv.URL, 100, 100),
 		&fakeManifest{destinationHash: xurTowerDestinationHash, destinationName: "The Last City"},
@@ -125,7 +124,7 @@ func TestGetXurLocation_UsesCharacterVendorCache(t *testing.T) {
 	)
 
 	for range 2 {
-		if got := s.getXurLocation(context.Background(), 3, "member-1", "token"); got != "The Tower" {
+		if got := s.getXurLocation(context.Background(), 3, "member-1", "char-1", "token"); got != "The Tower" {
 			t.Fatalf("getXurLocation = %q, want The Tower", got)
 		}
 	}
@@ -140,10 +139,10 @@ func TestGetXurLocation_OmitsUnknownLocation(t *testing.T) {
 	resp.Response.Vendors.Data = map[string]bungie.VendorComponent{
 		"2190858386": {VendorHash: bungie.XurVendorHash, VendorLocationIndex: -1, Enabled: true},
 	}
-	c.Set("vendors:character:3:member-1", resp, time.Minute)
+	c.Set("vendors:character:3:member-1:char-1", resp, time.Minute)
 	s := &Service{cache: c, manifest: &fakeManifest{destinationHash: xurTowerDestinationHash}}
 
-	if got := s.getXurLocation(context.Background(), 3, "member-1", "token"); got != "" {
+	if got := s.getXurLocation(context.Background(), 3, "member-1", "char-1", "token"); got != "" {
 		t.Errorf("getXurLocation = %q, want omitted location", got)
 	}
 }

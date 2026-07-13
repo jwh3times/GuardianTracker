@@ -46,13 +46,14 @@ type Xur struct {
 
 // XurItem is a single item in Xûr's inventory.
 type XurItem struct {
-	Hash    string `json:"hash"`
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Icon    string `json:"icon"`
-	Rarity  string `json:"rarity"`
-	Missing bool   `json:"missing"`
-	Cost    string `json:"cost"`
+	Hash      string `json:"hash"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	Icon      string `json:"icon"`
+	Rarity    string `json:"rarity"`
+	Missing   bool   `json:"missing"`
+	Cost      string `json:"cost"`
+	ClassName string `json:"className,omitempty"`
 }
 
 // Milestone is one active weekly milestone.
@@ -114,12 +115,13 @@ type publicWeeklyCache struct {
 }
 
 type xurItemEnriched struct {
-	Hash   uint32
-	Name   string
-	Type   string
-	Icon   string
-	Rarity string
-	Cost   string
+	Hash      uint32
+	Name      string
+	Type      string
+	Icon      string
+	Rarity    string
+	Cost      string
+	ClassType *int
 }
 
 type dailyMilestoneItem struct {
@@ -248,7 +250,7 @@ func toDuration(d time.Duration) Duration {
 }
 
 // GetWeekly assembles the weekly payload for a user.
-func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipID, bungieToken string) (*Weekly, error) {
+func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipID, bungieToken, requestedCharacterID string) (*Weekly, error) {
 	now := time.Now().UTC()
 	resetAt := NextWeeklyReset(now)
 	resetIn := toDuration(resetAt.Sub(now))
@@ -269,8 +271,10 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		missingHashes map[uint32]struct{}
 		dailyVendors  []dailyVendorItem
 		xurLocation   string
+		characterID   string
 	)
 	if bungieToken != "" {
+		characterID, _ = s.resolveCharacter(ctx, membershipType, membershipID, bungieToken, requestedCharacterID)
 		var wg sync.WaitGroup
 		wg.Add(2)
 		go func() {
@@ -284,10 +288,11 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		}()
 		go func() {
 			defer wg.Done()
-			// Daily vendor items (Ada-1, Banshee-44) — shared cache, populated by first authed request
-			dailyVendors = s.getDailyVendorItems(ctx, membershipType, membershipID, bungieToken, now)
+			// Component 402 may contain class-specific inventory, so this path
+			// follows the validated active Guardian.
+			dailyVendors = s.getDailyVendorItems(ctx, membershipType, membershipID, characterID, bungieToken, now)
 			if pub.XurPresent {
-				xurLocation = s.getXurLocation(ctx, membershipType, membershipID, bungieToken)
+				xurLocation = s.getXurLocation(ctx, membershipType, membershipID, characterID, bungieToken)
 			}
 		}()
 		wg.Wait()
@@ -317,14 +322,19 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		items := make([]XurItem, len(pub.XurItems))
 		for i, xi := range pub.XurItems {
 			_, isMissing := missingHashes[xi.Hash]
+			className := ""
+			if xi.ClassType != nil && *xi.ClassType >= 0 && *xi.ClassType <= 2 {
+				className = bungie.GetClassName(*xi.ClassType)
+			}
 			items[i] = XurItem{
-				Hash:    strconv.FormatUint(uint64(xi.Hash), 10),
-				Name:    xi.Name,
-				Type:    xi.Type,
-				Icon:    xi.Icon,
-				Rarity:  xi.Rarity,
-				Missing: isMissing,
-				Cost:    xi.Cost,
+				Hash:      strconv.FormatUint(uint64(xi.Hash), 10),
+				Name:      xi.Name,
+				Type:      xi.Type,
+				Icon:      xi.Icon,
+				Rarity:    xi.Rarity,
+				Missing:   isMissing,
+				Cost:      xi.Cost,
+				ClassName: className,
 			}
 		}
 		xurBlock = &Xur{
@@ -338,7 +348,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 	// Assemble weekly milestones (for This Week page), with per-raid missing counts.
 	milestones := buildMilestones(pub, s.efficiency, missingHashes)
 
-	recommended := s.rankRecommended(ctx, membershipType, membershipID, bungieToken, pub, missingHashes, wishlistHashes)
+	recommended := s.rankRecommended(ctx, membershipType, membershipID, characterID, bungieToken, pub, missingHashes, wishlistHashes)
 	dailyActions := s.buildDailyActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
 
 	fetchedAt := pub.FetchedAt
@@ -531,9 +541,9 @@ func (s *Service) mapEngineActions(actions []efficiency.ScoredAction) []Recommen
 // rankRecommended runs the efficiency engine; falls back to the legacy Xûr-only
 // heuristic when the engine is unavailable or has nothing to suggest (cold index,
 // private profile, no missing set). Best-effort — never fails the weekly request.
-func (s *Service) rankRecommended(ctx context.Context, membershipType int, membershipID, bungieToken string, pub *publicWeeklyCache, missing, wishlist map[uint32]struct{}) []RecommendedAction {
+func (s *Service) rankRecommended(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, pub *publicWeeklyCache, missing, wishlist map[uint32]struct{}) []RecommendedAction {
 	if s.efficiency != nil && bungieToken != "" {
-		liveVendors := s.LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)
+		liveVendors := s.liveVendorItemHashesAtCharacter(ctx, membershipType, membershipID, characterID, bungieToken, time.Now().UTC())
 		activeMilestones := make([]string, 0, len(pub.MilestoneNames))
 		for _, name := range pub.MilestoneNames {
 			activeMilestones = append(activeMilestones, name)
@@ -679,12 +689,13 @@ func (s *Service) fetchXurInventory(ctx context.Context, pub *publicWeeklyCache)
 			}
 			rarity := strings.ToLower(bungie.GetTierName(def.Inventory.TierType))
 			enriched = append(enriched, xurItemEnriched{
-				Hash:   hash,
-				Name:   def.DisplayProperties.Name,
-				Type:   bungie.ItemTypeName(def.ItemType, def.ItemSubType),
-				Icon:   def.DisplayProperties.Icon,
-				Rarity: rarity,
-				Cost:   hashToCost[hash],
+				Hash:      hash,
+				Name:      def.DisplayProperties.Name,
+				Type:      bungie.ItemTypeName(def.ItemType, def.ItemSubType),
+				Icon:      def.DisplayProperties.Icon,
+				Rarity:    rarity,
+				Cost:      hashToCost[hash],
+				ClassType: armorClassType(def),
 			})
 		}
 	} else {
@@ -834,16 +845,16 @@ func (s *Service) fetchMilestones(ctx context.Context, pub *publicWeeklyCache) {
 }
 
 // getDailyVendorItems fetches Ada-1 and Banshee-44 inventory via the character vendor endpoint.
-// The result is shared across all users via a global cache key (the rotation is identical for everyone).
-func (s *Service) getDailyVendorItems(ctx context.Context, membershipType int, membershipID, bungieToken string, now time.Time) []dailyVendorItem {
-	const cacheKey = "daily:vendors"
+// Component 402 can vary by class, so the result is cached per validated character.
+func (s *Service) getDailyVendorItems(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, now time.Time) []dailyVendorItem {
+	cacheKey := fmt.Sprintf("daily:vendors:%d:%s:%s", membershipType, membershipID, characterID)
 	if cached, ok := s.cache.Get(cacheKey); ok {
 		if items, ok := cached.([]dailyVendorItem); ok {
 			return items
 		}
 	}
 
-	resp := s.getCharacterVendors(ctx, membershipType, membershipID, bungieToken)
+	resp := s.getCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
 	if resp == nil {
 		return nil
 	}
@@ -864,8 +875,8 @@ const xurTowerDestinationHash uint32 = 1737926756
 // getXurLocation resolves Xûr's character-scoped live location through the
 // manifest. Location is best-effort: failures return an empty string so the
 // weekly payload can omit the field while preserving inventory and schedule.
-func (s *Service) getXurLocation(ctx context.Context, membershipType int, membershipID, bungieToken string) string {
-	resp := s.getCharacterVendors(ctx, membershipType, membershipID, bungieToken)
+func (s *Service) getXurLocation(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string) string {
+	resp := s.getCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
 	if resp == nil || s.manifest == nil {
 		return ""
 	}
@@ -894,35 +905,67 @@ func xurLocationLabel(destinationHash uint32, destinationName string) string {
 	return destinationName
 }
 
-// resolvePrimaryCharacter returns the most recently played character ID for the given membership.
-func (s *Service) resolvePrimaryCharacter(ctx context.Context, membershipType int, membershipID, bungieToken string) string {
-	cacheKey := "char:primary:" + membershipID
+type characterRoster struct {
+	Characters map[string]bungie.CharacterComponent
+	PrimaryID  string
+}
+
+// resolveCharacter validates a requested character against the authenticated
+// roster and fails soft to the most recently played character on mismatch.
+func (s *Service) resolveCharacter(ctx context.Context, membershipType int, membershipID, bungieToken, requestedCharacterID string) (string, int) {
+	cacheKey := fmt.Sprintf("weekly:roster:%d:%s", membershipType, membershipID)
 	if cached, ok := s.cache.Get(cacheKey); ok {
-		if charID, ok := cached.(string); ok {
-			return charID
+		if roster, ok := cached.(characterRoster); ok {
+			return roster.resolve(requestedCharacterID)
 		}
+	}
+	if s.bungie == nil {
+		return "", -1
 	}
 
 	chars, err := s.bungie.GetCharacters(ctx, membershipType, membershipID, bungieToken)
 	if err != nil {
 		log.Printf("weekly: GetCharacters: %v", err)
-		return ""
+		return "", -1
 	}
 
-	var mostRecent string
+	roster := characterRoster{Characters: make(map[string]bungie.CharacterComponent)}
 	var mostRecentTime time.Time
 	for id, c := range chars.Response.Characters.Data {
+		if c.CharacterID == "" {
+			c.CharacterID = id
+		}
+		roster.Characters[id] = c
 		t, err := time.Parse(time.RFC3339, c.DateLastPlayed)
-		if err == nil && t.After(mostRecentTime) {
+		if roster.PrimaryID == "" || (err == nil && t.After(mostRecentTime)) {
 			mostRecentTime = t
-			mostRecent = id
+			roster.PrimaryID = id
 		}
 	}
 
-	if mostRecent != "" {
-		s.cache.Set(cacheKey, mostRecent, 5*time.Minute)
+	if len(roster.Characters) > 0 {
+		s.cache.Set(cacheKey, roster, 5*time.Minute)
 	}
-	return mostRecent
+	return roster.resolve(requestedCharacterID)
+}
+
+func (r characterRoster) resolve(requestedCharacterID string) (string, int) {
+	if c, ok := r.Characters[requestedCharacterID]; requestedCharacterID != "" && ok {
+		return requestedCharacterID, c.ClassType
+	}
+	c, ok := r.Characters[r.PrimaryID]
+	if !ok {
+		return "", -1
+	}
+	return r.PrimaryID, c.ClassType
+}
+
+func armorClassType(def *bungie.InventoryItemDefinition) *int {
+	if def == nil || def.ItemType != bungie.ItemTypeArmor || def.ClassType == nil || *def.ClassType < 0 || *def.ClassType > 2 {
+		return nil
+	}
+	classType := *def.ClassType
+	return &classType
 }
 
 func (s *Service) enrichDailyVendorItems(resp *bungie.CharacterVendorsResponse) []dailyVendorItem {

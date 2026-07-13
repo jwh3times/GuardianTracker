@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -39,15 +39,9 @@ function renderPage(ui: React.ReactNode, route = "/") {
 
 describe("Dashboard", () => {
   it("renders real collection totals and honest wishlist availability", async () => {
-    // Not an onboarding test — mark first-run done so the greeting reads
-    // "Welcome back" and the Get Started panel doesn't crowd the assertions.
-    localStorage.setItem(
-      `guardian_first_run_done:${sampleUser.membershipId}`,
-      "2026-01-01",
-    );
     renderPage(<Dashboard />);
     expect(
-      await screen.findByText(/Welcome back, TestGuardian/),
+      await screen.findByText(/Welcome, TestGuardian/),
     ).toBeInTheDocument();
     // 8 of 10 weapons collected in the fixture
     expect(await screen.findByText("8/10")).toBeInTheDocument();
@@ -70,22 +64,9 @@ describe("Dashboard page", () => {
     expect(screen.getByText(/Best thing to do today/i)).toBeInTheDocument();
   });
 
-  it("greets a first-run user and shows Get started; dismiss persists", async () => {
-    renderDashboard(); // the file's existing helper
-    expect(await screen.findByText(/^Welcome, /)).toBeInTheDocument();
-    expect(screen.getByText(/start with these/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /got it/i }));
-    expect(screen.queryByText(/start with these/i)).not.toBeInTheDocument();
-  });
-
-  it("greets a returning user with Welcome back and no panel", async () => {
-    localStorage.setItem(
-      `guardian_first_run_done:${sampleUser.membershipId}`,
-      "2026-01-01",
-    );
+  it("greets the current Guardian", async () => {
     renderDashboard();
-    expect(await screen.findByText(/^Welcome back, /)).toBeInTheDocument();
-    expect(screen.queryByText(/start with these/i)).not.toBeInTheDocument();
+    expect(await screen.findByText(/^Welcome, /)).toBeInTheDocument();
   });
 
   it("shows the privacy error state when collections is blocked", async () => {

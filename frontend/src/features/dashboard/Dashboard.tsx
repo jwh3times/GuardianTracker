@@ -20,8 +20,6 @@ import { apiFetch } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
 import { collectionsQuery } from "../../lib/queries";
 import { toWishlistEntry } from "../../lib/adapters";
-import { isFirstRun, markFirstRunDone } from "../../lib/firstRun";
-import { GetStartedPanel } from "./GetStartedPanel";
 import type { DailyAction, SummaryCategory, Weekly } from "../../types/design";
 import type {
   ProfileResponse,
@@ -49,17 +47,9 @@ const emblemStyle = (url?: string): React.CSSProperties | undefined =>
 
 export function Dashboard() {
   const { user } = useAuth();
-  const { activeCharacter } = useCharacters();
+  const { activeCharacter, isLoading: charactersLoading } = useCharacters();
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
-
-  const [showGetStarted, setShowGetStarted] = React.useState(() =>
-    isFirstRun(user?.membershipId),
-  );
-  const dismissGetStarted = () => {
-    markFirstRunDone(user?.membershipId);
-    setShowGetStarted(false);
-  };
 
   const { data: profileData } = useQuery({
     queryKey: ["currentUser"],
@@ -85,9 +75,12 @@ export function Dashboard() {
     isLoading: weeklyLoading,
     isError: weeklyFailed,
   } = useQuery({
-    queryKey: ["weekly"],
-    queryFn: () => apiFetch<Weekly>("/api/weekly/recommendations"),
-    enabled: membershipType != null && !!membershipId,
+    queryKey: ["weekly", activeCharacter?.id ?? null],
+    queryFn: () =>
+      apiFetch<Weekly>(
+        `/api/weekly/recommendations${activeCharacter ? `?characterId=${encodeURIComponent(activeCharacter.id)}` : ""}`,
+      ),
+    enabled: membershipType != null && !!membershipId && !charactersLoading,
   });
 
   const {
@@ -158,9 +151,9 @@ export function Dashboard() {
   );
 
   return (
-    <div className="gt-page gt-dash">
+    <div className="gt-page gt-dash" data-onboarding-target="dashboard">
       <PageHead
-        title={`${showGetStarted ? "Welcome" : "Welcome back"}, ${displayName}`}
+        title={`Welcome, ${displayName}`}
         sub="Your collection at a glance"
         right={
           <CountdownChip
@@ -170,8 +163,6 @@ export function Dashboard() {
           />
         }
       />
-
-      {showGetStarted && <GetStartedPanel onDismiss={dismissGetStarted} />}
 
       {/* HERO COMPLETION */}
       <Panel pad={false} style={{ padding: "var(--s-5)" }}>

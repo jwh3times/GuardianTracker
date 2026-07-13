@@ -11,6 +11,7 @@ import { LockedFeature } from "./features/admin/AdminKit";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { ToastProvider } from "./components/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { OnboardingTour } from "./features/onboarding/OnboardingTour";
 
 // Lazy-loaded pages for code splitting
 const Dashboard = lazy(() =>
@@ -95,6 +96,7 @@ const ProtectedLayout: React.FC = () => {
           <Suspense fallback={<PageLoader />}>
             <Outlet />
           </Suspense>
+          <OnboardingTour />
         </AppShell>
       </CharacterProvider>
     </FlagsProvider>

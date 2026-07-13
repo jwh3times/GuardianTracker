@@ -6,6 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse, delay } from "msw";
 import { API, sampleUser, sampleWeekly, server } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";
+import {
+  CharacterProvider,
+  useCharacters,
+} from "../../contexts/CharacterContext";
 import { ToastProvider } from "../../components/Toast";
 import { ThisWeek } from "./ThisWeek";
 
@@ -23,9 +27,11 @@ function renderPage(ui: React.ReactNode, route = "/") {
   return render(
     <QueryClientProvider client={qc}>
       <AuthProvider>
-        <ToastProvider>
-          <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-        </ToastProvider>
+        <CharacterProvider>
+          <ToastProvider>
+            <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
+          </ToastProvider>
+        </CharacterProvider>
       </AuthProvider>
     </QueryClientProvider>,
   );
@@ -104,10 +110,11 @@ describe("ThisWeek page", () => {
               {
                 hash: "9002",
                 name: "Ace of Spades",
-                type: "Hand Cannon",
+                type: "Armor",
                 rarity: "exotic",
                 missing: false,
                 cost: "29 Strange Coins",
+                className: "Warlock",
               },
             ],
           },
@@ -137,6 +144,7 @@ describe("ThisWeek page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("The Tower")).toBeInTheDocument();
     expect(screen.getByText("Gjallarhorn")).toBeInTheDocument();
+    expect(screen.getByText("Warlock armor")).toBeInTheDocument();
     expect(
       container.querySelector(
         'img[src="https://www.bungie.net/icons/gjallarhorn.png"]',
@@ -233,5 +241,58 @@ describe("ThisWeek page", () => {
     );
     fireEvent.click(await screen.findByText("Fatebringer"));
     expect(screen.getByTestId("loc").textContent).toBe("/collections?item=100");
+  });
+
+  it("refetches weekly vendor context when the active Guardian changes", async () => {
+    const requestedCharacters: string[] = [];
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json([
+          {
+            characterId: "char-hunter",
+            classType: 1,
+            className: "Hunter",
+            raceName: "Awoken",
+            light: 2010,
+            emblemPath: "",
+            emblemBackgroundPath: "",
+            dateLastPlayed: "2026-07-12T12:00:00Z",
+          },
+          {
+            characterId: "char-warlock",
+            classType: 2,
+            className: "Warlock",
+            raceName: "Human",
+            light: 2005,
+            emblemPath: "",
+            emblemBackgroundPath: "",
+            dateLastPlayed: "2026-07-11T12:00:00Z",
+          },
+        ]),
+      ),
+      http.get(`${API}/api/weekly/recommendations`, ({ request }) => {
+        requestedCharacters.push(
+          new URL(request.url).searchParams.get("characterId") ?? "",
+        );
+        return HttpResponse.json(sampleWeekly);
+      }),
+    );
+
+    function SwitchProbe() {
+      const { setActiveCharacter } = useCharacters();
+      return (
+        <>
+          <button onClick={() => setActiveCharacter("char-warlock")}>
+            Switch
+          </button>
+          <ThisWeek />
+        </>
+      );
+    }
+
+    renderPage(<SwitchProbe />);
+    await waitFor(() => expect(requestedCharacters).toContain("char-hunter"));
+    fireEvent.click(screen.getByRole("button", { name: "Switch" }));
+    await waitFor(() => expect(requestedCharacters).toContain("char-warlock"));
   });
 });

@@ -385,7 +385,10 @@ export function Collections() {
   const errState = errorState(error);
 
   return (
-    <div className="gt-page gt-collections">
+    <div
+      className="gt-page gt-collections"
+      data-onboarding-target="collections"
+    >
       <PageHead
         title="Collections"
         sub={
