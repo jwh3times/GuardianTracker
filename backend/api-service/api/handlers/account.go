@@ -3,12 +3,12 @@ package handlers
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
 )
@@ -65,7 +65,8 @@ func (h *AccountHandler) SetRole(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		log.Printf("SetRole(%s): %v", membershipID, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "self-service role update failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -108,7 +109,7 @@ func (h *AccountHandler) GetFlags(c *gin.Context) {
 	resp := gin.H{"role": auth.RoleName(role), "flags": []resolvedFlag{}}
 	flags, err := h.resolver.List(c.Request.Context())
 	if err != nil {
-		log.Printf("GetFlags: list: %v", err)
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "feature flag resolution failed open", observability.Err(err))
 		c.JSON(http.StatusOK, resp) // fail open — don't hide features on a DB hiccup
 		return
 	}

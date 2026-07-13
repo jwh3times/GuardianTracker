@@ -31,10 +31,11 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 ### Auth & token flow
 
 Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the user's
-Bungie tokens **AES-256-GCM encrypted** in Postgres (`TOKEN_ENCRYPTION_KEY`, with
-`TOKEN_ENCRYPTION_KEY_PREVIOUS` supporting rotation) and issues its own JWTs: short-lived access
-tokens plus per-device rotating refresh sessions with revocation and reuse detection (all
-Postgres-backed). Role tiers (standard / beta / alpha / admin) and feature
+Bungie tokens **AES-256-GCM encrypted** in Postgres with explicit current/previous key versions.
+It returns a short-lived access JWT for localStorage and sends the per-device rotating refresh JWT
+only in a host-only HttpOnly cookie scoped to `/api/auth`. Callback and refresh require an exact
+allowlisted browser origin; the cookie policy assumes the frontend and API are same-site. Refresh
+sessions retain Postgres-backed revocation and reuse detection. Role tiers (standard / beta / alpha / admin) and feature
 flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login. Security details and the
 credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
 
@@ -54,7 +55,7 @@ docker compose up --build
 ```
 
 - Frontend `http://localhost:5273`, API `http://localhost:8081`, pgAdmin `http://localhost:5150`
-- Postgres `:5532`
+- Postgres `:5532`; Postgres and pgAdmin bind only to `127.0.0.1`
 - Bungie manifest persists in the `manifest-data` named volume.
 - `database/init/01-init.sql` auto-loads into Postgres on first run.
 
@@ -96,16 +97,32 @@ Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`
 
 ### Required secrets
 
-| Variable                        | Purpose                                                                                               |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Variable                                | Purpose                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `GO_ENV`                                | Required; exactly `development` or `production`                                                       |
+| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                               |
+| `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                              |
 | `BUNGIE_API_KEY`                | From <https://www.bungie.net/en/Application>                                                          |
 | `BUNGIE_CLIENT_ID`              | Bungie app settings                                                                                   |
 | `BUNGIE_CLIENT_SECRET`          | Bungie app settings                                                                                   |
 | `JWT_SECRET`                    | 32+ char random string (`openssl rand -base64 32`)                                                    |
 | `DATABASE_URL`                  | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
-| `TOKEN_ENCRYPTION_KEY`          | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous key for rotation during key migration                                             |
+| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
+| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                           |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                             |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
 | `ADMIN_MEMBERSHIP_IDS`          | (optional) comma-separated Bungie membership IDs pinned to admin role at login                        |
+
+### Application logging
+
+The API uses `log/slog` and assigns every request a server-generated UUID exposed
+as `X-Request-ID`. Access records use Gin route templates and include method,
+status, duration, and response bytes. They never include raw URLs/query strings,
+bodies, authorization headers, User-Agent values, or routine client IPs.
+Membership, session, user, and character identifiers are deterministic 24-hex
+pseudonyms in application logs; exact values remain only in the PostgreSQL audit
+trail. Successful app requests log at info, 4xx at warn, 5xx at error, and
+successful health probes at debug.
 
 ## CI/CD
 
@@ -113,8 +130,13 @@ GitHub Actions (`.github/workflows/ci-cd.yml`) — four required jobs:
 
 1. **format-check** — `npm run format:check` (Prettier) + `gofmt`. Fix: `npm run format` from `frontend/` or `gofmt -w .` from `backend/api-service/`.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
-3. **test-go-services** — `go vet`, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
+3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)
+
+`.github/workflows/browser.yml` adds two advisory jobs: **Browser E2E + Axe**
+and **Browser Visual Regression**. They report failures normally (no
+`continue-on-error`) and retain reports/evidence for 14 days. Promote E2E + axe
+to required after ten consecutive clean runs; visual stays optional.
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
@@ -158,11 +180,26 @@ environment-specific operations notes. Do not move private operational detail in
 ```powershell
 # Go (from backend/api-service/)
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
 # Frontend (from frontend/)
 npm test
+
+# Browser (start from repo root, then run scripts from frontend/)
+docker compose stop frontend api-service   # 5273/8081 would be silently reused
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
 ```
+
+Playwright reuses any server already on 5273/8081 outside CI, so a running
+Compose app stack silently replaces the hermetic one and the suite dies at login
+with `Failed to fetch`. Visual baselines are Linux renderings and must be
+regenerated inside the pinned `mcr.microsoft.com/playwright` image — never commit
+snapshots produced on Windows. Both procedures are in
+[frontend/README.md](./frontend/README.md#browser-tests).
 
 ### Full Go coverage locally (matches CI)
 

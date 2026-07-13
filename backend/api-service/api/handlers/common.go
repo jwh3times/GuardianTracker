@@ -1,14 +1,22 @@
 package handlers
 
 import (
-	"log"
+	"context"
 	"net/http"
 	"strings"
 
 	"guardian-tracker/api-service/auth"
+	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
 )
+
+func handlerContext(c *gin.Context) context.Context {
+	if c != nil && c.Request != nil {
+		return c.Request.Context()
+	}
+	return context.Background()
+}
 
 // ownershipCheck verifies the authenticated user (set by JWT middleware) matches the requested membershipID.
 func ownershipCheck(c *gin.Context, membershipID string) bool {
@@ -23,7 +31,8 @@ func ownershipCheck(c *gin.Context, membershipID string) bool {
 func getBungieToken(c *gin.Context, membershipID string, tokenStore *auth.TokenStore) (string, bool) {
 	token, err := tokenStore.GetValidToken(membershipID)
 	if err != nil {
-		log.Printf("getBungieToken for %s: %v", membershipID, err)
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "Bungie token unavailable",
+			observability.ID("membership", membershipID), observability.Err(err))
 		if strings.Contains(err.Error(), "re-authentication required") {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Your Bungie session has expired. Please log in again.",

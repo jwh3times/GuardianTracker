@@ -11,3 +11,9 @@ package-lock.json
 
 # Design-system reference export (kept as-is; not maintained app source)
 design
+
+# Playwright run output (generated locally by the browser suites)
+playwright/.auth
+playwright-report
+test-results
+e2e/__screenshots__

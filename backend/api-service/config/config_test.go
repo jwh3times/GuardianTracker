@@ -8,12 +8,15 @@ import (
 
 func validProdConfig() *Config {
 	return &Config{
-		GoEnv:              "production",
-		BungieAPIKey:       "key",
-		BungieClientID:     "client",
-		JWTSecret:          strings.Repeat("s", 32),
-		DatabaseURL:        "postgres://localhost/db",
-		TokenEncryptionKey: "base64key",
+		GoEnv:                     "production",
+		LogLevel:                  "info",
+		LogFormat:                 "json",
+		BungieAPIKey:              "key",
+		BungieClientID:            "client",
+		JWTSecret:                 strings.Repeat("s", 32),
+		DatabaseURL:               "postgres://localhost/db",
+		TokenEncryptionKey:        "base64key",
+		TokenEncryptionKeyVersion: 1,
 	}
 }
 
@@ -51,9 +54,26 @@ func TestValidate_ProductionBranches(t *testing.T) {
 
 func TestValidate_DevelopmentNeverErrors(t *testing.T) {
 	// A completely empty dev config only warns — degraded mode is supported.
-	cfg := &Config{GoEnv: "development"}
+	cfg := &Config{GoEnv: "development", LogLevel: "info", LogFormat: "text"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() in development = %v, want nil", err)
+	}
+}
+
+func TestValidate_RequiresExplicitKnownGoEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  string
+	}{
+		{name: "unset", env: ""},
+		{name: "unknown", env: "staging"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{GoEnv: tc.env}
+			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "GO_ENV") {
+				t.Fatalf("Validate() = %v, want GO_ENV error", err)
+			}
+		})
 	}
 }
 
@@ -94,6 +114,136 @@ func TestLoad_EnvParsing(t *testing.T) {
 	if cfg.DBMaxConns != 8 {
 		t.Errorf("DBMaxConns = %d", cfg.DBMaxConns)
 	}
+}
+
+func TestLoad_TokenEncryptionKeyVersions(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY_VERSION", "")
+	t.Setenv("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION", "")
+	cfg := Load()
+	if cfg.TokenEncryptionKeyVersion != 1 || cfg.TokenEncryptionKeyPrevVersion != 0 {
+		t.Fatalf("default versions = %d/%d, want 1/0", cfg.TokenEncryptionKeyVersion, cfg.TokenEncryptionKeyPrevVersion)
+	}
+
+	t.Setenv("TOKEN_ENCRYPTION_KEY_VERSION", "2")
+	t.Setenv("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION", "1")
+	cfg = Load()
+	if cfg.TokenEncryptionKeyVersion != 2 || cfg.TokenEncryptionKeyPrevVersion != 1 {
+		t.Fatalf("configured versions = %d/%d, want 2/1", cfg.TokenEncryptionKeyVersion, cfg.TokenEncryptionKeyPrevVersion)
+	}
+}
+
+func TestLoad_RejectsInvalidTokenEncryptionKeyVersions(t *testing.T) {
+	t.Setenv("GO_ENV", "development")
+	t.Setenv("TOKEN_ENCRYPTION_KEY", "configured")
+	for _, value := range []string{"0", "-1", "32768", "not-a-number"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("TOKEN_ENCRYPTION_KEY_VERSION", value)
+			if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "TOKEN_ENCRYPTION_KEY_VERSION") {
+				t.Fatalf("Validate() = %v, want key-version error", err)
+			}
+		})
+	}
+}
+
+func TestValidate_TokenEncryptionPreviousVersionPairing(t *testing.T) {
+	base := Config{
+		GoEnv:                         "development",
+		LogLevel:                      "info",
+		LogFormat:                     "text",
+		TokenEncryptionKey:            "current",
+		TokenEncryptionKeyVersion:     2,
+		TokenEncryptionKeyPrev:        "previous",
+		TokenEncryptionKeyPrevVersion: 1,
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid rotation config rejected: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*Config)
+	}{
+		{name: "previous version missing", mutate: func(c *Config) { c.TokenEncryptionKeyPrevVersion = 0 }},
+		{name: "versions equal", mutate: func(c *Config) { c.TokenEncryptionKeyPrevVersion = c.TokenEncryptionKeyVersion }},
+		{name: "previous key missing", mutate: func(c *Config) { c.TokenEncryptionKeyPrev = "" }},
+		{name: "current key missing", mutate: func(c *Config) { c.TokenEncryptionKey = "" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			tc.mutate(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() unexpectedly succeeded")
+			}
+		})
+	}
+}
+
+func TestLoad_LoggingDefaultsByEnvironment(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "")
+	t.Setenv("LOG_FORMAT", "")
+
+	t.Setenv("GO_ENV", "development")
+	dev := Load()
+	if dev.LogLevel != "info" || dev.LogFormat != "text" {
+		t.Fatalf("development logging = %s/%s, want info/text", dev.LogLevel, dev.LogFormat)
+	}
+
+	t.Setenv("GO_ENV", "production")
+	prod := Load()
+	if prod.LogLevel != "info" || prod.LogFormat != "json" {
+		t.Fatalf("production logging = %s/%s, want info/json", prod.LogLevel, prod.LogFormat)
+	}
+}
+
+func TestValidate_RejectsInvalidLoggingConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		level  string
+		format string
+	}{
+		{name: "level", level: "trace", format: "text"},
+		{name: "format", level: "info", format: "xml"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{GoEnv: "development", LogLevel: tc.level, LogFormat: tc.format}
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() unexpectedly succeeded")
+			}
+		})
+	}
+}
+
+func TestLoad_E2EFixedTime(t *testing.T) {
+	t.Setenv("GO_ENV", "development")
+	t.Setenv("E2E_FIXED_TIME", "2026-07-11T18:00:00-04:00")
+	cfg := Load()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if cfg.E2EFixedTime == nil {
+		t.Fatalf("E2EFixedTime = %v", cfg.E2EFixedTime)
+	}
+	if got := cfg.E2EFixedTime.Format(time.RFC3339); got != "2026-07-11T22:00:00Z" {
+		t.Fatalf("E2EFixedTime = %s", got)
+	}
+}
+
+func TestLoad_RejectsInvalidOrProductionE2EFixedTime(t *testing.T) {
+	t.Run("invalid timestamp", func(t *testing.T) {
+		t.Setenv("GO_ENV", "development")
+		t.Setenv("E2E_FIXED_TIME", "Saturday afternoon")
+		if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "E2E_FIXED_TIME") {
+			t.Fatalf("Validate() = %v, want E2E_FIXED_TIME error", err)
+		}
+	})
+	t.Run("production", func(t *testing.T) {
+		t.Setenv("GO_ENV", "production")
+		t.Setenv("E2E_FIXED_TIME", "2026-07-11T18:00:00Z")
+		if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "development-only") {
+			t.Fatalf("Validate() = %v, want development-only error", err)
+		}
+	})
 }
 
 func TestLoad_FallbacksOnInvalidValues(t *testing.T) {

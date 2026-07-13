@@ -79,6 +79,11 @@ docker-compose.override.yml
 coverage/
 *.cover
 *.coverprofile
+frontend/playwright/.auth/
+frontend/playwright-report/
+frontend/test-results/
+# Manifest + search-index artifacts the E2E API writes at MANIFEST_DB_PATH
+backend/api-service/.e2e/
 
 # TypeScript incremental build cache
 *.tsbuildinfo

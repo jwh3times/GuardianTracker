@@ -3,11 +3,10 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +16,7 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/characters"
 	"guardian-tracker/api-service/services/collections"
@@ -93,12 +93,19 @@ func (a *weeklyWishlistAdapter) List(ctx context.Context, userID int64) ([]weekl
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment variables")
+		slog.Debug("environment file not loaded; using process environment")
 	}
 
 	cfg := config.Load()
+	logger, err := observability.NewLogger(cfg.LogLevel, cfg.LogFormat, os.Stdout)
+	if err != nil {
+		slog.Error("logging configuration invalid", observability.Err(err))
+		os.Exit(1)
+	}
+	slog.SetDefault(logger)
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("Configuration invalid: %v", err)
+		slog.Error("configuration invalid", observability.Err(err))
+		os.Exit(1)
 	}
 
 	if cfg.IsProduction() {
@@ -111,20 +118,28 @@ func main() {
 	// Database — returns nil pool (not error) when DATABASE_URL is empty (degraded mode)
 	pool, err := db.Connect(ctx, cfg)
 	if err != nil {
-		log.Fatalf("Database connection failed: %v", err)
+		slog.Error("database connection failed", observability.Err(err))
+		os.Exit(1)
 	}
 	if pool != nil {
 		if err := db.Migrate(ctx, pool); err != nil {
-			log.Fatalf("Database migration failed: %v", err)
+			slog.Error("database migration failed", observability.Err(err))
+			os.Exit(1)
 		}
-		log.Println("Database migrations applied successfully")
+		slog.Info("database migrations applied")
 	}
 	stores := db.NewStores(pool)
 
 	// Token cipher — nil when TOKEN_ENCRYPTION_KEY is empty (degraded mode)
-	tokenCipher, err := auth.NewTokenCipher(cfg.TokenEncryptionKey, cfg.TokenEncryptionKeyPrev)
+	tokenCipher, err := auth.NewTokenCipher(
+		cfg.TokenEncryptionKey,
+		cfg.TokenEncryptionKeyVersion,
+		cfg.TokenEncryptionKeyPrev,
+		cfg.TokenEncryptionKeyPrevVersion,
+	)
 	if err != nil {
-		log.Fatalf("Token cipher initialization failed: %v", err)
+		slog.Error("token cipher initialization failed", observability.Err(err))
+		os.Exit(1)
 	}
 
 	// Auth — pass DB repo + cipher when both are available
@@ -193,7 +208,7 @@ func main() {
 		manifestProvider.CloseForSwap,
 		func(version string) {
 			if err := manifestProvider.Reopen(); err != nil {
-				log.Printf("Warning: manifest provider reopen failed: %v", err)
+				slog.Warn("manifest provider reopen failed", observability.Err(err))
 			}
 			appCache.Delete(records.WeaponTypesCacheKey)
 			appCache.Delete(records.ExoticWeaponsCacheKey)
@@ -208,10 +223,9 @@ func main() {
 	})
 
 	go func() {
-		log.Println("Checking manifest status...")
+		slog.Info("checking manifest status")
 		if err := manifestService.EnsureReady(ctx); err != nil {
-			log.Printf("Warning: could not initialize manifest: %v", err)
-			log.Println("Collections endpoint will return 503 until manifest is available")
+			slog.Warn("manifest initialization failed; dependent endpoints remain unavailable", observability.Err(err))
 		}
 	}()
 	manifestService.StartBackgroundUpdater(ctx)
@@ -222,6 +236,13 @@ func main() {
 		weeklyWishlist = &weeklyWishlistAdapter{s: stores.Wishlist}
 	}
 	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine)
+	if cfg.E2EFixedTime != nil {
+		fixedTime := *cfg.E2EFixedTime
+		weeklyService = weekly.NewServiceWithClock(
+			bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine,
+			func() time.Time { return fixedTime },
+		)
+	}
 	weeklyHandler := handlers.NewWeeklyHandler(weeklyService, tokenStore)
 
 	go searchService.BuildIndex()
@@ -283,12 +304,14 @@ func main() {
 	}
 
 	// Router
-	router := gin.Default()
+	router := gin.New()
+	router.Use(observability.HTTPMiddleware(logger))
 	// Trust only configured proxies for X-Forwarded-For so the audit-logged client
 	// IP can't be spoofed by clients. Empty list (local dev) trusts none.
 	if err := router.SetTrustedProxies(cfg.TrustedProxies); err != nil {
-		log.Printf("Warning: SetTrustedProxies(%v): %v", cfg.TrustedProxies, err)
+		slog.Warn("trusted proxy configuration rejected", observability.Err(err))
 	}
+	router.Use(middleware.APISecurityHeaders())
 	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 	router.Use(middleware.MaxBodyBytes(cfg.MaxBodyBytes))
 	// One shared limiter instance across the public auth endpoints (per-IP
@@ -302,14 +325,16 @@ func main() {
 	{
 		api.GET("/manifest/status", healthHandler.ManifestStatus)
 
-		// Auth
-		api.GET("/auth/bungie", authLimiter, authHandler.GetBungieAuthURL)
-		api.POST("/auth/bungie/callback", authLimiter, authHandler.BungieCallback)
-		api.POST("/auth/refresh", authLimiter, authHandler.RefreshToken)
-		api.GET("/auth/validate", jwtHelper.Middleware(revoker), authHandler.ValidateToken)
-		api.GET("/auth/profile", jwtHelper.Middleware(revoker), authHandler.GetProfile)
-		api.POST("/auth/logout", jwtHelper.Middleware(revoker), authHandler.Logout)
-		api.POST("/auth/logout/all", jwtHelper.Middleware(revoker), authHandler.LogoutAll)
+		// Auth responses are never cacheable. Callback and refresh both establish
+		// or rotate the refresh cookie, so they also require an exact browser Origin.
+		authRoutes := api.Group("/auth", middleware.NoStore())
+		authRoutes.GET("/bungie", authLimiter, authHandler.GetBungieAuthURL)
+		authRoutes.POST("/bungie/callback", middleware.RequireAllowedOrigin(cfg.CORSAllowedOrigins), authLimiter, authHandler.BungieCallback)
+		authRoutes.POST("/refresh", middleware.RequireAllowedOrigin(cfg.CORSAllowedOrigins), authLimiter, authHandler.RefreshToken)
+		authRoutes.GET("/validate", jwtHelper.Middleware(revoker), authHandler.ValidateToken)
+		authRoutes.GET("/profile", jwtHelper.Middleware(revoker), authHandler.GetProfile)
+		authRoutes.POST("/logout", jwtHelper.Middleware(revoker), authHandler.Logout)
+		authRoutes.POST("/logout/all", jwtHelper.Middleware(revoker), authHandler.LogoutAll)
 
 		// Wishlist
 		api.GET("/wishlist", jwtHelper.Middleware(revoker), wishlistHandler.GetWishlist)
@@ -366,10 +391,10 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("API service starting on port %s (%s)", cfg.Port, cfg.GoEnv)
-		log.Printf("Manifest ready: %v", manifestService.IsReady())
+		slog.Info("API service starting", "port", cfg.Port, "environment", cfg.GoEnv, "manifest_ready", manifestService.IsReady())
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+			slog.Error("API server stopped unexpectedly", observability.Err(err))
+			os.Exit(1)
 		}
 	}()
 
@@ -377,19 +402,19 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	slog.Info("shutting down API service")
 	cancel()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+		slog.Error("server shutdown deadline exceeded", observability.Err(err))
 	}
 	if err := manifestProvider.Close(); err != nil {
-		log.Printf("Warning: error closing manifest provider: %v", err)
+		slog.Warn("manifest provider close failed", observability.Err(err))
 	}
-	log.Println("Server exited gracefully")
+	slog.Info("API service stopped")
 }
 
 // startSessionPruner periodically deletes expired refresh sessions so abandoned
@@ -407,9 +432,9 @@ func startSessionPruner(ctx context.Context, users *db.UserStore) {
 			case <-ticker.C:
 				n, err := users.DeleteExpiredSessions(ctx)
 				if err != nil {
-					log.Printf("session pruner: %v", err)
+					slog.Error("session pruning failed", observability.Err(err))
 				} else if n > 0 {
-					log.Printf("session pruner: removed %d expired session(s)", n)
+					slog.Info("expired sessions pruned", "count", n)
 				}
 			}
 		}
@@ -432,9 +457,9 @@ func startAuditPruner(ctx context.Context, audit *db.AuditStore, retentionDays i
 				cutoff := time.Now().AddDate(0, 0, -retentionDays)
 				n, err := audit.DeleteOlderThan(ctx, cutoff)
 				if err != nil {
-					log.Printf("audit pruner: %v", err)
+					slog.Error("audit pruning failed", observability.Err(err))
 				} else if n > 0 {
-					log.Printf("audit pruner: removed %d expired audit row(s)", n)
+					slog.Info("expired audit rows pruned", "count", n)
 				}
 			}
 		}
@@ -444,14 +469,13 @@ func startAuditPruner(ctx context.Context, audit *db.AuditStore, retentionDays i
 func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		for _, allowed := range allowedOrigins {
-			if strings.TrimSpace(allowed) == origin {
-				c.Header("Access-Control-Allow-Origin", origin)
-				break
-			}
+		c.Header("Vary", "Origin")
+		if middleware.OriginAllowed(origin, allowedOrigins) {
+			c.Header("Access-Control-Allow-Origin", origin)
 		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Access-Control-Expose-Headers", "X-Request-ID")
 		c.Header("Access-Control-Allow-Credentials", "true")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)

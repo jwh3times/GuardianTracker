@@ -18,7 +18,7 @@ services:
     ports:
       # Default host port 5532 is offset from the canonical 5432 to avoid colliding
       # with other local projects. Override with POSTGRES_PORT. Container always listens on 5432.
-      - "${POSTGRES_PORT:-5532}:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5532}:5432"
     volumes:
       # PostgreSQL 18+ images store data under a version-specific subdir, so the
       # recommended mount point is /var/lib/postgresql (not /var/lib/postgresql/data).
@@ -44,7 +44,7 @@ services:
       PGADMIN_CONFIG_SERVER_MODE: "False"
     ports:
       # Host port 5150 is offset from the canonical 5050 to avoid collisions. Override with PGADMIN_PORT.
-      - "${PGADMIN_PORT:-5150}:80"
+      - "127.0.0.1:${PGADMIN_PORT:-5150}:80"
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,7 +57,9 @@ services:
       - "${API_SERVICE_PORT:-8081}:8081"
     environment:
       PORT: "8081"
-      GO_ENV: ${ENVIRONMENT:-development}
+      GO_ENV: ${GO_ENV:?set GO_ENV to development or production}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      LOG_FORMAT: ${LOG_FORMAT:-}
       BUNGIE_API_KEY: ${BUNGIE_API_KEY:-}
       BUNGIE_API_BASE_URL: https://www.bungie.net/Platform
       BUNGIE_CLIENT_ID: ${BUNGIE_CLIENT_ID:-}
@@ -74,6 +76,9 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5273}
       DATABASE_URL: postgres://guardian_app:guardian_dev_password@postgres:5432/guardian_tracker?sslmode=disable
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:-}
+      TOKEN_ENCRYPTION_KEY_VERSION: ${TOKEN_ENCRYPTION_KEY_VERSION:-1}
+      TOKEN_ENCRYPTION_KEY_PREVIOUS: ${TOKEN_ENCRYPTION_KEY_PREVIOUS:-}
+      TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION: ${TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION:-}
       ADMIN_MEMBERSHIP_IDS: ${ADMIN_MEMBERSHIP_IDS:-}
     volumes:
       - manifest-data:/app/data
@@ -114,9 +119,30 @@ services:
       POSTGRES_PASSWORD: test_password
       POSTGRES_DB: test_db
     ports:
-      - "${TEST_POSTGRES_PORT:-5533}:5432"
+      - "127.0.0.1:${TEST_POSTGRES_PORT:-5533}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: "no"
+
+  # Hermetic browser-suite database. Playwright owns the fake Bungie service,
+  # real API, and Vite processes; Compose supplies only an isolated Postgres.
+  # No data volume is attached, so removing the container resets every scenario.
+  e2e-postgres:
+    image: postgres:18-alpine
+    profiles: ["e2e"]
+    environment:
+      POSTGRES_DB: guardian_tracker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:${E2E_POSTGRES_PORT:-5534}:5432"
+    volumes:
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d guardian_tracker"]
       interval: 5s
       timeout: 5s
       retries: 10

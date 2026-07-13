@@ -59,17 +59,37 @@ Fill in the required secrets:
 | `DATABASE_URL` | Postgres connection string; Compose sets this for the container |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie tokens |
 
+Set the required runtime mode. Keep the current key version explicit in new
+environment files; it defaults to `1` only to preserve existing version-1 rows:
+
+| Variable | Purpose |
+| --- | --- |
+| `GO_ENV` | Exactly `development` or `production`; there is no implicit default |
+| `TOKEN_ENCRYPTION_KEY_VERSION` | Positive `SMALLINT` version for the current encryption key (start at `1`; omitted value defaults to `1`) |
+
 Optional values:
 
 | Variable | Purpose |
 | --- | --- |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS` | Previous encryption key during key rotation |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous encryption key; set only with that key |
 | `ADMIN_MEMBERSHIP_IDS` | Comma-separated Bungie membership IDs pinned to admin at login |
 | `CORS_ALLOWED_ORIGINS` | Explicit browser origins allowed to call the API |
 | `JWT_ACCESS_TTL` | Access-token lifetime as a Go duration (default `30m`) |
+| `LOG_LEVEL` | `debug`, `info`, `warn`, or `error`; defaults to `info` |
+| `LOG_FORMAT` | `text` or `json`; defaults to `text` in development and `json` in production |
 
 Do not commit `.env`, generated secrets, manifest databases, cloud credentials, or
 production runbooks.
+
+See [SECURITY.md](./SECURITY.md#token-encryption-key-rotation) before rotating an
+encryption key. The key and its version must move together.
+
+Invalid `LOG_LEVEL` or `LOG_FORMAT` values fail startup. Application logs carry
+a server-generated request UUID and use route templates rather than raw URLs.
+They do not record query strings, request/response bodies, authorization
+headers, User-Agent values, or routine client IPs. Security audit rows remain a
+separate Postgres trail with the exact identifiers needed for forensics.
 
 ## 3. Run the Full Stack
 
@@ -78,6 +98,10 @@ Docker Compose is the default path for local development:
 ```powershell
 docker compose up --build
 ```
+
+The checked-in example sets `GO_ENV=development` explicitly. Compose refuses to
+render the API service when `GO_ENV` is missing, preventing an accidental
+implicit degraded-mode startup.
 
 Open:
 
@@ -142,16 +166,23 @@ projects. Container ports stay fixed.
 | API service | `8081` | `8081` | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
 | Postgres | `5432` | `5532` | `docker-compose.yml`, `.env.example` |
 | pgAdmin | `80` | `5150` | `docker-compose.yml`, `.env.example` |
+| E2E Postgres | `5432` | `5534` | `docker-compose.yml`, `.env.example` |
 
 Compose mappings:
 
 ```text
-postgres        ${POSTGRES_PORT:-5532}      -> 5432
-pgadmin         ${PGADMIN_PORT:-5150}       -> 80
+postgres        127.0.0.1:${POSTGRES_PORT:-5532}      -> 5432
+pgadmin         127.0.0.1:${PGADMIN_PORT:-5150}       -> 80
 api-service     ${API_SERVICE_PORT:-8081}   -> 8081
 frontend        ${FRONTEND_PORT:-5273}      -> 8080
-test-postgres   ${TEST_POSTGRES_PORT:-5533} -> 5432
+test-postgres   127.0.0.1:${TEST_POSTGRES_PORT:-5533} -> 5432
+e2e-postgres    127.0.0.1:${E2E_POSTGRES_PORT:-5534}  -> 5432
 ```
+
+Postgres, pgAdmin, and both disposable test databases bind only to loopback. The
+frontend and API remain reachable on the configured host interfaces for local
+browser and tunnel workflows. `e2e-postgres` has no data volume; it mounts the
+normal database initializer read-only and resets when its container is removed.
 
 Minikube mappings:
 
@@ -171,6 +202,7 @@ Backend:
 cd backend/api-service
 go test ./...
 go vet ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ./test-local.ps1
 ```
 
@@ -183,6 +215,36 @@ npm run type-check
 npm run lint
 npm run format:check
 ```
+
+Browser quality gates:
+
+```powershell
+# From the repository root
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z" # deterministic Saturday/Xur fixture
+
+cd frontend
+npm ci
+npx playwright install chromium
+npm run e2e          # functional journeys + axe + destructive auth last
+npm run e2e:visual   # local preview; CI owns canonical Linux comparison
+
+cd ..
+docker compose --profile e2e down -v
+```
+
+The Playwright configuration launches `go run ./cmd/fake-bungie` from
+`backend/api-service`, the real API, and Vite, then waits for fake health, API
+readiness, and the asynchronous search index. The fake generates its tiny
+SQLite manifest at runtime and provides loopback-only scenario controls; the
+suite never contacts the real Bungie API. Tests use one worker because account
+and scenario state are shared.
+
+`.github/workflows/browser.yml` publishes reports and failure evidence for 14
+days. Browser E2E + Axe and visual regression are advisory initially and do not
+hide failures with `continue-on-error`. After ten consecutive clean E2E/axe
+runs, add `Browser E2E + Axe` to branch protection. Keep `Browser Visual
+Regression` optional.
 
 `./test-local.ps1` starts the test Postgres service on `:5533`, enables cgo for
 SQLite-backed manifest tests, and runs the Go coverage path that most closely

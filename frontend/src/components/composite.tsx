@@ -269,57 +269,76 @@ export function XurModule({
       {xur.location ? (
         <div className="gt-xur-loc mono">{xur.location}</div>
       ) : null}
-      <ul className="gt-vendor-list">
-        {xur.items.map((it) => (
-          <li
-            key={it.hash}
-            className="gt-vendor-item"
-            data-rarity={it.rarity}
-            role={onSelect ? "button" : undefined}
-            tabIndex={onSelect ? 0 : undefined}
-            style={onSelect ? { cursor: "pointer" } : undefined}
-            onClick={() => onSelect?.(it.hash)}
-            onKeyDown={(e) => {
-              if (onSelect && (e.key === "Enter" || e.key === " ")) {
-                e.preventDefault();
-                onSelect(it.hash);
-              }
-            }}
-          >
-            <ItemTile
-              rarity={it.rarity}
-              type={it.type}
-              icon={it.icon}
-              style={{ width: "2.4rem" }}
-            />
-            <div className="gt-vendor-main">
-              <div className="gt-item-name">{it.name}</div>
-              <div className="gt-item-type">
-                {it.type} · <span className="mono">{it.cost}</span>
-              </div>
-              {it.className && (
-                <div
-                  className="gt-item-badges"
-                  style={{ marginTop: "var(--s-1)" }}
-                >
-                  <Badge kind="for-you" dot>
-                    {it.className === activeClassName
-                      ? `For your ${it.className}`
-                      : `${it.className} armor`}
-                  </Badge>
+      {xur.items.length === 0 ? (
+        <EmptyState
+          icon="bungie"
+          title="Inventory unavailable"
+          body="Xûr is in the system, but his stock could not be loaded."
+        />
+      ) : (
+        <ul className="gt-vendor-list">
+          {xur.items.map((it) => {
+            const body = (
+              <>
+                <ItemTile
+                  rarity={it.rarity}
+                  type={it.type}
+                  icon={it.icon}
+                  style={{ width: "2.4rem" }}
+                />
+                <div className="gt-vendor-main">
+                  <div className="gt-item-name">{it.name}</div>
+                  <div className="gt-item-type">
+                    {it.type} · <span className="mono">{it.cost}</span>
+                  </div>
+                  {it.className && (
+                    <div
+                      className="gt-item-badges"
+                      style={{ marginTop: "var(--s-1)" }}
+                    >
+                      <Badge kind="for-you" dot>
+                        {it.className === activeClassName
+                          ? `For your ${it.className}`
+                          : `${it.className} armor`}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            {it.missing ? (
-              <Badge kind="missing" dot icon="bolt" />
-            ) : (
-              <Badge kind="owned" dot>
-                Owned
-              </Badge>
-            )}
-          </li>
-        ))}
-      </ul>
+                {it.missing ? (
+                  <Badge kind="missing" dot icon="bolt" />
+                ) : (
+                  <Badge kind="owned" dot>
+                    Owned
+                  </Badge>
+                )}
+              </>
+            );
+            // The row stays a listitem and the click target is a real button.
+            // role="button" on the <li> replaces its implicit listitem role,
+            // which leaves the <ul> with no listitem children (axe "list").
+            // A native button also brings Enter/Space and focus for free.
+            return (
+              <li
+                key={it.hash}
+                className="gt-vendor-item"
+                data-rarity={it.rarity}
+              >
+                {onSelect ? (
+                  <button
+                    type="button"
+                    className="gt-vendor-item-btn"
+                    onClick={() => onSelect(it.hash)}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  body
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </Panel>
   );
 }
@@ -328,22 +347,30 @@ export function XurModule({
 export function MilestoneModule({ milestones }: { milestones: Milestone[] }) {
   return (
     <Panel title="Milestones & Activities" icon="week">
-      <ul className="gt-vendor-list">
-        {milestones.map((m) => (
-          <li key={m.id} className="gt-milestone">
-            <div className="gt-milestone-l">
-              <div className="gt-action-meta mono">{m.label}</div>
-              <div className="gt-item-name">{m.name}</div>
-              <div className="gt-item-type">Reward: {m.reward}</div>
-            </div>
-            {m.missing != null && m.missing > 0 && (
-              <Badge kind="missing" dot>
-                {m.missing} missing
-              </Badge>
-            )}
-          </li>
-        ))}
-      </ul>
+      {milestones.length === 0 ? (
+        <EmptyState
+          icon="week"
+          title="No milestones this week"
+          body="Bungie is not reporting any active weekly milestones right now."
+        />
+      ) : (
+        <ul className="gt-vendor-list">
+          {milestones.map((m) => (
+            <li key={m.id} className="gt-milestone">
+              <div className="gt-milestone-l">
+                <div className="gt-action-meta mono">{m.label}</div>
+                <div className="gt-item-name">{m.name}</div>
+                <div className="gt-item-type">Reward: {m.reward}</div>
+              </div>
+              {m.missing != null && m.missing > 0 && (
+                <Badge kind="missing" dot>
+                  {m.missing} missing
+                </Badge>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </Panel>
   );
 }

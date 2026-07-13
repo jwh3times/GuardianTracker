@@ -151,19 +151,6 @@ func TestLightweight_StripsItems(t *testing.T) {
 	}
 }
 
-// fakeManifest implements ManifestRepo for service tests.
-type fakeManifest struct {
-	cols  []manifest.CollectibleWithItem
-	nodes map[uint32]*manifest.PresentationNodeDef
-}
-
-func (f *fakeManifest) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
-	return f.cols, nil
-}
-func (f *fakeManifest) GetAllPresentationNodes() (map[uint32]*manifest.PresentationNodeDef, error) {
-	return f.nodes, nil
-}
-
 // armorCol builds a CollectibleWithItem for a legendary armor piece.
 func armorCol(colHash, itemHash uint32, name string) manifest.CollectibleWithItem {
 	item := &bungie.InventoryItemDefinition{Hash: itemHash, ItemType: bungie.ItemTypeArmor}

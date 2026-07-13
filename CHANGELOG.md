@@ -11,6 +11,17 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 ### Added
 
+- Structured application and access logs with server-owned request UUIDs,
+  route-template records, privacy-safe identifier pseudonyms, and
+  `X-Request-ID` response/CORS propagation.
+- Staticcheck 2026.1 to the required Go CI job, alongside `go vet`,
+  `govulncheck`, race-enabled tests, and coverage enforcement.
+- A hermetic Playwright browser suite backed by a local fake Bungie service and
+  isolated Postgres profile, covering functional journeys, WCAG 2.2 axe checks,
+  keyboard/reduced-motion behavior, and deterministic visual regression.
+- Separate advisory browser CI jobs with one functional retry and 14-day
+  reports, logs, traces, screenshots, videos, and visual diffs. Visual tests run
+  in the package-matched Playwright 1.61.0 Noble image.
 - Collectible ornaments and finishers to the Cosmetics gallery after verifying
   their manifest item type/subtype classification.
 - A first-run guided tour of Dashboard, This Week, and Collections. Completion
@@ -33,6 +44,43 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 - Milestone definitions with Bungie's mapping-shaped `rewards` data no longer fail
   to parse and disappear from the weekly response.
+- Manifest downloads now create the destination directory. Writing the manifest
+  archive to a `MANIFEST_DB_PATH` whose directory did not exist yet failed every
+  retry immediately, leaving `/ready` at 503 and the manifest missing until the
+  next hourly update check.
+- Tertiary text, admin table headers and timestamps, the collections estimate
+  note, and the active cosmetics filter button all fell below the WCAG AA 4.5:1
+  contrast minimum (as low as 1.78:1 for white on the aqua signal color).
+- Xûr's vendor rows carried `role="button"` on their `<li>`, which replaced the
+  implicit `listitem` role and left the surrounding list with no list items.
+  The row is now a real listitem containing a real button.
+- The Xûr and milestone panels rendered an empty `<ul>` when Bungie reported no
+  vendor sales or milestones; they now render an empty state.
+
+### Changed
+
+- `--c-text-3` lightness raised from L 0.62 to 0.68 so tertiary text clears WCAG
+  AA on tinted surfaces. `--c-text-4` is now reserved for genuinely disabled
+  controls, which WCAG exempts from contrast minimums.
+
+### Security
+
+- Refresh JWTs now rotate in a host-only HttpOnly `guardian_refresh_token`
+  cookie instead of localStorage. Callback and refresh require an exact
+  allowlisted origin, definitive session failures clear the cookie, and token
+  responses expose only the access token and user snapshot. Existing browser
+  sessions sign in once again after this migration.
+- Token-encryption keys now carry exact positive versions so an A/v1 to B/v2
+  rotation can retain A/v1 for old rows while all new ciphertext uses B/v2;
+  unknown versions are rejected.
+- API responses now receive no-sniff and no-referrer headers, auth responses are
+  non-cacheable, manifest status no longer exposes its filesystem path, and the
+  frontend CSP no longer permits inline scripts. Inline styles remain a
+  documented CSP residual risk.
+- `GO_ENV` must be explicitly `development` or `production`, with one prominent
+  degraded-development warning and production fail-closed requirements.
+- Compose binds Postgres, pgAdmin, and the disposable test database only to
+  `127.0.0.1`; frontend and API bindings are unchanged.
 
 ## [0.3.12] - 2026-07-12
 

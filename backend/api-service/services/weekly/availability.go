@@ -3,10 +3,11 @@ package weekly
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 )
 
@@ -59,7 +60,7 @@ func extractVendorItems(resp *bungie.CharacterVendorsResponse, allowlist map[uin
 // whatever is available (possibly empty) on token/character/fetch failure; never
 // errors.
 func (s *Service) LiveVendorItemHashes(ctx context.Context, membershipType int, membershipID, bungieToken string) map[uint32]string {
-	return s.liveVendorItemHashesAt(ctx, membershipType, membershipID, bungieToken, time.Now().UTC())
+	return s.liveVendorItemHashesAt(ctx, membershipType, membershipID, bungieToken, s.nowUTC())
 }
 
 func (s *Service) liveVendorItemHashesAt(ctx context.Context, membershipType int, membershipID, bungieToken string, now time.Time) map[uint32]string {
@@ -101,7 +102,12 @@ func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, m
 
 	resp, err := s.bungie.GetCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
 	if err != nil {
-		log.Printf("weekly: GetCharacterVendors: %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly character vendors fetch failed",
+			slog.Int("membership_type", membershipType),
+			observability.ID("membership", membershipID),
+			observability.ID("character", characterID),
+			observability.Err(err),
+		)
 		return nil
 	}
 	if s.cache != nil {

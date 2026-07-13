@@ -11,19 +11,19 @@ You are working inside the Guardian Tracker Go backend. There is **one** service
 
 ```
 backend/api-service/
-  main.go                              ← Gin router, dependency wiring, manifest startup + swap hooks
+  main.go                              ← Gin router, slog/request middleware, dependency wiring, manifest startup + swap hooks
   config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
   auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
   auth/middleware.go                   ← JWT middleware for protected routes
   auth/state.go                        ← Stateless HMAC-signed OAuth state (CSRF, multi-replica safe)
   auth/tokenstore.go                   ← DB-backed encrypted Bungie OAuth token store; CAS refresh writes
-  auth/crypto.go                       ← AES-256-GCM cipher; key rotation via prev key
+  auth/crypto.go                       ← AES-256-GCM cipher; exact current/previous key versions
   auth/revocation.go                   ← JWT revocation: checks token_version (account-wide) + session
                                            existence (per-device) via RevocationChecker; 60s in-memory
                                            cache; also resolves role from DB for RequireAdmin/RequireTier
   auth/roles.go                        ← Role tiers (standard/beta/alpha/admin) + RequireAdmin/RequireTier
                                            tier-gating middleware
-  api/handlers/auth.go                 ← OAuth flow, token refresh, logout (single-device + all), profile
+  api/handlers/auth.go                 ← OAuth flow, HttpOnly refresh cookie, logout (single-device + all), profile
   api/handlers/characters.go           ← HTTP handler for characters
   api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
                                            collections + characters + records caches via service methods
@@ -84,8 +84,8 @@ backend/api-service/
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/auth/bungie` | None | Initiate OAuth — returns `{ authUrl, state }` |
-| POST | `/api/auth/bungie/callback` | None | Exchange code for JWT tokens |
-| POST | `/api/auth/refresh` | Refresh token | Rotate access + refresh tokens (per-session, reuse detection) |
+| POST | `/api/auth/bungie/callback` | Exact Origin + OAuth state | Exchange code; set refresh cookie; return `{token,user}` |
+| POST | `/api/auth/refresh` | Exact Origin + refresh cookie | Empty JSON request; rotate cookie + access token (per-session, reuse detection) |
 | GET | `/api/auth/validate` | JWT | Validate JWT |
 | GET | `/api/auth/profile` | JWT | Current user profile |
 | POST | `/api/auth/logout` | JWT | End current device's session only; other devices stay signed in |
@@ -124,7 +124,7 @@ Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_R
 
 1. `GET /api/auth/bungie` — generates HMAC-signed state token via `auth.StateSigner` (derived from `JWT_SECRET`), returns `{ authUrl, state }`
 2. User visits Bungie.net, authorizes, Bungie redirects to frontend `/auth/callback?code=...&state=...`
-3. Frontend POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — state verified with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code); exchanges code for Bungie tokens, stores tokens, issues Guardian JWT + refresh token, creates a `refresh_sessions` row
+3. Frontend credentialed-POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — exact Origin required; state verified with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code); stores Bungie tokens, returns the access JWT/user, sets the HttpOnly refresh cookie, and creates a `refresh_sessions` row
 
 ## JWT format
 
@@ -133,10 +133,11 @@ Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_R
 - `token_type` must be `"access"` for access tokens and `"refresh"` for refresh tokens
 - Access expiry: configurable via duration-based `JWT_ACCESS_TTL` (default 30m); legacy `JWT_EXPIRY_HOURS` is accepted when the new setting is absent
 - Refresh expiry: configurable via `JWT_REFRESH_EXPIRY_DAYS` (default 30d)
+- Browser delivery: access token/user snapshot in localStorage; refresh JWT only in host-only HttpOnly `guardian_refresh_token` (`SameSite=Lax`, `/api/auth`, and `Secure` in production)
 
 ## Token store (`auth/tokenstore.go`)
 
-DB-backed encrypted Bungie OAuth token store. Tokens are stored AES-256-GCM encrypted in the `bungie_tokens` table. Auto-refreshes via Bungie's OAuth refresh endpoint when within 5 minutes of expiry. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the CAS race reads and adopts the winner's tokens.
+DB-backed encrypted Bungie OAuth token store. Tokens are stored AES-256-GCM encrypted in the `bungie_tokens` table with exact positive current/previous key versions; unknown versions are rejected. Auto-refreshes via Bungie's OAuth refresh endpoint when within 5 minutes of expiry. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the race reads and adopts the winner's tokens.
 
 Sentinel errors:
 - `auth.ErrTokensNotFound` — no token row exists
@@ -163,7 +164,7 @@ Tiers: `standard(0) < beta(1) < alpha(2) < admin(3)` stored in `users.role`.
 
 Each login (and callback) creates a `refresh_sessions` row; the `sid` JWT claim holds the session ID:
 
-- `POST /api/auth/refresh` compare-and-swaps the session's refresh `jti` (`UserStore.RotateSession`). A replayed (already-rotated) token is detected as reuse → **revokes the whole session** (401, even if the revoking commit errors).
+- `POST /api/auth/refresh` reads the refresh JWT only from its cookie and compare-and-swaps the session's refresh `jti` (`UserStore.RotateSession`). A replayed (already-rotated) token is detected as reuse → **revokes the whole session** (401, even if the revoking commit errors). Successful refresh rotates the cookie; definitive failures expire it.
 - Sessions are independent → fully multi-device. `expires_at` slides forward on each rotation.
 - Sessions are capped per user (`maxSessionsPerUser`); an hourly `startSessionPruner` deletes expired rows.
 - `POST /api/auth/logout` — ends only the current session (`DeleteSession`); other devices stay signed in; Bungie token preserved.
@@ -225,7 +226,8 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 
 ## Go patterns
 
-- Config is loaded once at startup via `config.Load()`; `cfg.Validate()` returns an error (caller fatals in production).
+- Config is loaded once at startup via `config.Load()`; `cfg.Validate()` requires `GO_ENV` to be exactly `development` or `production` and rejects invalid/missing key versions.
+- Logging config accepts `LOG_LEVEL=debug|info|warn|error` and `LOG_FORMAT=text|json`; invalid values fail startup. Defaults are text/info in development and JSON/info in production.
 - Gin handlers must only: bind inputs, call a service/function, return `c.JSON(...)`. No business logic in handlers.
 - Errors: `c.JSON(http.StatusXXX, gin.H{"error": "...", "code": "MACHINE_CODE"})` then `return`.
 - All HTTP calls to Bungie API go through `services/bungie/client.go` (rate limiting + retry). Never construct Bungie API calls inline.
@@ -233,17 +235,25 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 - CGO is **enabled** (`CGO_ENABLED=1`) for SQLite.
 - Migrations run in a transaction — a failed multi-statement migration cannot leave a half-applied schema.
 
+## Structured logging
+
+- Use the request-scoped `*slog.Logger` attached to `context.Context`; every request has a server-owned UUID returned as `X-Request-ID`.
+- Access records use the matched route template, method, status, duration, and response bytes. Never log raw URLs/query strings, bodies, authorization headers, User-Agent values, or routine client IPs.
+- Use deterministic 24-hex pseudonyms (first 12 bytes of SHA-256) for membership, session, user, and character identifiers. Exact values belong only in `audit_log`.
+- Log successful health probes at debug, successful application requests at info, 4xx at warn, and 5xx/panic recovery at error.
+
 ## Environment variables
 
 ```
 PORT, GO_ENV, BUNGIE_API_KEY, BUNGIE_CLIENT_ID, BUNGIE_CLIENT_SECRET
 AUTH_REDIRECT_URI, JWT_SECRET, JWT_ACCESS_TTL, JWT_EXPIRY_HOURS (legacy), JWT_REFRESH_EXPIRY_DAYS
-DATABASE_URL, TOKEN_ENCRYPTION_KEY, TOKEN_ENCRYPTION_KEY_PREVIOUS
+DATABASE_URL, TOKEN_ENCRYPTION_KEY, TOKEN_ENCRYPTION_KEY_VERSION
+TOKEN_ENCRYPTION_KEY_PREVIOUS, TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION
 ADMIN_MEMBERSHIP_IDS, AUDIT_RETENTION_DAYS, TRUSTED_PROXIES
 BUNGIE_API_BASE_URL, BUNGIE_API_RPS, BUNGIE_API_BURST
 MANIFEST_DB_PATH, MANIFEST_CHECK_INTERVAL
 CACHE_ENABLED, CACHE_TTL_COLLECTIONS, CACHE_TTL_RECORDS
-CORS_ALLOWED_ORIGINS, LOG_LEVEL, HTTP_TIMEOUT_SECONDS
+CORS_ALLOWED_ORIGINS, LOG_LEVEL, LOG_FORMAT, HTTP_TIMEOUT_SECONDS
 ```
 
 ## Testing
@@ -251,6 +261,7 @@ CORS_ALLOWED_ORIGINS, LOG_LEVEL, HTTP_TIMEOUT_SECONDS
 ```powershell
 # From backend/api-service/
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 
 # With race detector (matches CI); requires CGO + Postgres for full coverage
 go test -race ./...
@@ -264,6 +275,15 @@ go test -race ./...
 ```
 
 DB integration tests gated on `TEST_DATABASE_URL`. SQLite tests gated on a runtime `requireSQLite(t)` probe (skipped when `CGO_ENABLED=0`).
+
+### Browser fixture service
+
+`backend/api-service/cmd/fake-bungie` is test-only. From
+`backend/api-service`, `go run ./cmd/fake-bungie` binds loopback port 8090,
+serves `/health`, OAuth/profile/vendor/milestone/settings fixtures, and a tiny
+runtime-generated zipped SQLite manifest. PUT/DELETE `/__e2e/scenario` controls
+mutable scenarios. It must never contact or proxy the real Bungie API and must
+never listen beyond loopback.
 
 ## Hot reload (development)
 

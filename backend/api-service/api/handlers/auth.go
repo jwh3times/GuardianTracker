@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -43,6 +43,11 @@ type UserStore interface {
 
 // oauthStateTTL is how long an issued OAuth state parameter stays valid.
 const oauthStateTTL = 10 * time.Minute
+
+const (
+	refreshCookieName = "guardian_refresh_token"
+	refreshCookiePath = "/api/auth"
+)
 
 // AuthHandler handles Bungie OAuth, token refresh, profile, and logout endpoints.
 type AuthHandler struct {
@@ -73,7 +78,7 @@ func NewAuthHandler(j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userSt
 func (h *AuthHandler) GetBungieAuthURL(c *gin.Context) {
 	state, err := h.state.Generate()
 	if err != nil {
-		log.Printf("Error generating CSRF state: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "OAuth state generation failed", observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize authentication"})
 		return
 	}
@@ -107,7 +112,7 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 
 	tokenResp, err := h.exchangeCode(c.Request.Context(), code)
 	if err != nil {
-		log.Printf("Error exchanging code for token: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "OAuth code exchange failed", observability.Err(err))
 		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
 			Details: map[string]any{"reason": "code_exchange"}})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete authentication"})
@@ -116,7 +121,7 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 
 	profile, err := h.getBungieProfile(c.Request.Context(), tokenResp.AccessToken)
 	if err != nil {
-		log.Printf("Error getting user profile: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "Bungie profile lookup failed", observability.Err(err))
 		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
 			Details: map[string]any{"reason": "profile_fetch"}})
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user profile"})
@@ -132,7 +137,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		forceAdmin := h.cfg.IsBootstrapAdmin(profile.MembershipID)
 		id, tv, r, err := h.userStore.Upsert(c.Request.Context(), profile.MembershipID, int16(profile.MembershipType), profile.DisplayName, forceAdmin)
 		if err != nil {
-			log.Printf("user upsert failed for %s: %v", profile.MembershipID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "login user persistence failed",
+				observability.ID("membership", profile.MembershipID), observability.Err(err))
 		} else {
 			tokenVersion = tv
 			role = int(r)
@@ -158,13 +164,15 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	sessionID := uuid.NewString()
 	accessToken, err := h.jwt.GenerateAccessToken(profile, tokenVersion, sessionID)
 	if err != nil {
-		log.Printf("Error generating access token: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "access token generation failed",
+			observability.ID("membership", profile.MembershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
 	refreshToken, refreshJTI, err := h.jwt.GenerateRefreshToken(profile, tokenVersion, sessionID)
 	if err != nil {
-		log.Printf("Error generating refresh token: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "refresh token generation failed",
+			observability.ID("membership", profile.MembershipID), observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 		return
 	}
@@ -176,7 +184,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	if h.userStore != nil {
 		expiresAt := now.Add(h.jwt.RefreshTokenTTL())
 		if err := h.userStore.CreateSession(c.Request.Context(), sessionID, profile.MembershipID, refreshJTI, c.Request.UserAgent(), expiresAt); err != nil {
-			log.Printf("create session failed for %s: %v", profile.MembershipID, err)
+			observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "refresh session creation failed",
+				observability.ID("membership", profile.MembershipID), observability.ID("session", sessionID), observability.Err(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
 			return
 		}
@@ -189,9 +198,9 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		SessionID:         sessionID,
 		Details:           map[string]any{"role": auth.RoleName(role)},
 	})
+	h.setRefreshCookie(c, refreshToken)
 	c.JSON(http.StatusOK, gin.H{
-		"token":        accessToken,
-		"refreshToken": refreshToken,
+		"token": accessToken,
 		"user": gin.H{
 			"id":             profile.MembershipID,
 			"displayName":    profile.DisplayName,
@@ -205,18 +214,20 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 
 // RefreshToken handles POST /api/auth/refresh
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	var body struct {
-		RefreshToken string `json:"refreshToken" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required"})
+	refreshCookie, err := c.Request.Cookie(refreshCookieName)
+	if err != nil || refreshCookie.Value == "" {
+		h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
+			Details: map[string]any{"reason": "missing_cookie"}})
+		h.expireRefreshCookie(c)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
 		return
 	}
 
-	claims, err := h.jwt.ValidateToken(body.RefreshToken)
+	claims, err := h.jwt.ValidateToken(refreshCookie.Value)
 	if err != nil || claims.TokenType != "refresh" {
 		h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 			Details: map[string]any{"reason": "invalid_token"}})
+		h.expireRefreshCookie(c)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
 		return
 	}
@@ -227,6 +238,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 				ActorMembershipID: claims.MembershipID, SessionID: claims.SessionID,
 				Details: map[string]any{"reason": "revoked"}})
+			h.expireRefreshCookie(c)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has been revoked. Please log in again."})
 			return
 		}
@@ -251,6 +263,11 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
 		return
 	}
+	newAccess, err := h.jwt.GenerateAccessToken(profile, claims.TokenVersion, sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
+		return
+	}
 
 	// Rotate the session's refresh jti with reuse detection. A replayed (already
 	// rotated) token revokes the session; an unknown/expired session forces re-login.
@@ -261,7 +278,8 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			// The adopted session is load-bearing for the new access token, so a failed
 			// write must fail the refresh rather than hand back a dead-on-arrival session.
 			if cerr := h.userStore.CreateSession(c.Request.Context(), sessionID, claims.MembershipID, newJTI, c.Request.UserAgent(), expiresAt); cerr != nil {
-				log.Printf("adopt legacy session failed for %s: %v", claims.MembershipID, cerr)
+				observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "legacy refresh session adoption failed",
+					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID), observability.Err(cerr))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
 				return
 			}
@@ -271,32 +289,30 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			case reused:
 				h.logAudit(c, db.AuditEvent{EventType: "refresh.reuse", Outcome: "failure",
 					ActorMembershipID: claims.MembershipID, SessionID: sessionID})
-				log.Printf("refresh-token reuse detected for %s (session %s) — session revoked", claims.MembershipID, sessionID)
+				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "refresh token reuse detected; session revoked",
+					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID))
+				h.expireRefreshCookie(c)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session ended for security reasons. Please log in again."})
 				return
 			case rerr != nil:
 				// Genuine DB error (not reuse): fail open, consistent with the revocation
 				// check above — the new jti goes unrecorded, so the next refresh may re-login.
-				log.Printf("rotate session failed for %s: %v — allowing refresh", claims.MembershipID, rerr)
+				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "refresh session rotation failed open",
+					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID), observability.Err(rerr))
 			case !rotated:
 				h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 					ActorMembershipID: claims.MembershipID, SessionID: sessionID,
 					Details: map[string]any{"reason": "expired"}})
+				h.expireRefreshCookie(c)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has expired. Please log in again."})
 				return
 			}
 		}
 	}
 
-	newAccess, err := h.jwt.GenerateAccessToken(profile, claims.TokenVersion, sessionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
-		return
-	}
-
+	h.setRefreshCookie(c, newRefresh)
 	c.JSON(http.StatusOK, gin.H{
-		"token":        newAccess,
-		"refreshToken": newRefresh,
+		"token": newAccess,
 		"user": gin.H{
 			"id":             claims.MembershipID,
 			"displayName":    claims.DisplayName,
@@ -343,7 +359,8 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 
 	if h.userStore != nil && sessionID != "" {
 		if err := h.userStore.DeleteSession(c.Request.Context(), sessionID); err != nil {
-			log.Printf("logout: delete session %s failed: %v", sessionID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "logout session deletion failed",
+				observability.ID("session", sessionID), observability.Err(err))
 		}
 	}
 	// Evict the session cache entry so this device's access token is rejected on its
@@ -353,6 +370,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 
 	h.logAudit(c, db.AuditEvent{EventType: "logout.session", ActorMembershipID: c.GetString("membership_id"), SessionID: sessionID})
+	h.expireRefreshCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
@@ -364,10 +382,12 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 
 	if h.userStore != nil {
 		if err := h.userStore.BumpTokenVersion(c.Request.Context(), membershipID); err != nil {
-			log.Printf("logout-all: bump token_version failed for %s: %v", membershipID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account token revocation failed",
+				observability.ID("membership", membershipID), observability.Err(err))
 		}
 		if err := h.userStore.DeleteUserSessions(c.Request.Context(), membershipID); err != nil {
-			log.Printf("logout-all: delete sessions failed for %s: %v", membershipID, err)
+			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account session deletion failed",
+				observability.ID("membership", membershipID), observability.Err(err))
 		}
 	}
 
@@ -382,7 +402,31 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	}
 
 	h.logAudit(c, db.AuditEvent{EventType: "logout.all", ActorMembershipID: membershipID})
+	h.expireRefreshCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Signed out of all devices"})
+}
+
+func (h *AuthHandler) setRefreshCookie(c *gin.Context, token string) {
+	ttl := h.jwt.RefreshTokenTTL()
+	h.writeRefreshCookie(c, token, time.Now().Add(ttl), int(ttl/time.Second))
+}
+
+func (h *AuthHandler) expireRefreshCookie(c *gin.Context) {
+	h.writeRefreshCookie(c, "", time.Unix(1, 0), -1)
+}
+
+func (h *AuthHandler) writeRefreshCookie(c *gin.Context, value string, expires time.Time, maxAge int) {
+	secure := h.cfg != nil && h.cfg.IsProduction()
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    value,
+		Path:     refreshCookiePath,
+		Expires:  expires.UTC(),
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // logAudit writes one event best-effort: it never blocks or fails the request.
@@ -394,7 +438,8 @@ func (h *AuthHandler) logAudit(c *gin.Context, ev db.AuditEvent) {
 	ev.IP = c.ClientIP()
 	ev.UserAgent = c.Request.UserAgent()
 	if err := h.audit.Log(c.Request.Context(), ev); err != nil {
-		log.Printf("audit %s: %v", ev.EventType, err)
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "audit event persistence failed",
+			"event_type", ev.EventType, observability.Err(err))
 	}
 }
 

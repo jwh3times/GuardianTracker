@@ -69,12 +69,12 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - Do not reference Apollo Client (`@apollo/client`) — it is not in this project.
 
 **Auth state**
-- Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads `guardian_token` or `guardian_refresh_token` directly from `localStorage`.
+- Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads `guardian_token` directly from localStorage or references the legacy `guardian_refresh_token` localStorage key.
 - Flag JWT decode operations outside of `AuthContext`.
 - Flag token refresh logic in page components or custom hooks — it belongs in `AuthContext`.
 
 **Token storage**
-- Tokens are stored in `localStorage` under `guardian_token` and `guardian_refresh_token`. Flag any attempt to store tokens in `sessionStorage`, cookies, or component state.
+- The access token is stored in localStorage under `guardian_token`; the refresh token is server-set only as the host-only HttpOnly `guardian_refresh_token` cookie. Flag JavaScript that reads/writes a refresh token, callback/refresh requests without `credentials: "include"`, refresh bodies containing a token, or refresh-token fields in response types.
 
 **Protected routes**
 - Route-level auth is handled by `ProtectedLayout` in `App.tsx`. Flag inline auth checks in page components that duplicate this logic.
@@ -92,12 +92,26 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - Flag endpoints that return another user's data without verifying the requesting user's `membershipId` from the JWT (`ownershipCheck` in `api/handlers/common.go`).
 - Flag logout implementations that clear tokens client-side but do not call `POST /api/auth/logout`. Note as a known limitation only if the backend endpoint itself fails.
 
+## Logging checks
+
+- Every request must receive a server-generated UUID returned as `X-Request-ID`; do not trust an inbound request ID as the canonical value.
+- Access logs must use the Gin route template, not the raw URL, and include only method, status, duration, and response bytes plus the request ID.
+- Flag application logs containing query strings, bodies, authorization headers, User-Agent values, routine client IPs, or exact membership/session/user/character identifiers. Those identifiers must use the deterministic 24-hex pseudonym helper; exact values are allowed only in the PostgreSQL audit trail.
+- Panic recovery must emit an error record with the request ID and return 500 without exposing the panic. Successful health probes are debug, other successes info, 4xx warn, and 5xx error.
+- CI must keep `go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...` in the required Go job. Suppressions require an inline explanation of a verified false positive.
+
+## Browser-test checks
+
+- Browser tests must use `cmd/fake-bungie`, the runtime-generated fixture manifest, and loopback `e2e-postgres`; flag any live Bungie dependency or committed loose manifest database.
+- Keep Playwright package/image versions equal at 1.61.0, `workers: 1`, exactly one functional CI retry, and destructive auth sequenced after shared journeys.
+- Browser workflow failures must not be hidden with `continue-on-error`. E2E + axe stays advisory until ten clean runs and then becomes required; visual regression remains advisory.
+
 ## Intentional exceptions (do not flag)
 
 - `GET /health` and `GET /ready` have no auth — intentional for Kubernetes probes.
 - `GET /api/auth/bungie` has no auth — initiates the OAuth flow before any session exists.
 - `GET /api/manifest/status` has no auth — public readiness endpoint.
-- `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` have no JWT auth — callback uses the CSRF state, refresh uses the refresh token as its own credential.
+- `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` have no JWT auth — callback uses the CSRF state, refresh uses the HttpOnly cookie as its own credential; both require an exact allowlisted `Origin`.
 - OAuth state is not single-use — this is the intentional stateless HMAC design.
 - `GET /api/admin/users`, `PUT /api/admin/users/:id/role`, `GET /api/admin/flags`, `PUT /api/admin/flags/:key`, `GET /api/admin/audit` — require admin role via `RequireAdmin`; the restriction itself is correct.
 - `PUT /api/account/role` — self-service role opt-in; deliberately rejects `admin` as a target role and rejects admin callers (`ADMIN_OPT_IN`).

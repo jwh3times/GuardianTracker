@@ -2,11 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"guardian-tracker/api-service/cache"
+	"guardian-tracker/api-service/observability"
 )
 
 // UserAuthStore is satisfied by db.UserStore. It returns the data the middleware
@@ -14,9 +15,13 @@ import (
 // and role (for tier gating) in one query, plus per-session validity (for
 // this-device logout).
 type UserAuthStore interface {
-	GetAuthInfo(ctx context.Context, membershipID string) (tokenVersion int, role int16, err error)
+	GetAuthInfo(ctx context.Context, membershipID string) (tokenVersion int, role int16, found bool, err error)
 	SessionExists(ctx context.Context, sessionID string) (bool, error)
 }
+
+// ErrUserNotFound marks a definitive missing/deleted user. Unlike a transient
+// database error, this must fail closed so an orphaned JWT cannot authenticate.
+var ErrUserNotFound = errors.New("auth: user not found")
 
 // authInfo is the cached per-user value: token version + role, refreshed together
 // so an admin role change (which evicts the key) re-syncs both at once.
@@ -51,26 +56,29 @@ func (r *RevocationChecker) Resolve(ctx context.Context, membershipID string, cl
 	}
 
 	// Account-wide token_version + role, cached per user.
-	var role int
-	if v, ok := r.cache.Get("tver:" + membershipID); ok {
-		if ai, ok := v.(authInfo); ok {
-			if ai.version != claimedVersion {
-				return 0, fmt.Errorf("token revoked")
-			}
-			role = ai.role
-		}
-	} else {
-		dbVersion, dbRole, err := r.store.GetAuthInfo(ctx, membershipID)
+	cacheKey := "tver:" + membershipID
+	ai := authInfo{}
+	haveAuthInfo := false
+	if v, ok := r.cache.Get(cacheKey); ok {
+		ai, haveAuthInfo = v.(authInfo)
+	}
+	if !haveAuthInfo {
+		dbVersion, dbRole, found, err := r.store.GetAuthInfo(ctx, membershipID)
 		if err != nil {
-			log.Printf("revocation check failed for %s: %v — allowing request", membershipID, err)
+			observability.Logger(ctx).WarnContext(ctx, "revocation check failed open",
+				observability.ID("membership", membershipID), observability.Err(err))
 			return RoleStandard, nil // fail open on DB error
 		}
-		r.cache.Set("tver:"+membershipID, authInfo{version: dbVersion, role: int(dbRole)}, r.ttl)
-		if dbVersion != claimedVersion {
-			return 0, fmt.Errorf("token revoked")
+		if !found {
+			return 0, ErrUserNotFound
 		}
-		role = int(dbRole)
+		ai = authInfo{version: dbVersion, role: int(dbRole)}
+		r.cache.Set(cacheKey, ai, r.ttl)
 	}
+	if ai.version != claimedVersion {
+		return 0, fmt.Errorf("token revoked")
+	}
+	role := ai.role
 
 	// Per-session validity (this-device logout), cached per session id.
 	if sessionID != "" {
@@ -95,7 +103,8 @@ func (r *RevocationChecker) checkSession(ctx context.Context, sessionID string) 
 	}
 	exists, err := r.store.SessionExists(ctx, sessionID)
 	if err != nil {
-		log.Printf("session check failed for %s: %v — allowing request", sessionID, err)
+		observability.Logger(ctx).WarnContext(ctx, "session check failed open",
+			observability.ID("session", sessionID), observability.Err(err))
 		return nil // fail open on DB error
 	}
 	r.cache.Set(cacheKey, exists, r.ttl)

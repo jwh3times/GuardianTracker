@@ -19,7 +19,8 @@ React/Vite frontend (:5273)
   custom `gt-*` design system.
 - **API:** Go + Gin HTTP service with Bungie OAuth, JWT access/refresh tokens,
   manifest management, collection analysis, weekly recommendations, search,
-  wishlist, preferences, roles, flags, and admin endpoints.
+  wishlist, preferences, roles, flags, admin endpoints, and structured request
+  logging.
 - **Postgres:** users, wishlist, preferences and onboarding completion, encrypted
   Bungie tokens, refresh sessions, roles, feature flags, and audit log.
 - **SQLite:** local copy of the Bungie Destiny 2 manifest, downloaded and
@@ -34,9 +35,15 @@ Bungie OAuth login uses a stateless HMAC-signed CSRF state. On callback, the API
 stores Bungie OAuth tokens AES-256-GCM encrypted in Postgres and issues Guardian
 Tracker JWTs.
 
-Access tokens are short-lived bearer tokens. Refresh tokens are rotating,
-per-device sessions backed by Postgres. Reused refresh tokens revoke the affected
-session. Sign-out-everywhere bumps the user's token version and removes sessions.
+Access tokens are short-lived bearer tokens stored with the non-secret user
+snapshot in browser localStorage. Refresh tokens are rotating, per-device
+sessions backed by Postgres and delivered only through a host-only HttpOnly
+cookie scoped to `/api/auth`. Reused refresh tokens revoke the affected session.
+Sign-out-everywhere bumps the user's token version and removes sessions.
+
+The callback and refresh endpoints require an exact allowlisted browser origin.
+This cookie policy assumes the frontend and API are same-site; a cross-site
+deployment would require a new cookie and CSRF decision.
 
 Authorization reads the current role from the DB-backed revocation cache rather
 than trusting the JWT role hint.
@@ -93,10 +100,26 @@ Primary route groups:
 
 See `backend/api-service/main.go` for the authoritative route registration.
 
+## Request Logging
+
+The API generates a UUID for every request, exposes it as `X-Request-ID`, and
+attaches a request-scoped `log/slog` logger to the Go context. Access records use
+the matched route template rather than the raw URL and include method, status,
+duration, and response bytes. Successful health probes are debug records;
+successful application requests are info, 4xx are warning, and 5xx are error.
+
+Application logs never include query strings, bodies, authorization headers,
+User-Agent values, or routine client IPs. Membership, session, user, and
+character identifiers use deterministic 24-hex pseudonyms derived from the
+first 12 SHA-256 bytes. Exact identifiers remain only in the existing Postgres
+audit trail.
+
 ## Local Infrastructure
 
 Docker Compose is the recommended full-stack development path. It starts the
 frontend, API service, Postgres, pgAdmin, and a test Postgres profile.
+Database and pgAdmin host ports are loopback-only; frontend and API bindings are
+unchanged.
 
 Minikube manifests under `k8s/` validate container and Kubernetes wiring. That
 environment runs in development mode and is not production parity.
@@ -105,9 +128,12 @@ environment runs in development mode and is not production parity.
 
 - Secrets are read from environment files or runtime environment variables, never
   committed.
-- Bungie tokens are encrypted at rest with key rotation support.
+- Bungie tokens are encrypted at rest with exact current/previous key versions.
 - CORS allows only configured origins.
-- API server timeouts and body limits are configured.
+- API server timeouts, body limits, no-sniff/referrer headers, and no-store auth
+  responses are configured.
+- The frontend CSP disallows inline scripts; inline styles remain an explicitly
+  documented residual risk.
 - Admin and role changes are audited.
 - Audit rows include client IP and User-Agent, retained by configured policy.
 
@@ -116,9 +142,17 @@ See [SECURITY.md](../SECURITY.md) for the security guide and checklist.
 ## Tests
 
 - Frontend: Vitest, Testing Library, MSW, type-check, lint, build.
-- Backend: Go unit and integration tests, `go vet`, `govulncheck`, race detector
-  in CI, Postgres-backed integration tests.
+- Browser: Playwright against the real API/Vite plus a test-only fake Bungie
+  service and runtime-generated SQLite manifest; functional, WCAG 2.2 axe, and
+  deterministic visual projects share one worker and isolated Postgres state.
+- Backend: Go unit and integration tests, `go vet`, Staticcheck 2026.1,
+  `govulncheck`, race detector in CI, Postgres-backed integration tests.
 - Docker: CI builds production images for validation.
+
+The browser workflow keeps functional/axe and visual jobs advisory during
+stabilization. E2E/axe becomes required only after ten consecutive clean runs;
+visual comparison remains optional and runs in the Playwright 1.61.0 Noble
+image that matches the pinned frontend package.
 
 ## Related Decisions
 

@@ -41,6 +41,7 @@ describe("apiFetch", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe(
       "Bearer tok-1",
     );
+    expect(init.credentials).toBe("include");
   });
 
   it("throws ApiError carrying status and backend code", async () => {
@@ -61,13 +62,11 @@ describe("apiFetch", () => {
 
   it("refreshes once on 401 and retries with the new token", async () => {
     localStorage.setItem("guardian_token", "stale");
-    localStorage.setItem("guardian_refresh_token", "refresh-1");
 
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
       if (url.endsWith("/api/auth/refresh")) {
         return jsonResponse(200, {
           token: "fresh",
-          refreshToken: "refresh-2",
           user: {
             id: "u",
             displayName: "G",
@@ -86,12 +85,17 @@ describe("apiFetch", () => {
 
     expect(out.ok).toBe(true);
     expect(localStorage.getItem("guardian_token")).toBe("fresh");
-    expect(localStorage.getItem("guardian_refresh_token")).toBe("refresh-2");
+    expect(localStorage.getItem("guardian_refresh_token")).toBeNull();
+    const refreshCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith("/api/auth/refresh"),
+    );
+    expect(refreshCall).toBeDefined();
+    expect(refreshCall?.[1]?.credentials).toBe("include");
+    expect(refreshCall?.[1]?.body).toBe("{}");
   });
 
   it("shares one in-flight refresh across concurrent 401s", async () => {
     localStorage.setItem("guardian_token", "stale");
-    localStorage.setItem("guardian_refresh_token", "refresh-1");
 
     let refreshCalls = 0;
     fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
@@ -100,7 +104,6 @@ describe("apiFetch", () => {
         await new Promise((r) => setTimeout(r, 10));
         return jsonResponse(200, {
           token: "fresh",
-          refreshToken: "refresh-2",
           user: {
             id: "u",
             displayName: "G",
@@ -151,7 +154,6 @@ describe("apiFetch", () => {
 describe("apiFetch refresh handling", () => {
   beforeEach(() => {
     localStorage.setItem("guardian_token", "expired");
-    localStorage.setItem("guardian_refresh_token", "refresh-abc");
     localStorage.setItem(
       "guardian_user",
       JSON.stringify({ membershipId: "1" }),
@@ -169,8 +171,9 @@ describe("apiFetch refresh handling", () => {
       ),
     );
     await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
-    // Session NOT destroyed — the refresh token survives a transient failure.
-    expect(localStorage.getItem("guardian_refresh_token")).toBe("refresh-abc");
+    // Session NOT destroyed on a transient failure.
+    expect(localStorage.getItem("guardian_token")).toBe("expired");
+    expect(localStorage.getItem("guardian_user")).not.toBeNull();
   });
 
   it("keeps the session when refresh hits a 5xx", async () => {
@@ -187,6 +190,7 @@ describe("apiFetch refresh handling", () => {
   });
 
   it("clears the session on a definitive 401 from the refresh endpoint", async () => {
+    localStorage.setItem("guardian_refresh_token", "legacy-token");
     server.use(
       http.get(`${API}/api/thing`, () =>
         HttpResponse.json({ error: "nope" }, { status: 401 }),
@@ -214,7 +218,6 @@ describe("apiFetch refresh handling", () => {
       http.post(`${API}/api/auth/refresh`, () =>
         HttpResponse.json({
           token: "fresh",
-          refreshToken: "refresh-def",
           user: { membershipId: "1" },
         }),
       ),

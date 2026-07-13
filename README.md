@@ -34,7 +34,7 @@ frontend.
 | Manifest data         | Bungie manifest SQLite database                                    |
 | Local runtime         | Docker Compose                                                     |
 | Kubernetes validation | Minikube manifests under `k8s/`                                    |
-| CI                    | GitHub Actions format, test, coverage, and Docker build validation |
+| CI                    | GitHub Actions format, Staticcheck, test, coverage, browser, and Docker validation |
 
 ## Architecture
 
@@ -76,6 +76,7 @@ docker compose up --build
 # Backend tests
 cd backend/api-service
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 
 # Frontend tests
 cd frontend
@@ -93,6 +94,28 @@ For CI-equivalent Go coverage with cgo and test Postgres, run:
 cd backend/api-service
 ./test-local.ps1
 ```
+
+Browser tests are hermetic: Playwright starts the test-only fake Bungie command,
+the real API, and Vite; the suite never calls Bungie.net. Start only its isolated
+database, set the deterministic fixture clock, then run the functional/axe or
+visual project:
+
+```powershell
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
+npm run e2e:visual
+cd ..
+docker compose --profile e2e down -v
+```
+
+Every pull request requires Format Check, Test Frontend, Test Go Services, and
+Build Docker Images. The Go job includes the pinned Staticcheck command above;
+see [CONTRIBUTING.md](./CONTRIBUTING.md#ci-gates) for the complete gate details.
+The separate Browser E2E + Axe and Browser Visual Regression jobs do not use
+`continue-on-error`, but remain non-required during stabilization. Promote E2E
+and axe after ten consecutive clean runs; visual regression remains optional.
 
 ## Project Layout
 

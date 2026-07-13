@@ -164,14 +164,14 @@ const { data } = useQuery({
 Auth state lives entirely in `AuthContext` (`contexts/AuthContext.tsx`):
 
 - Access token stored in `localStorage` under `guardian_token` (JWT, 30-minute default expiry)
-- Refresh token stored in `localStorage` under `guardian_refresh_token` (30d)
-- `useAuth()` returns `{ user, loading, login, logout, logoutAll, isAuthenticated }`
-- On mount, `AuthContext` checks if the stored JWT is expired and silently refreshes using the stored refresh token
-- `login()` stores both tokens and sets user state
-- `logout()` calls `POST /api/auth/logout` (ends this device's session only), then clears both tokens from `localStorage`
-- `logoutAll()` calls `POST /api/auth/logout/all` (bumps token_version, ends all sessions, evicts Bungie token), then clears both tokens
+- Non-secret user snapshot stored in `localStorage` under `guardian_user`
+- Refresh token stored only in the host-only HttpOnly `guardian_refresh_token` cookie (30d, `SameSite=Lax`, `/api/auth`; `Secure` in production)
+- `useAuth()` returns `{ user, token, login, logout, logoutAll, isAuthenticated, isLoading }`; it never exposes the refresh token
+- `apiFetch` handles a 401 by sending an empty credentialed request to `/api/auth/refresh`; concurrent failures share one refresh call
+- `login()` stores the access token/user only; the callback response has already set the refresh cookie
+- `logout()` / `logoutAll()` call the matching server endpoint, which expires the cookie, then clear access/user localStorage state
 
-**Never read `guardian_token` or `guardian_refresh_token` directly from `localStorage` in pages or components.** Always go through `useAuth()` or `apiFetch`.
+**Never read `guardian_token` directly from localStorage in pages or components.** Always go through `useAuth()` or `apiFetch`. The legacy `guardian_refresh_token` localStorage key must stay absent; JavaScript must never try to read the refresh cookie.
 
 **Never decode the JWT outside of `AuthContext`.** JWT claim parsing (displayName, membershipId, etc.) belongs only in `AuthContext`.
 
@@ -212,8 +212,8 @@ authenticated pages go inside this group — do not add inline auth checks or re
 
 `OAuthCallback.tsx` handles the redirect from Bungie at `/auth/callback?code=...&state=...`:
 1. Reads `code` and `state` from URL params
-2. POSTs `{ code, state }` to `POST /api/auth/bungie/callback` via `apiFetch`
-3. On success: stores tokens via `AuthContext.login()`, redirects to `/dashboard`
+2. POSTs `{ code, state }` to `POST /api/auth/bungie/callback` with `credentials: "include"`
+3. On success: the API sets the refresh cookie; `AuthContext.login()` stores `{token,user}` and redirects to `/dashboard`
 4. On failure: shows error, redirects back to `/login` with an error param
 
 ## Collections page features
@@ -271,6 +271,10 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests
 - Mock `AuthContext` when testing pages that call `useAuth()`
 - Do not use `MockedProvider` from Apollo — there is no Apollo Client in this project
+- Browser suites live under `frontend/e2e/` and use Playwright 1.61.0 plus `@axe-core/playwright`. Run `npm run e2e` for functional + accessibility + destructive-auth projects and `npm run e2e:visual` for visual comparison.
+- Start `docker compose --profile e2e up -d --wait e2e-postgres` first and set `E2E_FIXED_TIME=2026-07-18T18:00:00Z`. Playwright launches fake Bungie, the real API, and Vite; never substitute live Bungie calls.
+- Keep `workers: 1` because fixtures mutate shared account/scenario state. Destructive logout tests run only after functional and accessibility projects.
+- CI has exactly one retry for functional/axe, traces on the first retry, and retains reports/screenshots/video/diffs for 14 days. Visual baselines use 1440x900 Chromium in `mcr.microsoft.com/playwright:v1.61.0-noble` and stay advisory.
 
 ## Known limitations / TODOs
 

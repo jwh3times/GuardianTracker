@@ -1,8 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
@@ -11,8 +12,10 @@ import (
 )
 
 type Config struct {
-	Port  string
-	GoEnv string
+	Port      string
+	GoEnv     string
+	LogLevel  string
+	LogFormat string
 
 	BungieAPIKey       string
 	BungieAPIBaseURL   string
@@ -46,13 +49,21 @@ type Config struct {
 	CacheEnabled        bool
 	CacheTTLCollections time.Duration
 	CacheTTLRecords     time.Duration
+	// E2EFixedTime is an optional RFC3339 development-only clock used by the
+	// hermetic browser harness to make Xur's weekend schedule deterministic.
+	// Production always leaves this nil and uses the real clock.
+	E2EFixedTime *time.Time
 
 	CORSAllowedOrigins []string
 
-	DatabaseURL            string
-	DBMaxConns             int32
-	TokenEncryptionKey     string
-	TokenEncryptionKeyPrev string
+	DatabaseURL                   string
+	DBMaxConns                    int32
+	TokenEncryptionKey            string
+	TokenEncryptionKeyVersion     int16
+	TokenEncryptionKeyPrev        string
+	TokenEncryptionKeyPrevVersion int16
+
+	loadErr error
 
 	// AdminMembershipIDs are Bungie membership IDs pinned to the admin role on
 	// every login upsert. Bootstraps admin to the owner without manual SQL and
@@ -68,9 +79,20 @@ type Config struct {
 }
 
 func Load() *Config {
+	goEnv := strings.TrimSpace(os.Getenv("GO_ENV"))
+	defaultLogFormat := "text"
+	if goEnv == "production" {
+		defaultLogFormat = "json"
+	}
+	keyVersion, keyVersionErr := getPositiveSmallIntEnv("TOKEN_ENCRYPTION_KEY_VERSION", 1)
+	previousKeyVersion, previousKeyVersionErr := getPositiveSmallIntEnv("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION", 0)
+	e2eFixedTime, e2eFixedTimeErr := getOptionalTimeEnv("E2E_FIXED_TIME")
+
 	cfg := &Config{
-		Port:  getEnv("PORT", "8081"),
-		GoEnv: getEnv("GO_ENV", "development"),
+		Port:      getEnv("PORT", "8081"),
+		GoEnv:     goEnv,
+		LogLevel:  strings.ToLower(strings.TrimSpace(getEnv("LOG_LEVEL", "info"))),
+		LogFormat: strings.ToLower(strings.TrimSpace(getEnv("LOG_FORMAT", defaultLogFormat))),
 
 		BungieAPIKey:       os.Getenv("BUNGIE_API_KEY"),
 		BungieAPIBaseURL:   getEnv("BUNGIE_API_BASE_URL", "https://www.bungie.net/Platform"),
@@ -99,16 +121,20 @@ func Load() *Config {
 		CacheEnabled:        getBoolEnv("CACHE_ENABLED", true),
 		CacheTTLCollections: getDurationEnv("CACHE_TTL_COLLECTIONS", 5*time.Minute),
 		CacheTTLRecords:     getDurationEnv("CACHE_TTL_RECORDS", 10*time.Minute),
+		E2EFixedTime:        e2eFixedTime,
 
 		CORSAllowedOrigins: strings.Split(
 			getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 			",",
 		),
 
-		DatabaseURL:            os.Getenv("DATABASE_URL"),
-		DBMaxConns:             getInt32Env("DB_MAX_CONNS", 4),
-		TokenEncryptionKey:     os.Getenv("TOKEN_ENCRYPTION_KEY"),
-		TokenEncryptionKeyPrev: os.Getenv("TOKEN_ENCRYPTION_KEY_PREVIOUS"),
+		DatabaseURL:                   os.Getenv("DATABASE_URL"),
+		DBMaxConns:                    getInt32Env("DB_MAX_CONNS", 4),
+		TokenEncryptionKey:            os.Getenv("TOKEN_ENCRYPTION_KEY"),
+		TokenEncryptionKeyVersion:     keyVersion,
+		TokenEncryptionKeyPrev:        os.Getenv("TOKEN_ENCRYPTION_KEY_PREVIOUS"),
+		TokenEncryptionKeyPrevVersion: previousKeyVersion,
+		loadErr:                       errors.Join(keyVersionErr, previousKeyVersionErr, e2eFixedTimeErr),
 
 		AdminMembershipIDs: parseCSV(os.Getenv("ADMIN_MEMBERSHIP_IDS")),
 
@@ -148,6 +174,44 @@ func parseCSV(v string) []string {
 // are returned as errors (the caller fatals); in development they only warn,
 // and the service runs in degraded mode.
 func (c *Config) Validate() error {
+	switch c.GoEnv {
+	case "development", "production":
+		// Explicitly supported environments.
+	case "":
+		return fmt.Errorf("GO_ENV is required (must be development or production)")
+	default:
+		return fmt.Errorf("GO_ENV must be development or production (got %q)", c.GoEnv)
+	}
+	if c.loadErr != nil {
+		return c.loadErr
+	}
+	if !slices.Contains([]string{"debug", "info", "warn", "error"}, c.LogLevel) {
+		return fmt.Errorf("LOG_LEVEL must be debug, info, warn, or error (got %q)", c.LogLevel)
+	}
+	if !slices.Contains([]string{"text", "json"}, c.LogFormat) {
+		return fmt.Errorf("LOG_FORMAT must be text or json (got %q)", c.LogFormat)
+	}
+	if c.IsProduction() && c.E2EFixedTime != nil {
+		return fmt.Errorf("E2E_FIXED_TIME is development-only")
+	}
+	if c.TokenEncryptionKey != "" && c.TokenEncryptionKeyVersion <= 0 {
+		return fmt.Errorf("TOKEN_ENCRYPTION_KEY_VERSION must be a positive SMALLINT")
+	}
+	if c.TokenEncryptionKeyPrev != "" {
+		if c.TokenEncryptionKey == "" {
+			return fmt.Errorf("TOKEN_ENCRYPTION_KEY_PREVIOUS requires TOKEN_ENCRYPTION_KEY")
+		}
+		if c.TokenEncryptionKeyPrevVersion <= 0 {
+			return fmt.Errorf("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION must be a positive SMALLINT when TOKEN_ENCRYPTION_KEY_PREVIOUS is set")
+		}
+		if c.TokenEncryptionKeyPrevVersion == c.TokenEncryptionKeyVersion {
+			return fmt.Errorf("current and previous token encryption key versions must differ")
+		}
+	} else if c.TokenEncryptionKeyPrevVersion != 0 {
+		return fmt.Errorf("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION requires TOKEN_ENCRYPTION_KEY_PREVIOUS")
+	}
+
+	developmentWarnings := []string{}
 	missing := []string{}
 	if c.BungieAPIKey == "" {
 		missing = append(missing, "BUNGIE_API_KEY")
@@ -159,10 +223,10 @@ func (c *Config) Validate() error {
 		missing = append(missing, "JWT_SECRET")
 	}
 	if len(missing) > 0 {
-		log.Printf("WARNING: Missing required environment variables: %v", missing)
 		if c.IsProduction() {
 			return fmt.Errorf("cannot start in production without required environment variables: %v", missing)
 		}
+		developmentWarnings = append(developmentWarnings, "missing application configuration: "+strings.Join(missing, ", "))
 	}
 	if c.IsProduction() && len(c.JWTSecret) < 32 {
 		return fmt.Errorf("JWT_SECRET must be at least 32 characters in production")
@@ -175,10 +239,10 @@ func (c *Config) Validate() error {
 	}
 	if !c.IsProduction() {
 		if c.DatabaseURL == "" {
-			log.Println("WARNING: DATABASE_URL is not set — running in degraded mode (memory-only token store)")
+			developmentWarnings = append(developmentWarnings, "PostgreSQL-backed persistence and revocation")
 		}
 		if c.TokenEncryptionKey == "" {
-			log.Println("WARNING: TOKEN_ENCRYPTION_KEY is not set — Bungie tokens will not be encrypted at rest")
+			developmentWarnings = append(developmentWarnings, "Bungie token encryption at rest")
 		}
 	}
 	// A "*" entry combined with the credentialed CORS middleware would reflect
@@ -187,7 +251,10 @@ func (c *Config) Validate() error {
 		if c.IsProduction() {
 			return fmt.Errorf("CORS_ALLOWED_ORIGINS must not contain \"*\" (credentialed CORS)")
 		}
-		log.Println("WARNING: CORS_ALLOWED_ORIGINS contains \"*\" — origins will NOT be reflected; list explicit origins")
+		developmentWarnings = append(developmentWarnings, "browser CORS access (wildcard origins are not reflected)")
+	}
+	if len(developmentWarnings) > 0 {
+		slog.Warn("development mode is degraded", "disabled_protections", strings.Join(developmentWarnings, "; "))
 	}
 	return nil
 }
@@ -224,6 +291,21 @@ func getInt32Env(key string, fallback int32) int32 {
 	return fallback
 }
 
+// getPositiveSmallIntEnv parses a PostgreSQL SMALLINT key version. An unset
+// value returns fallback; any explicitly configured value must be in 1..32767.
+// A zero fallback is used for the optional previous-key version.
+func getPositiveSmallIntEnv(key string, fallback int16) (int16, error) {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.ParseInt(v, 10, 16)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%s must be a positive SMALLINT", key)
+	}
+	return int16(n), nil
+}
+
 func getBoolEnv(key string, fallback bool) bool {
 	if v := os.Getenv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {
@@ -258,4 +340,17 @@ func getDurationEnv(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+func getOptionalTimeEnv(key string) (*time.Time, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be an RFC3339 timestamp: %w", key, err)
+	}
+	parsed = parsed.UTC()
+	return &parsed, nil
 }

@@ -64,3 +64,65 @@ func TestMaxBodyBytes_Rejects(t *testing.T) {
 		t.Fatalf("big body got %d, want 400", big.Code)
 	}
 }
+
+func TestAPISecurityHeaders(t *testing.T) {
+	r := gin.New()
+	r.Use(APISecurityHeaders())
+	r.GET("/api/x", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	r.GET("/health", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	api := httptest.NewRecorder()
+	r.ServeHTTP(api, httptest.NewRequest(http.MethodGet, "/api/x", nil))
+	if got := api.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q", got)
+	}
+	if got := api.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Fatalf("Referrer-Policy = %q", got)
+	}
+
+	health := httptest.NewRecorder()
+	r.ServeHTTP(health, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if got := health.Header().Get("X-Content-Type-Options"); got != "" {
+		t.Fatalf("health X-Content-Type-Options = %q, want empty", got)
+	}
+}
+
+func TestNoStore(t *testing.T) {
+	r := gin.New()
+	r.GET("/auth", NoStore(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/auth", nil))
+	if got := w.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got)
+	}
+}
+
+func TestRequireAllowedOrigin_ExactMatchOnly(t *testing.T) {
+	r := gin.New()
+	r.POST("/auth", RequireAllowedOrigin([]string{" https://app.example ", "http://localhost:5273"}), func(c *gin.Context) {
+		c.Status(http.StatusNoContent)
+	})
+
+	for _, tc := range []struct {
+		name   string
+		origin string
+		want   int
+	}{
+		{name: "allowed", origin: "https://app.example", want: http.StatusNoContent},
+		{name: "missing", want: http.StatusForbidden},
+		{name: "prefix attack", origin: "https://app.example.attacker.test", want: http.StatusForbidden},
+		{name: "different port", origin: "http://localhost:5274", want: http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/auth", nil)
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			r.ServeHTTP(w, req)
+			if w.Code != tc.want {
+				t.Fatalf("status = %d, want %d", w.Code, tc.want)
+			}
+		})
+	}
+}

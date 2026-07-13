@@ -105,6 +105,10 @@ PostgreSQL is the primary persistence layer for all user data. The api-service c
 ### Bungie token store (`db/tokens.go`)
 
 Stores AES-256-GCM encrypted Bungie OAuth tokens in the `bungie_tokens` table.
+`key_version` is a positive `SMALLINT` that identifies the exact encryption key:
+new writes use only `TOKEN_ENCRYPTION_KEY_VERSION`, while reads accept only an
+exact current or configured previous version. Unknown versions must fail; never
+reuse a version number for different key material.
 
 **`Get(ctx, membershipID)`** — returns `ErrTokensNotFound` (not a generic error) when no row exists for the membership.
 
@@ -153,16 +157,16 @@ schema_migrations (version)
 ### Running PostgreSQL locally for development
 
 ```powershell
-# Docker Compose starts Postgres automatically — use that for most dev work.
+# Docker Compose starts loopback-only Postgres automatically — use that for most dev work.
 # For isolated DB testing, use test-local.ps1 in backend/api-service/:
-./test-local.ps1   # spins up postgres:18-alpine on :5433 as gt-test-pg
+./test-local.ps1   # spins up postgres:18-alpine on 127.0.0.1:5533 as gt-test-pg
 
 # Or manually:
 docker run --name guardian-pg `
   -e POSTGRES_PASSWORD=devpassword `
   -e POSTGRES_USER=guardian_app `
   -e POSTGRES_DB=guardian_tracker `
-  -p 5432:5432 `
+  -p 127.0.0.1:5432:5432 `
   -d postgres:18-alpine
 
 # Bootstrap least-privilege role (one-time after server provisioning)

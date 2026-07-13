@@ -33,18 +33,17 @@ type RefreshResult =
 let refreshPromise: Promise<RefreshResult> | null = null;
 
 async function doRefresh(): Promise<RefreshResult> {
-  const refreshToken = localStorage.getItem("guardian_refresh_token");
-  if (!refreshToken) return { ok: false, transient: false };
   try {
     const res = await fetch(`${API_URL}/api/auth/refresh`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      body: JSON.stringify({}),
     });
     if (res.ok) {
       const data = (await res.json()) as AuthTokenResponse;
       localStorage.setItem("guardian_token", data.token);
-      localStorage.setItem("guardian_refresh_token", data.refreshToken);
+      localStorage.removeItem("guardian_refresh_token");
       localStorage.setItem("guardian_user", JSON.stringify(data.user));
       window.dispatchEvent(new Event("guardian_token_refreshed"));
       return { ok: true, token: data.token };
@@ -69,7 +68,11 @@ export async function apiFetch<T>(
     ...(init?.headers as Record<string, string> | undefined),
   };
 
-  let res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers,
+  });
 
   if (res.status === 401) {
     if (!refreshPromise) {
@@ -82,6 +85,7 @@ export async function apiFetch<T>(
     if (result.ok) {
       res = await fetch(`${API_URL}${path}`, {
         ...init,
+        credentials: "include",
         headers: { ...headers, Authorization: `Bearer ${result.token}` },
       });
     } else if (result.transient) {

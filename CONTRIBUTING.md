@@ -152,6 +152,7 @@ npm run lint
 # Go service (from backend/api-service/)
 go test ./...
 go vet ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ```
 
 Coverage thresholds are enforced in CI:
@@ -172,6 +173,17 @@ cd backend/api-service
 See [CLAUDE.md → Full Go coverage locally](./CLAUDE.md#full-go-coverage-locally-matches-ci)
 for the toolchain details (a C compiler is required for the cgo tests).
 
+For full-browser validation, start the isolated database and use the fake Bungie
+fixtures; never point automated tests at the live Bungie API:
+
+```powershell
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
+npm run e2e:visual
+```
+
 ## CI gates
 
 Every PR must pass these GitHub Actions jobs before it can merge:
@@ -180,13 +192,17 @@ Every PR must pass these GitHub Actions jobs before it can merge:
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | **Format Check**        | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted                                                      |
 | **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                        |
-| **Test Go Services**    | `go vet`, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against a Postgres service container |
+| **Test Go Services**    | `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against Postgres |
 | **Build Docker Images** | builds both production Docker images (build validation; no push)                                                           |
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it
 is enforced through a code-scanning merge rule rather than as a required status
 check. See [CLAUDE.md → CI/CD](./CLAUDE.md#cicd) for the full explanation, including
 how Dependabot PRs are handled.
+
+The separate browser workflow reports failures normally but is not initially in
+branch protection. Promote `Browser E2E + Axe` after ten consecutive clean runs.
+`Browser Visual Regression` remains advisory.
 
 ## Reporting bugs & requesting features
 

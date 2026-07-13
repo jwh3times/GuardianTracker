@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"guardian-tracker/api-service/cache"
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/manifest"
 )
@@ -202,7 +203,11 @@ func (s *Service) getAnalysis(ctx context.Context, membershipType int, membershi
 		return nil, fmt.Errorf("%w: %v", ErrManifestNotReady, err)
 	}
 
-	log.Printf("Fetching collections for membership %d/%s", membershipType, membershipID)
+	logger := observability.Logger(ctx)
+	logger.LogAttrs(ctx, slog.LevelInfo, "fetching collections",
+		slog.Int("membership_type", membershipType),
+		observability.ID("membership", membershipID),
+	)
 	profile, err := s.bungieClient.GetProfile(ctx, membershipType, membershipID, accessToken, []int{bungie.ComponentCollectibles})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch profile: %w", err)
@@ -225,7 +230,10 @@ func (s *Service) getAnalysis(ctx context.Context, membershipType int, membershi
 			}
 		}
 	}
-	log.Printf("User has %d collected items", len(collected))
+	logger.LogAttrs(ctx, slog.LevelInfo, "collection ownership loaded",
+		slog.Int("collected_items", len(collected)),
+		observability.ID("membership", membershipID),
+	)
 
 	collectibles, err := s.manifest.GetAllCollectiblesWithItems()
 	if err != nil {

@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"guardian-tracker/api-service/observability"
 
 	"golang.org/x/time/rate"
 )
@@ -302,7 +305,11 @@ func (c *Client) DownloadFileToPath(ctx context.Context, url, dest string) error
 		if lastErr == nil {
 			return nil
 		}
-		log.Printf("download attempt %d/3 failed: %v", attempt+1, lastErr)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "manifest download attempt failed",
+			slog.Int("attempt", attempt+1),
+			slog.Int("max_attempts", 3),
+			observability.Err(lastErr),
+		)
 	}
 	return lastErr
 }
@@ -320,6 +327,9 @@ func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) error
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", dest, err)
 	}
 	out, err := os.Create(dest)
 	if err != nil {

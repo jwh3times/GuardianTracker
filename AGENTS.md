@@ -41,6 +41,8 @@ Key directories:
 | `docs/`                     | Public project documentation                                       |
 | `private/`                  | Local/private planning and archived notes; should remain untracked |
 | `.claude/agents/`           | Claude-specific specialized agent instructions                     |
+| `frontend/e2e/`             | Playwright functional, accessibility, and visual browser tests      |
+| `backend/api-service/cmd/fake-bungie/` | Test-only Bungie/manifest fixture service                |
 
 ## Running Locally
 
@@ -78,27 +80,41 @@ Never commit real secrets. Use `.env` locally and keep generated/private files o
 
 Important local variables:
 
-| Variable               | Purpose                                                              |
-| ---------------------- | -------------------------------------------------------------------- |
-| `BUNGIE_CLIENT_ID`     | Bungie OAuth client ID                                               |
-| `BUNGIE_CLIENT_SECRET` | Bungie OAuth client secret                                           |
-| `BUNGIE_API_KEY`       | Bungie API key                                                       |
-| `BUNGIE_REDIRECT_URI`  | OAuth callback URL                                                   |
-| `JWT_SECRET`           | JWT signing secret                                                   |
-| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM token encryption key                                     |
-| `DATABASE_URL`         | Postgres connection string                                           |
-| `FRONTEND_URL`         | Allowed frontend origin                                              |
-| `ADMIN_MEMBERSHIP_IDS` | Optional comma-separated Bungie membership IDs with admin privileges |
+| Variable                                | Purpose                                                              |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| `GO_ENV`                                | Required runtime mode: exactly `development` or `production`         |
+| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error` (`info` default)                  |
+| `LOG_FORMAT`                            | `text` or `json` (development text; production JSON by default)       |
+| `BUNGIE_CLIENT_ID`                      | Bungie OAuth client ID                                               |
+| `BUNGIE_CLIENT_SECRET`                  | Bungie OAuth client secret                                           |
+| `BUNGIE_API_KEY`                        | Bungie API key                                                       |
+| `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                   |
+| `JWT_SECRET`                            | JWT signing secret                                                   |
+| `TOKEN_ENCRYPTION_KEY`                  | AES-256-GCM token encryption key                                     |
+| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current encryption key              |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | Optional previous decryption key during rotation                     |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                          |
+| `DATABASE_URL`                          | Postgres connection string                                           |
+| `CORS_ALLOWED_ORIGINS`                  | Exact browser origins allowed to call the API                        |
+| `ADMIN_MEMBERSHIP_IDS`                  | Optional comma-separated Bungie membership IDs with admin privileges |
 
 Auth and security behavior to preserve:
 
 - OAuth state is HMAC signed.
-- Bungie tokens are encrypted at rest with AES-256-GCM.
-- App sessions use JWTs and per-device refresh tokens.
+- Bungie tokens are encrypted at rest with AES-256-GCM and exact current/previous key versions.
+- Access JWTs and the user snapshot are stored in localStorage; the rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
 - Refresh token revocation is backed by PostgreSQL.
+- Callback and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
 - Admin access is controlled by explicit membership ID configuration.
 
 See `SECURITY.md` for public security posture and reporting guidance.
+
+Logging behavior to preserve:
+
+- Every request receives a server-owned UUID returned as `X-Request-ID` and attached to the request context.
+- Access logs use route templates, method, status, duration, and response bytes; health-probe successes log at debug.
+- Application logs pseudonymize membership, session, user, and character identifiers as deterministic 24-hex values. Exact identifiers belong only in the PostgreSQL audit trail.
+- Never log query strings, bodies, authorization headers, User-Agent values, or routine client IPs.
 
 ## Testing and Validation
 
@@ -106,21 +122,34 @@ Use the narrowest relevant test first, then run broader checks when the change c
 
 Common commands:
 
-```bash
-# Backend tests
+```powershell
+# Backend tests (from the repository root)
 cd backend/api-service
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+cd ../..
 
 # Frontend checks
 cd frontend
 npm run lint
 npm run build
+cd ..
+
+# Hermetic browser checks (start the e2e Compose profile first)
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
+npm run e2e:visual
+cd ..
 
 # Local CI-equivalent backend coverage script
+cd backend/api-service
 ./test-local.ps1
 ```
 
 Required CI checks are documented in `README.md` and workflow files under `.github/workflows/`.
+Browser E2E + Axe is advisory until ten consecutive clean runs; visual regression remains optional.
 
 ## Documentation Rules
 

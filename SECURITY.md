@@ -60,6 +60,18 @@ If you have previously committed credentials to this repository, you **must**:
 | `TOKEN_ENCRYPTION_KEY`          | 32-byte base64 key — AES-256-GCM encryption of stored Bungie tokens   | `openssl rand -base64 32`                                    |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous encryption key, kept readable during key rotation | the key being rotated out                                    |
 
+`GO_ENV` is required and accepts exactly `development` or `production`.
+Production refuses to start without Postgres and token encryption; explicit
+development may run with those protections disabled and emits one conspicuous
+warning describing every disabled protection.
+
+Encryption keys also have explicit positive `SMALLINT` versions:
+
+| Variable                                | Purpose                                                        |
+| --------------------------------------- | -------------------------------------------------------------- |
+| `TOKEN_ENCRYPTION_KEY_VERSION`          | Current-key ciphertext version (`1` by default for existing rows) |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact version accepted for the optional previous key            |
+
 ### Local Development
 
 ```bash
@@ -67,21 +79,13 @@ cp .env.example .env
 # Edit with development values — NEVER use production credentials locally
 ```
 
-### Kubernetes Production
+### Minikube Validation
 
-```bash
-# Create from literal values (do not put in scripts or version control)
-kubectl create secret generic api-service-secrets \
-  --from-literal=BUNGIE_API_KEY=your_key \
-  --from-literal=BUNGIE_CLIENT_ID=your_id \
-  --from-literal=BUNGIE_CLIENT_SECRET=your_secret \
-  --from-literal=JWT_SECRET=your_jwt_secret \
-  --from-literal=POSTGRES_PASSWORD=your_db_password
-
-# Or from a secure temp file (delete immediately after)
-kubectl create secret generic api-service-secrets --from-env-file=.env.secrets
-rm .env.secrets
-```
+The manifests under `k8s/` run only as a local development-validation stack.
+They use `GO_ENV=development`, omit Postgres, and are not a production deployment
+or secret-management guide. Never place production credentials in those
+manifests. A production runtime and its secret-management procedure remain
+deferred until a deployment target is selected.
 
 ---
 
@@ -90,14 +94,41 @@ rm .env.secrets
 ### Authentication & Authorization
 
 - **Bungie OAuth 2.0** with CSRF protection — stateless HMAC-SHA256-signed state parameter (`v1.<ts>.<nonce>.<sig>`, key derived from `JWT_SECRET` with domain separation), verified with a 10-minute TTL. Stateless by design: login survives restarts and works across replicas. Tradeoff: a state token is replayable within its TTL (the previous in-memory store was not browser-bound either, and the Bungie authorization code it accompanies is single-use)
-- **JWT tokens** — HS256 signed, access token (30-minute default) + refresh token (30d) with rotation; `tver` (token_version), `jti`, and `sid` (session id) claims. The access lifetime is configurable with the duration-based `JWT_ACCESS_TTL` setting; `JWT_EXPIRY_HOURS` remains a legacy fallback when the new setting is absent. Tokens already issued retain their original expiry until they are refreshed or revoked.
+- **JWT tokens** — HS256 signed access token (30-minute default) plus a rotating 30-day refresh credential; `tver` (token_version), `jti`, and `sid` (session id) claims. The access lifetime is configurable with the duration-based `JWT_ACCESS_TTL` setting; `JWT_EXPIRY_HOURS` remains a legacy fallback when the new setting is absent. Tokens already issued retain their original expiry until they are refreshed or revoked.
+- **Browser credential split** — the access JWT and non-secret user snapshot remain in `localStorage`. The refresh JWT is delivered only as the host-only `guardian_refresh_token` cookie with `HttpOnly`, `SameSite=Lax`, and `Path=/api/auth`; production also sets `Secure`. Callback and refresh responses contain `{token,user}` and never expose the refresh token to JavaScript. There is no localStorage compatibility bridge, so sessions created before this migration sign in once again.
 - **Per-device refresh sessions + reuse detection** — each login opens a row in `refresh_sessions` (the `sid` claim) holding the current refresh `jti`. `POST /api/auth/refresh` compare-and-swaps it (`RotateSession`); a replayed (already-rotated) refresh token is detected as reuse and the **whole session is revoked** with 401, rather than staying valid to expiry. Sessions are independent, so this is fully multi-device. The CAS **fails open** on DB errors, consistent with revocation below — except a definitive reuse always 401s. Session `expires_at` slides forward on each rotation to match the freshly issued refresh token, so an active session is not force-expired at its original creation time. Sessions are capped per user (oldest-by-use evicted) and a background pruner deletes expired rows, so the table can't grow unbounded. If a session row can't be persisted at login, the login itself fails (the session is load-bearing — the access token is checked against it on every request)
-- **Two logout scopes** — `POST /api/auth/logout` ends only the current device's session (others stay signed in; the access token is rejected within the cache window via the session check, and the account-wide Bungie token is preserved). `POST /api/auth/logout/all` bumps `token_version`, deletes every session, and evicts the Bungie token (sign out everywhere)
+- **Two logout scopes** — `POST /api/auth/logout` ends only the current device's session (others stay signed in; the access token is rejected within the cache window via the session check, and the account-wide Bungie token is preserved). `POST /api/auth/logout/all` bumps `token_version`, deletes every session, and evicts the Bungie token (sign out everywhere). Both responses expire the refresh cookie; definitive refresh failures expire it too.
 - **JWT revocation** — sign-out-everywhere bumps `token_version` in Postgres; the access-token middleware verifies both `token_version` (account-wide) and session existence (per-device) via `RevocationChecker` with a 60-second cache window. The checks **fail open** on DB errors (availability over strict revocation — logout is not guaranteed during a DB outage)
 - **Logout exposure window** — with the default 30-minute access lifetime, an access token whose session revocation cannot be observed immediately is bounded by the token lifetime plus the 60-second revocation cache window; the frontend silently refreshes expired access tokens while the refresh session remains valid
 - **Token-type claims** — refresh tokens cannot be used as access tokens (enforced in middleware)
-- **Bungie tokens encrypted at rest** — AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and key-version metadata stored with each encrypted row
+- **Bungie tokens encrypted at rest** — AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and exact key-version metadata stored with each encrypted row. Decryption accepts only an exact current- or previous-version match and rejects unknown versions.
 - **Bungie token auto-refresh** — stored Bungie OAuth tokens are refreshed automatically before expiry (5-min buffer); refresh writes are compare-and-swap on `updated_at`, and a replica that loses the race adopts the winner's tokens instead of clobbering them
+
+### Token-encryption key rotation
+
+Version numbers identify keys; never reuse a version for different key material.
+Existing version-1 rows remain readable during the first rotation:
+
+1. Start with key A as `TOKEN_ENCRYPTION_KEY`, version `1`, and no previous key.
+2. Generate key B, then deploy B as the current key/version `2` while retaining
+   A as the previous key/version `1`:
+
+   ```env
+   TOKEN_ENCRYPTION_KEY=<key-B>
+   TOKEN_ENCRYPTION_KEY_VERSION=2
+   TOKEN_ENCRYPTION_KEY_PREVIOUS=<key-A>
+   TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION=1
+   ```
+
+3. New or refreshed rows are encrypted with B/v2; existing A/v1 rows continue
+   to decrypt only through the exact previous-version match.
+4. Keep A/v1 configured until no `bungie_tokens.key_version = 1` rows remain.
+   Rows are rewritten through normal login/token persistence; users whose rows
+   are removed must authenticate again.
+5. Remove both previous-key variables only after version 1 is no longer stored.
+
+Unknown, zero, negative, duplicate, or keyless versions are configuration/data
+errors; do not change a version independently of its key.
 
 ### Roles, Feature Flags & Admin Console
 
@@ -127,11 +158,20 @@ rm .env.secrets
 
 - **Strict origin validation** — only explicitly configured origins allowed (set via `CORS_ALLOWED_ORIGINS`)
 - **Credentials**: allowed only with explicit origin match
+- **Credential-issuing endpoints** — `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` require an exact allowlisted `Origin`; missing or unlisted origins are rejected. CORS responses vary on `Origin`.
+
+The refresh-cookie design assumes the frontend and API are same-site. A future
+cross-site production topology must revisit the cookie policy and would require
+`SameSite=None; Secure` plus an explicit CSRF design before deployment.
 
 ### HTTP Security (Go service)
 
 - **Server timeouts**: ReadTimeout 30s, WriteTimeout 60s, IdleTimeout 120s — prevents slowloris-style attacks
 - **Graceful shutdown** with 30s timeout
+- **API response headers**: every API response sets `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`; auth responses also set `Cache-Control: no-store`
+- **Frontend CSP**: inline scripts are disallowed, object embedding is disabled, the base URI is restricted to self, and framing is limited to self. Google Fonts origins used by the app are allowlisted. `style-src 'unsafe-inline'` remains a documented residual XSS-hardening risk while the current component system still uses inline styles.
+- **Request correlation**: the server assigns every request a UUID and returns it as `X-Request-ID`; CORS exposes the header to allowed browser origins.
+- **Application-log privacy**: access records use route templates and omit query strings, bodies, authorization headers, User-Agent values, and routine client IPs. Membership, session, user, and character identifiers are deterministic 24-hex pseudonyms outside the exact PostgreSQL security audit trail.
 
 ---
 
@@ -141,6 +181,7 @@ rm .env.secrets
 - [ ] `JWT_SECRET` is 32+ characters, randomly generated
 - [ ] `CORS_ALLOWED_ORIGINS` set to your production domain only
 - [ ] `GO_ENV=production` on the API service
+- [ ] Current and previous encryption keys have the exact positive versions intended for their stored rows
 - [ ] Rate limiting enabled and tuned for expected traffic
 - [ ] TLS/HTTPS configured (terminate at load balancer or ingress)
 - [ ] Database connections use SSL (`sslmode=require`)
@@ -148,4 +189,4 @@ rm .env.secrets
 - [ ] Logging does not include tokens, secrets, or full OAuth codes
 - [ ] Docker images built from pinned base image versions
 - [ ] Kubernetes secrets not stored in version control
-- [ ] `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` set (the service refuses to start in production without them)
+- [ ] `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` set (the service refuses to start in production without them); current key version verified (`1` when omitted)

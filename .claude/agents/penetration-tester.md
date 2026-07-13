@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: opus
 ---
 
-You are performing authorized security testing on the Guardian Tracker application. All testing targets the local development environment (`http://localhost:3000` frontend, `http://localhost:8081` API). Do not target any external system including Bungie.net.
+You are performing authorized security testing on the Guardian Tracker application. All testing targets the local development environment (`http://localhost:5273` frontend, `http://localhost:8081` API). Do not target any external system including Bungie.net.
 
 There is **one** backend service: `api-service` (Go + Gin, port 8081). There is no auth-service, bungie-service, graphql-service, or internal API key surface.
 
@@ -24,10 +24,11 @@ The state parameter is a stateless HMAC-SHA256-signed token (`v1.<ts>.<nonce>.<s
 
 ### Bungie OAuth — authorization code exchange
 
-Code exchange happens server-side. The authorization code is never exposed to the frontend.
+The frontend receives the authorization code in the callback URL and immediately exchanges it server-side; it never receives Bungie access or refresh tokens.
 
-- Test: POST to `/api/auth/bungie/callback` with a fabricated `code` and valid `state` — must return an error from Bungie exchange, not 500
+- Test: POST to `/api/auth/bungie/callback` with an exact allowlisted `Origin`, a fabricated `code`, and valid `state` — must return a controlled error from Bungie exchange
 - Test: POST with a replayed `code` (after it has already been exchanged) — Bungie's server must reject the second exchange; the api-service must surface that error correctly
+- Test: omit `Origin` or use an unlisted origin on callback — must be rejected before a cookie is issued
 
 ### JWT configuration
 
@@ -42,19 +43,22 @@ Algorithm: HS256. `token_type` claim distinguishes access (`"access"`) from refr
 
 ### JWT revocation
 
-After `POST /api/auth/logout`, the backend bumps `token_version` in Postgres. Middleware verifies via `RevocationChecker` with a 60-second in-memory cache.
+Single-device logout deletes that refresh session; logout-all also bumps `token_version` in Postgres and removes all sessions. Middleware verifies token version and session existence via `RevocationChecker` with a 60-second in-memory cache.
 
 - Test: logout, then immediately use the old access token — should get 401 (revocation checked within the 60s cache window)
 - Test: DB is unavailable during the token_version check — revocation fails open (request allowed) — document as known limitation
-- Test: after logout, confirm Bungie OAuth token is also deleted from the `bungie_tokens` table
+- Test: after single-device logout, confirm the account-wide Bungie OAuth token remains; after logout-all, confirm it is deleted from `bungie_tokens`
 
 ### Refresh token behavior
 
-Refresh tokens are stored in localStorage. After logout, the `token_version` bump invalidates all refresh tokens for that account.
+Refresh tokens are stored only in the host-only HttpOnly `guardian_refresh_token` cookie (`SameSite=Lax`, `Path=/api/auth`, and `Secure` in production). JavaScript stores only the access token and user snapshot.
 
-- Test: after `POST /api/auth/logout` (single session), confirm the old refresh token for that session cannot mint a new access token — must return 401
+- Test: callback sets the expected cookie attributes and returns `{token,user}` without `refreshToken`; the legacy localStorage key remains absent
+- Test: `/api/auth/refresh` accepts an empty JSON body only with the cookie and an exact allowlisted `Origin`, then rotates the cookie
+- Test: missing/unlisted `Origin`, missing cookie, or a token supplied only in the JSON body must be rejected
+- Test: after `POST /api/auth/logout` (single session), confirm the old refresh cookie is expired and that session cannot mint a new access token
 - Test: after `POST /api/auth/logout/all` (all sessions), confirm any refresh token from any prior session is rejected
-- Test: send a structurally valid but unknown JWT to `/api/auth/refresh` — must return 401, not 500
+- Test: definitive refresh failures expire the cookie; transient 429/5xx failures do not destroy the browser session
 
 ### Per-device session reuse detection
 
@@ -127,17 +131,20 @@ All wishlist endpoints (`GET/POST/PUT/DELETE /api/wishlist`) are JWT-protected a
 Bungie OAuth tokens are stored AES-256-GCM encrypted in `bungie_tokens`. The membership row is bound as AAD.
 
 - Audit: verify the DB row for a logged-in user contains encrypted blobs — `access_token_enc`, `refresh_token_enc` — not plaintext
-- Test: if `TOKEN_ENCRYPTION_KEY` is unset in development, verify that login still works (tokens stored in memory only) and that a warning is logged
+- Test: rotate A/v1 to B/v2 with A/v1 configured as previous; old rows decrypt, new rows use v2, and unknown versions are rejected
+- Test: zero, negative, duplicate, incomplete current/previous key versions fail configuration validation
+- Test: if `TOKEN_ENCRYPTION_KEY` is unset in explicit development, verify that login still works (tokens stored in memory only) and that the consolidated degraded-mode warning names the missing protection
 
 ## Frontend token handling
 
-### localStorage exposure
+### Browser credential exposure
 
-`guardian_token` (JWT) and `guardian_refresh_token` are stored in `localStorage`.
+Only `guardian_token` (short-lived access JWT) and the non-secret user snapshot are stored in localStorage. The refresh credential is HttpOnly.
 
-- Audit: check all React pages for `dangerouslySetInnerHTML` usage or unsanitized user-controlled content rendered as HTML — XSS would allow reading both tokens
+- Audit: check all React pages for `dangerouslySetInnerHTML` usage or unsanitized user-controlled content rendered as HTML — XSS could read the access token and act within its lifetime, but must not be able to read the refresh token
 - Check for `eval()`, `innerHTML`, or template-injected content in any component
 - Test: if any XSS vector is found, confirm it can read `localStorage.getItem('guardian_token')`
+- Test: confirm `localStorage.getItem('guardian_refresh_token')` is absent and `document.cookie` cannot expose the HttpOnly cookie
 
 ### Client-side auth claims
 
@@ -150,9 +157,10 @@ Bungie OAuth tokens are stored AES-256-GCM encrypted in `bungie_tokens`. The mem
 
 ### CORS
 
-`CORS_ALLOWED_ORIGINS` is set to `http://localhost:3000` in the configmap.
+`CORS_ALLOWED_ORIGINS` is set to `http://localhost:5273` in the Minikube configmap.
 
 - Test: send a cross-origin request from `http://attacker.example.com` to the API service — must not include `Access-Control-Allow-Origin: http://attacker.example.com` in the response
+- Test: allowed CORS responses include `Vary: Origin`; credentialed responses never reflect a wildcard
 
 ### Health endpoints
 
@@ -167,6 +175,13 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 - Test: trigger various error conditions (invalid membershipId, bad JWT, missing Bungie token) — verify responses don't include stack traces, internal file paths, connection strings, or other internal details
 - Confirm: the `code` field uses only the defined machine-readable values (`PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`)
 
+### Request IDs and application-log privacy
+
+- Test: every response, including 4xx, 5xx, and panic recovery, has a server-generated UUID in `X-Request-ID`; an attacker-supplied request-ID header must not become the canonical value
+- Test: allowed cross-origin responses expose `X-Request-ID`
+- Audit access records for route templates rather than raw URLs and verify query strings, bodies, authorization values, User-Agent values, and routine client IPs are absent
+- Audit application errors involving users/sessions/characters: identifiers must be deterministic 24-hex pseudonyms, while the separate PostgreSQL audit trail may retain exact identifiers for security forensics
+
 ## Known intentional gaps (document, do not escalate as vulnerabilities)
 
 - OAuth state is replayable within its 10-minute TTL — stateless HMAC design cannot enforce one-time use; mitigated by Bungie's single-use authorization code
@@ -174,3 +189,5 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 - If revocation cannot be observed immediately after logout, access tokens remain valid up to the configured lifetime (30m by default) plus the 60s revocation cache window
 - Per-device session reuse detection revokes only the replayed session — a stolen refresh token that is used *before* the legitimate client rotates it would not be detected until a subsequent rotation attempt
 - Auth/session audit events are best-effort — a DB outage during login/logout can drop an audit record (role/flag changes are atomic and cannot be dropped)
+- `style-src 'unsafe-inline'` remains in the frontend CSP while components depend on inline styles; `script-src` must not include it
+- The refresh cookie assumes a same-site frontend/API topology; any future cross-site deployment requires a new cookie and CSRF review

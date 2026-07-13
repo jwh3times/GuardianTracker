@@ -90,13 +90,19 @@ func (s *UserStore) Upsert(ctx context.Context, membershipID string, membershipT
 }
 
 // GetAuthInfo returns the current token_version and role for one membership.
-// Used by the revocation checker, which caches both so role changes propagate
-// within the cache window with no token churn (TODO 13.2).
-func (s *UserStore) GetAuthInfo(ctx context.Context, membershipID string) (tokenVersion int, role int16, err error) {
+// found=false with err=nil is a definitive missing user; database failures remain
+// errors so the revocation checker can distinguish deletion from an outage.
+func (s *UserStore) GetAuthInfo(ctx context.Context, membershipID string) (tokenVersion int, role int16, found bool, err error) {
 	err = s.pool.QueryRow(ctx,
 		`SELECT token_version, role FROM users WHERE membership_id = $1`, membershipID,
 	).Scan(&tokenVersion, &role)
-	return
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, 0, false, nil
+	}
+	if err != nil {
+		return 0, 0, false, err
+	}
+	return tokenVersion, role, true, nil
 }
 
 // GetTokenVersion returns the current token_version for revocation checks.
