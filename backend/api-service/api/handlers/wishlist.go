@@ -54,7 +54,7 @@ type tokenProvider interface {
 
 type prefsStoreIface interface {
 	Get(ctx context.Context, userID int64) (*db.UserPreferences, error)
-	Upsert(ctx context.Context, userID int64, cardStyle string, personalize bool) (*db.UserPreferences, error)
+	Upsert(ctx context.Context, userID int64, cardStyle string, personalize, completeOnboarding bool) (*db.UserPreferences, error)
 }
 
 // WishlistHandler handles wishlist and preferences endpoints.
@@ -335,7 +335,7 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 func (h *WishlistHandler) GetPreferences(c *gin.Context) {
 	if h.prefs == nil {
 		// Return defaults when DB not configured
-		c.JSON(http.StatusOK, gin.H{"cardStyle": "framed", "personalize": true})
+		c.JSON(http.StatusOK, gin.H{"cardStyle": "framed", "personalize": true, "onboardedAt": nil})
 		return
 	}
 	membershipID := c.GetString("membership_id")
@@ -351,7 +351,7 @@ func (h *WishlistHandler) GetPreferences(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"cardStyle": p.CardStyle, "personalize": p.Personalize})
+	c.JSON(http.StatusOK, preferencesResponse(p))
 }
 
 // UpdatePreferences handles PUT /api/preferences
@@ -361,8 +361,9 @@ func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
 		return
 	}
 	var body struct {
-		CardStyle   string `json:"cardStyle"`
-		Personalize *bool  `json:"personalize"`
+		CardStyle          string `json:"cardStyle"`
+		Personalize        *bool  `json:"personalize"`
+		OnboardingComplete *bool  `json:"onboardingComplete"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
@@ -370,6 +371,10 @@ func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
 	}
 	if body.CardStyle != "" && body.CardStyle != "framed" && body.CardStyle != "compact" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "cardStyle must be 'framed' or 'compact'"})
+		return
+	}
+	if body.OnboardingComplete != nil && !*body.OnboardingComplete {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "onboardingComplete can only be set to true"})
 		return
 	}
 	membershipID := c.GetString("membership_id")
@@ -394,13 +399,22 @@ func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
 	if body.Personalize != nil {
 		personalize = *body.Personalize
 	}
-	p, err := h.prefs.Upsert(c.Request.Context(), userID, cardStyle, personalize)
+	completeOnboarding := body.OnboardingComplete != nil && *body.OnboardingComplete
+	p, err := h.prefs.Upsert(c.Request.Context(), userID, cardStyle, personalize, completeOnboarding)
 	if err != nil {
 		log.Printf("UpdatePreferences: Upsert(%d): %v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"cardStyle": p.CardStyle, "personalize": p.Personalize})
+	c.JSON(http.StatusOK, preferencesResponse(p))
+}
+
+func preferencesResponse(p *db.UserPreferences) gin.H {
+	return gin.H{
+		"cardStyle":   p.CardStyle,
+		"personalize": p.Personalize,
+		"onboardedAt": p.OnboardedAt,
+	}
 }
 
 // --- helpers ---

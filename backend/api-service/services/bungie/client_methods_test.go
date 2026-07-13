@@ -92,7 +92,11 @@ func TestGetCharacterVendors_Parses(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer tok" {
 			t.Errorf("Authorization = %q", got)
 		}
-		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"sales":{"data":{
+		if got := r.URL.Query().Get("components"); got != "400,402" {
+			t.Errorf("components = %q, want 400,402", got)
+		}
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"vendors":{"data":{
+			"2190858386":{"vendorHash":2190858386,"vendorLocationIndex":0,"enabled":true}}},"sales":{"data":{
 			"672118013":{"saleItems":{"0":{"itemHash":100,"costs":[{"itemHash":3,"quantity":1}]}}}}}}}`)
 	}))
 	defer srv.Close()
@@ -104,6 +108,10 @@ func TestGetCharacterVendors_Parses(t *testing.T) {
 	}
 	if _, ok := resp.Response.Sales.Data["672118013"]; !ok {
 		t.Errorf("vendor sales = %+v", resp.Response.Sales.Data)
+	}
+	xur, ok := resp.Response.Vendors.Data["2190858386"]
+	if !ok || xur.VendorLocationIndex != 0 || !xur.Enabled {
+		t.Errorf("Xur vendor component = %+v", xur)
 	}
 }
 

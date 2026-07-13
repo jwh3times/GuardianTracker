@@ -14,8 +14,8 @@ look plausible in code while producing empty, redundant, or misleading UI from l
 
 Known limitations include:
 
-- Xur inventory is usable, but a reliable Xur location signal is not available from the
-  public API.
+- Xur inventory is usable from the public API, but location is available only from the
+  authenticated character-vendor component's `vendorLocationIndex` plus manifest data.
 - Trials, Iron Banner, Nightfall, and comparable featured activity rotations are not
   reliably represented as public milestone definitions.
 - Character vendor component data can be useful for item-level availability, but it is
@@ -32,8 +32,13 @@ The app may continue to use verified item-level availability signals, such as Xu
 inventory and the established live-vendor availability map, when those signals are
 presented narrowly and best-effort.
 
+Xur location may use the authenticated character-vendor component 400. Resolve its
+`vendorLocationIndex` through `DestinyVendorDefinition.locations` and the destination
+manifest definition. Present destination `1737926756` as the user-facing label
+`The Tower`; omit the field when the character response or manifest lookup is unavailable.
+
 If a future feature needs Trials, Iron Banner, Nightfall, featured raid/dungeon rotation,
-Xur location, or broad vendor browsing, it must first verify a reliable source. Static
+or broad vendor browsing, it must first verify a reliable source. Static
 rotation tables or third-party sources require an explicit follow-up decision covering
 maintenance, freshness, licensing, and failure behavior.
 
@@ -41,6 +46,8 @@ maintenance, freshness, licensing, and failure behavior.
 
 - Xur remains the only weekly vendor module with a dedicated public UI unless another
   reliable data source is accepted.
+- Xur's Tower location is best-effort and disappears rather than displaying an unknown
+  or guessed value when authenticated vendor data cannot be resolved.
 - "Available now" item badges can remain best-effort and item-scoped.
 - Roadmap and implementation plans should not reintroduce broad weekly/vendor panels
   without a verify-first spike.

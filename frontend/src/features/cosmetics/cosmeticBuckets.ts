@@ -8,7 +8,9 @@
  *   - repository.go: cosmeticItemTypes confirms the same five integer types.
  *   - Shaders: classified as cosmetics by the backend (itemType "Shader")
  *     after Task 1b; TYPE_GLYPH already has Shader: "SHD".
- *   - Ornaments are NOT a distinct flat itemType; leave them out of v1.
+ *   - Local manifest verification (2026-07-12): collectible ornaments are
+ *     itemType 19 + itemSubType 21; collectible finishers are itemType 29.
+ *     The backend normalizes these to "Ornament" and "Finisher".
  *
  * Task 1b made toDestinyItem emit the real ItemTypeName strings (previously
  * "Unknown" for cosmetics), so these values match the items-map itemType.
@@ -23,6 +25,8 @@ export const COSMETIC_TYPES = [
   "Ship",
   "Sparrow",
   "Emote",
+  "Ornament",
+  "Finisher",
 ] as const;
 
 export type CosmeticType = (typeof COSMETIC_TYPES)[number];

@@ -39,8 +39,8 @@ frontend/src/
   contexts/
     AuthContext.tsx             ← Auth state, localStorage persistence, token refresh;
                                    logout (this device) + logoutAll (everywhere)
-    PreferencesContext.tsx      ← Card style + "for you" badge prefs (localStorage guardian_prefs)
-    CharacterContext.tsx        ← Characters query + persisted active-character pick (display-only)
+    PreferencesContext.tsx      ← Card style + "for you" badge prefs; account-backed onboarding completion
+    CharacterContext.tsx        ← Characters query + persisted active-character pick; scopes weekly vendors
     FlagsContext.tsx            ← GET /api/flags query; useFlag(key) / useFlags() resolved gating
                                    state + role
   styles/
@@ -97,10 +97,11 @@ frontend/src/
                                    (virtualized tile grid via @tanstack/react-virtual), CosmeticDetail.tsx
                                    (dedicated view-only drawer — shared ItemDetailDrawer left untouched),
                                    cosmeticItems.ts (classify by itemType + group), cosmeticBuckets.ts
-                                   (COSMETIC_TYPES: Emblem/Shader/Ghost/Ship/Sparrow/Emote)
+                                   (COSMETIC_TYPES: Emblem/Shader/Ghost/Ship/Sparrow/Emote/Ornament/Finisher)
+    onboarding/                ← account-backed first-run welcome + three-step guided tour
     wishlist/WishList.tsx      ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
-    weekly/ThisWeek.tsx        ← weekly recommendations / Xûr / milestones (real API)
-    dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + weekly
+    weekly/ThisWeek.tsx        ← weekly recommendations / Xûr / milestones scoped to active character
+    dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + active-character weekly
     settings/Settings.tsx      ← account info, early-access tier opt-in, appearance prefs, sign out
     admin/                     ← Admin.tsx (admin console: user roster + role mgmt, flag config;
                                    admin-gated route), AdminKit.tsx (RoleBadge, Switch, RoleSelect,
@@ -205,7 +206,7 @@ authenticated pages go inside this group — do not add inline auth checks or re
 
 ## Character context
 
-`CharacterContext` (`contexts/CharacterContext.tsx`) fetches and caches the character list, and persists the active character selection per account. `useCharacters()` returns `{ characters, activeCharacter, setActiveCharacter }`. Data is display-only — collections and other data are account-wide.
+`CharacterContext` (`contexts/CharacterContext.tsx`) fetches and caches the character list, and persists the active character selection per account. `useCharacters()` returns `{ characters, activeCharacter, setActiveCharacter }`. Collections, catalysts, and seals remain account-wide; Dashboard and This Week include the active character ID in weekly query keys and requests so authenticated vendor context follows the selected Guardian.
 
 ## OAuth callback flow
 
@@ -236,7 +237,10 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - `APICollectionSummary`: `+ collectedItems?: APIDestinyItem[]`
 - `APIRecordsEnvelope<T>`: `{ items: T[]; fetchedAt: string }` — envelope for catalysts/crafting/seals
 - `Weekly`: `+ resetAt`, `+ fetchedAt`, `+ degraded?`
-- `Milestone.missing`: now `number | undefined` — populated for raid/dungeon milestones; still omitted for non-raid/dungeon (no manifest reward→collectible signal)
+- `XurItem.className?: string` — manifest-defined armor class; the Xûr module labels it and highlights a match with the active Guardian
+- `APIPreferences.onboardedAt: string | null` — server-authoritative onboarding completion; `PreferencesContext.completeOnboarding()` persists it with `onboardingComplete:true`
+- `Milestone.missing`: `number | undefined` — populated for raid/dungeon milestones;
+  verified current non-raid rewards contain no collectible-linked items, so others omit it.
 - `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool
 - `APIItemCatalyst`: `{ name: string; description: string }` — one exotic catalyst entry; `description` may be empty (the manifest has at least one blank entry — Duality)
 - `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[]; catalysts: APIItemCatalyst[] }` — response envelope for `/api/items/:itemHash/perks`; `catalysts` is always present (empty array for non-exotics), up to 4 entries for multi-catalyst exotics
@@ -272,5 +276,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 
 - `logout()` ends only the current session; other devices remain signed in. `logoutAll()` ends all sessions and evicts the Bungie token. If revocation cannot be observed immediately, the old access token expires within the configured lifetime (30 minutes by default) plus the 60-second cache window
 - Search index snapshots persist beside the manifest by version; pages can still show a "warming up" error state while a missing or new-version snapshot rebuilds (~30s)
-- Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
-- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones still omit the field (no manifest reward→collectible signal)
+- Xûr location is optional — the backend resolves the authenticated vendor location to
+  `The Tower` and omits the field when Bungie or manifest data is unavailable.
+- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones
+  omit it because verified current reward definitions contain no collectible-linked items.

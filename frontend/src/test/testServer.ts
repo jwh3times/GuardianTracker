@@ -242,10 +242,18 @@ export const defaultHandlers = [
     }),
   ),
   http.get(`${API}/api/preferences`, () =>
-    HttpResponse.json({ cardStyle: "framed", personalize: true }),
+    HttpResponse.json({
+      cardStyle: "framed",
+      personalize: true,
+      onboardedAt: "2026-07-12T15:30:00Z",
+    }),
   ),
   http.put(`${API}/api/preferences`, () =>
-    HttpResponse.json({ cardStyle: "framed", personalize: true }),
+    HttpResponse.json({
+      cardStyle: "framed",
+      personalize: true,
+      onboardedAt: "2026-07-12T15:30:00Z",
+    }),
   ),
   http.get(`${API}/api/characters/:type/:id`, () => HttpResponse.json([])),
   http.get(`${API}/api/collections/:type/:id`, () =>

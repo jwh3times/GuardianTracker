@@ -95,7 +95,8 @@ func (m *mockWishlistStore) BulkSetPriority(_ context.Context, _ int64, ids []in
 // --- mock prefs store ---
 
 type mockPrefsStore struct {
-	prefs *db.UserPreferences
+	prefs                  *db.UserPreferences
+	lastCompleteOnboarding bool
 }
 
 func (m *mockPrefsStore) Get(_ context.Context, userID int64) (*db.UserPreferences, error) {
@@ -105,8 +106,14 @@ func (m *mockPrefsStore) Get(_ context.Context, userID int64) (*db.UserPreferenc
 	return &db.UserPreferences{UserID: userID, CardStyle: "framed", Personalize: true, UpdatedAt: time.Now()}, nil
 }
 
-func (m *mockPrefsStore) Upsert(_ context.Context, userID int64, cardStyle string, personalize bool) (*db.UserPreferences, error) {
-	return &db.UserPreferences{UserID: userID, CardStyle: cardStyle, Personalize: personalize, UpdatedAt: time.Now()}, nil
+func (m *mockPrefsStore) Upsert(_ context.Context, userID int64, cardStyle string, personalize, completeOnboarding bool) (*db.UserPreferences, error) {
+	m.lastCompleteOnboarding = completeOnboarding
+	onboardedAt := (*time.Time)(nil)
+	if completeOnboarding {
+		now := time.Now().UTC()
+		onboardedAt = &now
+	}
+	return &db.UserPreferences{UserID: userID, CardStyle: cardStyle, Personalize: personalize, OnboardedAt: onboardedAt, UpdatedAt: time.Now()}, nil
 }
 
 // --- mock manifest ---
@@ -569,6 +576,31 @@ func TestGetPreferences_DegradedMode_ReturnsDefaults(t *testing.T) {
 	if resp["personalize"] != true {
 		t.Errorf("expected personalize=true, got %v", resp["personalize"])
 	}
+	if _, ok := resp["onboardedAt"]; !ok || resp["onboardedAt"] != nil {
+		t.Errorf("expected onboardedAt=null, got %v", resp["onboardedAt"])
+	}
+}
+
+func TestGetPreferences_ReturnsOnboardedAt(t *testing.T) {
+	stamp := time.Date(2026, time.July, 12, 15, 30, 0, 0, time.UTC)
+	store := &mockWishlistStore{userID: 42}
+	prefs := &mockPrefsStore{prefs: &db.UserPreferences{
+		UserID: 42, CardStyle: "framed", Personalize: true, OnboardedAt: &stamp,
+	}}
+	r := newTestRouter(NewWishlistHandler(store, nil, prefs, nil, nil))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/preferences", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["onboardedAt"] != "2026-07-12T15:30:00Z" {
+		t.Errorf("onboardedAt = %v, want RFC3339 server timestamp", resp["onboardedAt"])
+	}
 }
 
 func TestUpdatePreferences_InvalidCardStyle_Returns400(t *testing.T) {
@@ -610,6 +642,44 @@ func TestUpdatePreferences_Success(t *testing.T) {
 	}
 	if resp["personalize"] != false {
 		t.Errorf("expected personalize=false, got %v", resp["personalize"])
+	}
+}
+
+func TestUpdatePreferences_CompletesOnboarding(t *testing.T) {
+	store := &mockWishlistStore{userID: 42}
+	prefs := &mockPrefsStore{}
+	r := newTestRouter(NewWishlistHandler(store, nil, prefs, nil, nil))
+
+	req := httptest.NewRequest(http.MethodPut, "/api/preferences", strings.NewReader(`{"onboardingComplete": true}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if !prefs.lastCompleteOnboarding {
+		t.Fatal("completion flag was not passed to the preferences store")
+	}
+	var resp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp["onboardedAt"] == nil {
+		t.Fatal("expected a server-generated onboardedAt timestamp")
+	}
+}
+
+func TestUpdatePreferences_RejectsOnboardingReset(t *testing.T) {
+	store := &mockWishlistStore{userID: 42}
+	prefs := &mockPrefsStore{}
+	r := newTestRouter(NewWishlistHandler(store, nil, prefs, nil, nil))
+
+	req := httptest.NewRequest(http.MethodPut, "/api/preferences", strings.NewReader(`{"onboardingComplete": false}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

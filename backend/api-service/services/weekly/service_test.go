@@ -2,6 +2,9 @@ package weekly
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -13,7 +16,10 @@ import (
 
 // fakeManifest satisfies weekly.ManifestRepo.
 type fakeManifest struct {
-	items map[uint32]*bungie.InventoryItemDefinition
+	items              map[uint32]*bungie.InventoryItemDefinition
+	destinationHash    uint32
+	destinationName    string
+	resolveLocationErr error
 }
 
 func (f *fakeManifest) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
@@ -24,6 +30,9 @@ func (f *fakeManifest) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.Inv
 		}
 	}
 	return out, nil
+}
+func (f *fakeManifest) ResolveVendorLocation(uint32, int) (uint32, string, error) {
+	return f.destinationHash, f.destinationName, f.resolveLocationErr
 }
 func (f *fakeManifest) GetMilestoneDefinitions([]uint32) (map[uint32]*bungie.MilestoneDefinition, error) {
 	return map[uint32]*bungie.MilestoneDefinition{}, nil
@@ -82,6 +91,59 @@ func TestToDuration(t *testing.T) {
 		if got := toDuration(tc.in); got != tc.want {
 			t.Errorf("toDuration(%v) = %+v, want %+v", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestXurLocationLabel(t *testing.T) {
+	if got := xurLocationLabel(xurTowerDestinationHash, "The Last City"); got != "The Tower" {
+		t.Errorf("Tower destination label = %q, want The Tower", got)
+	}
+	if got := xurLocationLabel(123, "Nessus"); got != "Nessus" {
+		t.Errorf("unknown destination label = %q, want Nessus", got)
+	}
+}
+
+func TestGetXurLocation_UsesCharacterVendorCache(t *testing.T) {
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"vendors":{"data":{
+			"2190858386":{"vendorHash":2190858386,"vendorLocationIndex":0,"enabled":true}
+		}},"sales":{"data":{}}}}`)
+	}))
+	defer srv.Close()
+
+	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	s := NewService(
+		bungie.NewClient("k", srv.URL, 100, 100),
+		&fakeManifest{destinationHash: xurTowerDestinationHash, destinationName: "The Last City"},
+		nil,
+		nil,
+		c,
+		nil,
+	)
+
+	for range 2 {
+		if got := s.getXurLocation(context.Background(), 3, "member-1", "char-1", "token"); got != "The Tower" {
+			t.Fatalf("getXurLocation = %q, want The Tower", got)
+		}
+	}
+	if requests != 1 {
+		t.Errorf("character vendor requests = %d, want 1", requests)
+	}
+}
+
+func TestGetXurLocation_OmitsUnknownLocation(t *testing.T) {
+	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	resp := &bungie.CharacterVendorsResponse{}
+	resp.Response.Vendors.Data = map[string]bungie.VendorComponent{
+		"2190858386": {VendorHash: bungie.XurVendorHash, VendorLocationIndex: -1, Enabled: true},
+	}
+	c.Set("vendors:character:3:member-1:char-1", resp, time.Minute)
+	s := &Service{cache: c, manifest: &fakeManifest{destinationHash: xurTowerDestinationHash}}
+
+	if got := s.getXurLocation(context.Background(), 3, "member-1", "char-1", "token"); got != "" {
+		t.Errorf("getXurLocation = %q, want omitted location", got)
 	}
 }
 

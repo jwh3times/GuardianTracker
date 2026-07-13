@@ -90,7 +90,10 @@ type InventoryItemDefinition struct {
 	DisplayProperties DisplayProperties `json:"displayProperties"`
 	ItemType          int               `json:"itemType"`
 	ItemSubType       int               `json:"itemSubType"`
-	Inventory         struct {
+	// ClassType is absent on class-agnostic items. Keep it as a pointer so an
+	// omitted value cannot be mistaken for Titan (class type 0).
+	ClassType *int `json:"classType,omitempty"`
+	Inventory struct {
 		TierType int `json:"tierType"`
 	} `json:"inventory"`
 	EquippingBlock struct {
@@ -107,14 +110,16 @@ type DisplayProperties struct {
 
 // Item type constants.
 const (
-	ItemTypeWeapon = 3
-	ItemTypeArmor  = 2
-	ItemTypeMod    = 19
+	ItemTypeWeapon   = 3
+	ItemTypeArmor    = 2
+	ItemTypeMod      = 19
+	ItemTypeFinisher = 29
 )
 
 // Item sub-type constants used for classification.
 const (
-	ItemSubTypeShader = 20
+	ItemSubTypeShader   = 20
+	ItemSubTypeOrnament = 21
 )
 
 // ItemTypeName returns a human-readable item type string, using weapon sub-type for specificity.
@@ -125,8 +130,11 @@ func ItemTypeName(itemType, subType int) string {
 	case ItemTypeArmor:
 		return "Armor"
 	case ItemTypeMod:
-		if subType == ItemSubTypeShader {
+		switch subType {
+		case ItemSubTypeShader:
 			return "Shader"
+		case ItemSubTypeOrnament:
+			return "Ornament"
 		}
 		return "Mod"
 	case 14:
@@ -139,6 +147,8 @@ func ItemTypeName(itemType, subType int) string {
 		return "Emote"
 	case 24:
 		return "Ghost"
+	case ItemTypeFinisher:
+		return "Finisher"
 	default:
 		return "Item"
 	}
@@ -367,6 +377,9 @@ type ActivityDefinition struct {
 // CharacterVendorsResponse wraps the per-character vendor API response.
 type CharacterVendorsResponse struct {
 	Response struct {
+		Vendors struct {
+			Data map[string]VendorComponent `json:"data"`
+		} `json:"vendors"`
 		Sales struct {
 			Data map[string]VendorSales `json:"data"`
 		} `json:"sales"`
@@ -374,6 +387,13 @@ type CharacterVendorsResponse struct {
 	ErrorCode   int    `json:"ErrorCode"`
 	ErrorStatus string `json:"ErrorStatus"`
 	Message     string `json:"Message"`
+}
+
+// VendorComponent contains the live, character-scoped summary for one vendor.
+type VendorComponent struct {
+	VendorHash          uint32 `json:"vendorHash"`
+	VendorLocationIndex int    `json:"vendorLocationIndex"`
+	Enabled             bool   `json:"enabled"`
 }
 
 // PublicVendorsResponse wraps the multi-vendor Bungie response.
@@ -404,6 +424,12 @@ type VendorSaleItem struct {
 
 // VendorItemCost is the currency cost for one item.
 type VendorItemCost struct {
+	ItemHash uint32 `json:"itemHash"`
+	Quantity int    `json:"quantity"`
+}
+
+// ItemQuantity is Bungie's generic item-hash and quantity pair.
+type ItemQuantity struct {
 	ItemHash uint32 `json:"itemHash"`
 	Quantity int    `json:"quantity"`
 }
@@ -469,17 +495,35 @@ type CoreSettings struct {
 
 // MilestoneDefinition is a DestinyMilestoneDefinition entry from the manifest.
 type MilestoneDefinition struct {
+	Hash              uint32                                       `json:"hash"`
+	DisplayProperties DisplayProperties                            `json:"displayProperties"`
+	MilestoneType     int                                          `json:"milestoneType"`
+	Rewards           map[string]MilestoneRewardCategoryDefinition `json:"rewards"`
+}
+
+// MilestoneRewardCategoryDefinition groups reward entries within a milestone.
+type MilestoneRewardCategoryDefinition struct {
+	RewardEntries map[string]MilestoneRewardEntryDefinition `json:"rewardEntries"`
+}
+
+// MilestoneRewardEntryDefinition describes the items represented by one reward entry.
+type MilestoneRewardEntryDefinition struct {
+	Items []ItemQuantity `json:"items"`
+}
+
+// VendorDefinition is the location-bearing subset of DestinyVendorDefinition.
+type VendorDefinition struct {
+	Hash      uint32                     `json:"hash"`
+	Locations []VendorLocationDefinition `json:"locations"`
+}
+
+// VendorLocationDefinition points from a vendor location slot to a destination.
+type VendorLocationDefinition struct {
+	DestinationHash uint32 `json:"destinationHash"`
+}
+
+// DestinationDefinition is the display subset of DestinyDestinationDefinition.
+type DestinationDefinition struct {
 	Hash              uint32            `json:"hash"`
 	DisplayProperties DisplayProperties `json:"displayProperties"`
-	MilestoneType     int               `json:"milestoneType"`
-	QuestItems        []struct {
-		QuestItemHash uint32 `json:"questItemHash"`
-	} `json:"questItems"`
-	Rewards []struct {
-		RewardEntries map[string]struct {
-			RewardItems []struct {
-				ItemHash uint32 `json:"itemHash"`
-			} `json:"rewardItems"`
-		} `json:"rewardEntries"`
-	} `json:"rewards"`
 }

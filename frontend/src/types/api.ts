@@ -164,6 +164,7 @@ export interface WishListItem {
 export interface APIPreferences {
   cardStyle: "framed" | "compact";
   personalize: boolean;
+  onboardedAt: string | null;
 }
 
 /** GET /api/items/search?q=<term>&limit=20 */

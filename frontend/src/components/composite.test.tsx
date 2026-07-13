@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { CategoryTree } from "./composite";
+import { CategoryTree, XurModule } from "./composite";
 import type { TreeNode } from "../types/design";
 
 const nodes: TreeNode[] = [
@@ -67,5 +67,33 @@ describe("CategoryTree", () => {
     // Only the top-level node ("Weapons") renders without expansion; children
     // are conditionally mounted, so exactly 1 treeitem is present initially.
     expect(screen.getAllByRole("treeitem").length).toBe(1);
+  });
+});
+
+describe("XurModule", () => {
+  it("marks class armor for the active Guardian", () => {
+    render(
+      <XurModule
+        activeClassName="Warlock"
+        xur={{
+          present: true,
+          leavesIn: { d: 1 },
+          items: [
+            {
+              hash: "101",
+              name: "Test Warlock Robes",
+              type: "Armor",
+              icon: "",
+              rarity: "exotic",
+              missing: true,
+              cost: "23 Strange Coins",
+              className: "Warlock",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("For your Warlock")).toBeInTheDocument();
   });
 });

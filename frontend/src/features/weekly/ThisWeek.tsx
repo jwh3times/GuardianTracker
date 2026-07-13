@@ -11,6 +11,7 @@ import {
 } from "../../components/composite";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { useAuth } from "../../contexts/AuthContext";
+import { useCharacters } from "../../contexts/CharacterContext";
 import { apiFetch } from "../../lib/api";
 import type { Weekly } from "../../types/design";
 
@@ -46,12 +47,18 @@ function purgeOldWeeks(currentResetAt: string) {
 
 export function ThisWeek() {
   const { user } = useAuth();
+  const { activeCharacter, isLoading: charactersLoading } = useCharacters();
   const navigate = useNavigate();
 
+  const characterID = activeCharacter?.id;
+
   const { data: w, isLoading } = useQuery({
-    queryKey: ["weekly"],
-    queryFn: () => apiFetch<Weekly>("/api/weekly/recommendations"),
-    enabled: !!user,
+    queryKey: ["weekly", characterID ?? null],
+    queryFn: () =>
+      apiFetch<Weekly>(
+        `/api/weekly/recommendations${characterID ? `?characterId=${encodeURIComponent(characterID)}` : ""}`,
+      ),
+    enabled: !!user && !charactersLoading,
   });
 
   const resetAt = w?.resetAt;
@@ -104,7 +111,7 @@ export function ThisWeek() {
   }
 
   return (
-    <div className="gt-page">
+    <div className="gt-page" data-onboarding-target="this-week">
       <PageHead
         title="This Week"
         sub={w ? `Resets ${w.resetLabel}` : "Weekly activities"}
@@ -142,6 +149,7 @@ export function ThisWeek() {
       <div className="gt-week-cols">
         <XurModule
           xur={w?.xur ?? null}
+          activeClassName={activeCharacter?.cls}
           onSelect={(hash) => navigate("/collections?item=" + hash)}
         />
         <MilestoneModule milestones={w?.milestones ?? []} />

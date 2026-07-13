@@ -90,12 +90,15 @@ export interface XurItem {
   rarity: Rarity;
   missing: boolean;
   cost: string;
+  /** Present only for class-specific armor verified from the manifest. */
+  className?: string;
 }
 
 export interface Xur {
   present: boolean;
   leavesIn: Duration;
-  location: string;
+  /** Omitted when Bungie does not provide a resolvable live vendor location. */
+  location?: string;
   items: XurItem[];
 }
 

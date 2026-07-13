@@ -15,8 +15,9 @@ import type { Character } from "../types/design";
 /**
  * Owns the characters query and the user's active-character pick.
  * The pick persists per account in localStorage and survives reloads.
- * Note: collections/catalysts/seals are account-wide — the active character is
- * a display concern (top-bar avatar, Dashboard hero), not a data scope.
+ * Collections/catalysts/seals remain account-wide. Weekly authenticated vendor
+ * inventory follows the active character because Bungie's component 402 is
+ * character-scoped.
  */
 interface CharacterContextValue {
   characters: Character[];

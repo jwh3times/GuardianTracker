@@ -180,12 +180,20 @@ function PrefsView() {
   );
 }
 
+function PreferencesTestRoot({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <PreferencesProvider>{children}</PreferencesProvider>
+    </AuthProvider>
+  );
+}
+
 describe("PreferencesContext", () => {
   it("defaults when no preferences are stored", () => {
     render(
-      <PreferencesProvider>
+      <PreferencesTestRoot>
         <PrefsView />
-      </PreferencesProvider>,
+      </PreferencesTestRoot>,
     );
     expect(screen.getByTestId("card")).toHaveTextContent("framed");
     expect(screen.getByTestId("pers")).toHaveTextContent("normal");
@@ -197,9 +205,9 @@ describe("PreferencesContext", () => {
       JSON.stringify({ cardStyle: "compact", personalize: "off" }),
     );
     const { unmount } = render(
-      <PreferencesProvider>
+      <PreferencesTestRoot>
         <PrefsView />
-      </PreferencesProvider>,
+      </PreferencesTestRoot>,
     );
     expect(screen.getByTestId("card")).toHaveTextContent("compact");
     expect(screen.getByTestId("pers")).toHaveTextContent("off");
@@ -207,24 +215,25 @@ describe("PreferencesContext", () => {
 
     localStorage.setItem("guardian_prefs", "{not json");
     render(
-      <PreferencesProvider>
+      <PreferencesTestRoot>
         <PrefsView />
-      </PreferencesProvider>,
+      </PreferencesTestRoot>,
     );
     expect(screen.getByTestId("card")).toHaveTextContent("framed");
   });
 
   it("syncs from the API on mount when a token is present", async () => {
     localStorage.setItem("guardian_token", "tok");
+    localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
     server.use(
       http.get(`${API}/api/preferences`, () =>
         HttpResponse.json({ cardStyle: "compact", personalize: false }),
       ),
     );
     render(
-      <PreferencesProvider>
+      <PreferencesTestRoot>
         <PrefsView />
-      </PreferencesProvider>,
+      </PreferencesTestRoot>,
     );
     await waitFor(() =>
       expect(screen.getByTestId("card")).toHaveTextContent("compact"),
@@ -241,9 +250,9 @@ describe("PreferencesContext", () => {
       }),
     );
     render(
-      <PreferencesProvider>
+      <PreferencesTestRoot>
         <PrefsView />
-      </PreferencesProvider>,
+      </PreferencesTestRoot>,
     );
     fireEvent.click(screen.getByText("card"));
     fireEvent.click(screen.getByText("pers"));

@@ -165,7 +165,11 @@ If your agent environment supports specialized subagents, use the local instruct
 
 ## Known Limitations
 
-- Character switcher is display-only in the current implementation.
+- Collections remain account-wide; the character switcher scopes authenticated
+  weekly vendor inventory, daily actions, availability ranking, and Xûr location
+  to the selected Guardian.
 - Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds asynchronously.
-- Xur location is not exposed by Bungie API responses and is represented as unknown unless sourced elsewhere.
-- Missing-count summaries intentionally omit non-raid/dungeon categories for now.
+- Xur location is resolved best-effort from the authenticated character-vendor
+  component and manifest destination data; it is omitted when unavailable.
+- Missing-count summaries intentionally omit non-raid/dungeon categories because
+  current Bungie milestone and activity rewards do not expose collectible-linked items.

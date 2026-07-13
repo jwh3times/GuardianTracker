@@ -177,7 +177,11 @@ the test container afterwards. Migrations are embedded and applied automatically
 
 ## Known Limitations
 
-- Character switcher drives display only; collection data is account-wide (character-scoped surfaces are P2)
+- Collections data remains account-wide. The character switcher scopes
+  authenticated weekly vendor inventory, daily actions, availability ranking,
+  and Xûr location to the selected Guardian; deeper character surfaces remain P2.
 - Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready)
-- Xûr location is always "Unknown" — the public Bungie API does not expose vendor location
-- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones still omit the field (no manifest reward→collectible signal)
+- Xûr location is best-effort: the authenticated character-vendor component's
+  location index resolves through the manifest to "The Tower"; failures omit the field.
+- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones
+  omit it because verified current reward definitions contain no collectible-linked items.
