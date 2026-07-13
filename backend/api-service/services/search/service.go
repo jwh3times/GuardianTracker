@@ -5,13 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -71,7 +72,9 @@ func NewService(ms *bungie.ManifestService, dbPath string) *Service {
 		snapshotDir:     filepath.Dir(dbPath),
 	}
 	if ms != nil && s.loadSnapshot(ms.Version()) {
-		log.Printf("search: restored index snapshot for manifest %s", ms.Version())
+		slog.Info("search index snapshot restored",
+			slog.String("manifest_version", ms.Version()),
+		)
 	}
 	return s
 }
@@ -158,14 +161,20 @@ func (s *Service) BuildIndex() {
 
 	db, err := sql.Open("sqlite3", s.dbPath+"?mode=ro&cache=shared")
 	if err != nil {
-		log.Printf("search: open manifest db: %v", err)
+		slog.Error("search index manifest database open failed",
+			slog.String("manifest_version", version),
+			observability.Err(err),
+		)
 		return
 	}
 	defer db.Close()
 
 	rows, err := db.Query("SELECT json FROM DestinyInventoryItemDefinition")
 	if err != nil {
-		log.Printf("search: query DestinyInventoryItemDefinition: %v", err)
+		slog.Error("search index manifest query failed",
+			slog.String("manifest_version", version),
+			observability.Err(err),
+		)
 		return
 	}
 	defer rows.Close()
@@ -197,7 +206,10 @@ func (s *Service) BuildIndex() {
 		})
 	}
 	if err := rows.Err(); err != nil {
-		log.Printf("search: scan error: %v", err)
+		slog.Error("search index manifest scan failed",
+			slog.String("manifest_version", version),
+			observability.Err(err),
+		)
 		return
 	}
 
@@ -206,9 +218,15 @@ func (s *Service) BuildIndex() {
 	s.builtVersion = version
 	s.mu.Unlock()
 	if err := s.saveSnapshot(version, entries); err != nil {
-		log.Printf("search: save snapshot for manifest %s: %v", version, err)
+		slog.Warn("search index snapshot save failed",
+			slog.String("manifest_version", version),
+			observability.Err(err),
+		)
 	}
-	log.Printf("search: index built — %d items (manifest %s)", len(entries), version)
+	slog.Info("search index built",
+		slog.Int("item_count", len(entries)),
+		slog.String("manifest_version", version),
+	)
 }
 
 // loadSnapshot restores a snapshot only when its embedded manifest version
@@ -224,7 +242,10 @@ func (s *Service) loadSnapshot(expectedVersion string) bool {
 	file, err := os.Open(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Printf("search: open snapshot %s: %v", path, err)
+			slog.Warn("search index snapshot open failed",
+				slog.String("manifest_version", expectedVersion),
+				observability.Err(err),
+			)
 		}
 		return false
 	}
@@ -232,18 +253,30 @@ func (s *Service) loadSnapshot(expectedVersion string) bool {
 
 	reader, err := gzip.NewReader(file)
 	if err != nil {
-		log.Printf("search: ignore corrupt snapshot %s: %v", path, err)
+		slog.Warn("ignoring corrupt search index snapshot",
+			slog.String("manifest_version", expectedVersion),
+			slog.String("stage", "decompress"),
+			observability.Err(err),
+		)
 		return false
 	}
 	defer reader.Close()
 
 	var snapshot indexSnapshot
 	if err := json.NewDecoder(reader).Decode(&snapshot); err != nil {
-		log.Printf("search: ignore corrupt snapshot %s: %v", path, err)
+		slog.Warn("ignoring corrupt search index snapshot",
+			slog.String("manifest_version", expectedVersion),
+			slog.String("stage", "decode"),
+			observability.Err(err),
+		)
 		return false
 	}
 	if snapshot.Format != searchSnapshotFormat || snapshot.Version != expectedVersion {
-		log.Printf("search: ignore stale or unsupported snapshot %s", path)
+		slog.Info("ignoring stale or unsupported search index snapshot",
+			slog.String("expected_manifest_version", expectedVersion),
+			slog.String("snapshot_manifest_version", snapshot.Version),
+			slog.Int("snapshot_format", snapshot.Format),
+		)
 		return false
 	}
 	for i := range snapshot.Entries {

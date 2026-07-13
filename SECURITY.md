@@ -170,6 +170,8 @@ cross-site production topology must revisit the cookie policy and would require
 - **Graceful shutdown** with 30s timeout
 - **API response headers**: every API response sets `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`; auth responses also set `Cache-Control: no-store`
 - **Frontend CSP**: inline scripts are disallowed, object embedding is disabled, the base URI is restricted to self, and framing is limited to self. Google Fonts origins used by the app are allowlisted. `style-src 'unsafe-inline'` remains a documented residual XSS-hardening risk while the current component system still uses inline styles.
+- **Request correlation**: the server assigns every request a UUID and returns it as `X-Request-ID`; CORS exposes the header to allowed browser origins.
+- **Application-log privacy**: access records use route templates and omit query strings, bodies, authorization headers, User-Agent values, and routine client IPs. Membership, session, user, and character identifiers are deterministic 24-hex pseudonyms outside the exact PostgreSQL security audit trail.
 
 ---
 

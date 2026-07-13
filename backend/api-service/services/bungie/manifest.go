@@ -5,12 +5,14 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"guardian-tracker/api-service/observability"
 )
 
 // ManifestService handles downloading and updating the Bungie manifest database.
@@ -111,7 +113,8 @@ func (m *ManifestService) CheckForUpdate(ctx context.Context) (bool, string, err
 }
 
 func (m *ManifestService) Download(ctx context.Context) error {
-	log.Println("Checking for manifest updates...")
+	logger := observability.Logger(ctx)
+	logger.InfoContext(ctx, "checking for manifest updates")
 	manifest, err := m.client.GetManifest(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get manifest metadata: %w", err)
@@ -122,7 +125,9 @@ func (m *ManifestService) Download(ctx context.Context) error {
 		return fmt.Errorf("no English manifest database URL found")
 	}
 	fullURL := m.client.cdnBaseURL + dbURL
-	log.Printf("Downloading manifest version %s from %s", newVersion, fullURL)
+	logger.LogAttrs(ctx, slog.LevelInfo, "downloading manifest",
+		slog.String("manifest_version", newVersion),
+	)
 	zipPath := m.dbPath + ".zip.tmp"
 	if err := m.client.DownloadFileToPath(ctx, fullURL, zipPath); err != nil {
 		return fmt.Errorf("failed to download manifest: %w", err)
@@ -136,9 +141,14 @@ func (m *ManifestService) Download(ctx context.Context) error {
 	m.lastCheck = time.Now()
 	m.mu.Unlock()
 	if err := os.WriteFile(m.versionPath, []byte(newVersion), 0644); err != nil {
-		log.Printf("Warning: failed to save version file: %v", err)
+		logger.LogAttrs(ctx, slog.LevelWarn, "manifest version file save failed",
+			slog.String("manifest_version", newVersion),
+			observability.Err(err),
+		)
 	}
-	log.Printf("Manifest version %s installed successfully", newVersion)
+	logger.LogAttrs(ctx, slog.LevelInfo, "manifest installed",
+		slog.String("manifest_version", newVersion),
+	)
 	m.runAfterSwapHooks(newVersion)
 	return nil
 }
@@ -200,12 +210,17 @@ func (m *ManifestService) EnsureReady(ctx context.Context) error {
 		if shouldCheck {
 			needsUpdate, _, err := m.CheckForUpdate(ctx)
 			if err != nil {
-				log.Printf("Warning: failed to check for manifest update: %v", err)
+				observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "manifest update check failed; keeping installed manifest",
+					observability.Err(err),
+				)
 				return nil
 			}
 			if needsUpdate {
 				if err := m.Download(ctx); err != nil {
-					log.Printf("Warning: failed to download manifest update: %v", err)
+					observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "manifest update download failed; keeping installed manifest",
+						slog.String("installed_manifest_version", m.GetCurrentVersion()),
+						observability.Err(err),
+					)
 					return nil
 				}
 			}
@@ -227,13 +242,20 @@ func (m *ManifestService) StartBackgroundUpdater(ctx context.Context) {
 			case <-ticker.C:
 				needsUpdate, newVersion, err := m.CheckForUpdate(ctx)
 				if err != nil {
-					log.Printf("Background manifest check failed: %v", err)
+					observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "background manifest update check failed",
+						observability.Err(err),
+					)
 					continue
 				}
 				if needsUpdate {
-					log.Printf("New manifest version available: %s", newVersion)
+					observability.Logger(ctx).LogAttrs(ctx, slog.LevelInfo, "new manifest version available",
+						slog.String("manifest_version", newVersion),
+					)
 					if err := m.Download(ctx); err != nil {
-						log.Printf("Background manifest download failed: %v", err)
+						observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "background manifest download failed",
+							slog.String("manifest_version", newVersion),
+							observability.Err(err),
+						)
 					}
 				}
 			}

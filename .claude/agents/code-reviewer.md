@@ -92,6 +92,14 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - Flag endpoints that return another user's data without verifying the requesting user's `membershipId` from the JWT (`ownershipCheck` in `api/handlers/common.go`).
 - Flag logout implementations that clear tokens client-side but do not call `POST /api/auth/logout`. Note as a known limitation only if the backend endpoint itself fails.
 
+## Logging checks
+
+- Every request must receive a server-generated UUID returned as `X-Request-ID`; do not trust an inbound request ID as the canonical value.
+- Access logs must use the Gin route template, not the raw URL, and include only method, status, duration, and response bytes plus the request ID.
+- Flag application logs containing query strings, bodies, authorization headers, User-Agent values, routine client IPs, or exact membership/session/user/character identifiers. Those identifiers must use the deterministic 24-hex pseudonym helper; exact values are allowed only in the PostgreSQL audit trail.
+- Panic recovery must emit an error record with the request ID and return 500 without exposing the panic. Successful health probes are debug, other successes info, 4xx warn, and 5xx error.
+- CI must keep `go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...` in the required Go job. Suppressions require an inline explanation of a verified false positive.
+
 ## Intentional exceptions (do not flag)
 
 - `GET /health` and `GET /ready` have no auth — intentional for Kubernetes probes.

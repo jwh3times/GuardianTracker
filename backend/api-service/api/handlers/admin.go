@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -53,7 +53,7 @@ type adminUserResponse struct {
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	users, err := h.users.ListUsers(c.Request.Context(), c.Query("q"), 200)
 	if err != nil {
-		log.Printf("admin ListUsers: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin user listing failed", observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -101,7 +101,8 @@ func (h *AdminHandler) SetUserRole(c *gin.Context) {
 		case errors.Is(err, db.ErrLastAdmin):
 			c.JSON(http.StatusConflict, gin.H{"error": "Can't remove the last admin. Promote another admin first.", "code": "LAST_ADMIN"})
 		default:
-			log.Printf("admin SetRoleByID(%d): %v", targetID, err)
+			observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin role update failed",
+				observability.IntID("user", targetID), observability.Err(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		}
 		return
@@ -142,7 +143,7 @@ func toAdminFlag(f *db.FeatureFlag) adminFlagResponse {
 func (h *AdminHandler) ListFlags(c *gin.Context) {
 	flags, err := h.flags.List(c.Request.Context())
 	if err != nil {
-		log.Printf("admin ListFlags: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin feature flag listing failed", observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -185,7 +186,8 @@ func (h *AdminHandler) UpdateFlag(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "unknown flag"})
 			return
 		}
-		log.Printf("admin UpdateFlag(%s): %v", key, err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin feature flag update failed",
+			"flag", key, observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}

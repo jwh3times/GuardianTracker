@@ -3,13 +3,14 @@ package weekly
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"guardian-tracker/api-service/cache"
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/collections"
 	"guardian-tracker/api-service/services/efficiency"
@@ -261,7 +262,9 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 
 	pub, err := s.getPublicWeekly(ctx, now)
 	if err != nil {
-		log.Printf("weekly: getPublicWeekly error: %v — returning partial response", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly public data fetch failed; returning partial response",
+			observability.Err(err),
+		)
 		pub = &publicWeeklyCache{}
 	}
 
@@ -281,7 +284,11 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 			defer wg.Done()
 			mh, mErr := s.collections.GetMissingItemHashes(ctx, membershipType, membershipID, bungieToken)
 			if mErr != nil {
-				log.Printf("weekly: GetMissingItemHashes for %s: %v", membershipID, mErr)
+				observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly missing items fetch failed",
+					slog.Int("membership_type", membershipType),
+					observability.ID("membership", membershipID),
+					observability.Err(mErr),
+				)
 				mh = map[uint32]struct{}{}
 			}
 			missingHashes = mh
@@ -651,13 +658,17 @@ func (s *Service) getPublicWeekly(ctx context.Context, now time.Time) (*publicWe
 func (s *Service) fetchXurInventory(ctx context.Context, pub *publicWeeklyCache) {
 	vendors, err := s.bungie.GetPublicVendors(ctx)
 	if err != nil {
-		log.Printf("weekly: GetPublicVendors: %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly public vendors fetch failed",
+			observability.Err(err),
+		)
 		return
 	}
 	xurKey := strconv.FormatUint(uint64(bungie.XurVendorHash), 10)
 	xurSales, ok := vendors.Response.Sales.Data[xurKey]
 	if !ok {
-		log.Printf("weekly: Xur (hash %d) not found in vendors response", bungie.XurVendorHash)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "Xur not found in public vendors response",
+			slog.Uint64("vendor_hash", uint64(bungie.XurVendorHash)),
+		)
 		return
 	}
 
@@ -674,7 +685,9 @@ func (s *Service) fetchXurInventory(ctx context.Context, pub *publicWeeklyCache)
 	if s.manifest != nil {
 		d, err := s.manifest.GetItemsByHashes(xurHashes)
 		if err != nil {
-			log.Printf("weekly: GetItemsByHashes (Xûr): %v", err)
+			observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly Xur manifest item lookup failed",
+				observability.Err(err),
+			)
 		} else {
 			defs = d
 		}
@@ -710,7 +723,9 @@ func (s *Service) fetchXurInventory(ctx context.Context, pub *publicWeeklyCache)
 func (s *Service) fetchMilestones(ctx context.Context, pub *publicWeeklyCache) {
 	milestones, err := s.bungie.GetPublicMilestones(ctx)
 	if err != nil {
-		log.Printf("weekly: GetPublicMilestones: %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly public milestones fetch failed",
+			observability.Err(err),
+		)
 		return
 	}
 
@@ -729,7 +744,9 @@ func (s *Service) fetchMilestones(ctx context.Context, pub *publicWeeklyCache) {
 	if s.manifest != nil {
 		d, err := s.manifest.GetMilestoneDefinitions(hashes)
 		if err != nil {
-			log.Printf("weekly: GetMilestoneDefinitions: %v", err)
+			observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly milestone manifest lookup failed",
+				observability.Err(err),
+			)
 		} else {
 			defs = d
 		}
@@ -892,7 +909,9 @@ func (s *Service) getXurLocation(ctx context.Context, membershipType int, member
 		vendor.VendorLocationIndex,
 	)
 	if err != nil {
-		log.Printf("weekly: resolve Xur location: %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly Xur location lookup failed",
+			observability.Err(err),
+		)
 		return ""
 	}
 	return xurLocationLabel(destinationHash, destinationName)
@@ -925,7 +944,11 @@ func (s *Service) resolveCharacter(ctx context.Context, membershipType int, memb
 
 	chars, err := s.bungie.GetCharacters(ctx, membershipType, membershipID, bungieToken)
 	if err != nil {
-		log.Printf("weekly: GetCharacters: %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly character roster fetch failed",
+			slog.Int("membership_type", membershipType),
+			observability.ID("membership", membershipID),
+			observability.Err(err),
+		)
 		return "", -1
 	}
 
@@ -988,7 +1011,9 @@ func (s *Service) enrichDailyVendorItems(resp *bungie.CharacterVendorsResponse) 
 	for vendorKey, meta := range vendorMetas {
 		sales, ok := resp.Response.Sales.Data[vendorKey]
 		if !ok {
-			log.Printf("weekly: vendor %s (%s) not found in character vendors response", meta.name, vendorKey)
+			slog.Warn("weekly vendor not found in character vendors response",
+				slog.String("vendor", meta.name),
+			)
 			continue
 		}
 		for _, sale := range sales.SaleItems {

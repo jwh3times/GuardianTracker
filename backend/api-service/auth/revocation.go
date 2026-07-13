@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"guardian-tracker/api-service/cache"
+	"guardian-tracker/api-service/observability"
 )
 
 // UserAuthStore is satisfied by db.UserStore. It returns the data the middleware
@@ -65,7 +65,8 @@ func (r *RevocationChecker) Resolve(ctx context.Context, membershipID string, cl
 	if !haveAuthInfo {
 		dbVersion, dbRole, found, err := r.store.GetAuthInfo(ctx, membershipID)
 		if err != nil {
-			log.Printf("revocation check failed for %s: %v — allowing request", membershipID, err)
+			observability.Logger(ctx).WarnContext(ctx, "revocation check failed open",
+				observability.ID("membership", membershipID), observability.Err(err))
 			return RoleStandard, nil // fail open on DB error
 		}
 		if !found {
@@ -102,7 +103,8 @@ func (r *RevocationChecker) checkSession(ctx context.Context, sessionID string) 
 	}
 	exists, err := r.store.SessionExists(ctx, sessionID)
 	if err != nil {
-		log.Printf("session check failed for %s: %v — allowing request", sessionID, err)
+		observability.Logger(ctx).WarnContext(ctx, "session check failed open",
+			observability.ID("session", sessionID), observability.Err(err))
 		return nil // fail open on DB error
 	}
 	r.cache.Set(cacheKey, exists, r.ttl)

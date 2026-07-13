@@ -6,12 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"guardian-tracker/api-service/observability"
 )
 
 // Sentinels the DB adapter translates from db-layer errors so the store can
@@ -118,9 +120,9 @@ func (s *TokenStore) Store(membershipID string, tokens *BungieTokens) {
 		case err == nil:
 			// persisted
 		case errors.Is(err, ErrNoUserRow):
-			log.Printf("TokenStore.Store: no users row for %s — tokens kept in memory only", membershipID)
+			slog.Warn("Bungie tokens retained in memory because user row is missing", observability.ID("membership", membershipID))
 		default:
-			log.Printf("TokenStore.Store: DB persist failed for %s: %v", membershipID, err)
+			slog.Warn("Bungie token persistence failed", observability.ID("membership", membershipID), observability.Err(err))
 		}
 	}
 
@@ -128,7 +130,7 @@ func (s *TokenStore) Store(membershipID string, tokens *BungieTokens) {
 	s.mu.Lock()
 	s.tokens[membershipID] = tokens
 	s.mu.Unlock()
-	log.Printf("Stored Bungie tokens for user %s (expires: %s)", membershipID, tokens.AccessTokenExpiresAt.Format(time.RFC3339))
+	slog.Info("Bungie tokens stored", observability.ID("membership", membershipID), "access_expires_at", tokens.AccessTokenExpiresAt)
 }
 
 // persist encrypts and upserts tokens to the DB. A zero prevUpdatedAt writes
@@ -220,13 +222,13 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 	}
 
 	if !exists {
-		return "", fmt.Errorf("no tokens found for user %s", membershipID)
+		return "", fmt.Errorf("no Bungie tokens found")
 	}
 	if tokens.isRefreshTokenExpired() {
 		s.mu.Lock()
 		delete(s.tokens, membershipID)
 		s.mu.Unlock()
-		return "", fmt.Errorf("refresh token expired for user %s, re-authentication required", membershipID)
+		return "", fmt.Errorf("refresh token expired; re-authentication required")
 	}
 	if !tokens.isAccessTokenExpired() {
 		return tokens.AccessToken, nil
@@ -243,13 +245,13 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 	tokens = s.tokens[membershipID]
 	s.mu.RUnlock()
 	if tokens == nil {
-		return "", fmt.Errorf("no tokens found for user %s", membershipID)
+		return "", fmt.Errorf("no Bungie tokens found")
 	}
 	if !tokens.isAccessTokenExpired() {
 		return tokens.AccessToken, nil
 	}
 
-	log.Printf("Access token expired for user %s, refreshing...", membershipID)
+	slog.Info("refreshing expired Bungie access token", observability.ID("membership", membershipID))
 	newTokens, err := s.refreshBungieToken(tokens)
 	if err != nil {
 		return "", fmt.Errorf("failed to refresh token: %w", err)
@@ -267,29 +269,30 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 				s.mu.Lock()
 				s.tokens[membershipID] = winner
 				s.mu.Unlock()
-				log.Printf("TokenStore: refresh race for %s — adopted newer DB tokens", membershipID)
+				slog.Info("adopted Bungie tokens from concurrent refresh", observability.ID("membership", membershipID))
 				return winner.AccessToken, nil
 			case loadErr == nil:
 				// Confirmed read: the winner's row is absent, unreadable, or expired,
 				// so our freshly minted tokens are strictly newer — write them
 				// unconditionally (best-effort).
 				if perr := s.persist(membershipID, newTokens, time.Time{}); perr != nil {
-					log.Printf("TokenStore: unconditional re-persist for %s failed: %v", membershipID, perr)
+					slog.Warn("Bungie token re-persistence failed", observability.ID("membership", membershipID), observability.Err(perr))
 				}
 			default:
 				// Transient read failure — do NOT clobber a possibly-valid winner.
 				// Keep newTokens in memory only; the next refresh will reconcile.
-				log.Printf("TokenStore: refresh race for %s — DB read failed, keeping new tokens in memory: %v", membershipID, loadErr)
+				slog.Warn("concurrent Bungie refresh reconciliation failed; retaining tokens in memory",
+					observability.ID("membership", membershipID), observability.Err(loadErr))
 			}
 		} else if err != nil && !errors.Is(err, ErrNoUserRow) {
-			log.Printf("TokenStore: persist after refresh for %s failed: %v", membershipID, err)
+			slog.Warn("Bungie token persistence after refresh failed", observability.ID("membership", membershipID), observability.Err(err))
 		}
 	}
 
 	s.mu.Lock()
 	s.tokens[membershipID] = newTokens
 	s.mu.Unlock()
-	log.Printf("Stored Bungie tokens for user %s (expires: %s)", membershipID, newTokens.AccessTokenExpiresAt.Format(time.RFC3339))
+	slog.Info("refreshed Bungie tokens stored", observability.ID("membership", membershipID), "access_expires_at", newTokens.AccessTokenExpiresAt)
 	return newTokens.AccessToken, nil
 }
 
@@ -302,7 +305,7 @@ func (s *TokenStore) Delete(membershipID string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := s.repo.Delete(ctx, membershipID); err != nil {
-			log.Printf("TokenStore.Delete: DB delete failed for %s: %v", membershipID, err)
+			slog.Warn("Bungie token deletion failed", observability.ID("membership", membershipID), observability.Err(err))
 		}
 	}
 }
@@ -373,7 +376,7 @@ func (s *TokenStore) cleanupLoop(ctx context.Context) {
 			for id, t := range s.tokens {
 				if now.After(t.RefreshTokenExpiresAt) {
 					delete(s.tokens, id)
-					log.Printf("Cleaned up expired tokens for user %s", id)
+					slog.Debug("expired in-memory Bungie tokens removed", observability.ID("membership", id))
 				}
 			}
 			s.mu.Unlock()

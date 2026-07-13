@@ -3,12 +3,12 @@ package handlers
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"slices"
 	"strconv"
 
 	"guardian-tracker/api-service/auth"
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/characters"
 	"guardian-tracker/api-service/services/collections"
@@ -152,12 +152,15 @@ func handleBungieError(c *gin.Context, err error) {
 		case 36:
 			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Bungie API rate limit exceeded. Please try again later.", "code": "RATE_LIMITED", "retryAfter": bungieErr.ThrottleSeconds})
 		default:
-			log.Printf("Bungie API error: %v", bungieErr)
+			ctx := handlerContext(c)
+			observability.Logger(ctx).WarnContext(ctx, "Bungie API request failed",
+				"bungie_error_code", bungieErr.ErrorCode, observability.Err(bungieErr))
 			c.JSON(http.StatusBadGateway, gin.H{"error": "Error communicating with Bungie API", "code": "BUNGIE_ERROR"})
 		}
 		return
 	}
-	log.Printf("Internal error: %v", err)
+	ctx := handlerContext(c)
+	observability.Logger(ctx).ErrorContext(ctx, "collections request failed", observability.Err(err))
 	c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error", "code": "INTERNAL_ERROR"})
 }
 

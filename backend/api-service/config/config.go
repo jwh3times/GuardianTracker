@@ -3,7 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"slices"
 	"strconv"
@@ -12,8 +12,10 @@ import (
 )
 
 type Config struct {
-	Port  string
-	GoEnv string
+	Port      string
+	GoEnv     string
+	LogLevel  string
+	LogFormat string
 
 	BungieAPIKey       string
 	BungieAPIBaseURL   string
@@ -73,12 +75,19 @@ type Config struct {
 }
 
 func Load() *Config {
+	goEnv := strings.TrimSpace(os.Getenv("GO_ENV"))
+	defaultLogFormat := "text"
+	if goEnv == "production" {
+		defaultLogFormat = "json"
+	}
 	keyVersion, keyVersionErr := getPositiveSmallIntEnv("TOKEN_ENCRYPTION_KEY_VERSION", 1)
 	previousKeyVersion, previousKeyVersionErr := getPositiveSmallIntEnv("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION", 0)
 
 	cfg := &Config{
-		Port:  getEnv("PORT", "8081"),
-		GoEnv: strings.TrimSpace(os.Getenv("GO_ENV")),
+		Port:      getEnv("PORT", "8081"),
+		GoEnv:     goEnv,
+		LogLevel:  strings.ToLower(strings.TrimSpace(getEnv("LOG_LEVEL", "info"))),
+		LogFormat: strings.ToLower(strings.TrimSpace(getEnv("LOG_FORMAT", defaultLogFormat))),
 
 		BungieAPIKey:       os.Getenv("BUNGIE_API_KEY"),
 		BungieAPIBaseURL:   getEnv("BUNGIE_API_BASE_URL", "https://www.bungie.net/Platform"),
@@ -170,6 +179,12 @@ func (c *Config) Validate() error {
 	if c.loadErr != nil {
 		return c.loadErr
 	}
+	if !slices.Contains([]string{"debug", "info", "warn", "error"}, c.LogLevel) {
+		return fmt.Errorf("LOG_LEVEL must be debug, info, warn, or error (got %q)", c.LogLevel)
+	}
+	if !slices.Contains([]string{"text", "json"}, c.LogFormat) {
+		return fmt.Errorf("LOG_FORMAT must be text or json (got %q)", c.LogFormat)
+	}
 	if c.TokenEncryptionKey != "" && c.TokenEncryptionKeyVersion <= 0 {
 		return fmt.Errorf("TOKEN_ENCRYPTION_KEY_VERSION must be a positive SMALLINT")
 	}
@@ -230,7 +245,7 @@ func (c *Config) Validate() error {
 		developmentWarnings = append(developmentWarnings, "browser CORS access (wildcard origins are not reflected)")
 	}
 	if len(developmentWarnings) > 0 {
-		log.Printf("SECURITY WARNING: development mode is degraded; disabled protections/features: %s", strings.Join(developmentWarnings, "; "))
+		slog.Warn("development mode is degraded", "disabled_protections", strings.Join(developmentWarnings, "; "))
 	}
 	return nil
 }

@@ -76,12 +76,20 @@ Optional values:
 | `ADMIN_MEMBERSHIP_IDS` | Comma-separated Bungie membership IDs pinned to admin at login |
 | `CORS_ALLOWED_ORIGINS` | Explicit browser origins allowed to call the API |
 | `JWT_ACCESS_TTL` | Access-token lifetime as a Go duration (default `30m`) |
+| `LOG_LEVEL` | `debug`, `info`, `warn`, or `error`; defaults to `info` |
+| `LOG_FORMAT` | `text` or `json`; defaults to `text` in development and `json` in production |
 
 Do not commit `.env`, generated secrets, manifest databases, cloud credentials, or
 production runbooks.
 
 See [SECURITY.md](./SECURITY.md#token-encryption-key-rotation) before rotating an
 encryption key. The key and its version must move together.
+
+Invalid `LOG_LEVEL` or `LOG_FORMAT` values fail startup. Application logs carry
+a server-generated request UUID and use route templates rather than raw URLs.
+They do not record query strings, request/response bodies, authorization
+headers, User-Agent values, or routine client IPs. Security audit rows remain a
+separate Postgres trail with the exact identifiers needed for forensics.
 
 ## 3. Run the Full Stack
 
@@ -191,6 +199,7 @@ Backend:
 cd backend/api-service
 go test ./...
 go vet ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ./test-local.ps1
 ```
 

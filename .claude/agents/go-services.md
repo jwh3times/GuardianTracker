@@ -11,7 +11,7 @@ You are working inside the Guardian Tracker Go backend. There is **one** service
 
 ```
 backend/api-service/
-  main.go                              ← Gin router, dependency wiring, manifest startup + swap hooks
+  main.go                              ← Gin router, slog/request middleware, dependency wiring, manifest startup + swap hooks
   config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
   auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
   auth/middleware.go                   ← JWT middleware for protected routes
@@ -227,12 +227,20 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 ## Go patterns
 
 - Config is loaded once at startup via `config.Load()`; `cfg.Validate()` requires `GO_ENV` to be exactly `development` or `production` and rejects invalid/missing key versions.
+- Logging config accepts `LOG_LEVEL=debug|info|warn|error` and `LOG_FORMAT=text|json`; invalid values fail startup. Defaults are text/info in development and JSON/info in production.
 - Gin handlers must only: bind inputs, call a service/function, return `c.JSON(...)`. No business logic in handlers.
 - Errors: `c.JSON(http.StatusXXX, gin.H{"error": "...", "code": "MACHINE_CODE"})` then `return`.
 - All HTTP calls to Bungie API go through `services/bungie/client.go` (rate limiting + retry). Never construct Bungie API calls inline.
 - Use constants and helpers from `services/bungie/types.go` for Bungie API types.
 - CGO is **enabled** (`CGO_ENABLED=1`) for SQLite.
 - Migrations run in a transaction — a failed multi-statement migration cannot leave a half-applied schema.
+
+## Structured logging
+
+- Use the request-scoped `*slog.Logger` attached to `context.Context`; every request has a server-owned UUID returned as `X-Request-ID`.
+- Access records use the matched route template, method, status, duration, and response bytes. Never log raw URLs/query strings, bodies, authorization headers, User-Agent values, or routine client IPs.
+- Use deterministic 24-hex pseudonyms (first 12 bytes of SHA-256) for membership, session, user, and character identifiers. Exact values belong only in `audit_log`.
+- Log successful health probes at debug, successful application requests at info, 4xx at warn, and 5xx/panic recovery at error.
 
 ## Environment variables
 
@@ -245,7 +253,7 @@ ADMIN_MEMBERSHIP_IDS, AUDIT_RETENTION_DAYS, TRUSTED_PROXIES
 BUNGIE_API_BASE_URL, BUNGIE_API_RPS, BUNGIE_API_BURST
 MANIFEST_DB_PATH, MANIFEST_CHECK_INTERVAL
 CACHE_ENABLED, CACHE_TTL_COLLECTIONS, CACHE_TTL_RECORDS
-CORS_ALLOWED_ORIGINS, LOG_LEVEL, HTTP_TIMEOUT_SECONDS
+CORS_ALLOWED_ORIGINS, LOG_LEVEL, LOG_FORMAT, HTTP_TIMEOUT_SECONDS
 ```
 
 ## Testing
@@ -253,6 +261,7 @@ CORS_ALLOWED_ORIGINS, LOG_LEVEL, HTTP_TIMEOUT_SECONDS
 ```powershell
 # From backend/api-service/
 go test ./...
+go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 
 # With race detector (matches CI); requires CGO + Postgres for full coverage
 go test -race ./...

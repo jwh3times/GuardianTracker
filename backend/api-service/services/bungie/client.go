@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"guardian-tracker/api-service/observability"
 
 	"golang.org/x/time/rate"
 )
@@ -302,7 +304,11 @@ func (c *Client) DownloadFileToPath(ctx context.Context, url, dest string) error
 		if lastErr == nil {
 			return nil
 		}
-		log.Printf("download attempt %d/3 failed: %v", attempt+1, lastErr)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "manifest download attempt failed",
+			slog.Int("attempt", attempt+1),
+			slog.Int("max_attempts", 3),
+			observability.Err(lastErr),
+		)
 	}
 	return lastErr
 }

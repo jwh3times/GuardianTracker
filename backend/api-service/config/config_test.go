@@ -9,6 +9,8 @@ import (
 func validProdConfig() *Config {
 	return &Config{
 		GoEnv:                     "production",
+		LogLevel:                  "info",
+		LogFormat:                 "json",
 		BungieAPIKey:              "key",
 		BungieClientID:            "client",
 		JWTSecret:                 strings.Repeat("s", 32),
@@ -52,7 +54,7 @@ func TestValidate_ProductionBranches(t *testing.T) {
 
 func TestValidate_DevelopmentNeverErrors(t *testing.T) {
 	// A completely empty dev config only warns — degraded mode is supported.
-	cfg := &Config{GoEnv: "development"}
+	cfg := &Config{GoEnv: "development", LogLevel: "info", LogFormat: "text"}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate() in development = %v, want nil", err)
 	}
@@ -146,6 +148,8 @@ func TestLoad_RejectsInvalidTokenEncryptionKeyVersions(t *testing.T) {
 func TestValidate_TokenEncryptionPreviousVersionPairing(t *testing.T) {
 	base := Config{
 		GoEnv:                         "development",
+		LogLevel:                      "info",
+		LogFormat:                     "text",
 		TokenEncryptionKey:            "current",
 		TokenEncryptionKeyVersion:     2,
 		TokenEncryptionKeyPrev:        "previous",
@@ -168,6 +172,41 @@ func TestValidate_TokenEncryptionPreviousVersionPairing(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := base
 			tc.mutate(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() unexpectedly succeeded")
+			}
+		})
+	}
+}
+
+func TestLoad_LoggingDefaultsByEnvironment(t *testing.T) {
+	t.Setenv("LOG_LEVEL", "")
+	t.Setenv("LOG_FORMAT", "")
+
+	t.Setenv("GO_ENV", "development")
+	dev := Load()
+	if dev.LogLevel != "info" || dev.LogFormat != "text" {
+		t.Fatalf("development logging = %s/%s, want info/text", dev.LogLevel, dev.LogFormat)
+	}
+
+	t.Setenv("GO_ENV", "production")
+	prod := Load()
+	if prod.LogLevel != "info" || prod.LogFormat != "json" {
+		t.Fatalf("production logging = %s/%s, want info/json", prod.LogLevel, prod.LogFormat)
+	}
+}
+
+func TestValidate_RejectsInvalidLoggingConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		level  string
+		format string
+	}{
+		{name: "level", level: "trace", format: "text"},
+		{name: "format", level: "info", format: "xml"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{GoEnv: "development", LogLevel: tc.level, LogFormat: tc.format}
 			if err := cfg.Validate(); err == nil {
 				t.Fatal("Validate() unexpectedly succeeded")
 			}

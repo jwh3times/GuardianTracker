@@ -3,10 +3,11 @@ package weekly
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
+	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 )
 
@@ -101,7 +102,12 @@ func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, m
 
 	resp, err := s.bungie.GetCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
 	if err != nil {
-		log.Printf("weekly: GetCharacterVendors: %v", err)
+		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly character vendors fetch failed",
+			slog.Int("membership_type", membershipType),
+			observability.ID("membership", membershipID),
+			observability.ID("character", characterID),
+			observability.Err(err),
+		)
 		return nil
 	}
 	if s.cache != nil {

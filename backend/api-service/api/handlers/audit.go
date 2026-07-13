@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
 )
@@ -73,7 +73,7 @@ func (h *AuditHandler) ListAudit(c *gin.Context) {
 
 	entries, nextCursor, err := h.store.List(c.Request.Context(), f)
 	if err != nil {
-		log.Printf("admin ListAudit: %v", err)
+		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin audit listing failed", observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
