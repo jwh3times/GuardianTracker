@@ -462,6 +462,121 @@ func TestGetSeals_CompletionAndGilding(t *testing.T) {
 	}
 }
 
+// TestGetSeals_ObjectivesBreakdown covers the per-objective drill-down data:
+// single vs. multiple objectives, explicit-hidden exclusion, absent-visible
+// inclusion (the *bool regression), blank-label numbering over included
+// objectives only, redeemed-record authority over stale objective payloads,
+// omission of the objectives key entirely when none survive, and zero
+// completionValue normalization.
+func TestGetSeals_ObjectivesBreakdown(t *testing.T) {
+	m := &fakeRecordsManifest{
+		nodes: map[uint32]*manifestrepo.PresentationNodeDef{
+			9200: nodeFromJSON(t, `{"hash":9200,
+				"displayProperties":{"name":"Seals"},
+				"children":{"presentationNodes":[{"presentationNodeHash":9300}]}}`),
+			9300: nodeFromJSON(t, `{"hash":9300,
+				"displayProperties":{"name":"Dredgen"},
+				"children":{"records":[
+					{"recordHash":3001},{"recordHash":3002},{"recordHash":3003},
+					{"recordHash":3004},{"recordHash":3005}]}}`),
+		},
+		records: map[uint32]*manifestrepo.RecordDef{
+			3001: recordFromJSON(t, `{"hash":3001,"displayProperties":{"name":"Single Objective"}}`),
+			3002: recordFromJSON(t, `{"hash":3002,"displayProperties":{"name":"Mixed Visibility"}}`),
+			3003: recordFromJSON(t, `{"hash":3003,"displayProperties":{"name":"Stale Complete"}}`),
+			3004: recordFromJSON(t, `{"hash":3004,"displayProperties":{"name":"No Objectives"}}`),
+			3005: recordFromJSON(t, `{"hash":3005,"displayProperties":{"name":"Zero Max"}}`),
+		},
+	}
+	profile := `{"ErrorCode":1,"Response":{"profileRecords":{"data":{"records":{
+		"3001":{"state":4,"objectives":[
+			{"progress":3,"completionValue":5,"complete":false,"visible":true,"progressDescription":"Kills"}
+		]},
+		"3002":{"state":4,"objectives":[
+			{"progress":1,"completionValue":2,"complete":false,"progressDescription":""},
+			{"progress":2,"completionValue":2,"complete":true,"visible":false,"progressDescription":"Hidden"},
+			{"progress":7,"completionValue":5,"complete":false,"visible":true,"progressDescription":"   "}
+		]},
+		"3003":{"state":1,"objectives":[
+			{"progress":0,"completionValue":1,"complete":false,"visible":true,"progressDescription":"Stale"}
+		]},
+		"3004":{"state":4},
+		"3005":{"state":4,"objectives":[
+			{"progress":0,"completionValue":0,"complete":false,"visible":true,"progressDescription":"Zero Progress"}
+		]}
+	}}}}}`
+	s := newRecordsService(t, newBungieServer(t, profile), m)
+
+	seals, _, err := s.GetSeals(context.Background(), 3, "4611686018467260757", "token")
+	if err != nil {
+		t.Fatalf("GetSeals: %v", err)
+	}
+	if len(seals) != 1 {
+		t.Fatalf("len(seals) = %d, want 1", len(seals))
+	}
+	byLabel := map[string]Triumph{}
+	for _, tr := range seals[0].Triumphs {
+		byLabel[tr.Label] = tr
+	}
+
+	// Single objective.
+	single := byLabel["Single Objective"]
+	if len(single.Objectives) != 1 {
+		t.Fatalf("single objective count = %d, want 1", len(single.Objectives))
+	}
+	if got := single.Objectives[0]; got.Label != "Kills" || got.Done || got.Cur != 3 || got.Max != 5 {
+		t.Errorf("single objective = %+v, want {Kills false 3 5}", got)
+	}
+
+	// Multiple objectives: the explicitly-hidden one is excluded, the
+	// visible-absent one is included, blank labels are numbered over the two
+	// surviving (included) objectives only, and a stale overshoot on an
+	// incomplete objective is clamped to Max.
+	mixed := byLabel["Mixed Visibility"]
+	if len(mixed.Objectives) != 2 {
+		t.Fatalf("mixed objective count = %d, want 2 (explicitly-hidden one excluded)", len(mixed.Objectives))
+	}
+	if got := mixed.Objectives[0]; got.Label != "Objective 1" || got.Done || got.Cur != 1 || got.Max != 2 {
+		t.Errorf("mixed objective 0 = %+v, want {Objective 1 false 1 2}", got)
+	}
+	if got := mixed.Objectives[1]; got.Label != "Objective 2" || got.Done || got.Cur != 5 || got.Max != 5 {
+		t.Errorf("mixed objective 1 = %+v, want {Objective 2 false 5 5} (Cur clamped to Max)", got)
+	}
+
+	// Redeemed record: stale incomplete objective payload must still report
+	// Done=true and Cur == Max.
+	stale := byLabel["Stale Complete"]
+	if len(stale.Objectives) != 1 {
+		t.Fatalf("stale objective count = %d, want 1", len(stale.Objectives))
+	}
+	if got := stale.Objectives[0]; !got.Done || got.Cur != got.Max {
+		t.Errorf("stale objective = %+v, want Done=true and Cur == Max", got)
+	}
+
+	// No objectives at all: the field must be entirely absent from the JSON
+	// (nil slice + omitempty), not an empty array.
+	none := byLabel["No Objectives"]
+	if none.Objectives != nil {
+		t.Errorf("no-objectives Objectives = %+v, want nil", none.Objectives)
+	}
+	blob, err := json.Marshal(none)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	if strings.Contains(string(blob), "objectives") {
+		t.Errorf("json = %s, must omit the \"objectives\" key entirely", blob)
+	}
+
+	// Zero completionValue normalizes to Max = 1.
+	zero := byLabel["Zero Max"]
+	if len(zero.Objectives) != 1 {
+		t.Fatalf("zero-max objective count = %d, want 1", len(zero.Objectives))
+	}
+	if got := zero.Objectives[0]; got.Max != 1 {
+		t.Errorf("zero-max objective Max = %d, want 1", got.Max)
+	}
+}
+
 // TestGetCatalysts_EffectLinkage covers the hash-first linkage chain: objective
 // overlap first, then stripped-name match, then catalyst-plug-name match, then
 // falling back to the record's own description when nothing links. It also

@@ -152,6 +152,27 @@ func TestGetRaceName(t *testing.T) {
 	}
 }
 
+func TestRecordObjective_VisibleAbsentMeansVisible(t *testing.T) {
+	// Bungie omits "visible" entirely for objectives that are visible; only
+	// explicit false means hidden. A plain bool can't represent "absent", so
+	// Visible must be *bool (nil = absent = visible).
+	var withVisibleFalse RecordObjective
+	if err := json.Unmarshal([]byte(`{"objectiveHash":1,"progress":1,"completionValue":2,"complete":false,"visible":false}`), &withVisibleFalse); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if withVisibleFalse.Visible == nil || *withVisibleFalse.Visible != false {
+		t.Errorf("Visible = %v, want pointer to false", withVisibleFalse.Visible)
+	}
+
+	var absentVisible RecordObjective
+	if err := json.Unmarshal([]byte(`{"objectiveHash":1,"progress":1,"completionValue":2,"complete":false}`), &absentVisible); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if absentVisible.Visible != nil {
+		t.Errorf("Visible = %v, want nil (absent means visible)", absentVisible.Visible)
+	}
+}
+
 func TestCollectibleDefinitionParsesSourceHash(t *testing.T) {
 	blob := `{"hash":123,"itemHash":456,"sourceHash":2065138144,"sourceString":"Source: \"Vault of Glass\" Raid"}`
 	var def CollectibleDefinition
