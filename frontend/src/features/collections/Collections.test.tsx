@@ -505,3 +505,262 @@ describe("Collections default-root seeding (regression)", () => {
     });
   });
 });
+
+// Fixture with a mismatched-rarity third item so a rarity+search test can
+// assert a true intersection (not just the search result on its own).
+const mixedRarityCollections = {
+  tree: [
+    {
+      hash: "10",
+      name: "Weapons",
+      icon: "",
+      collected: 0,
+      total: 3,
+      children: [
+        {
+          hash: "11",
+          name: "Hand Cannons",
+          icon: "",
+          collected: 0,
+          total: 3,
+          items: ["100", "200", "300"],
+        },
+      ],
+    },
+  ],
+  items: {
+    "100": {
+      itemHash: "100",
+      name: "Fatebringer",
+      description: "",
+      icon: "/i/fb.png",
+      itemType: "Hand Cannon",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "Challenging",
+      sources: ["Vault of Glass"],
+      isExotic: false,
+    },
+    "200": {
+      itemHash: "200",
+      name: "Imperial Decree",
+      description: "",
+      icon: "/i/id.png",
+      itemType: "Shotgun",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "Moderate",
+      sources: ["Menagerie"],
+      isExotic: false,
+    },
+    "300": {
+      itemHash: "300",
+      name: "Imperial Threat",
+      description: "",
+      icon: "/i/it.png",
+      itemType: "Hand Cannon",
+      tierType: 6,
+      rarity: "Exotic",
+      difficulty: "Challenging",
+      sources: ["Trials"],
+      isExotic: true,
+    },
+  },
+  collectedHashes: [],
+  summary: {
+    weapons: { total: 3, collected: 0 },
+    armor: { total: 0, collected: 0 },
+    exotics: { total: 0, collected: 0 },
+    cosmetics: { total: 0, collected: 0 },
+  },
+  fetchedAt: new Date().toISOString(),
+};
+
+// Fixture whose node gathers items in reverse-alphabetical order, so a
+// sort=name test proves sorting actually reordered the filtered set rather
+// than happening to already match gather order.
+const sortOrderCollections = {
+  tree: [
+    {
+      hash: "10",
+      name: "Weapons",
+      icon: "",
+      collected: 0,
+      total: 3,
+      children: [
+        {
+          hash: "11",
+          name: "Hand Cannons",
+          icon: "",
+          collected: 0,
+          total: 3,
+          // Deliberately includes a non-matching item (Fatebringer) so this
+          // fixture also proves the search predicate actually filtered
+          // something, not just that sort ran over an already-filtered set.
+          items: ["300", "200", "100"],
+        },
+      ],
+    },
+  ],
+  items: {
+    "100": {
+      itemHash: "100",
+      name: "Fatebringer",
+      description: "",
+      icon: "",
+      itemType: "Hand Cannon",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "Challenging",
+      sources: ["Vault of Glass"],
+      isExotic: false,
+    },
+    "200": {
+      itemHash: "200",
+      name: "Imperial Decree",
+      description: "",
+      icon: "",
+      itemType: "Shotgun",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "Moderate",
+      sources: ["Menagerie"],
+      isExotic: false,
+    },
+    "300": {
+      itemHash: "300",
+      name: "Imperial Threat",
+      description: "",
+      icon: "",
+      itemType: "Hand Cannon",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "Challenging",
+      sources: ["Trials"],
+      isExotic: false,
+    },
+  },
+  collectedHashes: [],
+  summary: {
+    weapons: { total: 3, collected: 0 },
+    armor: { total: 0, collected: 0 },
+    exotics: { total: 0, collected: 0 },
+    cosmetics: { total: 0, collected: 0 },
+  },
+  fetchedAt: new Date().toISOString(),
+};
+
+describe("Collections search field", () => {
+  it("has an accessible name of 'Search this category…'", async () => {
+    server.use(treeCollectionsHandler);
+    renderPage(<Collections />);
+    expect(
+      await screen.findByRole("searchbox", { name: "Search this category…" }),
+    ).toBeInTheDocument();
+  });
+
+  it("filters the grid to case-insensitive name-substring matches while typing", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json({ ...treeCollections, collectedHashes: [] }),
+      ),
+    );
+    renderCollections("?node=11");
+    await screen.findByText("Fatebringer");
+    expect(screen.getByText("Imperial Decree")).toBeInTheDocument();
+
+    const search = screen.getByRole("searchbox", {
+      name: "Search this category…",
+    });
+    fireEvent.change(search, { target: { value: "FATE" } });
+
+    await waitFor(() =>
+      expect(screen.queryByText("Imperial Decree")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText("Fatebringer")).toBeInTheDocument();
+  });
+
+  it("composes the search term with an active rarity filter (intersection, not union)", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(mixedRarityCollections),
+      ),
+    );
+    renderCollections("?node=11&rarity=legendary&q=imperial");
+
+    // Matches both the rarity filter and the search term.
+    expect(await screen.findByText("Imperial Decree")).toBeInTheDocument();
+    // Matches the search term but not the rarity filter — excluded.
+    expect(screen.queryByText("Imperial Threat")).not.toBeInTheDocument();
+    // Matches the rarity filter but not the search term — excluded.
+    expect(screen.queryByText("Fatebringer")).not.toBeInTheDocument();
+  });
+
+  it("composes the search term with a non-default sort, preserving sort order", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(sortOrderCollections),
+      ),
+    );
+    renderCollections("?node=11&sort=name&q=imperial");
+
+    const matches = await screen.findAllByText(/^Imperial/);
+    expect(matches.map((el) => el.textContent)).toEqual([
+      "Imperial Decree",
+      "Imperial Threat",
+    ]);
+    // Fatebringer doesn't match the search term — proves this list was
+    // actually filtered, not just sorted.
+    expect(screen.queryByText("Fatebringer")).not.toBeInTheDocument();
+  });
+
+  it("keeps the search term across a category (node) change", async () => {
+    server.use(treeCollectionsHandler);
+    renderPage(
+      <>
+        <Collections />
+        <LocationProbe />
+      </>,
+      "/collections?node=11&q=imperial",
+    );
+    await screen.findByText("Imperial Decree");
+
+    fireEvent.click(screen.getByText("Weapons"));
+
+    await waitFor(() => {
+      const search = screen.getByTestId("search").textContent ?? "";
+      expect(search).toContain("node=10");
+      expect(search).toContain("q=imperial");
+    });
+    expect(
+      screen.getByRole("searchbox", { name: "Search this category…" }),
+    ).toHaveValue("imperial");
+  });
+
+  it("shows a search-specific empty state naming the term when nothing matches", async () => {
+    server.use(treeCollectionsHandler);
+    renderCollections("?node=11&q=nonexistentitem");
+
+    expect(
+      await screen.findByText(/no items match "nonexistentitem"/i),
+    ).toBeInTheDocument();
+  });
+
+  it("Clear filters clears the search field and restores the full grid", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json({ ...treeCollections, collectedHashes: [] }),
+      ),
+    );
+    renderCollections("?node=11&q=nonexistentitem");
+    await screen.findByText(/no items match "nonexistentitem"/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /clear filters/i }));
+
+    await screen.findByText("Fatebringer");
+    expect(screen.getByText("Imperial Decree")).toBeInTheDocument();
+    expect(
+      screen.getByRole("searchbox", { name: "Search this category…" }),
+    ).toHaveValue("");
+  });
+});

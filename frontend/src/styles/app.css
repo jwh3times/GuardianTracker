@@ -686,6 +686,10 @@
   gap: var(--s-3);
   flex-wrap: wrap;
 }
+.gt-coll-search {
+  flex: 1 1 14rem;
+  max-width: 18rem;
+}
 .gt-viewtoggle {
   display: flex;
   gap: var(--s-1);
