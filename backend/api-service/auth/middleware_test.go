@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -16,18 +17,23 @@ import (
 
 // fakeVersionStore satisfies UserAuthStore.
 type fakeVersionStore struct {
-	version    int
-	role       int16
-	err        error
-	sessionOK  bool // returned by SessionExists
-	sessionErr error
+	version      int
+	role         int16
+	err          error
+	missing      bool
+	sessionOK    bool // returned by SessionExists
+	sessionErr   error
+	authCalls    int
+	sessionCalls int
 }
 
-func (f *fakeVersionStore) GetAuthInfo(_ context.Context, _ string) (int, int16, error) {
-	return f.version, f.role, f.err
+func (f *fakeVersionStore) GetAuthInfo(_ context.Context, _ string) (int, int16, bool, error) {
+	f.authCalls++
+	return f.version, f.role, !f.missing, f.err
 }
 
 func (f *fakeVersionStore) SessionExists(_ context.Context, _ string) (bool, error) {
+	f.sessionCalls++
 	return f.sessionOK, f.sessionErr
 }
 
@@ -146,6 +152,53 @@ func TestRevocation_FailOpenOnDBError(t *testing.T) {
 	revoker := NewRevocationChecker(&fakeVersionStore{err: fmt.Errorf("db down")}, cache.NewMemoryCache(time.Minute, time.Minute))
 	if err := revoker.Check(context.Background(), "user-1", 1); err != nil {
 		t.Fatalf("expected fail-open on DB error, got %v", err)
+	}
+}
+
+func TestRevocation_MissingUserFailsClosed(t *testing.T) {
+	store := &fakeVersionStore{missing: true}
+	revoker := NewRevocationChecker(store, cache.NewMemoryCache(time.Minute, time.Minute))
+	if err := revoker.Check(context.Background(), "deleted-user", 1); !errors.Is(err, ErrUserNotFound) {
+		t.Fatalf("Check() = %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestRevocation_WrongTypedUserCacheValueIsRepaired(t *testing.T) {
+	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c.Set("tver:user-1", "corrupt", time.Minute)
+	store := &fakeVersionStore{version: 4, role: RoleAlpha}
+	revoker := NewRevocationChecker(store, c)
+
+	role, err := revoker.Resolve(context.Background(), "user-1", 4, "")
+	if err != nil {
+		t.Fatalf("Resolve() = %v", err)
+	}
+	if role != RoleAlpha {
+		t.Fatalf("role = %d, want %d", role, RoleAlpha)
+	}
+	if store.authCalls != 1 {
+		t.Fatalf("GetAuthInfo calls = %d, want 1", store.authCalls)
+	}
+	v, ok := c.Get("tver:user-1")
+	if _, typed := v.(authInfo); !ok || !typed {
+		t.Fatalf("cache value was not repaired: %#v", v)
+	}
+}
+
+func TestRevocation_WrongTypedSessionCacheValueIsRepaired(t *testing.T) {
+	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c.Set("sess:session-1", "corrupt", time.Minute)
+	store := &fakeVersionStore{version: 1, sessionOK: true}
+	revoker := NewRevocationChecker(store, c)
+
+	if _, err := revoker.Resolve(context.Background(), "user-1", 1, "session-1"); err != nil {
+		t.Fatalf("Resolve() = %v", err)
+	}
+	if store.sessionCalls != 1 {
+		t.Fatalf("SessionExists calls = %d, want 1", store.sessionCalls)
+	}
+	if v, ok := c.Get("sess:session-1"); !ok || v != true {
+		t.Fatalf("session cache value was not repaired: %#v", v)
 	}
 }
 

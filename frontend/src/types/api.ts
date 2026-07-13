@@ -22,7 +22,6 @@ export interface AuthURLResponse {
 /** POST /api/auth/bungie/callback  |  POST /api/auth/refresh */
 export interface AuthTokenResponse {
   token: string;
-  refreshToken: string;
   user: APIUser;
 }
 

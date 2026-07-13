@@ -46,6 +46,14 @@ Two-stage build:
 
 The `nginx.conf` must serve `index.html` for all unknown paths so React Router works correctly.
 
+## Docker Compose host exposure
+
+The local `postgres`, `pgadmin`, and profile-gated `test-postgres` ports bind to
+`127.0.0.1` only. Keep those loopback prefixes when changing port mappings. The
+frontend/API bindings remain unchanged because local browsers and approved
+development tunnels use them. Compose requires an explicit `GO_ENV` value from
+the root environment file.
+
 ## Building for Minikube
 
 Images must be built inside Minikube's Docker daemon:

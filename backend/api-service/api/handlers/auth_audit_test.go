@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"testing"
 
@@ -40,15 +39,12 @@ func (s *spyAudit) types() []string {
 func TestRefreshToken_InvalidToken_AuditsFailure(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	spy := &spyAudit{}
-	// jwt/tokenStore/cfg are unused on the invalid-token early-return path; a
-	// minimal handler with only the audit logger set exercises it.
-	h := &AuthHandler{audit: spy}
+	h, _ := newAuthHandler(t)
+	h.audit = spy
 
 	r := gin.New()
 	r.POST("/api/auth/refresh", h.RefreshToken)
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh",
-		strings.NewReader(`{"refreshToken":"not-a-jwt"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := newRefreshRequest("/api/auth/refresh", "not-a-jwt")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -63,13 +59,12 @@ func TestRefreshToken_InvalidToken_AuditsFailure(t *testing.T) {
 func TestAudit_BestEffort_DoesNotBlockResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	spy := &spyAudit{err: context.DeadlineExceeded} // audit write fails
-	h := &AuthHandler{audit: spy}
+	h, _ := newAuthHandler(t)
+	h.audit = spy
 
 	r := gin.New()
 	r.POST("/api/auth/refresh", h.RefreshToken)
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh",
-		strings.NewReader(`{"refreshToken":"not-a-jwt"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := newRefreshRequest("/api/auth/refresh", "not-a-jwt")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

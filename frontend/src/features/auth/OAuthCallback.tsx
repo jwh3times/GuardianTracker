@@ -44,6 +44,7 @@ export const OAuthCallback: React.FC = () => {
       try {
         const response = await fetch(`${API_URL}/api/auth/bungie/callback`, {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({
             code,
@@ -63,7 +64,7 @@ export const OAuthCallback: React.FC = () => {
           throw new Error((data as { error?: string }).error);
         }
 
-        login(data.token, data.refreshToken, data.user);
+        login(data.token, data.user);
         navigate("/dashboard");
       } catch (err) {
         console.error("Error during OAuth callback:", err);

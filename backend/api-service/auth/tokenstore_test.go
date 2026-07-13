@@ -94,7 +94,7 @@ func newTestStore(t *testing.T, repo TokenRepo, tokenURL string) (*TokenStore, *
 	var cipher *TokenCipher
 	if repo != nil {
 		var err error
-		cipher, err = NewTokenCipher(validKey(t, 7), "")
+		cipher, err = NewTokenCipher(validKey(t, 7), 1, "", 0)
 		if err != nil {
 			t.Fatalf("NewTokenCipher: %v", err)
 		}

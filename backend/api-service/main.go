@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -122,7 +121,12 @@ func main() {
 	stores := db.NewStores(pool)
 
 	// Token cipher — nil when TOKEN_ENCRYPTION_KEY is empty (degraded mode)
-	tokenCipher, err := auth.NewTokenCipher(cfg.TokenEncryptionKey, cfg.TokenEncryptionKeyPrev)
+	tokenCipher, err := auth.NewTokenCipher(
+		cfg.TokenEncryptionKey,
+		cfg.TokenEncryptionKeyVersion,
+		cfg.TokenEncryptionKeyPrev,
+		cfg.TokenEncryptionKeyPrevVersion,
+	)
 	if err != nil {
 		log.Fatalf("Token cipher initialization failed: %v", err)
 	}
@@ -289,6 +293,7 @@ func main() {
 	if err := router.SetTrustedProxies(cfg.TrustedProxies); err != nil {
 		log.Printf("Warning: SetTrustedProxies(%v): %v", cfg.TrustedProxies, err)
 	}
+	router.Use(middleware.APISecurityHeaders())
 	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 	router.Use(middleware.MaxBodyBytes(cfg.MaxBodyBytes))
 	// One shared limiter instance across the public auth endpoints (per-IP
@@ -302,14 +307,16 @@ func main() {
 	{
 		api.GET("/manifest/status", healthHandler.ManifestStatus)
 
-		// Auth
-		api.GET("/auth/bungie", authLimiter, authHandler.GetBungieAuthURL)
-		api.POST("/auth/bungie/callback", authLimiter, authHandler.BungieCallback)
-		api.POST("/auth/refresh", authLimiter, authHandler.RefreshToken)
-		api.GET("/auth/validate", jwtHelper.Middleware(revoker), authHandler.ValidateToken)
-		api.GET("/auth/profile", jwtHelper.Middleware(revoker), authHandler.GetProfile)
-		api.POST("/auth/logout", jwtHelper.Middleware(revoker), authHandler.Logout)
-		api.POST("/auth/logout/all", jwtHelper.Middleware(revoker), authHandler.LogoutAll)
+		// Auth responses are never cacheable. Callback and refresh both establish
+		// or rotate the refresh cookie, so they also require an exact browser Origin.
+		authRoutes := api.Group("/auth", middleware.NoStore())
+		authRoutes.GET("/bungie", authLimiter, authHandler.GetBungieAuthURL)
+		authRoutes.POST("/bungie/callback", middleware.RequireAllowedOrigin(cfg.CORSAllowedOrigins), authLimiter, authHandler.BungieCallback)
+		authRoutes.POST("/refresh", middleware.RequireAllowedOrigin(cfg.CORSAllowedOrigins), authLimiter, authHandler.RefreshToken)
+		authRoutes.GET("/validate", jwtHelper.Middleware(revoker), authHandler.ValidateToken)
+		authRoutes.GET("/profile", jwtHelper.Middleware(revoker), authHandler.GetProfile)
+		authRoutes.POST("/logout", jwtHelper.Middleware(revoker), authHandler.Logout)
+		authRoutes.POST("/logout/all", jwtHelper.Middleware(revoker), authHandler.LogoutAll)
 
 		// Wishlist
 		api.GET("/wishlist", jwtHelper.Middleware(revoker), wishlistHandler.GetWishlist)
@@ -444,14 +451,13 @@ func startAuditPruner(ctx context.Context, audit *db.AuditStore, retentionDays i
 func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		for _, allowed := range allowedOrigins {
-			if strings.TrimSpace(allowed) == origin {
-				c.Header("Access-Control-Allow-Origin", origin)
-				break
-			}
+		c.Header("Vary", "Origin")
+		if middleware.OriginAllowed(origin, allowedOrigins) {
+			c.Header("Access-Control-Allow-Origin", origin)
 		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Access-Control-Expose-Headers", "X-Request-ID")
 		c.Header("Access-Control-Allow-Credentials", "true")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)

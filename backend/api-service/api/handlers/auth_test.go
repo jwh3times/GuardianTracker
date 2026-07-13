@@ -109,6 +109,45 @@ func newAuthHandler(t *testing.T) (*AuthHandler, *auth.JWT) {
 	return h, jwt
 }
 
+func newRefreshRequest(path, token string) *http.Request {
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: token})
+	}
+	return req
+}
+
+func findRefreshCookie(t *testing.T, w *httptest.ResponseRecorder) *http.Cookie {
+	t.Helper()
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.Name == refreshCookieName {
+			return cookie
+		}
+	}
+	t.Fatalf("response did not set %s", refreshCookieName)
+	return nil
+}
+
+func TestRefreshCookie_ProductionAttributes(t *testing.T) {
+	h, _ := newAuthHandler(t)
+	h.cfg.GoEnv = "production"
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	h.setRefreshCookie(c, "refresh-jwt")
+
+	cookie := findRefreshCookie(t, w)
+	if cookie.Value != "refresh-jwt" || cookie.Domain != "" || cookie.Path != refreshCookiePath {
+		t.Fatalf("refresh cookie scope = %+v", cookie)
+	}
+	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("refresh cookie security attributes = %+v", cookie)
+	}
+	if cookie.MaxAge <= 0 || !cookie.Expires.After(time.Now()) {
+		t.Fatalf("refresh cookie expiry = %+v", cookie)
+	}
+}
+
 func TestGetBungieAuthURL(t *testing.T) {
 	h, _ := newAuthHandler(t)
 	r := gin.New()
@@ -160,8 +199,12 @@ func TestLogout(t *testing.T) {
 		c.Set("membership_id", testUserID)
 		h.Logout(c)
 	})
-	if w := do(r, http.MethodPost, "/logout"); w.Code != http.StatusOK {
+	w := do(r, http.MethodPost, "/logout")
+	if w.Code != http.StatusOK {
 		t.Errorf("logout = %d, want 200", w.Code)
+	}
+	if cookie := findRefreshCookie(t, w); cookie.MaxAge >= 0 {
+		t.Fatalf("logout cookie MaxAge = %d, want negative", cookie.MaxAge)
 	}
 }
 
@@ -175,17 +218,21 @@ func TestRefreshToken_Success(t *testing.T) {
 
 	r := gin.New()
 	r.POST("/refresh", h.RefreshToken)
-	body := `{"refreshToken":"` + refresh + `"}`
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
+	r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("refresh = %d, body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "token") {
-		t.Errorf("missing new tokens: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "token") || strings.Contains(w.Body.String(), "refreshToken") {
+		t.Errorf("unexpected token response: %s", w.Body.String())
+	}
+	cookie := findRefreshCookie(t, w)
+	if cookie.Value == "" || cookie.Value == refresh {
+		t.Fatal("refresh cookie was not rotated")
+	}
+	if !cookie.HttpOnly || cookie.Path != refreshCookiePath || cookie.SameSite != http.SameSiteLaxMode || cookie.Secure {
+		t.Fatalf("refresh cookie attributes = %+v", cookie)
 	}
 }
 
@@ -198,22 +245,32 @@ func TestRefreshToken_RejectsAccessTokenAndGarbage(t *testing.T) {
 	r := gin.New()
 	r.POST("/refresh", h.RefreshToken)
 
-	post := func(jsonBody string) int {
+	post := func(token string) *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(jsonBody))
-		req.Header.Set("Content-Type", "application/json")
-		r.ServeHTTP(w, req)
-		return w.Code
+		r.ServeHTTP(w, newRefreshRequest("/refresh", token))
+		return w
 	}
 
-	if code := post(`{"refreshToken":"` + access + `"}`); code != http.StatusUnauthorized {
-		t.Errorf("access-as-refresh = %d, want 401", code)
+	if w := post(access); w.Code != http.StatusUnauthorized {
+		t.Errorf("access-as-refresh = %d, want 401", w.Code)
+	} else if findRefreshCookie(t, w).MaxAge >= 0 {
+		t.Error("invalid refresh did not expire the cookie")
 	}
-	if code := post(`{"refreshToken":"not-a-jwt"}`); code != http.StatusUnauthorized {
-		t.Errorf("garbage token = %d, want 401", code)
+	if w := post("not-a-jwt"); w.Code != http.StatusUnauthorized {
+		t.Errorf("garbage token = %d, want 401", w.Code)
 	}
-	if code := post(`{}`); code != http.StatusBadRequest {
-		t.Errorf("missing field = %d, want 400", code)
+	if w := post(""); w.Code != http.StatusUnauthorized {
+		t.Errorf("missing cookie = %d, want 401", w.Code)
+	}
+
+	// A legacy body token is not a compatibility bridge: without the cookie it
+	// is rejected even when the JSON contains an otherwise valid refresh token.
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(`{"refreshToken":"`+access+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("body-only token = %d, want 401", w.Code)
 	}
 }
 
@@ -238,9 +295,7 @@ func TestRefreshToken_ReuseRejected(t *testing.T) {
 	r.POST("/refresh", h.RefreshToken)
 	post := func() *httptest.ResponseRecorder {
 		w := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(`{"refreshToken":"`+refresh+`"}`))
-		req.Header.Set("Content-Type", "application/json")
-		r.ServeHTTP(w, req)
+		r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
 		return w
 	}
 
@@ -251,6 +306,8 @@ func TestRefreshToken_ReuseRejected(t *testing.T) {
 	// The original token is now superseded — replaying it revokes the session (401).
 	if w := post(); w.Code != http.StatusUnauthorized {
 		t.Fatalf("reused refresh = %d, want 401", w.Code)
+	} else if findRefreshCookie(t, w).MaxAge >= 0 {
+		t.Fatal("reuse rejection did not expire refresh cookie")
 	}
 	if _, alive := store.sessions[sid]; alive {
 		t.Error("reuse should have revoked (deleted) the session")
@@ -273,17 +330,15 @@ func TestRefreshToken_ReuseRejectedOnCommitError(t *testing.T) {
 	r := gin.New()
 	r.POST("/refresh", h.RefreshToken)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(`{"refreshToken":"`+refresh+`"}`))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
+	r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("reuse+commit-error refresh = %d, want 401", w.Code)
 	}
 }
 
-// TestRefreshToken_LegacyTokenAdopted verifies a pre-session refresh token (no sid)
-// is accepted once and adopted into a fresh session, so the rollout logs nobody out.
+// TestRefreshToken_LegacyTokenAdopted verifies a refresh cookie carrying a
+// pre-session token (no sid) is adopted into a fresh session.
 func TestRefreshToken_LegacyTokenAdopted(t *testing.T) {
 	store := newFakeUserStore()
 	h, jwt := newAuthHandlerWithStore(t, store)
@@ -296,9 +351,7 @@ func TestRefreshToken_LegacyTokenAdopted(t *testing.T) {
 	r := gin.New()
 	r.POST("/refresh", h.RefreshToken)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(`{"refreshToken":"`+refresh+`"}`))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
+	r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("legacy refresh = %d, want 200: %s", w.Code, w.Body.String())
@@ -345,8 +398,12 @@ func TestLogoutAll(t *testing.T) {
 		c.Set("membership_id", testUserID)
 		h.LogoutAll(c)
 	})
-	if w := do(r, http.MethodPost, "/logout/all"); w.Code != http.StatusOK {
+	w := do(r, http.MethodPost, "/logout/all")
+	if w.Code != http.StatusOK {
 		t.Fatalf("logout-all = %d, want 200", w.Code)
+	}
+	if cookie := findRefreshCookie(t, w); cookie.MaxAge >= 0 {
+		t.Fatalf("logout-all cookie MaxAge = %d, want negative", cookie.MaxAge)
 	}
 	if len(store.sessions) != 0 {
 		t.Errorf("expected all sessions cleared, got %d", len(store.sessions))
@@ -391,9 +448,7 @@ func TestRefreshToken_ExpiredSessionAuditReason(t *testing.T) {
 	r := gin.New()
 	r.POST("/refresh", h.RefreshToken)
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/refresh", strings.NewReader(`{"refreshToken":"`+refresh+`"}`))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
+	r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expired-session refresh = %d, want 401: %s", w.Code, w.Body.String())

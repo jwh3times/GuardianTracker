@@ -31,10 +31,11 @@ For the full port map â€” Docker Compose, Kubernetes, dev/cross-service wiring â
 ### Auth & token flow
 
 Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the user's
-Bungie tokens **AES-256-GCM encrypted** in Postgres (`TOKEN_ENCRYPTION_KEY`, with
-`TOKEN_ENCRYPTION_KEY_PREVIOUS` supporting rotation) and issues its own JWTs: short-lived access
-tokens plus per-device rotating refresh sessions with revocation and reuse detection (all
-Postgres-backed). Role tiers (standard / beta / alpha / admin) and feature
+Bungie tokens **AES-256-GCM encrypted** in Postgres with explicit current/previous key versions.
+It returns a short-lived access JWT for localStorage and sends the per-device rotating refresh JWT
+only in a host-only HttpOnly cookie scoped to `/api/auth`. Callback and refresh require an exact
+allowlisted browser origin; the cookie policy assumes the frontend and API are same-site. Refresh
+sessions retain Postgres-backed revocation and reuse detection. Role tiers (standard / beta / alpha / admin) and feature
 flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login. Security details and the
 credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
 
@@ -54,7 +55,7 @@ docker compose up --build
 ```
 
 - Frontend `http://localhost:5273`, API `http://localhost:8081`, pgAdmin `http://localhost:5150`
-- Postgres `:5532`
+- Postgres `:5532`; Postgres and pgAdmin bind only to `127.0.0.1`
 - Bungie manifest persists in the `manifest-data` named volume.
 - `database/init/01-init.sql` auto-loads into Postgres on first run.
 
@@ -96,15 +97,18 @@ Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`
 
 ### Required secrets
 
-| Variable                        | Purpose                                                                                               |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Variable                                | Purpose                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `GO_ENV`                                | Required; exactly `development` or `production`                                                       |
 | `BUNGIE_API_KEY`                | From <https://www.bungie.net/en/Application>                                                          |
 | `BUNGIE_CLIENT_ID`              | Bungie app settings                                                                                   |
 | `BUNGIE_CLIENT_SECRET`          | Bungie app settings                                                                                   |
 | `JWT_SECRET`                    | 32+ char random string (`openssl rand -base64 32`)                                                    |
 | `DATABASE_URL`                  | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
-| `TOKEN_ENCRYPTION_KEY`          | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous key for rotation during key migration                                             |
+| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
+| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                           |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                             |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
 | `ADMIN_MEMBERSHIP_IDS`          | (optional) comma-separated Bungie membership IDs pinned to admin role at login                        |
 
 ## CI/CD

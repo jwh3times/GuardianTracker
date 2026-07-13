@@ -16,7 +16,6 @@ import { ThisWeek } from "./ThisWeek";
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_refresh_token", "test-refresh");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"os"
@@ -53,5 +54,27 @@ func TestReady_NilPingerSkipsDBCheck(t *testing.T) {
 	h.Ready(c)
 	if w.Code != 200 {
 		t.Fatalf("Ready degraded-mode = %d, want 200", w.Code)
+	}
+}
+
+func TestManifestStatus_ExposesOnlyReadinessAndVersion(t *testing.T) {
+	h := NewHealthHandler(readyManifestService(t), nil)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/manifest/status", nil)
+	h.ManifestStatus(c)
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body) != 2 {
+		t.Fatalf("manifest status keys = %v, want exactly ready/version", body)
+	}
+	if _, ok := body["ready"]; !ok {
+		t.Fatal("manifest status missing ready")
+	}
+	if _, ok := body["version"]; !ok {
+		t.Fatal("manifest status missing version")
 	}
 }

@@ -59,17 +59,29 @@ Fill in the required secrets:
 | `DATABASE_URL` | Postgres connection string; Compose sets this for the container |
 | `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie tokens |
 
+Set the required runtime mode. Keep the current key version explicit in new
+environment files; it defaults to `1` only to preserve existing version-1 rows:
+
+| Variable | Purpose |
+| --- | --- |
+| `GO_ENV` | Exactly `development` or `production`; there is no implicit default |
+| `TOKEN_ENCRYPTION_KEY_VERSION` | Positive `SMALLINT` version for the current encryption key (start at `1`; omitted value defaults to `1`) |
+
 Optional values:
 
 | Variable | Purpose |
 | --- | --- |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS` | Previous encryption key during key rotation |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous encryption key; set only with that key |
 | `ADMIN_MEMBERSHIP_IDS` | Comma-separated Bungie membership IDs pinned to admin at login |
 | `CORS_ALLOWED_ORIGINS` | Explicit browser origins allowed to call the API |
 | `JWT_ACCESS_TTL` | Access-token lifetime as a Go duration (default `30m`) |
 
 Do not commit `.env`, generated secrets, manifest databases, cloud credentials, or
 production runbooks.
+
+See [SECURITY.md](./SECURITY.md#token-encryption-key-rotation) before rotating an
+encryption key. The key and its version must move together.
 
 ## 3. Run the Full Stack
 
@@ -78,6 +90,10 @@ Docker Compose is the default path for local development:
 ```powershell
 docker compose up --build
 ```
+
+The checked-in example sets `GO_ENV=development` explicitly. Compose refuses to
+render the API service when `GO_ENV` is missing, preventing an accidental
+implicit degraded-mode startup.
 
 Open:
 
@@ -146,12 +162,16 @@ projects. Container ports stay fixed.
 Compose mappings:
 
 ```text
-postgres        ${POSTGRES_PORT:-5532}      -> 5432
-pgadmin         ${PGADMIN_PORT:-5150}       -> 80
+postgres        127.0.0.1:${POSTGRES_PORT:-5532}      -> 5432
+pgadmin         127.0.0.1:${PGADMIN_PORT:-5150}       -> 80
 api-service     ${API_SERVICE_PORT:-8081}   -> 8081
 frontend        ${FRONTEND_PORT:-5273}      -> 8080
-test-postgres   ${TEST_POSTGRES_PORT:-5533} -> 5432
+test-postgres   127.0.0.1:${TEST_POSTGRES_PORT:-5533} -> 5432
 ```
+
+Postgres, pgAdmin, and the disposable test Postgres bind only to loopback. The
+frontend and API remain reachable on the configured host interfaces for local
+browser and tunnel workflows.
 
 Minikube mappings:
 

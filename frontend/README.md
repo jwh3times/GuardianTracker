@@ -43,7 +43,7 @@ src/
 ├── App.tsx                     # Router, lazy pages, ProtectedLayout (CharacterProvider + AppShell + auth gate)
 ├── index.tsx                   # Root; imports styles/{tokens,kit,app}.css
 ├── contexts/
-│   ├── AuthContext.tsx          # Auth state, localStorage persistence, token refresh
+│   ├── AuthContext.tsx          # Access/user localStorage state + cookie-backed token refresh
 │   ├── PreferencesContext.tsx   # Card style + "for you" badge prefs (localStorage)
 │   └── CharacterContext.tsx     # Characters query + persisted active-character pick (display-only)
 ├── styles/
@@ -101,11 +101,11 @@ src/
 2. Frontend calls API service `GET /api/auth/bungie` → receives OAuth URL + CSRF state
 3. User is redirected to Bungie.net and authorizes the app
 4. Bungie redirects to `/auth/callback?code=...&state=...`
-5. `OAuthCallback` posts code + state to API service, receives JWT tokens
-6. Tokens stored in `localStorage` (`guardian_token`, `guardian_refresh_token`)
-7. `apiFetch` in `lib/api.ts` injects `Authorization: Bearer <token>` on every request
+5. `OAuthCallback` posts code + state with credentials to the API service
+6. The response stores `guardian_token` and `guardian_user` in localStorage; the API sets the rotating refresh JWT in the host-only HttpOnly `guardian_refresh_token` cookie
+7. `apiFetch` sends credentials and injects `Authorization: Bearer <token>` on every request
 
-Token refresh (on 401) is handled automatically by `apiFetch` — a single shared refresh call prevents duplicate refresh requests from concurrent queries.
+Token refresh (on 401) is handled automatically by `apiFetch` using an empty JSON request and the cookie — a single shared refresh call prevents duplicate refresh requests from concurrent queries. JavaScript never reads or writes the refresh credential, and the legacy localStorage key is removed.
 
 ## App Shell & Navigation
 
@@ -135,7 +135,7 @@ Triumphs & Seals, Wishlist, Settings.
 ## Available Scripts
 
 ```bash
-npm start           # Vite dev server (port 3000)
+npm start           # Vite dev server (port 5273)
 npm run build       # tsc + Vite production build → /dist
 npm test            # Vitest
 npm run lint        # ESLint (flat config)

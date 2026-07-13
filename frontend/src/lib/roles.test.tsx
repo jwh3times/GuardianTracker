@@ -15,7 +15,6 @@ import { ToastProvider } from "../components/Toast";
 
 const authed = () => {
   localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_refresh_token", "test-refresh");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
   // Not an onboarding test — mark first-run done so the Dashboard greeting
 };

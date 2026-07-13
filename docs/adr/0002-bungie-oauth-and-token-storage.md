@@ -13,8 +13,12 @@ browser.
 ## Decision
 
 Use Bungie OAuth with stateless HMAC-signed CSRF state. Store Bungie OAuth tokens
-server-side in Postgres encrypted with AES-256-GCM. Issue Guardian Tracker JWT
-access tokens and rotating per-device refresh sessions.
+server-side in Postgres encrypted with AES-256-GCM. Persist an exact positive
+key version with every encrypted row; new writes use the current key/version and
+reads accept only an exact current or configured previous match. Issue Guardian
+Tracker JWT access tokens and rotating per-device refresh sessions. Browser
+delivery of the refresh credential is defined by
+[ADR 0008](./0008-browser-refresh-cookie.md).
 
 Refresh sessions are backed by Postgres and include reuse detection. Sign-out
 everywhere bumps the user's token version. Authorization reads current role and
@@ -25,7 +29,8 @@ role hints.
 
 - Browser code never receives Bungie OAuth tokens.
 - OAuth state survives process restarts and multiple API replicas.
-- Token encryption key rotation is supported through previous-key reads.
+- Token encryption key rotation is supported through exact previous-key/version
+  reads; unknown versions fail.
 - Revocation and role changes propagate through the cache window rather than
   instantly.
 - The API depends on Postgres for production-grade token persistence.

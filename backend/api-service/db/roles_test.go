@@ -29,12 +29,26 @@ func TestUserStore_SetRoleAndGetAuthInfo(t *testing.T) {
 	if err != nil || role != 2 {
 		t.Fatalf("GetRole = %d (%v), want 2", role, err)
 	}
-	tv, r, err := users.GetAuthInfo(ctx, mid)
+	tv, r, found, err := users.GetAuthInfo(ctx, mid)
 	if err != nil {
 		t.Fatalf("GetAuthInfo: %v", err)
 	}
+	if !found {
+		t.Fatal("GetAuthInfo reported existing user as missing")
+	}
 	if r != 2 || tv != 1 {
 		t.Errorf("GetAuthInfo = (tv %d, role %d), want (1, 2)", tv, r)
+	}
+}
+
+func TestUserStore_GetAuthInfoMissingIsDefinitive(t *testing.T) {
+	users := NewUserStore(testPool(t))
+	_, _, found, err := users.GetAuthInfo(context.Background(), "no-such-membership")
+	if err != nil {
+		t.Fatalf("GetAuthInfo: %v", err)
+	}
+	if found {
+		t.Fatal("GetAuthInfo found an unknown user")
 	}
 }
 
@@ -123,9 +137,12 @@ func TestUserStore_SetRoleByID_BumpsVersionAndAudits(t *testing.T) {
 		t.Errorf("RoleChange = %+v, want target=%s old=0 new=2", change, targetMid)
 	}
 	// token_version bumped from the default 1 to 2.
-	tv, role, err := users.GetAuthInfo(ctx, targetMid)
+	tv, role, found, err := users.GetAuthInfo(ctx, targetMid)
 	if err != nil {
 		t.Fatalf("GetAuthInfo: %v", err)
+	}
+	if !found {
+		t.Fatal("GetAuthInfo reported existing user as missing")
 	}
 	if tv != 2 || role != 2 {
 		t.Errorf("after change: tv=%d role=%d, want tv=2 role=2", tv, role)
