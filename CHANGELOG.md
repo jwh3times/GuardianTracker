@@ -27,6 +27,17 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 - A first-run guided tour of Dashboard, This Week, and Collections. Completion
   is stored with the user's server-side preferences so it follows the Bungie
   account across browsers and devices.
+- An accessible "Search this category…" field to the Collections toolbar.
+  The search term lives only in the URL (never persisted to localStorage,
+  unlike the other Collections filters), matches item names case-insensitively,
+  composes with every existing filter and sort, and is included in "Clear
+  filters" with a search-specific empty state naming the term.
+- A collapsed, keyboard-accessible objective disclosure on seal triumphs that
+  carry per-objective progress data. Multi-objective triumphs summarize as
+  completed-objective count/total; expanding shows each objective's own exact
+  progress. `GET /api/seals/:membershipType/:membershipId` now includes an
+  optional `objectives` array per triumph; triumphs without objective data are
+  unchanged.
 
 ### Changed
 
@@ -56,6 +67,10 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   The row is now a real listitem containing a real button.
 - The Xûr and milestone panels rendered an empty `<ul>` when Bungie reported no
   vendor sales or milestones; they now render an empty state.
+- Seal triumph objectives with no explicit `visible` field now decode as
+  visible instead of hidden. `RecordObjective.Visible` was a plain `bool`, so
+  an absent field (Bungie's default for a visible objective) decoded to
+  `false`, the inverse of Bungie's semantics; it is now `*bool` (`nil` = visible).
 
 ### Changed
 
@@ -81,6 +96,9 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   degraded-development warning and production fail-closed requirements.
 - Compose binds Postgres, pgAdmin, and the disposable test database only to
   `127.0.0.1`; frontend and API bindings are unchanged.
+- A regression test now pins the Postgres/pgAdmin/test-Postgres/e2e-Postgres
+  loopback-only Compose bindings above, closing a gap where that binding
+  shipped without the assertion its own rollout gate called for.
 
 ## [0.3.12] - 2026-07-12
 
