@@ -111,8 +111,14 @@ describe("SealCard", () => {
       {
         label: "Multi-objective triumph",
         done: false,
-        cur: 1,
-        max: 2,
+        // Parent cur/max is intentionally distinct from the completed-objective
+        // count/total below (1/2) — the backend derives top-level cur/max from
+        // objectives[0] alone, not an aggregate, so real data rarely coincides.
+        // A fixture where these values matched would let the test pass even if
+        // the component wrongly fell back to t.cur/t.max instead of computing
+        // completedCount/objectives.length.
+        cur: 0,
+        max: 1,
         objectives: [
           { label: "Objective A", done: true, cur: 1, max: 1 },
           { label: "Objective B", done: false, cur: 0, max: 1 },
