@@ -187,6 +187,29 @@ func TestDownloadFileToPath_WritesFile(t *testing.T) {
 	}
 }
 
+// The manifest zip lands at MANIFEST_DB_PATH + ".zip.tmp", so its directory may
+// not exist yet on a cold start (a fresh E2E .e2e/ dir, a new volume mount).
+// Extraction creates the directory, but the download runs first.
+func TestDownloadFileToPath_CreatesMissingParentDirectory(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("manifest-bytes"))
+	}))
+	defer srv.Close()
+
+	c := NewClient("k", "http://unused", 100, 100)
+	dest := filepath.Join(t.TempDir(), "missing", "manifest.sqlite.zip.tmp")
+	if err := c.DownloadFileToPath(context.Background(), srv.URL+"/world.content", dest); err != nil {
+		t.Fatalf("DownloadFileToPath into missing directory: %v", err)
+	}
+	data, err := os.ReadFile(dest)
+	if err != nil {
+		t.Fatalf("read dest: %v", err)
+	}
+	if string(data) != "manifest-bytes" {
+		t.Errorf("data = %q", data)
+	}
+}
+
 func TestDownloadFileToPath_Non200(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

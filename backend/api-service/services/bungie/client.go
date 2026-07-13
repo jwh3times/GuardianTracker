@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -326,6 +327,9 @@ func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) error
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for %s: %w", dest, err)
 	}
 	out, err := os.Create(dest)
 	if err != nil {

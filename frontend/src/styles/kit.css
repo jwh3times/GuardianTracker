@@ -674,7 +674,9 @@
 }
 .gt-cosmetic-filter-btn[data-active="true"] {
   background: var(--c-signal);
-  color: #fff;
+  /* White on the aqua signal is 1.78:1. --c-on-accent is the dark ink this
+     token exists for and clears AA against every bright accent. */
+  color: var(--c-on-accent);
 }
 .gt-cosmetic-count {
   color: var(--c-text-3);

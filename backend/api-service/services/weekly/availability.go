@@ -60,7 +60,7 @@ func extractVendorItems(resp *bungie.CharacterVendorsResponse, allowlist map[uin
 // whatever is available (possibly empty) on token/character/fetch failure; never
 // errors.
 func (s *Service) LiveVendorItemHashes(ctx context.Context, membershipType int, membershipID, bungieToken string) map[uint32]string {
-	return s.liveVendorItemHashesAt(ctx, membershipType, membershipID, bungieToken, time.Now().UTC())
+	return s.liveVendorItemHashesAt(ctx, membershipType, membershipID, bungieToken, s.nowUTC())
 }
 
 func (s *Service) liveVendorItemHashesAt(ctx context.Context, membershipType int, membershipID, bungieToken string, now time.Time) map[uint32]string {

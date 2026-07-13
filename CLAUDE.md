@@ -133,6 +133,11 @@ GitHub Actions (`.github/workflows/ci-cd.yml`) — four required jobs:
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)
 
+`.github/workflows/browser.yml` adds two advisory jobs: **Browser E2E + Axe**
+and **Browser Visual Regression**. They report failures normally (no
+`continue-on-error`) and retain reports/evidence for 14 days. Promote E2E + axe
+to required after ten consecutive clean runs; visual stays optional.
+
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
 **Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v0.2.0`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit.
@@ -180,7 +185,21 @@ go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 
 # Frontend (from frontend/)
 npm test
+
+# Browser (start from repo root, then run scripts from frontend/)
+docker compose stop frontend api-service   # 5273/8081 would be silently reused
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
 ```
+
+Playwright reuses any server already on 5273/8081 outside CI, so a running
+Compose app stack silently replaces the hermetic one and the suite dies at login
+with `Failed to fetch`. Visual baselines are Linux renderings and must be
+regenerated inside the pinned `mcr.microsoft.com/playwright` image — never commit
+snapshots produced on Windows. Both procedures are in
+[frontend/README.md](./frontend/README.md#browser-tests).
 
 ### Full Go coverage locally (matches CI)
 

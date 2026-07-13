@@ -276,6 +276,15 @@ go test -race ./...
 
 DB integration tests gated on `TEST_DATABASE_URL`. SQLite tests gated on a runtime `requireSQLite(t)` probe (skipped when `CGO_ENABLED=0`).
 
+### Browser fixture service
+
+`backend/api-service/cmd/fake-bungie` is test-only. From
+`backend/api-service`, `go run ./cmd/fake-bungie` binds loopback port 8090,
+serves `/health`, OAuth/profile/vendor/milestone/settings fixtures, and a tiny
+runtime-generated zipped SQLite manifest. PUT/DELETE `/__e2e/scenario` controls
+mutable scenarios. It must never contact or proxy the real Bungie API and must
+never listen beyond loopback.
+
 ## Hot reload (development)
 
 ```powershell

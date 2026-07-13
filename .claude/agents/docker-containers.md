@@ -48,11 +48,15 @@ The `nginx.conf` must serve `index.html` for all unknown paths so React Router w
 
 ## Docker Compose host exposure
 
-The local `postgres`, `pgadmin`, and profile-gated `test-postgres` ports bind to
-`127.0.0.1` only. Keep those loopback prefixes when changing port mappings. The
+The local `postgres`, `pgadmin`, profile-gated `test-postgres`, and profile-gated
+`e2e-postgres` ports bind to `127.0.0.1` only. Keep those loopback prefixes when changing port mappings. The
 frontend/API bindings remain unchanged because local browsers and approved
 development tunnels use them. Compose requires an explicit `GO_ENV` value from
 the root environment file.
+
+`e2e-postgres` uses `postgres:18-alpine`, host port 5534, the `e2e` profile, and
+a read-only `database/init` bind mount. It intentionally has no database data
+volume and `restart: "no"`; Playwright owns the other browser-test processes.
 
 ## Building for Minikube
 

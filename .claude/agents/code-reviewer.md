@@ -100,6 +100,12 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - Panic recovery must emit an error record with the request ID and return 500 without exposing the panic. Successful health probes are debug, other successes info, 4xx warn, and 5xx error.
 - CI must keep `go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...` in the required Go job. Suppressions require an inline explanation of a verified false positive.
 
+## Browser-test checks
+
+- Browser tests must use `cmd/fake-bungie`, the runtime-generated fixture manifest, and loopback `e2e-postgres`; flag any live Bungie dependency or committed loose manifest database.
+- Keep Playwright package/image versions equal at 1.61.0, `workers: 1`, exactly one functional CI retry, and destructive auth sequenced after shared journeys.
+- Browser workflow failures must not be hidden with `continue-on-error`. E2E + axe stays advisory until ten clean runs and then becomes required; visual regression remains advisory.
+
 ## Intentional exceptions (do not flag)
 
 - `GET /health` and `GET /ready` have no auth — intentional for Kubernetes probes.

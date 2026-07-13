@@ -127,6 +127,27 @@ services:
       retries: 10
     restart: "no"
 
+  # Hermetic browser-suite database. Playwright owns the fake Bungie service,
+  # real API, and Vite processes; Compose supplies only an isolated Postgres.
+  # No data volume is attached, so removing the container resets every scenario.
+  e2e-postgres:
+    image: postgres:18-alpine
+    profiles: ["e2e"]
+    environment:
+      POSTGRES_DB: guardian_tracker
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:${E2E_POSTGRES_PORT:-5534}:5432"
+    volumes:
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d guardian_tracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: "no"
+
 volumes:
   postgres-data:
   manifest-data:

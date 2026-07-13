@@ -173,6 +173,17 @@ cd backend/api-service
 See [CLAUDE.md → Full Go coverage locally](./CLAUDE.md#full-go-coverage-locally-matches-ci)
 for the toolchain details (a C compiler is required for the cgo tests).
 
+For full-browser validation, start the isolated database and use the fake Bungie
+fixtures; never point automated tests at the live Bungie API:
+
+```powershell
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
+npm run e2e:visual
+```
+
 ## CI gates
 
 Every PR must pass these GitHub Actions jobs before it can merge:
@@ -188,6 +199,10 @@ CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs
 is enforced through a code-scanning merge rule rather than as a required status
 check. See [CLAUDE.md → CI/CD](./CLAUDE.md#cicd) for the full explanation, including
 how Dependabot PRs are handled.
+
+The separate browser workflow reports failures normally but is not initially in
+branch protection. Promote `Browser E2E + Axe` after ten consecutive clean runs.
+`Browser Visual Regression` remains advisory.
 
 ## Reporting bugs & requesting features
 

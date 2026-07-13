@@ -1,0 +1,219 @@
+name: Browser Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "26"
+  GO_VERSION: "1.26.5"
+  GO_ENV: development
+  E2E_FRONTEND_URL: http://127.0.0.1:5273
+  E2E_API_URL: http://127.0.0.1:8081
+  E2E_FAKE_URL: http://127.0.0.1:8090
+  E2E_FIXED_TIME: "2026-07-18T18:00:00Z"
+  E2E_DATABASE_URL: postgres://guardian_app:guardian_dev_password@127.0.0.1:5534/guardian_tracker?sslmode=disable
+  DATABASE_URL: postgres://guardian_app:guardian_dev_password@127.0.0.1:5534/guardian_tracker?sslmode=disable
+  BUNGIE_API_KEY: e2e-api-key
+  BUNGIE_CLIENT_ID: e2e-client
+  BUNGIE_CLIENT_SECRET: e2e-client-secret
+  BUNGIE_API_BASE_URL: http://127.0.0.1:8090/Platform
+  BUNGIE_AUTHORIZE_URL: http://127.0.0.1:8090/en/OAuth/Authorize
+  BUNGIE_TOKEN_URL: http://127.0.0.1:8090/platform/app/oauth/token/
+  BUNGIE_CDN_BASE_URL: http://127.0.0.1:8090
+  FAKE_BUNGIE_CLIENT_ID: e2e-client
+  FAKE_BUNGIE_REDIRECT_URI: http://127.0.0.1:5273/auth/callback
+  AUTH_REDIRECT_URI: http://127.0.0.1:5273/auth/callback
+  CORS_ALLOWED_ORIGINS: http://127.0.0.1:5273
+  VITE_API_URL: http://127.0.0.1:8081
+  CACHE_ENABLED: "false"
+  JWT_SECRET: e2e_jwt_secret_change_me_32_chars_minimum
+  TOKEN_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+  TOKEN_ENCRYPTION_KEY_VERSION: "1"
+  ADMIN_MEMBERSHIP_IDS: "4611686018400000001"
+
+jobs:
+  functional-accessibility:
+    name: Browser E2E + Axe
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MANIFEST_DB_PATH: ${{ runner.temp }}/guardian-e2e/manifest.sqlite
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Start isolated E2E Postgres
+        run: docker compose --profile e2e up -d --wait e2e-postgres
+
+      # Playwright config owns fake-Bungie, the real API, Vite, readiness/search
+      # waits, one shared worker, and exactly one CI retry.
+      - name: Run functional and accessibility suites
+        working-directory: frontend
+        run: |
+          mkdir -p ../browser-logs ../backend/api-service/.e2e "$(dirname "$MANIFEST_DB_PATH")"
+          set -o pipefail
+          npm run e2e 2>&1 | tee ../browser-logs/playwright-functional.log
+
+      - name: Capture Postgres logs
+        if: always()
+        run: |
+          mkdir -p browser-logs
+          docker compose --profile e2e logs --no-color e2e-postgres > browser-logs/e2e-postgres.log 2>&1 || true
+
+      - name: Upload browser reports and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-e2e-axe
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            frontend/e2e/__screenshots__/
+            browser-logs/
+
+      - name: Stop isolated E2E Postgres
+        if: always()
+        run: docker compose --profile e2e down -v
+
+  visual-regression:
+    name: Browser Visual Regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MANIFEST_DB_PATH: ${{ runner.temp }}/guardian-e2e-visual/manifest.sqlite
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Start isolated E2E Postgres
+        run: docker compose --profile e2e up -d --wait e2e-postgres
+
+      # The pinned Playwright image supplies the deterministic browser. Services
+      # run on the host so the Go toolchain/CGO match the normal backend build.
+      - name: Start fake Bungie
+        run: |
+          mkdir -p browser-logs "$(dirname "$MANIFEST_DB_PATH")"
+          (cd backend/api-service && go run ./cmd/fake-bungie) > browser-logs/fake-bungie.log 2>&1 &
+          echo $! > browser-logs/fake-bungie.pid
+          for i in $(seq 1 90); do
+            curl -fsS http://127.0.0.1:8090/health >/dev/null && exit 0
+            sleep 1
+          done
+          cat browser-logs/fake-bungie.log
+          exit 1
+
+      - name: Start real API
+        run: |
+          (cd backend/api-service && go run .) > browser-logs/api-service.log 2>&1 &
+          echo $! > browser-logs/api-service.pid
+          for i in $(seq 1 120); do
+            curl -fsS http://127.0.0.1:8081/ready >/dev/null && exit 0
+            sleep 1
+          done
+          cat browser-logs/api-service.log
+          exit 1
+
+      - name: Start Vite
+        run: |
+          (cd frontend && npm run dev -- --host 127.0.0.1 --port 5273) > browser-logs/vite.log 2>&1 &
+          echo $! > browser-logs/vite.pid
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:5273/login >/dev/null && exit 0
+            sleep 1
+          done
+          cat browser-logs/vite.log
+          exit 1
+
+      - name: Run visual suite in pinned Playwright image
+        run: |
+          set -o pipefail
+          docker run --rm --init --ipc=host --network host \
+            -e CI=true \
+            -e E2E_EXTERNAL_SERVERS=1 \
+            -e E2E_FRONTEND_URL="$E2E_FRONTEND_URL" \
+            -e E2E_API_URL="$E2E_API_URL" \
+            -e E2E_FAKE_URL="$E2E_FAKE_URL" \
+            -e E2E_FIXED_TIME="$E2E_FIXED_TIME" \
+            -v "$GITHUB_WORKSPACE/frontend:/work" \
+            -w /work \
+            mcr.microsoft.com/playwright:v1.61.0-noble \
+            bash -lc "npm ci && npm run e2e:visual" \
+            2>&1 | tee browser-logs/playwright-visual.log
+
+      - name: Capture Postgres logs
+        if: always()
+        run: docker compose --profile e2e logs --no-color e2e-postgres > browser-logs/e2e-postgres.log 2>&1 || true
+
+      - name: Upload visual report and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: browser-visual
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            frontend/e2e/__screenshots__/
+            browser-logs/
+
+      - name: Stop browser services and E2E Postgres
+        if: always()
+        run: |
+          for pidfile in browser-logs/vite.pid browser-logs/api-service.pid browser-logs/fake-bungie.pid; do
+            if [ -f "$pidfile" ]; then
+              kill "$(cat "$pidfile")" 2>/dev/null || true
+            fi
+          done
+          docker compose --profile e2e down -v

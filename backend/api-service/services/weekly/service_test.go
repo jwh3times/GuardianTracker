@@ -168,6 +168,17 @@ func TestCategoryFromMilestoneName(t *testing.T) {
 	}
 }
 
+func TestNewServiceWithClockUsesInjectedUTCClock(t *testing.T) {
+	fixed := time.Date(2026, 7, 11, 18, 30, 0, 0, time.FixedZone("EDT", -4*60*60))
+	s := NewServiceWithClock(nil, nil, nil, nil, cache.NewNoOpCache(), nil, func() time.Time { return fixed })
+	if got, want := s.nowUTC(), fixed.UTC(); !got.Equal(want) || got.Location() != time.UTC {
+		t.Fatalf("nowUTC() = %v, want %v", got, want)
+	}
+	if !XurPresent(s.nowUTC()) {
+		t.Fatal("injected Saturday clock should put Xur in the present window")
+	}
+}
+
 func TestBuildRecommended_WishlistBeatsMissing(t *testing.T) {
 	s := &Service{}
 	pub := &publicWeeklyCache{

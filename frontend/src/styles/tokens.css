@@ -17,7 +17,13 @@
   /* ---- TEXT ---- */
   --c-text: oklch(0.95 0.006 250); /* primary */
   --c-text-2: oklch(0.78 0.01 252); /* secondary */
-  --c-text-3: oklch(0.62 0.012 254); /* tertiary / meta */
+  /* tertiary lifted from L 0.62 → 0.68: at 0.62 it landed at 3.8:1 on the
+     exotic-tinted countdown chip and 4.0:1 on the active collections tree row,
+     both short of WCAG AA 4.5:1. 0.68 clears 4.5:1 on every tinted surface. */
+  --c-text-3: oklch(0.68 0.012 254); /* tertiary / meta */
+  /* Faint enough to fail AA as body text — reserve it for genuinely disabled
+     controls, which WCAG exempts. Content that happens to look muted (table
+     headers, timestamps, notes) must use --c-text-3. */
   --c-text-4: oklch(0.48 0.012 256); /* disabled / faint */
   --c-on-accent: oklch(0.15 0.02 260); /* text on bright accents */
 

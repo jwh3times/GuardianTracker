@@ -214,6 +214,38 @@ func TestValidate_RejectsInvalidLoggingConfiguration(t *testing.T) {
 	}
 }
 
+func TestLoad_E2EFixedTime(t *testing.T) {
+	t.Setenv("GO_ENV", "development")
+	t.Setenv("E2E_FIXED_TIME", "2026-07-11T18:00:00-04:00")
+	cfg := Load()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	if cfg.E2EFixedTime == nil {
+		t.Fatalf("E2EFixedTime = %v", cfg.E2EFixedTime)
+	}
+	if got := cfg.E2EFixedTime.Format(time.RFC3339); got != "2026-07-11T22:00:00Z" {
+		t.Fatalf("E2EFixedTime = %s", got)
+	}
+}
+
+func TestLoad_RejectsInvalidOrProductionE2EFixedTime(t *testing.T) {
+	t.Run("invalid timestamp", func(t *testing.T) {
+		t.Setenv("GO_ENV", "development")
+		t.Setenv("E2E_FIXED_TIME", "Saturday afternoon")
+		if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "E2E_FIXED_TIME") {
+			t.Fatalf("Validate() = %v, want E2E_FIXED_TIME error", err)
+		}
+	})
+	t.Run("production", func(t *testing.T) {
+		t.Setenv("GO_ENV", "production")
+		t.Setenv("E2E_FIXED_TIME", "2026-07-11T18:00:00Z")
+		if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "development-only") {
+			t.Fatalf("Validate() = %v, want development-only error", err)
+		}
+	})
+}
+
 func TestLoad_FallbacksOnInvalidValues(t *testing.T) {
 	t.Setenv("JWT_ACCESS_TTL", "not-a-duration")
 	t.Setenv("JWT_EXPIRY_HOURS", "not-a-number")
