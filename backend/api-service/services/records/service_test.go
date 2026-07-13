@@ -563,7 +563,11 @@ func TestGetSeals_ObjectivesBreakdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)
 	}
-	if strings.Contains(string(blob), "objectives") {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(blob, &fields); err != nil {
+		t.Fatalf("json.Unmarshal: %v", err)
+	}
+	if _, ok := fields["objectives"]; ok {
 		t.Errorf("json = %s, must omit the \"objectives\" key entirely", blob)
 	}
 

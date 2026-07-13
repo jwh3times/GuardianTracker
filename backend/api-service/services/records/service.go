@@ -91,8 +91,12 @@ type Seal struct {
 type Triumph struct {
 	Label string `json:"label"`
 	Done  bool   `json:"done"`
-	Cur   int    `json:"cur"`
-	Max   int    `json:"max"`
+	// Cur and Max are legacy/compat fields derived from the record's first
+	// RAW objective (record.Objectives[0]), which may be explicitly hidden,
+	// whereas Objectives below excludes hidden entries — so Cur/Max must
+	// never be correlated with Objectives by index.
+	Cur int `json:"cur"`
+	Max int `json:"max"`
 	// Objectives is the per-objective drill-down for the triumph's progress
 	// bar; omitted entirely (not an empty array) when no objective survives
 	// visibility filtering, so the response stays byte-identical for
