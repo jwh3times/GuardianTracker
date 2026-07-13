@@ -7,6 +7,7 @@ import React, {
   ReactNode,
 } from "react";
 import { apiFetch } from "../lib/api";
+import { useAuth } from "./AuthContext";
 
 export type CardStyle = "framed" | "compact";
 export type Personalize = "off" | "normal";
@@ -19,8 +20,12 @@ interface Preferences {
 }
 
 interface PreferencesContextType extends Preferences {
+  /** Undefined when account preferences could not be resolved. */
+  onboardedAt: string | null | undefined;
+  preferencesReady: boolean;
   setCardStyle: (v: CardStyle) => void;
   setPersonalize: (v: Personalize) => void;
+  completeOnboarding: () => Promise<void>;
 }
 
 const DEFAULTS: Preferences = { cardStyle: "framed", personalize: "normal" };
@@ -47,7 +52,14 @@ function load(): Preferences {
 export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
+  const { isAuthenticated, user } = useAuth();
   const [prefs, setPrefs] = useState<Preferences>(load);
+  const [onboardedAt, setOnboardedAt] = useState<string | null | undefined>(
+    undefined,
+  );
+  const [syncedMembershipId, setSyncedMembershipId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     try {
@@ -58,22 +70,36 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
   }, [prefs]);
 
   useEffect(() => {
-    // On mount, sync from API if authenticated
-    const token = localStorage.getItem("guardian_token");
-    if (!token) return;
-    apiFetch<{ cardStyle: "framed" | "compact"; personalize: boolean }>(
-      "/api/preferences",
-    )
+    if (!isAuthenticated || !user?.membershipId) {
+      return;
+    }
+
+    let cancelled = false;
+    const membershipId = user.membershipId;
+    apiFetch<{
+      cardStyle: "framed" | "compact";
+      personalize: boolean;
+      onboardedAt: string | null;
+    }>("/api/preferences")
       .then((remote) => {
+        if (cancelled) return;
         setPrefs({
           cardStyle: remote.cardStyle,
           personalize: remote.personalize ? "normal" : "off",
         });
+        setOnboardedAt(remote.onboardedAt);
       })
       .catch(() => {
         // API unavailable — keep localStorage value
+      })
+      .finally(() => {
+        if (!cancelled) setSyncedMembershipId(membershipId);
       });
-  }, []); // once on mount
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user?.membershipId]);
 
   const setCardStyle = useCallback((cardStyle: CardStyle) => {
     setPrefs((p) => {
@@ -97,9 +123,32 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
     });
   }, []);
 
+  const completeOnboarding = useCallback(async () => {
+    const remote = await apiFetch<{
+      cardStyle: "framed" | "compact";
+      personalize: boolean;
+      onboardedAt: string;
+    }>("/api/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ onboardingComplete: true }),
+    });
+    setOnboardedAt(remote.onboardedAt);
+  }, []);
+
+  const preferencesReady =
+    !isAuthenticated ||
+    (!!user?.membershipId && syncedMembershipId === user.membershipId);
+
   return (
     <PreferencesContext.Provider
-      value={{ ...prefs, setCardStyle, setPersonalize }}
+      value={{
+        ...prefs,
+        onboardedAt,
+        preferencesReady,
+        setCardStyle,
+        setPersonalize,
+        completeOnboarding,
+      }}
     >
       {children}
     </PreferencesContext.Provider>

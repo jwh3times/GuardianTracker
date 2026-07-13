@@ -16,8 +16,8 @@ const data = {
           name: "Emblems",
           icon: "",
           collected: 1,
-          total: 2,
-          items: ["100", "101"],
+          total: 4,
+          items: ["100", "101", "102", "103"],
         },
         {
           hash: "wpn",
@@ -55,6 +55,30 @@ const data = {
       sources: [],
       isExotic: true,
     },
+    "102": {
+      itemHash: "102",
+      name: "Ornament A",
+      description: "",
+      icon: "/o.png",
+      itemType: "Ornament",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "",
+      sources: [],
+      isExotic: false,
+    },
+    "103": {
+      itemHash: "103",
+      name: "Finisher A",
+      description: "",
+      icon: "/f.png",
+      itemType: "Finisher",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "",
+      sources: [],
+      isExotic: false,
+    },
     "200": {
       itemHash: "200",
       name: "Gun",
@@ -73,7 +97,7 @@ const data = {
     weapons: { total: 1, collected: 0 },
     armor: { total: 0, collected: 0 },
     exotics: { total: 0, collected: 0 },
-    cosmetics: { total: 2, collected: 1 },
+    cosmetics: { total: 4, collected: 1 },
   },
   fetchedAt: "2026-06-30T00:00:00Z",
 } as unknown as APIUserCollections;
@@ -81,7 +105,12 @@ const data = {
 describe("cosmeticItems", () => {
   it("keeps only cosmetic-typed items and tags collected state", () => {
     const items = cosmeticItems(data);
-    expect(items.map((i) => i.name).sort()).toEqual(["Emblem A", "Emblem B"]);
+    expect(items.map((i) => i.name).sort()).toEqual([
+      "Emblem A",
+      "Emblem B",
+      "Finisher A",
+      "Ornament A",
+    ]);
     expect(items.find((i) => i.id === "100")?.collected).toBe(true);
     expect(items.find((i) => i.id === "101")?.collected).toBe(false);
   });
@@ -89,6 +118,8 @@ describe("cosmeticItems", () => {
   it("groups items by their type string", () => {
     const groups = groupByType(cosmeticItems(data));
     expect(groups.get("Emblem")).toHaveLength(2);
+    expect(groups.get("Ornament")).toHaveLength(1);
+    expect(groups.get("Finisher")).toHaveLength(1);
     expect(groups.has("Hand Cannon")).toBe(false);
   });
 });

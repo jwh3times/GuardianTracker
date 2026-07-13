@@ -95,8 +95,8 @@ backend/api-service/
 | PUT | `/api/wishlist/:id` | JWT | Update wishlist item priority/notes |
 | DELETE | `/api/wishlist/:id` | JWT | Remove wishlist item |
 | POST | `/api/wishlist/bulk` | JWT | Bulk `delete` / `set_priority` over selected ids; partial-success `{updated, skipped}` |
-| GET | `/api/preferences` | JWT | Get user preferences |
-| PUT | `/api/preferences` | JWT | Update user preferences |
+| GET | `/api/preferences` | JWT | Get user preferences and `onboardedAt` |
+| PUT | `/api/preferences` | JWT | Update preferences; `onboardingComplete:true` stamps completion and cannot reset it |
 | PUT | `/api/account/role` | JWT | Self-service opt-in to standard/beta/alpha; admin rejected, admin callers rejected |
 | GET | `/api/flags` | JWT | Resolved feature-flag state for caller (enabled/accessible/locked + role) |
 | GET | `/api/admin/users?q=` | JWT + admin | User roster (id, displayName, platform, role, lastActive) |
@@ -108,7 +108,7 @@ backend/api-service/
 | GET | `/api/collections/:membershipType/:membershipId` | JWT | Collections + fetchedAt; `?include=all` adds collectedItems |
 | POST | `/api/collections/:membershipType/:membershipId/refresh` | JWT | Invalidate cache (collections + characters + records) |
 | GET | `/api/manifest/status` | None | Manifest version and readiness |
-| GET | `/api/weekly/recommendations` | JWT + flag | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt |
+| GET | `/api/weekly/recommendations?characterId=` | JWT + flag | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt; validates the optional character against the authenticated roster and falls back to the primary character |
 | GET | `/api/items/search?q=&limit=` | JWT + flag | Manifest item search; 503 until index ready |
 | GET | `/api/items/:itemHash` | JWT | Minimal manifest item view for deep-linked non-collectible items; `{ itemHash, name, icon, itemType, tierType, rarity, description }`; 404 for unknown hash; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
 | GET | `/api/items/:itemHash/perks` | JWT | Weapon possible perk pool + exotic catalyst pool from manifest; `{ itemHash, perkColumns: [{role,label,perks}], catalysts: [{name,description}] }`; 200 + empty arrays for non-weapon/unknown hash or non-exotic; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
@@ -207,8 +207,8 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 - `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
 - `ClassifyDifficulty(source, isExotic)` — positive-match table; returns `"Unrated"` for unmatched sources (no catch-all "Easy"); exported for use by the efficiency engine
 - `DestinyItem.FarmOnly` — set `true` when the collectible source string contains "cannot be reacquired"; surfaced as a "Farm only" chip in the UI
-- `DestinyItem.ItemType` — `toDestinyItem` now names all cosmetic types via `bungie.ItemTypeName` (default case), so cosmetics carry real strings (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`) instead of `"Unknown"`; the frontend cosmetics gallery classifies by these strings
-- Shaders: `bungie.ItemTypeName(19, 20)` → `"Shader"` (subtype-gated), and `manifest.CollectibleCategory` classifies a shader (`ItemType==ItemTypeMod && ItemSubType==ItemSubTypeShader`) as `"cosmetics"` — do NOT add `19` to `cosmeticItemTypes` (that would miscategorize all mods)
+- `DestinyItem.ItemType` — `toDestinyItem` names all verified cosmetic types via `bungie.ItemTypeName`, so cosmetics carry real strings (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`/`Ornament`/`Finisher`) instead of `"Unknown"`; the frontend gallery classifies by these strings
+- Shaders and ornaments both use `itemType=19` (mod), with verified subtypes 20 and 21 respectively. Gate both by subtype in `manifest.CollectibleCategory`; do NOT add all of item type 19 to `cosmeticItemTypes`. Finishers use verified item type 29.
 
 ## Weekly service
 
@@ -221,6 +221,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
   non-raid reward definitions contain no collectible-linked items, so others omit it.
 - `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells
 - `LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)` (`services/weekly/availability.go`) returns item hash → vendor display name across all rotating vendors (Xûr, Banshee-44, Ada-1, ritual vendors); best-effort with the caller's Bungie token — used by the wishlist handler for availability instead of the Xûr-only `XurItemHashes`
+- `GetWeekly(..., requestedCharacterID)` validates the requested character against the authenticated roster and scopes component-402 vendor inventory, daily actions, recommendation availability, and Xûr location to that character. Character-specific caches include membership and character IDs. Xûr armor carries an optional manifest `className`; absent class data remains unlabelled.
 
 ## Go patterns
 

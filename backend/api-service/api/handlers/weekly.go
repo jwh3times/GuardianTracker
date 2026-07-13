@@ -1,10 +1,10 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
 
-	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/services/weekly"
 
 	"github.com/gin-gonic/gin"
@@ -12,12 +12,20 @@ import (
 
 // WeeklyHandler handles GET /api/weekly/recommendations
 type WeeklyHandler struct {
-	service    *weekly.Service
-	tokenStore *auth.TokenStore
+	service    weeklyService
+	tokenStore weeklyTokenStore
+}
+
+type weeklyService interface {
+	GetWeekly(ctx context.Context, membershipType int, membershipID, bungieToken, characterID string) (*weekly.Weekly, error)
+}
+
+type weeklyTokenStore interface {
+	GetValidToken(membershipID string) (string, error)
 }
 
 // NewWeeklyHandler creates a new WeeklyHandler.
-func NewWeeklyHandler(svc *weekly.Service, ts *auth.TokenStore) *WeeklyHandler {
+func NewWeeklyHandler(svc weeklyService, ts weeklyTokenStore) *WeeklyHandler {
 	return &WeeklyHandler{service: svc, tokenStore: ts}
 }
 
@@ -25,6 +33,7 @@ func NewWeeklyHandler(svc *weekly.Service, ts *auth.TokenStore) *WeeklyHandler {
 func (h *WeeklyHandler) GetWeekly(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	membershipType := c.GetInt("membership_type")
+	characterID := c.Query("characterId")
 
 	bungieToken, err := h.tokenStore.GetValidToken(membershipID)
 	if err != nil {
@@ -33,7 +42,7 @@ func (h *WeeklyHandler) GetWeekly(c *gin.Context) {
 		bungieToken = ""
 	}
 
-	result, err := h.service.GetWeekly(c.Request.Context(), membershipType, membershipID, bungieToken)
+	result, err := h.service.GetWeekly(c.Request.Context(), membershipType, membershipID, bungieToken, characterID)
 	if err != nil {
 		log.Printf("weekly: GetWeekly for %s: %v", membershipID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch weekly data"})

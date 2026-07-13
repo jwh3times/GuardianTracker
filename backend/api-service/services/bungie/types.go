@@ -90,7 +90,10 @@ type InventoryItemDefinition struct {
 	DisplayProperties DisplayProperties `json:"displayProperties"`
 	ItemType          int               `json:"itemType"`
 	ItemSubType       int               `json:"itemSubType"`
-	Inventory         struct {
+	// ClassType is absent on class-agnostic items. Keep it as a pointer so an
+	// omitted value cannot be mistaken for Titan (class type 0).
+	ClassType *int `json:"classType,omitempty"`
+	Inventory struct {
 		TierType int `json:"tierType"`
 	} `json:"inventory"`
 	EquippingBlock struct {
@@ -107,14 +110,16 @@ type DisplayProperties struct {
 
 // Item type constants.
 const (
-	ItemTypeWeapon = 3
-	ItemTypeArmor  = 2
-	ItemTypeMod    = 19
+	ItemTypeWeapon   = 3
+	ItemTypeArmor    = 2
+	ItemTypeMod      = 19
+	ItemTypeFinisher = 29
 )
 
 // Item sub-type constants used for classification.
 const (
-	ItemSubTypeShader = 20
+	ItemSubTypeShader   = 20
+	ItemSubTypeOrnament = 21
 )
 
 // ItemTypeName returns a human-readable item type string, using weapon sub-type for specificity.
@@ -125,8 +130,11 @@ func ItemTypeName(itemType, subType int) string {
 	case ItemTypeArmor:
 		return "Armor"
 	case ItemTypeMod:
-		if subType == ItemSubTypeShader {
+		switch subType {
+		case ItemSubTypeShader:
 			return "Shader"
+		case ItemSubTypeOrnament:
+			return "Ornament"
 		}
 		return "Mod"
 	case 14:
@@ -139,6 +147,8 @@ func ItemTypeName(itemType, subType int) string {
 		return "Emote"
 	case 24:
 		return "Ghost"
+	case ItemTypeFinisher:
+		return "Finisher"
 	default:
 		return "Item"
 	}

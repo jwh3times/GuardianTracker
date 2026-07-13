@@ -75,8 +75,8 @@ const cosmeticsData = {
           name: "Emblems",
           icon: "",
           collected: 1,
-          total: 2,
-          items: ["100", "200"],
+          total: 4,
+          items: ["100", "200", "300", "400"],
         },
       ],
     },
@@ -106,13 +106,37 @@ const cosmeticsData = {
       sources: [],
       isExotic: true,
     },
+    "300": {
+      itemHash: "300",
+      name: "Test Ornament",
+      description: "",
+      icon: "/o.png",
+      itemType: "Ornament",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "",
+      sources: [],
+      isExotic: false,
+    },
+    "400": {
+      itemHash: "400",
+      name: "Test Finisher",
+      description: "",
+      icon: "/f.png",
+      itemType: "Finisher",
+      tierType: 5,
+      rarity: "Legendary",
+      difficulty: "",
+      sources: [],
+      isExotic: false,
+    },
   },
   collectedHashes: ["100"],
   summary: {
     weapons: { total: 0, collected: 0 },
     armor: { total: 0, collected: 0 },
     exotics: { total: 0, collected: 0 },
-    cosmetics: { total: 2, collected: 1 },
+    cosmetics: { total: 4, collected: 1 },
   },
   fetchedAt: "2026-06-30T00:00:00Z",
 };
@@ -149,6 +173,8 @@ describe("Cosmetics", () => {
     expect(
       await screen.findByRole("tab", { name: "Emblem" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Ornament" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Finisher" })).toBeInTheDocument();
     expect(await screen.findByText("Calus Selected")).toBeInTheDocument();
     expect(screen.getByText("Neon Mareld")).toBeInTheDocument();
     expect(screen.getByText("1/2 collected")).toBeInTheDocument();

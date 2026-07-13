@@ -21,11 +21,6 @@ const authed = () => {
   localStorage.setItem("guardian_refresh_token", "test-refresh");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
   // Not an onboarding test — mark first-run done so the Dashboard greeting
-  // reads "Welcome back" as these assertions expect.
-  localStorage.setItem(
-    `guardian_first_run_done:${sampleUser.membershipId}`,
-    "2026-01-01",
-  );
 };
 
 describe("App routing", () => {
@@ -49,7 +44,7 @@ describe("App routing", () => {
     );
     // AppShell sidebar nav renders alongside the dashboard content
     expect(
-      await screen.findByText(/Welcome back, TestGuardian/),
+      await screen.findByText(/Welcome, TestGuardian/),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Collections").length).toBeGreaterThan(0);
   });
@@ -62,7 +57,7 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByText(/Welcome back, TestGuardian/),
+      await screen.findByText(/Welcome, TestGuardian/),
     ).toBeInTheDocument();
   });
 });
@@ -163,6 +158,11 @@ describe("AppShell interactions", () => {
     });
     fireEvent.click(switcher);
     expect(await screen.findByText("Switch Guardian")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Vendors shown for this Guardian · collections are account-wide",
+      ),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByText(/Warlock/));
     // Menu closes after a pick
     await waitFor(() =>
@@ -252,7 +252,7 @@ describe("AppShell interactions", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByText(/Welcome back, TestGuardian/),
+      await screen.findByText(/Welcome, TestGuardian/),
     ).toBeInTheDocument();
   });
 
@@ -313,7 +313,7 @@ describe("AppShell interactions", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByText(/Welcome back, TestGuardian/),
+      await screen.findByText(/Welcome, TestGuardian/),
     ).toBeInTheDocument();
   });
 

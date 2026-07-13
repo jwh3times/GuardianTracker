@@ -290,11 +290,12 @@ func (r *Repository) getItemsByHashesChunkedLocked(hashes []uint32) (map[uint32]
 
 // cosmeticItemTypes is the set of itemType values bucketed as cosmetics.
 var cosmeticItemTypes = map[int]struct{}{
-	14: {}, // Emblem
-	21: {}, // Ship
-	22: {}, // Sparrow
-	23: {}, // Emote
-	24: {}, // Ghost
+	14:                      {}, // Emblem
+	21:                      {}, // Ship
+	22:                      {}, // Sparrow
+	23:                      {}, // Emote
+	24:                      {}, // Ghost
+	bungie.ItemTypeFinisher: {},
 }
 
 // CollectibleCategory classifies an item into one of the collection summary
@@ -303,11 +304,11 @@ func CollectibleCategory(item *bungie.InventoryItemDefinition) string {
 	if item == nil {
 		return ""
 	}
-	// Shaders are itemType=19 (ItemTypeMod), itemSubType=20. They must be
-	// classified as cosmetics independently of the cosmeticItemTypes set, because
-	// adding 19 to that set would also catch regular mods (same itemType,
-	// different subType).
-	if item.ItemType == bungie.ItemTypeMod && item.ItemSubType == bungie.ItemSubTypeShader {
+	// Shaders and ornaments share itemType=19 (ItemTypeMod) with regular mods,
+	// so classify only their manifest-verified subtypes instead of adding every
+	// mod to cosmeticItemTypes.
+	if item.ItemType == bungie.ItemTypeMod &&
+		(item.ItemSubType == bungie.ItemSubTypeShader || item.ItemSubType == bungie.ItemSubTypeOrnament) {
 		return "cosmetics"
 	}
 	if _, isCosmetic := cosmeticItemTypes[item.ItemType]; isCosmetic {

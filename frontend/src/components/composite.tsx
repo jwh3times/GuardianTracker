@@ -239,9 +239,11 @@ export function ActionList({
 /* ---------------- XÛR MODULE ---------------- */
 export function XurModule({
   xur,
+  activeClassName,
   onSelect,
 }: {
   xur: Xur | null | undefined;
+  activeClassName?: string;
   onSelect?: (hash: string) => void;
 }) {
   if (!xur || !xur.present) {
@@ -295,6 +297,18 @@ export function XurModule({
               <div className="gt-item-type">
                 {it.type} · <span className="mono">{it.cost}</span>
               </div>
+              {it.className && (
+                <div
+                  className="gt-item-badges"
+                  style={{ marginTop: "var(--s-1)" }}
+                >
+                  <Badge kind="for-you" dot>
+                    {it.className === activeClassName
+                      ? `For your ${it.className}`
+                      : `${it.className} armor`}
+                  </Badge>
+                </div>
+              )}
             </div>
             {it.missing ? (
               <Badge kind="missing" dot icon="bolt" />

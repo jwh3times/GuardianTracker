@@ -20,8 +20,8 @@ React/Vite frontend (:5273)
 - **API:** Go + Gin HTTP service with Bungie OAuth, JWT access/refresh tokens,
   manifest management, collection analysis, weekly recommendations, search,
   wishlist, preferences, roles, flags, and admin endpoints.
-- **Postgres:** users, wishlist, preferences, encrypted Bungie tokens, refresh
-  sessions, roles, feature flags, and audit log.
+- **Postgres:** users, wishlist, preferences and onboarding completion, encrypted
+  Bungie tokens, refresh sessions, roles, feature flags, and audit log.
 - **SQLite:** local copy of the Bungie Destiny 2 manifest, downloaded and
   swapped by the API service.
 - **Cache:** in-memory service caches for collection results, weekly data,
@@ -82,9 +82,10 @@ Primary route groups:
 - account: profile, role opt-in, feature flags
 - collections: collection tree, refresh, item views, item perk pools
 - weekly: recommendations, Xur inventory and authenticated location, milestones,
-  reset countdowns
+  reset countdowns; authenticated vendor calls validate and follow the selected
+  character because Bungie's vendor inventory can be class-specific
 - wishlist: user-scoped CRUD
-- preferences: user preferences
+- preferences: user preferences plus irreversible first-run onboarding completion
 - records: catalysts, crafting, seals
 - characters: account characters
 - admin: users, roles, flags, audit log

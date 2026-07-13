@@ -9,8 +9,19 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 
 ## [Unreleased]
 
+### Added
+
+- Collectible ornaments and finishers to the Cosmetics gallery after verifying
+  their manifest item type/subtype classification.
+- A first-run guided tour of Dashboard, This Week, and Collections. Completion
+  is stored with the user's server-side preferences so it follows the Bungie
+  account across browsers and devices.
+
 ### Changed
 
+- Authenticated weekly vendor inventory, daily actions, availability ranking,
+  and Xûr location now follow the selected Guardian. Xûr armor also identifies
+  its manifest-defined class and highlights armor for the active class.
 - Xûr's location now resolves best-effort from authenticated vendor and manifest
   data and is displayed as "The Tower"; the location row is omitted when Bungie
   cannot resolve it.

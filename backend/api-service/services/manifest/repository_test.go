@@ -59,6 +59,10 @@ func writeFixtureDB(t *testing.T, path string) {
 			"itemType":2,"inventory":{"tierType":5},"equippingBlock":{"equipmentSlotTypeHash":3448274439}}`,
 		// Cosmetic (ship, itemType 21)
 		400: `{"hash":400,"displayProperties":{"name":"Test Ship"},"itemType":21,"inventory":{"tierType":5}}`,
+		// Cosmetic (ornament, itemType 19 + itemSubType 21)
+		500: `{"hash":500,"displayProperties":{"name":"Test Ornament"},"itemType":19,"itemSubType":21,"inventory":{"tierType":5}}`,
+		// Cosmetic (finisher, itemType 29)
+		600: `{"hash":600,"displayProperties":{"name":"Test Finisher"},"itemType":29,"inventory":{"tierType":5}}`,
 	}
 	for hash, blob := range items {
 		if _, err := db.Exec(`INSERT INTO DestinyInventoryItemDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -71,6 +75,8 @@ func writeFixtureDB(t *testing.T, path string) {
 		2000: `{"hash":2000,"itemHash":200,"sourceString":"Exotic quest","displayProperties":{"name":"Gjallarhorn"}}`,
 		3000: `{"hash":3000,"itemHash":300,"sourceString":"World drops","displayProperties":{"name":"Helm of Tests"}}`,
 		4000: `{"hash":4000,"itemHash":400,"sourceString":"Eververse","displayProperties":{"name":"Test Ship"}}`,
+		5000: `{"hash":5000,"itemHash":500,"sourceString":"Eververse","displayProperties":{"name":"Test Ornament"}}`,
+		6000: `{"hash":6000,"itemHash":600,"sourceString":"Eververse","displayProperties":{"name":"Test Finisher"}}`,
 	}
 	for hash, blob := range collectibles {
 		if _, err := db.Exec(`INSERT INTO DestinyCollectibleDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -316,6 +322,12 @@ func TestCollectibleCategory(t *testing.T) {
 			d.Inventory.TierType = bungie.TierTypeCommon
 			return d
 		}(), "cosmetics"},
+		{"ornament cosmetic", func() *bungie.InventoryItemDefinition {
+			d := &bungie.InventoryItemDefinition{ItemType: bungie.ItemTypeMod, ItemSubType: bungie.ItemSubTypeOrnament}
+			d.Inventory.TierType = bungie.TierTypeLegendary
+			return d
+		}(), "cosmetics"},
+		{"finisher cosmetic", mk(bungie.ItemTypeFinisher, bungie.TierTypeLegendary), "cosmetics"},
 		{"mod (uncategorized)", mk(19, bungie.TierTypeCommon), ""},
 		{"nil", nil, ""},
 	}

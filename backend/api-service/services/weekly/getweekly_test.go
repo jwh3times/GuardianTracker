@@ -74,6 +74,42 @@ func TestFetchXurInventory_EnrichesFromManifest(t *testing.T) {
 	}
 }
 
+func TestFetchXurInventory_CarriesVerifiedArmorClass(t *testing.T) {
+	warlock := 2
+	armor := &bungie.InventoryItemDefinition{Hash: 101, ItemType: bungie.ItemTypeArmor, ClassType: &warlock}
+	armor.DisplayProperties.Name = "Test Warlock Robes"
+	armor.Inventory.TierType = bungie.TierTypeExotic
+	mani := &richManifest{items: map[uint32]*bungie.InventoryItemDefinition{101: armor}}
+	svc := weeklyService(t, `{"ErrorCode":1,"Response":{"sales":{"data":{
+		"2190858386":{"saleItems":{"0":{"itemHash":101}}}}}}}`, mani)
+
+	pub := &publicWeeklyCache{}
+	svc.fetchXurInventory(context.Background(), pub)
+	if len(pub.XurItems) != 1 || pub.XurItems[0].ClassType == nil || *pub.XurItems[0].ClassType != 2 {
+		t.Fatalf("XurItems = %+v, want Warlock class annotation", pub.XurItems)
+	}
+}
+
+func TestResolveCharacterValidatesAndFallsBack(t *testing.T) {
+	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	roster := characterRoster{
+		Characters: map[string]bungie.CharacterComponent{
+			"char-hunter":  {CharacterID: "char-hunter", ClassType: 1},
+			"char-warlock": {CharacterID: "char-warlock", ClassType: 2},
+		},
+		PrimaryID: "char-hunter",
+	}
+	c.Set("weekly:roster:3:member-1", roster, time.Minute)
+	svc := &Service{cache: c}
+
+	if id, classType := svc.resolveCharacter(context.Background(), 3, "member-1", "token", "char-warlock"); id != "char-warlock" || classType != 2 {
+		t.Errorf("valid selection = (%q, %d), want (char-warlock, 2)", id, classType)
+	}
+	if id, classType := svc.resolveCharacter(context.Background(), 3, "member-1", "token", "not-in-roster"); id != "char-hunter" || classType != 1 {
+		t.Errorf("invalid selection fallback = (%q, %d), want (char-hunter, 1)", id, classType)
+	}
+}
+
 func TestFetchXurInventory_DegradedWithoutManifest(t *testing.T) {
 	svc := weeklyService(t, `{"ErrorCode":1,"Response":{"sales":{"data":{
 		"2190858386":{"saleItems":{"0":{"itemHash":100}}}}}}}`, nil)
@@ -179,7 +215,7 @@ func TestGetWeekly_PublicPath(t *testing.T) {
 		nil, // efficiency engine — nil triggers fallback
 	)
 
-	res, err := svc.GetWeekly(context.Background(), 3, "4611686018467260757", "")
+	res, err := svc.GetWeekly(context.Background(), 3, "4611686018467260757", "", "")
 	if err != nil {
 		t.Fatalf("GetWeekly: %v", err)
 	}

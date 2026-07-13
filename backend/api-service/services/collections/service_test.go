@@ -326,6 +326,8 @@ func TestToDestinyItem_ItemType(t *testing.T) {
 		wantType    string
 	}{
 		{"shader (19,20)", bungie.ItemTypeMod, bungie.ItemSubTypeShader, "Shader"},
+		{"ornament (19,21)", bungie.ItemTypeMod, bungie.ItemSubTypeOrnament, "Ornament"},
+		{"finisher (29)", bungie.ItemTypeFinisher, 0, "Finisher"},
 		{"ghost (24)", 24, 0, "Ghost"},
 		{"ship (21)", 21, 0, "Ship"},
 		{"emblem (14)", 14, 0, "Emblem"},

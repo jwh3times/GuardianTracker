@@ -71,6 +71,7 @@ export const BADGE_COLOR: Record<string, string> = {
   "in-progress": "var(--c-progress)",
   gilded: "var(--c-gild)",
   owned: "var(--c-text-3)",
+  "for-you": "var(--c-signal)",
   urgent: "var(--c-danger)",
   high: "var(--c-expiring)",
   medium: "var(--c-rare)",

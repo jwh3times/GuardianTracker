@@ -44,9 +44,9 @@ Guardian Tracker exists to answer those questions with **clarity, prioritization
 - **Dashboard** — Real account, collections, weekly, and wishlist queries power overall completion, per-category progress, character context, weekly preview, and wishlist availability.
 - **Collections** — A Bungie presentation-node category tree shows weapons, armor, exotics, and cosmetics with collected/missing counts, item cards, filters, sorting, data freshness, and item detail drawers.
 - **Wishlist** — User-scoped persisted wishlist CRUD with priority, notes, sorting, and availability badges.
-- **This Week** — Real weekly milestones, Xur inventory, daily actions, reset countdowns, missing/wishlist flags, and ranked recommendations.
+- **This Week** — Real weekly milestones, Xur inventory, active-Guardian vendor context, class-aware armor labels, daily actions, reset countdowns, missing/wishlist flags, and ranked recommendations.
 - **Catalysts, crafting, triumphs, and seals** — Real progress surfaces backed by Bungie records data.
-- **Cosmetics gallery** — Dedicated visual browsing for emblems, shaders, ghost shells, ships, sparrows, and emotes.
+- **Cosmetics gallery** — Dedicated visual browsing for emblems, shaders, ghost shells, ships, sparrows, emotes, collectible ornaments, and finishers.
 - **Global search** — Manifest-backed search with deep links into item drawers.
 - **Settings, roles, flags, admin, and audit log** — User preferences, early-access role opt-in, admin management, feature flags, and audit trail are implemented.
 - **Design language** — Dark Destiny-flavored UI with rarity styling, `gt-*` classes, skeleton/error/empty states, toasts, and lazy-loaded routes.
@@ -54,11 +54,11 @@ Guardian Tracker exists to answer those questions with **clarity, prioritization
 ### 3.2 Known Gaps and Product Debt
 
 - **Difficulty and availability are qualified signals** — Difficulty is inferred from source text and can be `Unrated`; "available now" reflects reliable live vendor signals, not a universal obtainable/unobtainable truth.
-- **Collection filters are not fully persistent yet** — Persisted filter state and more explicit obtainability filters remain roadmap work.
-- **Wishlist availability can become broader** — Wishlist availability should reuse the broader reliable vendor availability map where appropriate.
-- **Search index is in memory** — It rebuilds on startup and manifest swap; persistence is roadmap work.
-- **Character switcher is mostly display context** — Collection data is account-wide; deeper character-scoped surfaces remain future work.
-- **Some weekly facts are intentionally omitted** — Xur location and non-raid/dungeon missing counts are not shown unless a reliable Bungie data signal exists.
+- **Collection filters mix URL and local defaults** — Category and filter state are shareable in the URL; filter defaults also persist locally, while category remains URL-only.
+- **Vendor availability is best-effort** — Collections and Wishlist reuse the verified rotating-vendor map, but Bungie can omit authenticated vendor data.
+- **Search can briefly warm** — A versioned search snapshot persists beside the manifest, but a missing or new-version snapshot rebuilds asynchronously.
+- **Character switcher has limited data scope** — Collection data remains account-wide, while authenticated weekly vendor context follows the selected Guardian; deeper character-scoped surfaces remain future work.
+- **Some weekly facts are intentionally omitted** — Xur location is omitted when authenticated vendor/manifest resolution fails, and non-raid/dungeon missing counts remain absent because verified current reward definitions have no collectible-linked items.
 - **No E2E/a11y/visual regression suite yet** — Unit/integration coverage exists; browser-level regression coverage is roadmap work.
 
 ### 3.3 Current Navigation
@@ -86,7 +86,7 @@ This is the menu of data the app can surface or already surfaces. Design with th
 - **Inventory & Item Instances (102, 201, 300–305)** — actual owned item instances with their **rolled perks, stats, masterwork, and sockets** — i.e., _which_ roll of a gun you have. Enables god-roll tracking and "you already have a better copy" insights.
 - **Craftables (1300) & Deepsight** — weapon **crafting pattern progress** (red-border / Deepsight resonance: "3 of 5 patterns extracted"). Huge for completionists.
 - **Metrics (1100)** — tracked lifetime stats.
-- **Profile-level cosmetics** — the manifest + collectibles cover **shaders, emblems, ghost shells, ships, sparrows, finishers, emotes, transmog ornaments** — all collectible categories we don't yet surface.
+- **Profile-level cosmetics** — the manifest + collectibles cover **shaders, emblems, ghost shells, ships, sparrows, finishers, emotes, and transmog ornaments**; these verified collectible categories are surfaced in the Cosmetics gallery.
 - **Activity History / PGCR** — post-game reports; could support "you ran this raid but didn't get X."
 - **Clan / Groups** — clan membership and roster.
 
@@ -161,7 +161,7 @@ Features are grouped by horizon. Each lists the **user value**, **data source** 
 
 ### 5.6 Cosmetics Collections — P1
 
-**Value:** Completionists & fashion players want shaders, emblems, ghosts, ships, sparrows, emotes, ornaments tracked too.
+**Value:** Completionists and fashion players can browse shaders, emblems, ghosts, ships, sparrows, emotes, collectible ornaments, and finishers by ownership state.
 **Data:** Collectibles (800) + Manifest (categories already exist).
 **Design needs:** Visual-forward galleries (cosmetics are about looks) with collected/missing and source.
 
@@ -180,7 +180,7 @@ Features are grouped by horizon. Each lists the **user value**, **data source** 
 ### 5.9 Account-wide niceties — P1/P2
 
 - **Multi-character support** (collections are mostly account-wide, but some data is per-character).
-- **Onboarding** for returning/new players ("here's what changed, here's where to start").
+- **Onboarding** introduces first-time users to their account snapshot, Dashboard, This Week, and Collections; completion persists in account-backed preferences.
 - **Notifications/digests** (P2): "Xûr has an exotic you're missing," "wishlisted roll available this week."
 - **Shareable** collection progress (P2).
 
