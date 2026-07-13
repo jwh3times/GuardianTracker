@@ -48,7 +48,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      MANIFEST_DB_PATH: ${{ runner.temp }}/guardian-e2e/manifest.sqlite
+      # The runner context is not available in job-level env (only github, needs,
+      # strategy, matrix, vars, secrets, inputs), so ${{ runner.temp }} here makes
+      # the whole workflow file invalid and it never runs.
+      MANIFEST_DB_PATH: ${{ github.workspace }}/browser-e2e/manifest.sqlite
 
     steps:
       - name: Checkout code
@@ -114,7 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      MANIFEST_DB_PATH: ${{ runner.temp }}/guardian-e2e-visual/manifest.sqlite
+      MANIFEST_DB_PATH: ${{ github.workspace }}/browser-e2e-visual/manifest.sqlite
 
     steps:
       - name: Checkout code
@@ -146,7 +149,7 @@ jobs:
           mkdir -p browser-logs "$(dirname "$MANIFEST_DB_PATH")"
           (cd backend/api-service && go run ./cmd/fake-bungie) > browser-logs/fake-bungie.log 2>&1 &
           echo $! > browser-logs/fake-bungie.pid
-          for i in $(seq 1 90); do
+          for _ in $(seq 1 90); do
             curl -fsS http://127.0.0.1:8090/health >/dev/null && exit 0
             sleep 1
           done
@@ -157,7 +160,7 @@ jobs:
         run: |
           (cd backend/api-service && go run .) > browser-logs/api-service.log 2>&1 &
           echo $! > browser-logs/api-service.pid
-          for i in $(seq 1 120); do
+          for _ in $(seq 1 120); do
             curl -fsS http://127.0.0.1:8081/ready >/dev/null && exit 0
             sleep 1
           done
@@ -168,7 +171,7 @@ jobs:
         run: |
           (cd frontend && npm run dev -- --host 127.0.0.1 --port 5273) > browser-logs/vite.log 2>&1 &
           echo $! > browser-logs/vite.pid
-          for i in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             curl -fsS http://127.0.0.1:5273/login >/dev/null && exit 0
             sleep 1
           done
