@@ -34,6 +34,25 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
 - Milestone definitions with Bungie's mapping-shaped `rewards` data no longer fail
   to parse and disappear from the weekly response.
 
+### Security
+
+- Refresh JWTs now rotate in a host-only HttpOnly `guardian_refresh_token`
+  cookie instead of localStorage. Callback and refresh require an exact
+  allowlisted origin, definitive session failures clear the cookie, and token
+  responses expose only the access token and user snapshot. Existing browser
+  sessions sign in once again after this migration.
+- Token-encryption keys now carry exact positive versions so an A/v1 to B/v2
+  rotation can retain A/v1 for old rows while all new ciphertext uses B/v2;
+  unknown versions are rejected.
+- API responses now receive no-sniff and no-referrer headers, auth responses are
+  non-cacheable, manifest status no longer exposes its filesystem path, and the
+  frontend CSP no longer permits inline scripts. Inline styles remain a
+  documented CSP residual risk.
+- `GO_ENV` must be explicitly `development` or `production`, with one prominent
+  degraded-development warning and production fail-closed requirements.
+- Compose binds Postgres, pgAdmin, and the disposable test database only to
+  `127.0.0.1`; frontend and API bindings are unchanged.
+
 ## [0.3.12] - 2026-07-12
 
 ### Changed

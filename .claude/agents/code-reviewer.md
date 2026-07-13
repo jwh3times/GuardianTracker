@@ -69,12 +69,12 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - Do not reference Apollo Client (`@apollo/client`) — it is not in this project.
 
 **Auth state**
-- Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads `guardian_token` or `guardian_refresh_token` directly from `localStorage`.
+- Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads `guardian_token` directly from localStorage or references the legacy `guardian_refresh_token` localStorage key.
 - Flag JWT decode operations outside of `AuthContext`.
 - Flag token refresh logic in page components or custom hooks — it belongs in `AuthContext`.
 
 **Token storage**
-- Tokens are stored in `localStorage` under `guardian_token` and `guardian_refresh_token`. Flag any attempt to store tokens in `sessionStorage`, cookies, or component state.
+- The access token is stored in localStorage under `guardian_token`; the refresh token is server-set only as the host-only HttpOnly `guardian_refresh_token` cookie. Flag JavaScript that reads/writes a refresh token, callback/refresh requests without `credentials: "include"`, refresh bodies containing a token, or refresh-token fields in response types.
 
 **Protected routes**
 - Route-level auth is handled by `ProtectedLayout` in `App.tsx`. Flag inline auth checks in page components that duplicate this logic.
@@ -97,7 +97,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - `GET /health` and `GET /ready` have no auth — intentional for Kubernetes probes.
 - `GET /api/auth/bungie` has no auth — initiates the OAuth flow before any session exists.
 - `GET /api/manifest/status` has no auth — public readiness endpoint.
-- `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` have no JWT auth — callback uses the CSRF state, refresh uses the refresh token as its own credential.
+- `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` have no JWT auth — callback uses the CSRF state, refresh uses the HttpOnly cookie as its own credential; both require an exact allowlisted `Origin`.
 - OAuth state is not single-use — this is the intentional stateless HMAC design.
 - `GET /api/admin/users`, `PUT /api/admin/users/:id/role`, `GET /api/admin/flags`, `PUT /api/admin/flags/:key`, `GET /api/admin/audit` — require admin role via `RequireAdmin`; the restriction itself is correct.
 - `PUT /api/account/role` — self-service role opt-in; deliberately rejects `admin` as a target role and rejects admin callers (`ADMIN_OPT_IN`).

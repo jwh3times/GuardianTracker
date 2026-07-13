@@ -61,6 +61,5 @@ func (h *HealthHandler) ManifestStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"ready":   h.manifestService.IsReady(),
 		"version": h.manifestService.GetCurrentVersion(),
-		"dbPath":  h.manifestService.GetDBPath(),
 	})
 }

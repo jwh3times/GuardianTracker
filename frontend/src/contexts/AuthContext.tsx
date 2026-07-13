@@ -11,8 +11,7 @@ import { apiFetch } from "../lib/api";
 interface AuthContextType {
   user: APIUser | null;
   token: string | null;
-  refreshToken: string | null;
-  login: (token: string, refreshToken: string, user: APIUser) => void;
+  login: (token: string, user: APIUser) => void;
   logout: () => void;
   logoutAll: () => void;
   isAuthenticated: boolean;
@@ -28,7 +27,6 @@ interface AuthProviderProps {
 interface AuthState {
   user: APIUser | null;
   token: string | null;
-  refreshToken: string | null;
 }
 
 // Reads persisted authentication from localStorage. Runs synchronously as the
@@ -36,33 +34,35 @@ interface AuthState {
 // first render (no loading flash, no setState-in-effect on mount).
 function readStoredAuth(): AuthState {
   const storedToken = localStorage.getItem("guardian_token");
-  const storedRefreshToken = localStorage.getItem("guardian_refresh_token");
   const storedUser = localStorage.getItem("guardian_user");
+
+  // Refresh tokens moved to an HttpOnly cookie. Remove the legacy value
+  // without attempting to bridge it into the new session mechanism.
+  localStorage.removeItem("guardian_refresh_token");
 
   if (storedToken && storedUser) {
     try {
       return {
         token: storedToken,
-        refreshToken: storedRefreshToken,
         user: JSON.parse(storedUser) as APIUser,
       };
     } catch (error) {
       console.error("Error parsing stored user data:", error);
       localStorage.removeItem("guardian_token");
-      localStorage.removeItem("guardian_refresh_token");
       localStorage.removeItem("guardian_user");
     }
   }
 
-  return { token: null, refreshToken: null, user: null };
+  return { token: null, user: null };
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [auth, setAuth] = useState<AuthState>(readStoredAuth);
-  const { user, token, refreshToken } = auth;
+  const { user, token } = auth;
 
   // Sync React state when apiFetch silently refreshes a token via the 401 retry path.
-  // apiFetch writes new tokens to localStorage and fires "guardian_token_refreshed".
+  // apiFetch writes the new access token and user snapshot to localStorage and
+  // fires "guardian_token_refreshed".
   useEffect(() => {
     const syncFromStorage = () => {
       const newState = readStoredAuth();
@@ -73,19 +73,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       window.removeEventListener("guardian_token_refreshed", syncFromStorage);
   }, []);
 
-  const login = (
-    newToken: string,
-    newRefreshToken: string,
-    newUser: APIUser,
-  ) => {
-    setAuth({ token: newToken, refreshToken: newRefreshToken, user: newUser });
+  const login = (newToken: string, newUser: APIUser) => {
+    setAuth({ token: newToken, user: newUser });
     localStorage.setItem("guardian_token", newToken);
-    localStorage.setItem("guardian_refresh_token", newRefreshToken);
+    localStorage.removeItem("guardian_refresh_token");
     localStorage.setItem("guardian_user", JSON.stringify(newUser));
   };
 
   const clearStoredAuth = () => {
-    setAuth({ token: null, refreshToken: null, user: null });
+    setAuth({ token: null, user: null });
     localStorage.removeItem("guardian_token");
     localStorage.removeItem("guardian_refresh_token");
     localStorage.removeItem("guardian_user");
@@ -93,21 +89,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Ends only this device's session; other devices stay signed in.
   const logout = () => {
-    // Fire-and-forget — clear client state regardless of response
-    apiFetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    // Clear immediately, then clear again after the request settles in case an
+    // expired access token triggered a successful refresh before logout.
+    void apiFetch("/api/auth/logout", { method: "POST" })
+      .catch(() => {})
+      .finally(clearStoredAuth);
     clearStoredAuth();
   };
 
   // Signs out every device for the account (bumps token_version server-side).
   const logoutAll = () => {
-    apiFetch("/api/auth/logout/all", { method: "POST" }).catch(() => {});
+    void apiFetch("/api/auth/logout/all", { method: "POST" })
+      .catch(() => {})
+      .finally(clearStoredAuth);
     clearStoredAuth();
   };
 
   const value: AuthContextType = {
     user,
     token,
-    refreshToken,
     login,
     logout,
     logoutAll,

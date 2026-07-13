@@ -7,7 +7,7 @@ model: sonnet
 
 You are managing the Guardian Tracker Kubernetes infrastructure running on Minikube. Know the cluster topology, secrets model, and deployment workflow exactly.
 
-**This is a dev-validation environment only.** It runs `GO_ENV: development` with no Postgres, so the api-service runs in degraded mode (in-memory Bungie token store, no wishlist/preferences persistence, no JWT revocation). It validates Kubernetes manifests and container builds — not production parity. Production deployment planning belongs in private runbooks; production `GO_ENV=production` requires `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` secrets.
+**This is a dev-validation environment only.** It runs explicit `GO_ENV: development` with no Postgres, so the api-service runs in degraded mode (in-memory Bungie token store, no wishlist/preferences persistence, no JWT revocation). It validates Kubernetes manifests and container builds — not production parity. No production runtime has been selected; deployment planning belongs in private runbooks.
 
 ## Cluster topology
 
@@ -58,6 +58,7 @@ Non-sensitive values that change per environment:
 | `CACHE_TTL_COLLECTIONS` | `300` | Seconds |
 | `JWT_ACCESS_TTL` | `30m` | Go duration; `JWT_EXPIRY_HOURS` remains a legacy fallback |
 | `JWT_REFRESH_EXPIRY_DAYS` | `30` | |
+| `TOKEN_ENCRYPTION_KEY_VERSION` | `1` | Positive placeholder; no encryption key is configured in this degraded stack |
 
 Update `k8s/api-service-configmap.yaml` and apply when the ngrok URL changes:
 ```powershell
@@ -84,7 +85,7 @@ kubectl create secret generic api-service-secrets `
 | `BUNGIE_CLIENT_SECRET` | OAuth app client secret (required for login) |
 | `JWT_SECRET` | HS256 JWT signing key; also derives the OAuth state HMAC key |
 
-Note: `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` are not in the Minikube secret because the stack runs in development mode without Postgres. These are required in production.
+Note: `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` are not in the Minikube secret because the stack runs in development mode without Postgres. Do not treat this omission or these manifests as production guidance.
 
 Update a secret in-place:
 ```powershell
@@ -95,7 +96,7 @@ kubectl rollout restart deployment/api-service
 
 ## Port forwarding
 
-The frontend is accessed via kubectl port-forward to `localhost:3000`:
+The frontend is accessed via kubectl port-forward to `localhost:5273`:
 
 ```powershell
 Start-Job -ScriptBlock { kubectl port-forward service/frontend 5273:80 }

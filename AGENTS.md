@@ -78,24 +78,29 @@ Never commit real secrets. Use `.env` locally and keep generated/private files o
 
 Important local variables:
 
-| Variable               | Purpose                                                              |
-| ---------------------- | -------------------------------------------------------------------- |
-| `BUNGIE_CLIENT_ID`     | Bungie OAuth client ID                                               |
-| `BUNGIE_CLIENT_SECRET` | Bungie OAuth client secret                                           |
-| `BUNGIE_API_KEY`       | Bungie API key                                                       |
-| `BUNGIE_REDIRECT_URI`  | OAuth callback URL                                                   |
-| `JWT_SECRET`           | JWT signing secret                                                   |
-| `TOKEN_ENCRYPTION_KEY` | AES-256-GCM token encryption key                                     |
-| `DATABASE_URL`         | Postgres connection string                                           |
-| `FRONTEND_URL`         | Allowed frontend origin                                              |
-| `ADMIN_MEMBERSHIP_IDS` | Optional comma-separated Bungie membership IDs with admin privileges |
+| Variable                                | Purpose                                                              |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| `GO_ENV`                                | Required runtime mode: exactly `development` or `production`         |
+| `BUNGIE_CLIENT_ID`                      | Bungie OAuth client ID                                               |
+| `BUNGIE_CLIENT_SECRET`                  | Bungie OAuth client secret                                           |
+| `BUNGIE_API_KEY`                        | Bungie API key                                                       |
+| `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                   |
+| `JWT_SECRET`                            | JWT signing secret                                                   |
+| `TOKEN_ENCRYPTION_KEY`                  | AES-256-GCM token encryption key                                     |
+| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current encryption key              |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | Optional previous decryption key during rotation                     |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                          |
+| `DATABASE_URL`                          | Postgres connection string                                           |
+| `CORS_ALLOWED_ORIGINS`                  | Exact browser origins allowed to call the API                        |
+| `ADMIN_MEMBERSHIP_IDS`                  | Optional comma-separated Bungie membership IDs with admin privileges |
 
 Auth and security behavior to preserve:
 
 - OAuth state is HMAC signed.
-- Bungie tokens are encrypted at rest with AES-256-GCM.
-- App sessions use JWTs and per-device refresh tokens.
+- Bungie tokens are encrypted at rest with AES-256-GCM and exact current/previous key versions.
+- Access JWTs and the user snapshot are stored in localStorage; the rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
 - Refresh token revocation is backed by PostgreSQL.
+- Callback and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
 - Admin access is controlled by explicit membership ID configuration.
 
 See `SECURITY.md` for public security posture and reporting guidance.

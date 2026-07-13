@@ -44,6 +44,11 @@ type UserStore interface {
 // oauthStateTTL is how long an issued OAuth state parameter stays valid.
 const oauthStateTTL = 10 * time.Minute
 
+const (
+	refreshCookieName = "guardian_refresh_token"
+	refreshCookiePath = "/api/auth"
+)
+
 // AuthHandler handles Bungie OAuth, token refresh, profile, and logout endpoints.
 type AuthHandler struct {
 	jwt         *auth.JWT
@@ -189,9 +194,9 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 		SessionID:         sessionID,
 		Details:           map[string]any{"role": auth.RoleName(role)},
 	})
+	h.setRefreshCookie(c, refreshToken)
 	c.JSON(http.StatusOK, gin.H{
-		"token":        accessToken,
-		"refreshToken": refreshToken,
+		"token": accessToken,
 		"user": gin.H{
 			"id":             profile.MembershipID,
 			"displayName":    profile.DisplayName,
@@ -205,18 +210,20 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 
 // RefreshToken handles POST /api/auth/refresh
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	var body struct {
-		RefreshToken string `json:"refreshToken" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Refresh token is required"})
+	refreshCookie, err := c.Request.Cookie(refreshCookieName)
+	if err != nil || refreshCookie.Value == "" {
+		h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
+			Details: map[string]any{"reason": "missing_cookie"}})
+		h.expireRefreshCookie(c)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
 		return
 	}
 
-	claims, err := h.jwt.ValidateToken(body.RefreshToken)
+	claims, err := h.jwt.ValidateToken(refreshCookie.Value)
 	if err != nil || claims.TokenType != "refresh" {
 		h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 			Details: map[string]any{"reason": "invalid_token"}})
+		h.expireRefreshCookie(c)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
 		return
 	}
@@ -227,6 +234,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 			h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 				ActorMembershipID: claims.MembershipID, SessionID: claims.SessionID,
 				Details: map[string]any{"reason": "revoked"}})
+			h.expireRefreshCookie(c)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has been revoked. Please log in again."})
 			return
 		}
@@ -247,6 +255,11 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	newRefresh, newJTI, err := h.jwt.GenerateRefreshToken(profile, claims.TokenVersion, sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
+		return
+	}
+	newAccess, err := h.jwt.GenerateAccessToken(profile, claims.TokenVersion, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
 		return
@@ -272,6 +285,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 				h.logAudit(c, db.AuditEvent{EventType: "refresh.reuse", Outcome: "failure",
 					ActorMembershipID: claims.MembershipID, SessionID: sessionID})
 				log.Printf("refresh-token reuse detected for %s (session %s) — session revoked", claims.MembershipID, sessionID)
+				h.expireRefreshCookie(c)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session ended for security reasons. Please log in again."})
 				return
 			case rerr != nil:
@@ -282,21 +296,16 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 				h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
 					ActorMembershipID: claims.MembershipID, SessionID: sessionID,
 					Details: map[string]any{"reason": "expired"}})
+				h.expireRefreshCookie(c)
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has expired. Please log in again."})
 				return
 			}
 		}
 	}
 
-	newAccess, err := h.jwt.GenerateAccessToken(profile, claims.TokenVersion, sessionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
-		return
-	}
-
+	h.setRefreshCookie(c, newRefresh)
 	c.JSON(http.StatusOK, gin.H{
-		"token":        newAccess,
-		"refreshToken": newRefresh,
+		"token": newAccess,
 		"user": gin.H{
 			"id":             claims.MembershipID,
 			"displayName":    claims.DisplayName,
@@ -353,6 +362,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 
 	h.logAudit(c, db.AuditEvent{EventType: "logout.session", ActorMembershipID: c.GetString("membership_id"), SessionID: sessionID})
+	h.expireRefreshCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
@@ -382,7 +392,31 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	}
 
 	h.logAudit(c, db.AuditEvent{EventType: "logout.all", ActorMembershipID: membershipID})
+	h.expireRefreshCookie(c)
 	c.JSON(http.StatusOK, gin.H{"message": "Signed out of all devices"})
+}
+
+func (h *AuthHandler) setRefreshCookie(c *gin.Context, token string) {
+	ttl := h.jwt.RefreshTokenTTL()
+	h.writeRefreshCookie(c, token, time.Now().Add(ttl), int(ttl/time.Second))
+}
+
+func (h *AuthHandler) expireRefreshCookie(c *gin.Context) {
+	h.writeRefreshCookie(c, "", time.Unix(1, 0), -1)
+}
+
+func (h *AuthHandler) writeRefreshCookie(c *gin.Context, value string, expires time.Time, maxAge int) {
+	secure := h.cfg != nil && h.cfg.IsProduction()
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    value,
+		Path:     refreshCookiePath,
+		Expires:  expires.UTC(),
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // logAudit writes one event best-effort: it never blocks or fails the request.

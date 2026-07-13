@@ -17,3 +17,4 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0005: Versioning with Auto-Incremented Releases](./0005-versioning-with-build-tags.md)
 - [ADR 0006: Roles, Feature Flags, and Admin Authorization](./0006-roles-feature-flags-and-admin-authorization.md)
 - [ADR 0007: Bungie Public API Weekly and Vendor Limits](./0007-bungie-public-api-weekly-and-vendor-limits.md)
+- [ADR 0008: Browser Refresh Credential Cookie](./0008-browser-refresh-cookie.md)

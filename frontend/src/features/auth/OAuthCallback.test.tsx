@@ -11,7 +11,6 @@ import { OAuthCallback } from "./OAuthCallback";
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_refresh_token", "test-refresh");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 
@@ -20,12 +19,13 @@ describe("OAuthCallback", () => {
   // single-use auth code must only be submitted once.
   it("submits the auth code exactly once under StrictMode", async () => {
     let callbackPosts = 0;
+    let callbackCredentials: RequestCredentials | undefined;
     server.use(
-      http.post(`${API}/api/auth/bungie/callback`, () => {
+      http.post(`${API}/api/auth/bungie/callback`, ({ request }) => {
         callbackPosts++;
+        callbackCredentials = request.credentials;
         return HttpResponse.json({
           token: "new-token",
-          refreshToken: "new-refresh",
           user: sampleUser,
         });
       }),
@@ -53,6 +53,8 @@ describe("OAuthCallback", () => {
 
     expect(await screen.findByText("dashboard-stub")).toBeInTheDocument();
     expect(callbackPosts).toBe(1);
+    expect(callbackCredentials).toBe("include");
+    expect(localStorage.getItem("guardian_refresh_token")).toBeNull();
   });
 
   it("shows an error when Bungie returns one", async () => {

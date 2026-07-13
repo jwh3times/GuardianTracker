@@ -34,9 +34,15 @@ Bungie OAuth login uses a stateless HMAC-signed CSRF state. On callback, the API
 stores Bungie OAuth tokens AES-256-GCM encrypted in Postgres and issues Guardian
 Tracker JWTs.
 
-Access tokens are short-lived bearer tokens. Refresh tokens are rotating,
-per-device sessions backed by Postgres. Reused refresh tokens revoke the affected
-session. Sign-out-everywhere bumps the user's token version and removes sessions.
+Access tokens are short-lived bearer tokens stored with the non-secret user
+snapshot in browser localStorage. Refresh tokens are rotating, per-device
+sessions backed by Postgres and delivered only through a host-only HttpOnly
+cookie scoped to `/api/auth`. Reused refresh tokens revoke the affected session.
+Sign-out-everywhere bumps the user's token version and removes sessions.
+
+The callback and refresh endpoints require an exact allowlisted browser origin.
+This cookie policy assumes the frontend and API are same-site; a cross-site
+deployment would require a new cookie and CSRF decision.
 
 Authorization reads the current role from the DB-backed revocation cache rather
 than trusting the JWT role hint.
@@ -97,6 +103,8 @@ See `backend/api-service/main.go` for the authoritative route registration.
 
 Docker Compose is the recommended full-stack development path. It starts the
 frontend, API service, Postgres, pgAdmin, and a test Postgres profile.
+Database and pgAdmin host ports are loopback-only; frontend and API bindings are
+unchanged.
 
 Minikube manifests under `k8s/` validate container and Kubernetes wiring. That
 environment runs in development mode and is not production parity.
@@ -105,9 +113,12 @@ environment runs in development mode and is not production parity.
 
 - Secrets are read from environment files or runtime environment variables, never
   committed.
-- Bungie tokens are encrypted at rest with key rotation support.
+- Bungie tokens are encrypted at rest with exact current/previous key versions.
 - CORS allows only configured origins.
-- API server timeouts and body limits are configured.
+- API server timeouts, body limits, no-sniff/referrer headers, and no-store auth
+  responses are configured.
+- The frontend CSP disallows inline scripts; inline styles remain an explicitly
+  documented residual risk.
 - Admin and role changes are audited.
 - Audit rows include client IP and User-Agent, retained by configured policy.
 

@@ -8,12 +8,13 @@ import (
 
 func validProdConfig() *Config {
 	return &Config{
-		GoEnv:              "production",
-		BungieAPIKey:       "key",
-		BungieClientID:     "client",
-		JWTSecret:          strings.Repeat("s", 32),
-		DatabaseURL:        "postgres://localhost/db",
-		TokenEncryptionKey: "base64key",
+		GoEnv:                     "production",
+		BungieAPIKey:              "key",
+		BungieClientID:            "client",
+		JWTSecret:                 strings.Repeat("s", 32),
+		DatabaseURL:               "postgres://localhost/db",
+		TokenEncryptionKey:        "base64key",
+		TokenEncryptionKeyVersion: 1,
 	}
 }
 
@@ -57,6 +58,23 @@ func TestValidate_DevelopmentNeverErrors(t *testing.T) {
 	}
 }
 
+func TestValidate_RequiresExplicitKnownGoEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  string
+	}{
+		{name: "unset", env: ""},
+		{name: "unknown", env: "staging"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{GoEnv: tc.env}
+			if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "GO_ENV") {
+				t.Fatalf("Validate() = %v, want GO_ENV error", err)
+			}
+		})
+	}
+}
+
 func TestLoad_EnvParsing(t *testing.T) {
 	t.Setenv("PORT", "9999")
 	t.Setenv("GO_ENV", "production")
@@ -93,6 +111,67 @@ func TestLoad_EnvParsing(t *testing.T) {
 	}
 	if cfg.DBMaxConns != 8 {
 		t.Errorf("DBMaxConns = %d", cfg.DBMaxConns)
+	}
+}
+
+func TestLoad_TokenEncryptionKeyVersions(t *testing.T) {
+	t.Setenv("TOKEN_ENCRYPTION_KEY_VERSION", "")
+	t.Setenv("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION", "")
+	cfg := Load()
+	if cfg.TokenEncryptionKeyVersion != 1 || cfg.TokenEncryptionKeyPrevVersion != 0 {
+		t.Fatalf("default versions = %d/%d, want 1/0", cfg.TokenEncryptionKeyVersion, cfg.TokenEncryptionKeyPrevVersion)
+	}
+
+	t.Setenv("TOKEN_ENCRYPTION_KEY_VERSION", "2")
+	t.Setenv("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION", "1")
+	cfg = Load()
+	if cfg.TokenEncryptionKeyVersion != 2 || cfg.TokenEncryptionKeyPrevVersion != 1 {
+		t.Fatalf("configured versions = %d/%d, want 2/1", cfg.TokenEncryptionKeyVersion, cfg.TokenEncryptionKeyPrevVersion)
+	}
+}
+
+func TestLoad_RejectsInvalidTokenEncryptionKeyVersions(t *testing.T) {
+	t.Setenv("GO_ENV", "development")
+	t.Setenv("TOKEN_ENCRYPTION_KEY", "configured")
+	for _, value := range []string{"0", "-1", "32768", "not-a-number"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("TOKEN_ENCRYPTION_KEY_VERSION", value)
+			if err := Load().Validate(); err == nil || !strings.Contains(err.Error(), "TOKEN_ENCRYPTION_KEY_VERSION") {
+				t.Fatalf("Validate() = %v, want key-version error", err)
+			}
+		})
+	}
+}
+
+func TestValidate_TokenEncryptionPreviousVersionPairing(t *testing.T) {
+	base := Config{
+		GoEnv:                         "development",
+		TokenEncryptionKey:            "current",
+		TokenEncryptionKeyVersion:     2,
+		TokenEncryptionKeyPrev:        "previous",
+		TokenEncryptionKeyPrevVersion: 1,
+	}
+	if err := base.Validate(); err != nil {
+		t.Fatalf("valid rotation config rejected: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*Config)
+	}{
+		{name: "previous version missing", mutate: func(c *Config) { c.TokenEncryptionKeyPrevVersion = 0 }},
+		{name: "versions equal", mutate: func(c *Config) { c.TokenEncryptionKeyPrevVersion = c.TokenEncryptionKeyVersion }},
+		{name: "previous key missing", mutate: func(c *Config) { c.TokenEncryptionKeyPrev = "" }},
+		{name: "current key missing", mutate: func(c *Config) { c.TokenEncryptionKey = "" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base
+			tc.mutate(&cfg)
+			if err := cfg.Validate(); err == nil {
+				t.Fatal("Validate() unexpectedly succeeded")
+			}
+		})
 	}
 }
 
