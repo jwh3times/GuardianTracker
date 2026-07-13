@@ -1,6 +1,6 @@
 # Roadmap
 
-**Updated:** 2026-07-12
+**Updated:** 2026-07-13
 
 This public roadmap lists work that is not implemented yet. Completed work is
 tracked in [CHANGELOG.md](./CHANGELOG.md), and durable architecture decisions are
@@ -21,23 +21,6 @@ runbooks, and environment-specific operations notes belong under `private/`.
   operating decision.
 
 ## Product Backlog
-
-### 1. E2E, Accessibility, and Visual Regression
-
-**Status:** Not implemented
-**Gate:** Test infrastructure spec
-**Likely size:** Large
-
-Add Playwright coverage for the main user journeys, then layer automated
-accessibility checks and optional visual snapshots.
-
-Initial target flows:
-
-- login callback and protected routing
-- collections browsing and item drawer
-- wishlist CRUD
-- search deep links
-- This Week, catalysts, crafting, triumphs, settings, and admin smoke paths
 
 ### 2. Deeper Character-Scoped Surfaces
 
@@ -116,15 +99,16 @@ cloud resources, and deploying production infrastructure should be implemented
 only after the target hosting model is accepted. Environment-specific runbooks
 belong in `private/` until then.
 
-### 8. Structured Logging and Metrics
+### 8. Metrics
 
 **Status:** Not implemented
 **Gate:** Production observability decision
 **Likely size:** Medium
 
-Move from ad hoc logs to structured logs with request IDs, sanitized identifiers,
-and deploy-target-appropriate aggregation. Add metrics only after the production
-runtime is known.
+Structured request/access logging with request IDs and sanitized identifiers has
+shipped (see [docs/architecture.md](./docs/architecture.md#request-logging)).
+Metrics remain unimplemented; add them only after the production runtime and
+collector target are known.
 
 ## Completed Work
 

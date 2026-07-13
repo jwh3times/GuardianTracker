@@ -125,3 +125,37 @@ test("keyboard disclosures and reduced-motion preference are active", async ({
     ),
   ).toBe(true);
 });
+
+test("the Collections category search has an accessible name and no blocking axe findings while active", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/collections?node=10");
+  const search = page.getByRole("searchbox", {
+    name: "Search this category…",
+  });
+  await expect(search).toBeVisible();
+  await expect(search).toHaveAccessibleName("Search this category…");
+
+  await search.focus();
+  await expect(search).toBeFocused();
+  await search.fill("Fate");
+  await scanPage(page, testInfo, "collections-search-active");
+});
+
+// Mirrors the item-drawer scan above: opens an interactive disclosure by
+// keyboard, confirms it has an accessible name, then scans the expanded state.
+test("an expanded triumph disclosure has an accessible name and no blocking axe findings", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/triumphs");
+  const toggle = page.getByRole("button", { name: /Tested Resolve/ });
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAccessibleName(/Tested Resolve/);
+
+  await toggle.focus();
+  await expect(toggle).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+  await scanPage(page, testInfo, "triumph-disclosure-expanded");
+});

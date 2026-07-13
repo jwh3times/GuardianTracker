@@ -114,7 +114,7 @@ backend/api-service/
 | GET | `/api/items/:itemHash/perks` | JWT | Weapon possible perk pool + exotic catalyst pool from manifest; `{ itemHash, perkColumns: [{role,label,perks}], catalysts: [{name,description}] }`; 200 + empty arrays for non-weapon/unknown hash or non-exotic; 503 (`MANIFEST_NOT_READY`) while manifest warms; 400 on non-numeric hash; NOT membership-scoped |
 | GET | `/api/catalysts/:membershipType/:membershipId` | JWT + flag | `{ items, fetchedAt }` exotic catalyst progress incl. weapon type/icon/effect text |
 | GET | `/api/crafting/:membershipType/:membershipId` | JWT + flag | `{ items, fetchedAt }` crafting pattern progress |
-| GET | `/api/seals/:membershipType/:membershipId` | JWT + flag | `{ items, fetchedAt }` triumph/seal completion |
+| GET | `/api/seals/:membershipType/:membershipId` | JWT + flag | `{ items, fetchedAt }` triumph/seal completion; each triumph carries an optional `objectives` array (`{label,done,cur,max}`) |
 | GET | `/health` | None | Liveness probe |
 | GET | `/ready` | None | Readiness probe |
 
@@ -199,6 +199,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 - `Effect` is resolved by `resolveCatalystEffect`: links the catalyst record to its weapon via `GetCatalystLinks()` objective-hash overlap first (unambiguous on both the weapon and record side), then a stripped-name match, then a catalyst-plug-name match, falling back to the record's own description and then `""`
 - `WeaponTypesCacheKey` / `CatalystLinksCacheKey` exported for eviction from the after-swap hook
 - `InvalidateCache(membershipType, membershipId)` drops cached profile records (called by RefreshCollections)
+- `Triumph.Objectives []TriumphObjective` (`omitempty`) — per-objective drill-down built by `GetSeals`: excludes explicitly-hidden objectives (`RecordObjective.Visible *bool`; `nil` = absent = visible — a plain `bool` would decode Bungie's absent-field-means-visible default backwards), falls back to `Objective N` for a blank `progressDescription` (numbered over the objectives that survive visibility filtering), normalizes a zero `completionValue` to `Max=1`, and forces `Done=true`/`Cur==Max` on every objective when the parent record is redeemed regardless of stale objective payloads. The existing top-level `Triumph.Cur`/`Max` is unchanged for response compatibility.
 
 ## Collections service
 

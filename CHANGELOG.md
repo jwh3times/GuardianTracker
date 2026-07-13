@@ -3,47 +3,74 @@
 All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Guardian Tracker uses the SemVer target version in `VERSION`; merges to `main`
-are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
-`v0.3.10`, `v0.3.11`, and `v0.3.12`.
+Guardian Tracker uses the SemVer target version in `VERSION`; every merge to
+`main` is stamped with an annotated version tag and GitHub Release such as
+`v0.3.19`, `v0.3.20`, and `v0.3.21`. One merge to `main` produces exactly one
+version, so each released section below corresponds to a single merged pull
+request.
 
 ## [Unreleased]
 
 ### Added
 
-- Structured application and access logs with server-owned request UUIDs,
-  route-template records, privacy-safe identifier pseudonyms, and
-  `X-Request-ID` response/CORS propagation.
-- Staticcheck 2026.1 to the required Go CI job, alongside `go vet`,
-  `govulncheck`, race-enabled tests, and coverage enforcement.
+- An accessible "Search this category…" field to the Collections toolbar.
+  The search term lives only in the URL (never persisted to localStorage,
+  unlike the other Collections filters), matches item names case-insensitively,
+  composes with every existing filter and sort, and is included in "Clear
+  filters" with a search-specific empty state naming the term.
+- A collapsed, keyboard-accessible objective disclosure on seal triumphs that
+  carry per-objective progress data. Multi-objective triumphs summarize as
+  completed-objective count/total; expanding shows each objective's own exact
+  progress. `GET /api/seals/:membershipType/:membershipId` now includes an
+  optional `objectives` array per triumph; triumphs without objective data are
+  unchanged.
+
+### Fixed
+
+- Seal triumph objectives with no explicit `visible` field now decode as
+  visible instead of hidden. `RecordObjective.Visible` was a plain `bool`, so
+  an absent field (Bungie's default for a visible objective) decoded to
+  `false`, the inverse of Bungie's semantics; it is now `*bool` (`nil` = visible).
+
+### Security
+
+- A regression test now pins the Postgres/pgAdmin/test-Postgres/e2e-Postgres
+  loopback-only Compose bindings shipped in 0.3.18, closing a gap where that
+  binding shipped without the assertion its own rollout gate called for.
+
+## [0.3.21] - 2026-07-13
+
+### Changed
+
+- Bumped the frontend npm minor/patch group: `@tanstack/react-virtual` 3.14.5 to
+  3.14.6 (pulling `@tanstack/virtual-core` 3.17.3 to 3.17.4) and `postcss` 8.5.17
+  to 8.5.19.
+
+## [0.3.20] - 2026-07-13
+
+### Added
+
 - A hermetic Playwright browser suite backed by a local fake Bungie service and
   isolated Postgres profile, covering functional journeys, WCAG 2.2 axe checks,
   keyboard/reduced-motion behavior, and deterministic visual regression.
 - Separate advisory browser CI jobs with one functional retry and 14-day
   reports, logs, traces, screenshots, videos, and visual diffs. Visual tests run
   in the package-matched Playwright 1.61.0 Noble image.
-- Collectible ornaments and finishers to the Cosmetics gallery after verifying
-  their manifest item type/subtype classification.
-- A first-run guided tour of Dashboard, This Week, and Collections. Completion
-  is stored with the user's server-side preferences so it follows the Bungie
-  account across browsers and devices.
+- A test-only `fake-bungie` command and `e2efixture` package serving a synthetic
+  manifest and deterministic profile/vendor data, plus an `e2e` Docker Compose
+  profile with its own isolated Postgres. No browser test contacts Bungie.net.
+- A development-only `E2E_FIXED_TIME` setting (RFC3339) that injects a fixed
+  clock into the weekly service so Xûr's weekend window is deterministic.
+  Startup fails closed if it is set in production.
 
 ### Changed
 
-- Authenticated weekly vendor inventory, daily actions, availability ranking,
-  and Xûr location now follow the selected Guardian. Xûr armor also identifies
-  its manifest-defined class and highlights armor for the active class.
-- Xûr's location now resolves best-effort from authenticated vendor and manifest
-  data and is displayed as "The Tower"; the location row is omitted when Bungie
-  cannot resolve it.
-- Non-raid/dungeon milestone missing counts remain intentionally omitted after
-  current Bungie reward definitions were verified to contain no collectible-linked
-  items.
+- `--c-text-3` lightness raised from L 0.62 to 0.68 so tertiary text clears WCAG
+  AA on tinted surfaces. `--c-text-4` is now reserved for genuinely disabled
+  controls, which WCAG exempts from contrast minimums.
 
 ### Fixed
 
-- Milestone definitions with Bungie's mapping-shaped `rewards` data no longer fail
-  to parse and disappear from the weekly response.
 - Manifest downloads now create the destination directory. Writing the manifest
   archive to a `MANIFEST_DB_PATH` whose directory did not exist yet failed every
   retry immediately, leaving `/ready` at 503 and the manifest missing until the
@@ -56,12 +83,31 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   The row is now a real listitem containing a real button.
 - The Xûr and milestone panels rendered an empty `<ul>` when Bungie reported no
   vendor sales or milestones; they now render an empty state.
+- The browser workflow was not valid YAML, so it never actually ran; it now
+  parses and executes.
+- The fake OAuth redirect is built from configuration rather than the incoming
+  request.
+
+## [0.3.19] - 2026-07-13
+
+### Added
+
+- Structured application and access logs with server-owned request UUIDs,
+  route-template records, privacy-safe identifier pseudonyms, and
+  `X-Request-ID` response/CORS propagation.
+- `LOG_LEVEL` (`debug`, `info`, `warn`, `error`; defaults to `info`) and
+  `LOG_FORMAT` (`text` or `json`; text in development, JSON in production)
+  settings, validated at startup.
+- Staticcheck 2026.1 to the required Go CI job, alongside `go vet`,
+  `govulncheck`, race-enabled tests, and coverage enforcement.
 
 ### Changed
 
-- `--c-text-3` lightness raised from L 0.62 to 0.68 so tertiary text clears WCAG
-  AA on tinted surfaces. `--c-text-4` is now reserved for genuinely disabled
-  controls, which WCAG exempts from contrast minimums.
+- The API service migrated from the standard `log` package and `gin.Default()`
+  to `log/slog`, `gin.New()`, and a new `observability` package providing the
+  logger, HTTP middleware, and custom panic recovery.
+
+## [0.3.18] - 2026-07-13
 
 ### Security
 
@@ -81,6 +127,82 @@ are stamped with annotated version tags and GitHub Releases such as `v0.2.0`,
   degraded-development warning and production fail-closed requirements.
 - Compose binds Postgres, pgAdmin, and the disposable test database only to
   `127.0.0.1`; frontend and API bindings are unchanged.
+- Revocation now distinguishes a deleted user from a database outage. The user
+  lookup reports whether the row was found, so an unknown or deleted user is
+  rejected with 401 while a genuine database failure retains the documented
+  fail-open behavior; previously the two were indistinguishable.
+
+## [0.3.17] - 2026-07-13
+
+### Changed
+
+- Bumped `github.com/mattn/go-sqlite3` from 1.14.47 to 1.14.48.
+
+## [0.3.16] - 2026-07-13
+
+### Changed
+
+- Bumped `postcss` from 8.5.16 to 8.5.17.
+
+## [0.3.15] - 2026-07-13
+
+### Added
+
+- Collectible ornaments and finishers to the Cosmetics gallery after verifying
+  their manifest item type/subtype classification.
+- A first-run guided tour of Dashboard, This Week, and Collections. Completion
+  is stored with the user's server-side preferences so it follows the Bungie
+  account across browsers and devices. `GET`/`PUT /api/preferences` carry
+  `onboardedAt`, and `PUT` accepts a write-once `onboardingComplete` flag;
+  attempting to set it back to `false` is rejected.
+- A `characterId` query parameter on `GET /api/weekly/recommendations`.
+
+### Changed
+
+- Authenticated weekly vendor inventory, daily actions, availability ranking,
+  and Xûr location now follow the selected Guardian. Xûr armor also identifies
+  its manifest-defined class and highlights armor for the active class.
+- The Dashboard's weekly query is keyed by the active character and defers until
+  the character list has loaded.
+
+### Removed
+
+- The Dashboard "Get Started" panel and its localStorage first-run flag,
+  superseded by the server-backed guided tour. The Dashboard header no longer
+  alternates between "Welcome" and "Welcome back".
+
+## [0.3.14] - 2026-07-12
+
+### Added
+
+- A manifest repository lookup that resolves a vendor and location index to its
+  destination definition, with zero-value fallbacks for best-effort callers.
+- An authenticated character-vendor fetch with a five-minute membership-scoped
+  cache, plus a daily-cached live vendor sale-item lookup behind a vendor
+  allowlist, enriching item availability.
+- A `location` field on the Xûr response, omitted when it cannot be resolved.
+
+### Changed
+
+- Xûr's location now resolves best-effort from authenticated vendor and manifest
+  data and is displayed as "The Tower"; the location row is omitted when Bungie
+  cannot resolve it.
+- Non-raid/dungeon milestone missing counts remain intentionally omitted after
+  current Bungie reward definitions were verified to contain no collectible-linked
+  items.
+
+### Fixed
+
+- Milestone definitions with Bungie's mapping-shaped `rewards` data no longer fail
+  to parse and disappear from the weekly response.
+
+## [0.3.13] - 2026-07-12
+
+### Changed
+
+- Release-notes maintenance only: backfilled the `[0.3.0]` through `[0.3.12]`
+  sections and refreshed the version examples in this file's header. No
+  functional, API, or schema changes.
 
 ## [0.3.12] - 2026-07-12
 

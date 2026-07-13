@@ -79,6 +79,28 @@ describe("Triumphs page", () => {
     ).toBeInTheDocument();
   });
 
+  it("expands a triumph's own objective disclosure to show exact per-objective progress", async () => {
+    renderPage(<Triumphs />);
+    await screen.findByText("Conqueror");
+
+    // "Complete a GM" carries no objective data — it stays a flat row.
+    expect(
+      screen.queryByRole("button", { name: /Complete a GM/i }),
+    ).not.toBeInTheDocument();
+
+    // "Flawless card" carries objective data — it gets a disclosure toggle,
+    // collapsed by default.
+    const toggle = screen.getByRole("button", { name: /Flawless card/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Win 7 Trials matches")).not.toBeInTheDocument();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(await screen.findByText("Win 7 Trials matches")).toBeInTheDocument();
+    expect(screen.getByText("No deaths in the run")).toBeInTheDocument();
+  });
+
   it("renders the loading spinner while the query is in flight", async () => {
     server.use(
       http.get(`${API}/api/seals/:type/:id`, async () => {

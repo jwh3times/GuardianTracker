@@ -462,11 +462,15 @@ type RecordComponent struct {
 
 // RecordObjective is one objective within a record.
 type RecordObjective struct {
-	ObjectiveHash       uint32 `json:"objectiveHash"`
-	Progress            int    `json:"progress"`
-	CompletionValue     int    `json:"completionValue"`
-	Complete            bool   `json:"complete"`
-	Visible             bool   `json:"visible"`
+	ObjectiveHash   uint32 `json:"objectiveHash"`
+	Progress        int    `json:"progress"`
+	CompletionValue int    `json:"completionValue"`
+	Complete        bool   `json:"complete"`
+	// Visible is a *bool because Bungie omits the field entirely when an
+	// objective is visible; only an explicit false means hidden. A plain bool
+	// would decode an absent field to false, which is the exact inverse of
+	// the real semantics. nil = absent = visible.
+	Visible             *bool  `json:"visible"`
 	ProgressDescription string `json:"progressDescription"`
 }
 

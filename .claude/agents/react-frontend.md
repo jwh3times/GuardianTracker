@@ -73,7 +73,11 @@ frontend/src/
     composite.tsx              ← Panel, CategoryTree, ItemDetailDrawer (renders perk columns — label + chips —
                                    with loading state; props: perkColumns?, perksLoading?, catalysts?; renders a
                                    "Catalyst" section (name + description) when catalysts is non-empty; old flat
-                                   item.perks block removed), SealCard, Dropdown…
+                                   item.perks block removed), SealCard (renders each triumph via TriumphRow;
+                                   triumphs with a `t.objectives` array get a collapsed-by-default, keyboard-
+                                   accessible disclosure — local expansion state per row — that lists each
+                                   objective's own label/progress; triumphs with no objectives render flat,
+                                   unchanged), Dropdown…
     LoadingSpinner.tsx         ← (was components/ui/) shown while data loads
     Toast.tsx                  ← (was components/ui/) ToastProvider / useToast
                                  Import these directly (e.g. "../../../components/primitives") — the
@@ -115,10 +119,14 @@ frontend/src/
                                    APIPerkColumn, APIItemCatalyst, APIItemPerks, APIItemView)
     design.ts                  ← Design-system domain types (GTItem — GTItem.perks field REMOVED, Seal,
                                    Weekly with resetAt/fetchedAt/degraded, Milestone.missing now optional,
-                                   WishlistEntry with icon, PerkColumn, ItemCatalyst, Catalyst.effect)
+                                   WishlistEntry with icon, PerkColumn, ItemCatalyst, Catalyst.effect,
+                                   TriumphObjective, Triumph.objectives?)
   test/                        ← Shared test infra (referenced by vite.config setupFiles)
     setup.ts                   ← Vitest setup file
     testServer.ts              ← MSW server + shared fixtures
+    dockerComposeSecurity.test.ts ← Parses root docker-compose.yml and pins postgres/pgadmin/
+                                   test-postgres/e2e-postgres to 127.0.0.1-only port bindings
+                                   (api-service/frontend intentionally excluded)
   vite-env.d.ts
 ```
 
@@ -222,7 +230,8 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected) and opens the detail drawer; if no collectible entry exists, falls back to `itemByHashQuery` → `toGTItemView` for a read-only view drawer
 - Cosmetics is a full top-level category alongside Weapons, Armor, Exotics
 - Add-to-wishlist and remove-from-wishlist mutations with pending-state guard (prevents double-click races)
-- Filter/category state (rarity, difficulty, sort, view, missing-only, "available now", "hide farm-only", and the selected category) is owned by `useCollectionsFilters` (`features/collections/useCollectionsFilters.ts`), which makes the URL the source of truth: `parseFilters`/`serializeFilters` read and write `?node=&rarity=&diff=&sort=&view=&missing=&avail=&farm=`, keeping the URL shareable and reload-safe. Filter fields (not `node`) also mirror to a `gt.collections.filters` localStorage entry, which supplies defaults only when the URL carries no filter params (e.g. a fresh visit) — `node` is always URL-only, never persisted to storage. History behavior differs by field: `setNode` pushes a history entry so Back returns to the previous category; every filter setter (`setRarity`, `setDiff`, `setSort`, `setView`, `setMissing`, `setAvail`, `setFarm`) replaces, so toggling a filter doesn't spam history. Callers that must change multiple fields atomically (e.g. restoring node + missing together from a deep link) go through `setFilters`, not sequential single-field setters — `useSearchParams`'s functional updater snapshots `prev` per call, so two `write` calls in the same tick would clobber each other.
+- Filter/category state (rarity, difficulty, sort, view, missing-only, "available now", "hide farm-only", the in-page search term, and the selected category) is owned by `useCollectionsFilters` (`features/collections/useCollectionsFilters.ts`), which makes the URL the source of truth: `parseFilters`/`serializeFilters` read and write `?node=&q=&rarity=&diff=&sort=&view=&missing=&avail=&farm=`, keeping the URL shareable and reload-safe. Filter fields also mirror to a `gt.collections.filters` localStorage entry, which supplies defaults only when the URL carries no filter params (e.g. a fresh visit). `node` and `q` are the two keys in `URL_ONLY_KEYS`: never persisted to storage, never read back from it, and re-asserted from the URL everywhere stored/legacy state is merged in — a bare `?node=` or `?q=` deep link still applies the user's stored filter defaults, and a stray `q`/`node` key in a hand-edited or legacy localStorage payload can't leak into state. History behavior differs by field: `setNode` pushes a history entry so Back returns to the previous category; every other setter, including `setQ`, replaces (`{ replace: true }`), so typing a search term or toggling a filter doesn't spam history. Callers that must change multiple fields atomically (e.g. restoring node + missing together from a deep link) go through `setFilters`, not sequential single-field setters — `useSearchParams`'s functional updater snapshots `prev` per call, so two `write` calls in the same tick would clobber each other.
+- The Collections toolbar's "Search this category…" field (`type="search"`, `aria-label`, 100-char `maxLength`) filters the currently-loaded category's items by case-insensitive name substring match, purely client-side over the already-fetched `?include=all` payload — it does not call `/api/items/search`. It composes with every other filter/sort as another predicate, is cleared by "Clear filters," and drives a search-specific empty state that names the term (`No items match "<term>"`).
 
 ## Wishlist page features
 
@@ -250,6 +259,7 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - `PerkColumn` (design.ts): `{ role: string; label: string; perks: string[] }` — design-layer parallel to `APIPerkColumn`
 - `ItemCatalyst` (design.ts): `{ name: string; description: string }` — design-layer parallel to `APIItemCatalyst`; passed to `ItemDetailDrawer`'s `catalysts` prop
 - `Catalyst.effect?: string` (design.ts) — catalyst perk/effect text on the `/api/catalysts/...` response; rendered on `Catalysts.tsx` cards when present
+- `Triumph.objectives?: TriumphObjective[]` (design.ts) — optional per-objective drill-down on `/api/seals/...` triumphs; `TriumphObjective { label, done, cur, max }`; absent (not an empty array) when the triumph has no objective data, so existing triumphs render unchanged
 
 ## Styling
 

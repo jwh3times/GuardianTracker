@@ -91,6 +91,23 @@ type Seal struct {
 type Triumph struct {
 	Label string `json:"label"`
 	Done  bool   `json:"done"`
+	// Cur and Max are legacy/compat fields derived from the record's first
+	// RAW objective (record.Objectives[0]), which may be explicitly hidden,
+	// whereas Objectives below excludes hidden entries — so Cur/Max must
+	// never be correlated with Objectives by index.
+	Cur int `json:"cur"`
+	Max int `json:"max"`
+	// Objectives is the per-objective drill-down for the triumph's progress
+	// bar; omitted entirely (not an empty array) when no objective survives
+	// visibility filtering, so the response stays byte-identical for
+	// triumphs with no objective data.
+	Objectives []TriumphObjective `json:"objectives,omitempty"`
+}
+
+// TriumphObjective is one objective's progress within a triumph.
+type TriumphObjective struct {
+	Label string `json:"label"`
+	Done  bool   `json:"done"`
 	Cur   int    `json:"cur"`
 	Max   int    `json:"max"`
 }
@@ -791,11 +808,48 @@ func (s *Service) GetSeals(ctx context.Context, membershipType int, membershipID
 					cur = max
 				}
 
+				// Per-objective drill-down: include every objective that is
+				// not explicitly hidden (nil Visible == absent == visible).
+				// Redeemed state overrides stale objective payloads; blank
+				// labels fall back to "Objective N", numbered over the
+				// objectives that survive visibility filtering.
+				var triumphObjectives []TriumphObjective
+				if hasRecord {
+					for _, obj := range record.Objectives {
+						if obj.Visible != nil && !*obj.Visible {
+							continue
+						}
+						objMax := obj.CompletionValue
+						if objMax <= 0 {
+							objMax = 1
+						}
+						objDone := obj.Complete
+						objCur := obj.Progress
+						if isComplete {
+							objDone = true
+							objCur = objMax
+						} else if objCur > objMax {
+							objCur = objMax
+						}
+						objLabel := obj.ProgressDescription
+						if strings.TrimSpace(objLabel) == "" {
+							objLabel = fmt.Sprintf("Objective %d", len(triumphObjectives)+1)
+						}
+						triumphObjectives = append(triumphObjectives, TriumphObjective{
+							Label: objLabel,
+							Done:  objDone,
+							Cur:   objCur,
+							Max:   objMax,
+						})
+					}
+				}
+
 				triumphs = append(triumphs, Triumph{
-					Label: label,
-					Done:  isComplete,
-					Cur:   cur,
-					Max:   max,
+					Label:      label,
+					Done:       isComplete,
+					Cur:        cur,
+					Max:        max,
+					Objectives: triumphObjectives,
 				})
 			}
 
