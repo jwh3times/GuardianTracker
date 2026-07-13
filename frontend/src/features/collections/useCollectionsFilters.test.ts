@@ -13,6 +13,7 @@ describe("collections filter (de)serialization", () => {
     const f = parseFilters(new URLSearchParams(""));
     expect(f).toEqual({
       node: "",
+      q: "",
       rarity: null,
       diff: null,
       sort: "rarity",
@@ -26,6 +27,7 @@ describe("collections filter (de)serialization", () => {
   it("serializes only non-default values", () => {
     const p = serializeFilters({
       node: "",
+      q: "",
       rarity: null,
       diff: null,
       sort: "rarity",
@@ -40,6 +42,7 @@ describe("collections filter (de)serialization", () => {
   it("round-trips a fully-populated state", () => {
     const state = {
       node: "42",
+      q: "hand cannon",
       rarity: "exotic" as const,
       diff: "challenging" as const,
       sort: "name" as const,
@@ -50,6 +53,22 @@ describe("collections filter (de)serialization", () => {
     };
     const p = serializeFilters(state);
     expect(parseFilters(p)).toEqual(state);
+  });
+
+  it("round-trips q through parse/serialize; empty q is omitted from the URL", () => {
+    const withQ = serializeFilters({ ...defaults(), q: "warlock" });
+    expect(withQ.get("q")).toBe("warlock");
+    expect(parseFilters(withQ).q).toBe("warlock");
+
+    const withoutQ = serializeFilters({ ...defaults(), q: "" });
+    expect(withoutQ.has("q")).toBe(false);
+  });
+
+  it("truncates an over-long q to exactly 100 characters", () => {
+    const long = "a".repeat(150);
+    const f = parseFilters(new URLSearchParams(`q=${long}`));
+    expect(f.q).toHaveLength(100);
+    expect(f.q).toBe("a".repeat(100));
   });
 
   it("emits missing=0 only when off, avail/farm=1 only when on", () => {
@@ -120,11 +139,100 @@ describe("useCollectionsFilters — atomic setFilters", () => {
     expect(result.current.node).toBe("11");
     localStorage.clear();
   });
+
+  it("a lone ?q=foo still applies the user's stored filter defaults", () => {
+    localStorage.clear();
+    localStorage.setItem(
+      "gt.collections.filters",
+      JSON.stringify({ sort: "name" }),
+    );
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: ["/?q=foo"] },
+        children,
+      );
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+    // A lone `q` param must not be treated as "the URL carries filter params" —
+    // the stored non-default sort must still apply.
+    expect(result.current.q).toBe("foo");
+    expect(result.current.sort).toBe("name");
+    localStorage.clear();
+  });
+
+  it("never persists q to localStorage", () => {
+    localStorage.clear();
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(MemoryRouter, null, children);
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+
+    act(() => {
+      result.current.setQ("hunter");
+    });
+
+    const stored = JSON.parse(
+      localStorage.getItem("gt.collections.filters") ?? "{}",
+    );
+    expect(stored).not.toHaveProperty("q");
+    localStorage.clear();
+  });
+
+  it("does not leak a stray q from localStorage into state", () => {
+    localStorage.clear();
+    localStorage.setItem(
+      "gt.collections.filters",
+      JSON.stringify({ q: "leaked", sort: "name" }),
+    );
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(MemoryRouter, null, children);
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+    // q is URL-only: a hand-edited/legacy stored payload can't leak it in,
+    // even though the other stored field (sort) still applies.
+    expect(result.current.q).toBe("");
+    expect(result.current.sort).toBe("name");
+    localStorage.clear();
+  });
+
+  it("preserves q when the selected category changes", () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: ["/?q=foo"] },
+        children,
+      );
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+
+    act(() => {
+      result.current.setNode("7");
+    });
+
+    expect(result.current.node).toBe("7");
+    expect(result.current.q).toBe("foo");
+  });
+
+  it("clearFilters clears q; hasFilters is true for a search-only state", () => {
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: ["/?q=foo"] },
+        children,
+      );
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+
+    expect(result.current.hasFilters).toBe(true);
+
+    act(() => {
+      result.current.clearFilters();
+    });
+
+    expect(result.current.q).toBe("");
+  });
 });
 
 function defaults() {
   return {
     node: "",
+    q: "",
     rarity: null,
     diff: null,
     sort: "rarity" as const,

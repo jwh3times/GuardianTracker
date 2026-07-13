@@ -7,6 +7,7 @@ export type SortKey = "rarity" | "name" | "difficulty" | "avail";
 
 export interface CollectionsFilters {
   node: string;
+  q: string;
   rarity: Rarity | null;
   diff: Difficulty | null;
   sort: SortKey;
@@ -17,7 +18,20 @@ export interface CollectionsFilters {
 }
 
 const STORAGE_KEY = "gt.collections.filters";
-// Keys that count as "filters" (node is tracked separately).
+const MAX_Q_LENGTH = 100;
+
+// Keys that live only in the URL: never persisted to localStorage, never
+// read back from it, and re-asserted from the URL wherever stored/legacy
+// state is merged in. `node` is the original member of this set; `q` (the
+// in-page search term) joins it for the same reason — a lone `q` (or `node`)
+// param must not be treated as "the user has filters set" and must not be
+// overwritten by a hand-edited/legacy stored payload.
+const URL_ONLY_KEYS = ["node", "q"] as const;
+
+// Keys that count as "filters" — presence of any of these in the URL means
+// the URL is the source of truth and stored defaults are ignored. Keys in
+// URL_ONLY_KEYS are deliberately excluded so a bare `?node=` or `?q=` deep
+// link still applies the user's stored filter defaults.
 const FILTER_KEYS = [
   "rarity",
   "diff",
@@ -36,6 +50,7 @@ export function parseFilters(p: URLSearchParams): CollectionsFilters {
   const sort = p.get("sort");
   return {
     node: p.get("node") ?? "",
+    q: (p.get("q") ?? "").slice(0, MAX_Q_LENGTH),
     rarity:
       rarity && RARITIES.includes(rarity as Rarity) ? (rarity as Rarity) : null,
     diff:
@@ -55,6 +70,7 @@ export function parseFilters(p: URLSearchParams): CollectionsFilters {
 export function serializeFilters(f: CollectionsFilters): URLSearchParams {
   const p = new URLSearchParams();
   if (f.node) p.set("node", f.node);
+  if (f.q) p.set("q", f.q);
   if (f.rarity) p.set("rarity", f.rarity);
   if (f.diff) p.set("diff", f.diff);
   if (f.sort !== "rarity") p.set("sort", f.sort);
@@ -69,7 +85,8 @@ function urlHasFilterParams(p: URLSearchParams): boolean {
   return FILTER_KEYS.some((k) => p.has(k));
 }
 
-// loadStoredFilters returns saved filter fields (never node), or null.
+// loadStoredFilters returns saved filter fields (never node/q — see
+// URL_ONLY_KEYS), or null.
 function loadStoredFilters(): Partial<CollectionsFilters> | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -83,17 +100,20 @@ export function useCollectionsFilters() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Effective filters: from the URL when it carries filter params; otherwise
-  // filter fields from localStorage (node always from the URL).
+  // filter fields from localStorage (node/q always come from the URL — see
+  // URL_ONLY_KEYS).
   const filters = useMemo<CollectionsFilters>(() => {
     const fromUrl = parseFilters(searchParams);
     if (urlHasFilterParams(searchParams)) return fromUrl;
     const stored = loadStoredFilters();
-    return stored ? { ...fromUrl, ...stored, node: fromUrl.node } : fromUrl;
+    return stored
+      ? { ...fromUrl, ...stored, node: fromUrl.node, q: fromUrl.q }
+      : fromUrl;
   }, [searchParams]);
 
-  // Persist filter fields (not node) whenever they change.
+  // Persist filter fields (not node/q) whenever they change.
   useEffect(() => {
-    const { node: _node, ...rest } = filters;
+    const { node: _node, q: _q, ...rest } = filters;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
     } catch {
@@ -116,20 +136,23 @@ export function useCollectionsFilters() {
     ) => {
       setSearchParams(
         (prev) => {
+          const parsedFromUrl = parseFilters(prev);
           const base = urlHasFilterParams(prev)
-            ? parseFilters(prev)
+            ? parsedFromUrl
             : {
-                ...parseFilters(prev),
+                ...parsedFromUrl,
                 ...(loadStoredFilters() ?? {}),
-                // node is URL-only: re-assert it from the URL so a hand-edited /
-                // legacy localStorage payload containing `node` can't leak into it.
-                node: parseFilters(prev).node,
+                // node/q are URL-only: re-assert them from the URL so a
+                // hand-edited / legacy localStorage payload containing either
+                // key can't leak into it.
+                node: parsedFromUrl.node,
+                q: parsedFromUrl.q,
               };
           const next = { ...base, ...patch };
           const out = serializeFilters(next);
           for (const [k, v] of prev) {
             if (
-              k === "node" ||
+              (URL_ONLY_KEYS as readonly string[]).includes(k) ||
               (FILTER_KEYS as readonly string[]).includes(k) ||
               opts?.drop?.includes(k)
             )
@@ -154,6 +177,8 @@ export function useCollectionsFilters() {
       opts: { replace?: boolean; drop?: string[] } = { replace: true },
     ) => write(patch, opts),
     setNode: (node: string) => write({ node }), // push (Back returns to prev category)
+    // Replace navigation: typing must not push a history entry per keystroke.
+    setQ: (q: string) => write({ q }, { replace: true }),
     setRarity: (rarity: Rarity | null) => write({ rarity }, { replace: true }),
     setDiff: (diff: Difficulty | null) => write({ diff }, { replace: true }),
     setSort: (sort: SortKey) => write({ sort }, { replace: true }),
@@ -163,14 +188,15 @@ export function useCollectionsFilters() {
     setFarm: (farm: boolean) => write({ farm }, { replace: true }),
     clearFilters: () =>
       write(
-        { rarity: null, diff: null, avail: false, farm: false },
+        { rarity: null, diff: null, avail: false, farm: false, q: "" },
         { replace: true },
       ),
     hasFilters: !!(
       filters.rarity ||
       filters.diff ||
       filters.avail ||
-      filters.farm
+      filters.farm ||
+      filters.q
     ),
   };
 }
