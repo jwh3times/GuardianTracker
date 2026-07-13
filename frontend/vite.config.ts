@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import { loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
@@ -37,6 +37,7 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: "jsdom",
       setupFiles: ["./src/test/setup.ts"],
+      exclude: [...configDefaults.exclude, "e2e/**"],
       coverage: {
         provider: "v8",
         // Count every source file, not just files imported by tests — otherwise
@@ -48,6 +49,7 @@ export default defineConfig(({ mode }) => {
           "src/main.tsx",
           "src/index.tsx",
           "src/types/**", // type-only modules have no executable statements
+          "e2e/**",
         ],
         // Floor for the current suite — ratchet upward as tests grow. Branch
         // coverage sits at ~74% and lines at ~83%; the gates leave headroom so

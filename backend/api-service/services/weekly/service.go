@@ -154,6 +154,7 @@ type Service struct {
 	wishlist    WishlistReader
 	cache       cache.Cache
 	efficiency  *efficiency.Engine
+	now         func() time.Time
 }
 
 // ManifestRepo is the subset of the manifest repository the weekly service uses.
@@ -180,6 +181,17 @@ type WishlistItem struct {
 
 // NewService creates a new weekly recommendations service.
 func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine) *Service {
+	return NewServiceWithClock(b, m, c, w, appCache, eng, time.Now)
+}
+
+// NewServiceWithClock creates a weekly service with an injected clock. The
+// production constructor above always uses time.Now; the alternate constructor
+// exists so hermetic browser tests can keep Xur in a deterministic weekend
+// window without changing production behavior.
+func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, now func() time.Time) *Service {
+	if now == nil {
+		now = time.Now
+	}
 	return &Service{
 		bungie:      b,
 		manifest:    m,
@@ -187,7 +199,15 @@ func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w Wish
 		wishlist:    w,
 		cache:       appCache,
 		efficiency:  eng,
+		now:         now,
 	}
+}
+
+func (s *Service) nowUTC() time.Time {
+	if s.now == nil {
+		return time.Now().UTC()
+	}
+	return s.now().UTC()
 }
 
 // --- Time math ---
@@ -252,7 +272,7 @@ func toDuration(d time.Duration) Duration {
 
 // GetWeekly assembles the weekly payload for a user.
 func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipID, bungieToken, requestedCharacterID string) (*Weekly, error) {
-	now := time.Now().UTC()
+	now := s.nowUTC()
 	resetAt := NextWeeklyReset(now)
 	resetIn := toDuration(resetAt.Sub(now))
 	dailyResetAt := NextDailyReset(now)
@@ -381,7 +401,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 // data is unavailable. Served from the shared weekly cache; the first call
 // after a reset fetches public vendors inline.
 func (s *Service) XurItemHashes(ctx context.Context) map[uint32]struct{} {
-	return s.xurItemHashesAt(ctx, time.Now().UTC())
+	return s.xurItemHashesAt(ctx, s.nowUTC())
 }
 
 func (s *Service) xurItemHashesAt(ctx context.Context, now time.Time) map[uint32]struct{} {
@@ -550,7 +570,7 @@ func (s *Service) mapEngineActions(actions []efficiency.ScoredAction) []Recommen
 // private profile, no missing set). Best-effort — never fails the weekly request.
 func (s *Service) rankRecommended(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, pub *publicWeeklyCache, missing, wishlist map[uint32]struct{}) []RecommendedAction {
 	if s.efficiency != nil && bungieToken != "" {
-		liveVendors := s.liveVendorItemHashesAtCharacter(ctx, membershipType, membershipID, characterID, bungieToken, time.Now().UTC())
+		liveVendors := s.liveVendorItemHashesAtCharacter(ctx, membershipType, membershipID, characterID, bungieToken, s.nowUTC())
 		activeMilestones := make([]string, 0, len(pub.MilestoneNames))
 		for _, name := range pub.MilestoneNames {
 			activeMilestones = append(activeMilestones, name)

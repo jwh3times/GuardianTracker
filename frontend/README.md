@@ -11,7 +11,7 @@ React + TypeScript SPA for Guardian Tracker, a Destiny 2 collection tracking app
 - **Styling**: Custom "Guardian Tracker" design system — oklch design tokens + `gt-*` CSS classes (`src/styles/`). Tailwind is still installed for a few legacy primitives but new UI uses the design system.
 - **Icons**: in-house single-path line set (`components/Icon.tsx`)
 - **Forms/Validation**: React Hook Form + Zod (available)
-- **Tests**: Vitest + React Testing Library
+- **Tests**: Vitest + React Testing Library; Playwright + axe for hermetic full-browser checks
 
 The design source (a self-contained prototype) lives in `frontend/design/`.
 
@@ -141,7 +141,66 @@ npm test            # Vitest
 npm run lint        # ESLint (flat config)
 npm run lint:fix    # ESLint with auto-fix
 npm run type-check  # tsc --noEmit
+npm run e2e         # functional + axe + destructive auth (one shared worker)
+npm run e2e:visual  # visual project; canonical CI rendering uses pinned Linux image
 ```
+
+## Browser Tests
+
+From the repository root, start the isolated database and set the deterministic
+fixture clock before running Playwright:
+
+```powershell
+docker compose stop frontend api-service   # see "Port conflicts" below
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
+```
+
+Playwright launches the test-only fake Bungie command, real API, and Vite. The
+fake serves a runtime-generated manifest and deterministic profile/vendor data;
+no browser test contacts Bungie.net. Functional, accessibility, visual, and
+destructive-auth projects share one worker, with logout/logout-all sequenced
+last so they cannot invalidate other journeys.
+
+### Port conflicts
+
+Playwright runs with `reuseExistingServer` outside CI, so anything already
+listening on **5273** or **8081** is silently adopted instead of the hermetic
+stack. If the Docker Compose app stack is up, the browser talks to your real API
+— which points at Bungie.net and a different CORS origin — and the suite fails at
+login with `Failed to start authentication: Failed to fetch`. Stop the `frontend`
+and `api-service` containers first; leave `e2e-postgres` running.
+
+### Visual baselines
+
+Baselines are Linux renderings. Generating them on Windows or macOS produces
+different font rasterization and will fail CI on every run, so `npm run
+e2e:visual` locally is only useful for eyeballing the report — never commit
+snapshots it writes.
+
+Regenerate them in the same pinned image CI uses. Build the Go servers for Linux,
+then run Playwright with them inside the container (everything stays on loopback,
+which the fake Bungie service requires):
+
+```powershell
+$repo = (Get-Location).Path -replace '\\','/'
+docker compose --profile e2e up -d --wait e2e-postgres
+docker run --rm -v "${repo}:/src" -v guardian-e2e-bin:/out -w /src/backend/api-service `
+  -e CGO_ENABLED=1 golang:1.26.5 `
+  bash -c "go build -o /out/api-service . && go build -o /out/fake-bungie ./cmd/fake-bungie"
+docker run --rm --init --ipc=host --network guardiantracker_default `
+  -e CI=true -e E2E_FIXED_TIME=2026-07-18T18:00:00Z `
+  -e E2E_FAKE_COMMAND=/out/fake-bungie -e E2E_API_COMMAND=/out/api-service `
+  -e E2E_DATABASE_URL="postgres://guardian_app:guardian_dev_password@e2e-postgres:5432/guardian_tracker?sslmode=disable" `
+  -v "${repo}:/repo" -v "/repo/frontend/node_modules" -v guardian-e2e-bin:/out -w /repo/frontend `
+  mcr.microsoft.com/playwright:v1.61.0-noble `
+  bash -lc "npm ci && npm run e2e:update-snapshots"
+```
+
+The anonymous `node_modules` volume keeps the container's Linux install from
+overwriting your host `node_modules`.
 
 ## Destiny 2 Theme
 

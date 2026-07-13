@@ -49,6 +49,10 @@ type Config struct {
 	CacheEnabled        bool
 	CacheTTLCollections time.Duration
 	CacheTTLRecords     time.Duration
+	// E2EFixedTime is an optional RFC3339 development-only clock used by the
+	// hermetic browser harness to make Xur's weekend schedule deterministic.
+	// Production always leaves this nil and uses the real clock.
+	E2EFixedTime *time.Time
 
 	CORSAllowedOrigins []string
 
@@ -82,6 +86,7 @@ func Load() *Config {
 	}
 	keyVersion, keyVersionErr := getPositiveSmallIntEnv("TOKEN_ENCRYPTION_KEY_VERSION", 1)
 	previousKeyVersion, previousKeyVersionErr := getPositiveSmallIntEnv("TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION", 0)
+	e2eFixedTime, e2eFixedTimeErr := getOptionalTimeEnv("E2E_FIXED_TIME")
 
 	cfg := &Config{
 		Port:      getEnv("PORT", "8081"),
@@ -116,6 +121,7 @@ func Load() *Config {
 		CacheEnabled:        getBoolEnv("CACHE_ENABLED", true),
 		CacheTTLCollections: getDurationEnv("CACHE_TTL_COLLECTIONS", 5*time.Minute),
 		CacheTTLRecords:     getDurationEnv("CACHE_TTL_RECORDS", 10*time.Minute),
+		E2EFixedTime:        e2eFixedTime,
 
 		CORSAllowedOrigins: strings.Split(
 			getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
@@ -128,7 +134,7 @@ func Load() *Config {
 		TokenEncryptionKeyVersion:     keyVersion,
 		TokenEncryptionKeyPrev:        os.Getenv("TOKEN_ENCRYPTION_KEY_PREVIOUS"),
 		TokenEncryptionKeyPrevVersion: previousKeyVersion,
-		loadErr:                       errors.Join(keyVersionErr, previousKeyVersionErr),
+		loadErr:                       errors.Join(keyVersionErr, previousKeyVersionErr, e2eFixedTimeErr),
 
 		AdminMembershipIDs: parseCSV(os.Getenv("ADMIN_MEMBERSHIP_IDS")),
 
@@ -184,6 +190,9 @@ func (c *Config) Validate() error {
 	}
 	if !slices.Contains([]string{"text", "json"}, c.LogFormat) {
 		return fmt.Errorf("LOG_FORMAT must be text or json (got %q)", c.LogFormat)
+	}
+	if c.IsProduction() && c.E2EFixedTime != nil {
+		return fmt.Errorf("E2E_FIXED_TIME is development-only")
 	}
 	if c.TokenEncryptionKey != "" && c.TokenEncryptionKeyVersion <= 0 {
 		return fmt.Errorf("TOKEN_ENCRYPTION_KEY_VERSION must be a positive SMALLINT")
@@ -331,4 +340,17 @@ func getDurationEnv(key string, fallback time.Duration) time.Duration {
 		}
 	}
 	return fallback
+}
+
+func getOptionalTimeEnv(key string) (*time.Time, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return nil, nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be an RFC3339 timestamp: %w", key, err)
+	}
+	parsed = parsed.UTC()
+	return &parsed, nil
 }

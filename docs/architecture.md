@@ -142,9 +142,17 @@ See [SECURITY.md](../SECURITY.md) for the security guide and checklist.
 ## Tests
 
 - Frontend: Vitest, Testing Library, MSW, type-check, lint, build.
+- Browser: Playwright against the real API/Vite plus a test-only fake Bungie
+  service and runtime-generated SQLite manifest; functional, WCAG 2.2 axe, and
+  deterministic visual projects share one worker and isolated Postgres state.
 - Backend: Go unit and integration tests, `go vet`, Staticcheck 2026.1,
   `govulncheck`, race detector in CI, Postgres-backed integration tests.
 - Docker: CI builds production images for validation.
+
+The browser workflow keeps functional/axe and visual jobs advisory during
+stabilization. E2E/axe becomes required only after ten consecutive clean runs;
+visual comparison remains optional and runs in the Playwright 1.61.0 Noble
+image that matches the pinned frontend package.
 
 ## Related Decisions
 

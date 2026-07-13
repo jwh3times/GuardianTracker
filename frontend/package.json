@@ -44,6 +44,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test --project=functional --project=accessibility --project=auth-destructive",
+    "e2e:functional": "playwright test --project=functional",
+    "e2e:a11y": "playwright test --project=accessibility",
+    "e2e:visual": "playwright test --project=visual",
+    "e2e:update-snapshots": "playwright test --project=visual --update-snapshots",
+    "e2e:report": "playwright show-report",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -51,7 +57,9 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.61.0",
     "@tailwindcss/postcss": "^4.3.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

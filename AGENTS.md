@@ -41,6 +41,8 @@ Key directories:
 | `docs/`                     | Public project documentation                                       |
 | `private/`                  | Local/private planning and archived notes; should remain untracked |
 | `.claude/agents/`           | Claude-specific specialized agent instructions                     |
+| `frontend/e2e/`             | Playwright functional, accessibility, and visual browser tests      |
+| `backend/api-service/cmd/fake-bungie/` | Test-only Bungie/manifest fixture service                |
 
 ## Running Locally
 
@@ -120,22 +122,34 @@ Use the narrowest relevant test first, then run broader checks when the change c
 
 Common commands:
 
-```bash
-# Backend tests
+```powershell
+# Backend tests (from the repository root)
 cd backend/api-service
 go test ./...
 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+cd ../..
 
 # Frontend checks
 cd frontend
 npm run lint
 npm run build
+cd ..
+
+# Hermetic browser checks (start the e2e Compose profile first)
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
+cd frontend
+npm run e2e
+npm run e2e:visual
+cd ..
 
 # Local CI-equivalent backend coverage script
+cd backend/api-service
 ./test-local.ps1
 ```
 
 Required CI checks are documented in `README.md` and workflow files under `.github/workflows/`.
+Browser E2E + Axe is advisory until ten consecutive clean runs; visual regression remains optional.
 
 ## Documentation Rules
 

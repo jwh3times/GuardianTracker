@@ -236,6 +236,13 @@ func main() {
 		weeklyWishlist = &weeklyWishlistAdapter{s: stores.Wishlist}
 	}
 	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine)
+	if cfg.E2EFixedTime != nil {
+		fixedTime := *cfg.E2EFixedTime
+		weeklyService = weekly.NewServiceWithClock(
+			bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine,
+			func() time.Time { return fixedTime },
+		)
+	}
 	weeklyHandler := handlers.NewWeeklyHandler(weeklyService, tokenStore)
 
 	go searchService.BuildIndex()

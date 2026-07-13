@@ -166,6 +166,7 @@ projects. Container ports stay fixed.
 | API service | `8081` | `8081` | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
 | Postgres | `5432` | `5532` | `docker-compose.yml`, `.env.example` |
 | pgAdmin | `80` | `5150` | `docker-compose.yml`, `.env.example` |
+| E2E Postgres | `5432` | `5534` | `docker-compose.yml`, `.env.example` |
 
 Compose mappings:
 
@@ -175,11 +176,13 @@ pgadmin         127.0.0.1:${PGADMIN_PORT:-5150}       -> 80
 api-service     ${API_SERVICE_PORT:-8081}   -> 8081
 frontend        ${FRONTEND_PORT:-5273}      -> 8080
 test-postgres   127.0.0.1:${TEST_POSTGRES_PORT:-5533} -> 5432
+e2e-postgres    127.0.0.1:${E2E_POSTGRES_PORT:-5534}  -> 5432
 ```
 
-Postgres, pgAdmin, and the disposable test Postgres bind only to loopback. The
+Postgres, pgAdmin, and both disposable test databases bind only to loopback. The
 frontend and API remain reachable on the configured host interfaces for local
-browser and tunnel workflows.
+browser and tunnel workflows. `e2e-postgres` has no data volume; it mounts the
+normal database initializer read-only and resets when its container is removed.
 
 Minikube mappings:
 
@@ -212,6 +215,36 @@ npm run type-check
 npm run lint
 npm run format:check
 ```
+
+Browser quality gates:
+
+```powershell
+# From the repository root
+docker compose --profile e2e up -d --wait e2e-postgres
+$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z" # deterministic Saturday/Xur fixture
+
+cd frontend
+npm ci
+npx playwright install chromium
+npm run e2e          # functional journeys + axe + destructive auth last
+npm run e2e:visual   # local preview; CI owns canonical Linux comparison
+
+cd ..
+docker compose --profile e2e down -v
+```
+
+The Playwright configuration launches `go run ./cmd/fake-bungie` from
+`backend/api-service`, the real API, and Vite, then waits for fake health, API
+readiness, and the asynchronous search index. The fake generates its tiny
+SQLite manifest at runtime and provides loopback-only scenario controls; the
+suite never contacts the real Bungie API. Tests use one worker because account
+and scenario state are shared.
+
+`.github/workflows/browser.yml` publishes reports and failure evidence for 14
+days. Browser E2E + Axe and visual regression are advisory initially and do not
+hide failures with `continue-on-error`. After ten consecutive clean E2E/axe
+runs, add `Browser E2E + Axe` to branch protection. Keep `Browser Visual
+Regression` optional.
 
 `./test-local.ps1` starts the test Postgres service on `:5533`, enables cgo for
 SQLite-backed manifest tests, and runs the Go coverage path that most closely

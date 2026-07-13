@@ -253,7 +253,7 @@
   font-size: var(--t-2xs);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: var(--c-text-4);
+  color: var(--c-text-3);
 }
 .gt-userrow[data-me="true"] {
   background: color-mix(in oklch, var(--c-signal) 6%, transparent);
@@ -294,7 +294,7 @@
 }
 .gt-userrow-active {
   font-size: var(--t-2xs);
-  color: var(--c-text-4);
+  color: var(--c-text-3);
 }
 .gt-admin-search {
   max-width: 18rem;

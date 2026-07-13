@@ -558,6 +558,22 @@
   background: var(--c-surface-2);
   border: 0.07rem solid var(--c-line-soft);
 }
+/* The clickable vendor row: a real button inside the listitem, laid out as the
+   row itself so the visual result matches the non-interactive variant. */
+.gt-vendor-item-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .gt-milestone-l {
   flex: 1;
 }
@@ -814,7 +830,7 @@
   position: relative;
 }
 .gt-dd-note {
-  color: var(--c-text-4);
+  color: var(--c-text-3);
   margin-left: 0.3rem;
   font-size: var(--t-2xs);
 }
