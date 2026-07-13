@@ -115,7 +115,10 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_oauth_request"})
 		return
 	}
-	redirect, err := url.Parse(q.Get("redirect_uri"))
+	// Build the redirect from the configured URI, not from the request. The check
+	// above already proves they are equal, so this is behaviour-preserving, and it
+	// keeps the redirect target off the request's data path entirely.
+	redirect, err := url.Parse(s.redirectURI)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_redirect_uri"})
 		return
