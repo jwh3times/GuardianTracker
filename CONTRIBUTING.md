@@ -188,12 +188,12 @@ npm run e2e:visual
 
 Every PR must pass these GitHub Actions jobs before it can merge:
 
-| Check                   | What it does                                                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Format Check**        | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted                                                                             |
-| **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                                               |
-| **Test Go Services**    | `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against Postgres                        |
-| **Build Docker Images** | builds both production Docker images (build validation; no push)                                                                                  |
+| Check                   | What it does                                                                                                               |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **Format Check**        | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted                                                      |
+| **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                        |
+| **Test Go Services**    | `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against Postgres |
+| **Build Docker Images** | builds both production Docker images (build validation; no push)                                                           |
 | **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.sh`); exempt for bot-authored PRs |
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it
