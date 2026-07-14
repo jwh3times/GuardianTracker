@@ -68,7 +68,7 @@ git diff $(git merge-base main HEAD)..HEAD --stat
 ```
 
 Tell it exactly what changed and let it update the docs it owns (README.md, SETUP.md,
-docs/architecture.md, ROADMAP.md, SECURITY.md, CLAUDE.md, docs/adr/, .claude/agents/).
+docs/architecture.md, ROADMAP.md, SECURITY.md, AGENTS.md, docs/adr/, .claude/agents/).
 It owns CHANGELOG.md too, but **you** write the changelog section in step 5 — tell it
 to leave CHANGELOG.md alone so you don't fight over the file.
 

@@ -26,14 +26,14 @@ frontend.
 
 ## Tech Stack
 
-| Concern               | Choice                                                             |
-| --------------------- | ------------------------------------------------------------------ |
-| Frontend              | React 19, TypeScript, Vite, React Router, TanStack Query           |
-| Backend               | Go, Gin                                                            |
-| User data             | PostgreSQL                                                         |
-| Manifest data         | Bungie manifest SQLite database                                    |
-| Local runtime         | Docker Compose                                                     |
-| Kubernetes validation | Minikube manifests under `k8s/`                                    |
+| Concern               | Choice                                                                             |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| Frontend              | React 19, TypeScript, Vite, React Router, TanStack Query                           |
+| Backend               | Go, Gin                                                                            |
+| User data             | PostgreSQL                                                                         |
+| Manifest data         | Bungie manifest SQLite database                                                    |
+| Local runtime         | Docker Compose                                                                     |
+| Kubernetes validation | Minikube manifests under `k8s/`                                                    |
 | CI                    | GitHub Actions format, Staticcheck, test, coverage, browser, and Docker validation |
 
 ## Architecture
@@ -139,8 +139,8 @@ private/                  Gitignored private plans, runbooks, and research
 - [CHANGELOG.md](./CHANGELOG.md) - shipped changes by version.
 - [SECURITY.md](./SECURITY.md) - security model, reporting, checklist.
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - contribution workflow and CI gates.
-- [AGENTS.md](./AGENTS.md) - General AI agent operating guide.
-- [CLAUDE.md](./CLAUDE.md) - Claude-specific agent operating guide.
+- [AGENTS.md](./AGENTS.md) - canonical AI agent operating guide (all tools).
+- [CLAUDE.md](./CLAUDE.md) - Claude Code specifics; imports AGENTS.md.
 - [frontend/README.md](./frontend/README.md) - frontend-specific guide.
 - [k8s/README.md](./k8s/README.md) - Minikube validation guide.
 

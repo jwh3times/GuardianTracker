@@ -63,7 +63,7 @@ docker compose up --build
 
 For single-service work with hot reload, run services individually (Vite for the
 frontend, [Air](https://github.com/air-verse/air) for the API). See
-[SETUP.md](./SETUP.md) and [CLAUDE.md](./CLAUDE.md#running-services) for all
+[SETUP.md](./SETUP.md) and [AGENTS.md](./AGENTS.md#running-services) for all
 three run options (Compose, Minikube, individual).
 
 > On first run the API service downloads the ~100MB Destiny 2 manifest. The
@@ -80,7 +80,7 @@ k8s/                      # Kubernetes manifests + Minikube scripts
 ```
 
 For public architecture, read [docs/architecture.md](./docs/architecture.md).
-For agent-specific operating context, read **[CLAUDE.md](./CLAUDE.md)**.
+For agent-specific operating context, read **[AGENTS.md](./AGENTS.md)**.
 
 ## Branching & pull requests
 
@@ -170,7 +170,7 @@ cd backend/api-service
 ./test-local.ps1 -Html    # also open the per-line HTML report
 ```
 
-See [CLAUDE.md → Full Go coverage locally](./CLAUDE.md#full-go-coverage-locally-matches-ci)
+See [AGENTS.md → Full Go coverage locally](./AGENTS.md#full-go-coverage-locally-matches-ci)
 for the toolchain details (a C compiler is required for the cgo tests).
 
 For full-browser validation, start the isolated database and use the fake Bungie
@@ -188,17 +188,17 @@ npm run e2e:visual
 
 Every PR must pass these GitHub Actions jobs before it can merge:
 
-| Check                   | What it does                                                                                                               |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Format Check**        | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted                                                      |
-| **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                        |
-| **Test Go Services**    | `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against Postgres |
-| **Build Docker Images** | builds both production Docker images (build validation; no push)                                                           |
+| Check                   | What it does                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Format Check**        | Prettier (frontend) + `gofmt` (Go) — fails if anything is unformatted                                                                             |
+| **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                                               |
+| **Test Go Services**    | `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against Postgres                        |
+| **Build Docker Images** | builds both production Docker images (build validation; no push)                                                                                  |
 | **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.sh`); exempt for bot-authored PRs |
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it
 is enforced through a code-scanning merge rule rather than as a required status
-check. See [CLAUDE.md → CI/CD](./CLAUDE.md#cicd) for the full explanation, including
+check. See [AGENTS.md → CI/CD](./AGENTS.md#cicd) for the full explanation, including
 how Dependabot PRs are handled.
 
 The separate browser workflow reports failures normally but is not initially in

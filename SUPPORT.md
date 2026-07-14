@@ -27,7 +27,7 @@ person.
 Found something broken? Open an issue using the **Bug report** template and
 include reproduction steps, expected vs. actual behavior, the affected component
 (API, frontend, database, k8s), and the branch or commit you tested. Check the
-**Known Limitations** section of [CLAUDE.md](CLAUDE.md#known-limitations) first —
+**Known Limitations** section of [AGENTS.md](AGENTS.md#known-limitations) first —
 a few behaviors (e.g. Xûr's location always "Unknown") are upstream API
 limitations, not bugs.
 
