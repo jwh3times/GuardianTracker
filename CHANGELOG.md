@@ -13,6 +13,32 @@ request.
 
 No unreleased changes.
 
+## [0.3.24] - 2026-07-13
+
+### Added
+
+- A `/ship` skill that takes a branch from "code done" to "PR open": it refreshes the
+  docs against the branch diff, writes the `CHANGELOG.md` entry for the version the
+  merge will mint, runs fast format/lint/typecheck gates, pushes, and opens or updates
+  the pull request.
+- `scripts/next-version.sh`, the single source of truth for the build number. The tag
+  workflow, the new CI guard, and `/ship` all call it, so the three cannot disagree.
+- A required `Changelog Version` CI check that fails a pull request whose changelog
+  version does not match the tag its merge would create. Bot-authored pull requests are
+  exempt, since they never touch the changelog; `/ship` backfills their entries.
+
+### Removed
+
+- The per-turn docs-freshness `Stop` hook. Documentation is now checked when a branch is
+  shipped, which is when it matters, rather than after every response turn.
+
+## [0.3.23] - 2026-07-13
+
+### Changed
+
+- Release-notes maintenance only: promoted the v0.3.22 changes out of `[Unreleased]`
+  into a dated section. No functional, API, or schema changes.
+
 ## [0.3.22] - 2026-07-13
 
 ### Added

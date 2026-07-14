@@ -126,12 +126,15 @@ successful health probes at debug.
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/ci-cd.yml`) — four required jobs:
+GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
 
 1. **format-check** — `npm run format:check` (Prettier) + `gofmt`. Fix: `npm run format` from `frontend/` or `gofmt -w .` from `backend/api-service/`.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)
+5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
+   merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
+   Bot-authored PRs are exempt; `/ship` backfills their entries.
 
 `.github/workflows/browser.yml` adds two advisory jobs: **Browser E2E + Axe**
 and **Browser Visual Regression**. They report failures normally (no
@@ -144,7 +147,7 @@ CodeQL runs on PRs via default setup; gated through the code-scanning merge rule
 
 ### Branch protection (`main`)
 
-Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`), code-scanning gate (errors+warnings / medium+), no bypass actors.
+Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`), code-scanning gate (errors+warnings / medium+), no bypass actors.
 
 To change the gate, update the repository ruleset through GitHub UI or the GitHub API. Required check names must match CI job `name:` exactly.
 
@@ -163,10 +166,11 @@ For specialized work, invoke the appropriate subagent:
 | Code review — correctness, security, pattern violations                                                                       | `code-reviewer`             |
 | Documentation sync — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, CLAUDE.md, agent files | `docs-updater`              |
 
-Docs freshness is auto-checked at the end of every response turn by a read-only Stop hook in
-`.claude/settings.json` (single pre-approved git command + Read/Grep/Glob — it never edits files).
-When it detects drift it blocks the stop with specifics and the main session invokes `docs-updater`
-to fix exactly that drift.
+Docs freshness is handled at push time by the `/ship` skill
+(`.claude/skills/ship/SKILL.md`), not by a per-turn hook. `/ship` invokes
+`docs-updater` against the branch diff, writes the `CHANGELOG.md` section for the
+version the merge will mint, runs the fast checks, pushes, and opens or updates the
+PR. Run it when a branch is ready for review.
 
 ## Documentation boundaries
 

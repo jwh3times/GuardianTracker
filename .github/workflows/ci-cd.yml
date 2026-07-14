@@ -205,3 +205,53 @@ jobs:
           tags: guardiantracker/api-service:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  changelog-version:
+    name: Changelog Version
+    runs-on: ubuntu-latest
+
+    # Guards that CHANGELOG.md's top version equals the tag this merge will mint.
+    # Without this, a PR can be written against a version number that another PR
+    # takes first, and the changelog silently disagrees with the tags.
+    #
+    # PR-only: on a push to main the merge is already tagged, so "next version"
+    # is necessarily one ahead of the changelog and the check would always fail.
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags are required to compute the next version
+
+      - name: Test the next-version oracle
+        run: bash scripts/next-version.test.sh
+
+      - name: Verify CHANGELOG's top version matches the tag this merge will mint
+        env:
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        run: |
+          # Bot PRs (dependabot) never touch CHANGELOG.md. Requiring an entry would
+          # block them permanently, so they are exempt — /ship backfills the entry for
+          # their version on its next run. Exempting here is safe only because of that
+          # backfill; without it the changelog silently loses a version, which is
+          # exactly how v0.3.16, v0.3.17 and v0.3.21 went undocumented.
+          if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
+            echo "Bot-authored PR; /ship backfills its changelog entry after merge. Skipping."
+            exit 0
+          fi
+
+          expected=$(bash scripts/next-version.sh)
+          actual=$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | head -1)
+
+          if [ -z "$actual" ]; then
+            echo "::error::CHANGELOG.md contains no versioned section (expected a '## [x.y.z] - date' heading)."
+            exit 1
+          fi
+
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::CHANGELOG.md's top version is ${actual}, but merging this PR will mint v${expected}. Rebase onto main and re-run /ship."
+            exit 1
+          fi
+
+          echo "CHANGELOG top version ${actual} matches the tag this merge will mint."

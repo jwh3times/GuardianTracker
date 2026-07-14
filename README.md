@@ -110,9 +110,10 @@ cd ..
 docker compose --profile e2e down -v
 ```
 
-Every pull request requires Format Check, Test Frontend, Test Go Services, and
-Build Docker Images. The Go job includes the pinned Staticcheck command above;
-see [CONTRIBUTING.md](./CONTRIBUTING.md#ci-gates) for the complete gate details.
+Every pull request requires Format Check, Test Frontend, Test Go Services,
+Build Docker Images, and Changelog Version. The Go job includes the pinned
+Staticcheck command above; see
+[CONTRIBUTING.md](./CONTRIBUTING.md#ci-gates) for the complete gate details.
 The separate Browser E2E + Axe and Browser Visual Regression jobs do not use
 `continue-on-error`, but remain non-required during stabilization. Promote E2E
 and axe after ten consecutive clean runs; visual regression remains optional.
