@@ -1,0 +1,11 @@
+# Prettier ignores for repo-root runs (the `Check Prettier formatting (repo
+# markdown)` CI step). Frontend-scoped runs use `frontend/.prettierignore`.
+#
+# Prettier honors the root `.gitignore` by default, so node_modules/, dist/,
+# build/, coverage/, private/, .superpowers/, and docs/superpowers/ are already
+# excluded and are not repeated here.
+
+# Design-system reference export (kept as-is; not maintained app source).
+# Mirrors the `design` entry in frontend/.prettierignore — without this, a
+# root-level run would reformat files that are deliberately frozen.
+frontend/design

@@ -348,12 +348,12 @@ A reusable kit (some primitives exist: Button, Card, LoadingSpinner, Toast):
 Completed product work is tracked in `CHANGELOG.md`; current remaining work is
 tracked in `ROADMAP.md`. At a product level, future work clusters into:
 
-| Horizon | Theme | Examples |
-| --- | --- | --- |
-| Near-term polish | Make shipped surfaces more durable and ergonomic | Persisted collection filters, broader wishlist availability, search-index persistence |
-| Quality gates | Improve confidence before broader release | E2E tests, accessibility checks, visual regression |
-| Account depth | Use more verified Bungie data | Character-scoped surfaces, owned-roll/god-roll insights |
-| Sharing and re-engagement | Expand beyond single-session use | Notifications/digests, shareable collection progress |
+| Horizon                   | Theme                                            | Examples                                                                              |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Near-term polish          | Make shipped surfaces more durable and ergonomic | Persisted collection filters, broader wishlist availability, search-index persistence |
+| Quality gates             | Improve confidence before broader release        | E2E tests, accessibility checks, visual regression                                    |
+| Account depth             | Use more verified Bungie data                    | Character-scoped surfaces, owned-roll/god-roll insights                               |
+| Sharing and re-engagement | Expand beyond single-session use                 | Notifications/digests, shareable collection progress                                  |
 
 Each item should be treated as gated until its data assumptions, security model,
 and test plan are explicit.

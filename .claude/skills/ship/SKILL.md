@@ -108,6 +108,9 @@ Tests, Staticcheck, `govulncheck`, and the Docker build are **not** run here; CI
 them. These are the cheap gates that catch most mistakes in seconds:
 
 ```bash
+# repo root — covers README, SETUP, docs/, .claude/ (the frontend run cannot)
+./frontend/node_modules/.bin/prettier --check "**/*.md"
+
 # frontend/
 npm run format:check
 npm run lint
@@ -118,9 +121,11 @@ gofmt -l .
 go vet ./...
 ```
 
-`format:check` also covers markdown, so run it **after** the doc edits. If it fails,
-fix with `npm run format` and re-run. If any check is red, stop and report — do not
-push.
+The **root** Prettier command is the one that covers markdown — `npm run format:check`
+from `frontend/` cannot see files outside `frontend/`, so it will happily pass while
+`README.md` or `docs/` are unformatted and CI is red. Run the root command **after**
+the doc edits in step 4. Fix with the same command using `--write` instead of
+`--check`. If any check is red, stop and report — do not push.
 
 ### 7. Commit the docs and changelog
 

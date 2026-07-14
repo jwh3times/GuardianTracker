@@ -165,7 +165,7 @@ successful health probes at debug.
 
 GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
 
-1. **format-check** — `npm run format:check` (Prettier) + `gofmt`. Fix: `npm run format` from `frontend/` or `gofmt -w .` from `backend/api-service/`.
+1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)

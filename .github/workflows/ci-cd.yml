@@ -25,9 +25,16 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
 
-    # Single formatting gate for the whole repo: Prettier for the frontend and
-    # gofmt for the Go services. Fails if anything wasn't formatted. Fix locally
-    # with `npm run format` (frontend) or `gofmt -w .` (backend/api-service).
+    # Single formatting gate for the whole repo, in three parts. Fix locally with:
+    #   frontend/     -> `npm run format`                    (from frontend/)
+    #   repo markdown -> `./frontend/node_modules/.bin/prettier --write "**/*.md"`
+    #                                                        (from the repo root)
+    #   Go services   -> `gofmt -w .`                        (from backend/api-service/)
+    # The markdown step runs from the repo root so it also covers docs/, .claude/,
+    # k8s/, and the root *.md files, which the frontend-scoped run cannot reach. It
+    # reuses the frontend's Prettier install rather than adding a second package.json.
+    # The root .gitignore (private/, docs/superpowers/, node_modules/) and the root
+    # .prettierignore (frontend/design) decide what is skipped.
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -46,6 +53,11 @@ jobs:
       - name: Check Prettier formatting (frontend)
         working-directory: ./frontend
         run: npm run format:check
+
+      # Runs from the repo root (no working-directory) so the glob reaches
+      # markdown outside frontend/ — README, SETUP, docs/, .claude/, k8s/.
+      - name: Check Prettier formatting (repo markdown)
+        run: ./frontend/node_modules/.bin/prettier --check "**/*.md"
 
       - name: Setup Go
         uses: actions/setup-go@v6

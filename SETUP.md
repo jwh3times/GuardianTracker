@@ -50,34 +50,34 @@ cp frontend/.env.example frontend/.env.local
 
 Fill in the required secrets:
 
-| Variable | Purpose |
-| --- | --- |
-| `BUNGIE_API_KEY` | Bungie API key |
-| `BUNGIE_CLIENT_ID` | Bungie OAuth client ID |
-| `BUNGIE_CLIENT_SECRET` | Bungie OAuth client secret |
-| `JWT_SECRET` | 32+ character signing secret |
-| `DATABASE_URL` | Postgres connection string; Compose sets this for the container |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie tokens |
+| Variable               | Purpose                                                         |
+| ---------------------- | --------------------------------------------------------------- |
+| `BUNGIE_API_KEY`       | Bungie API key                                                  |
+| `BUNGIE_CLIENT_ID`     | Bungie OAuth client ID                                          |
+| `BUNGIE_CLIENT_SECRET` | Bungie OAuth client secret                                      |
+| `JWT_SECRET`           | 32+ character signing secret                                    |
+| `DATABASE_URL`         | Postgres connection string; Compose sets this for the container |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie tokens         |
 
 Set the required runtime mode. Keep the current key version explicit in new
 environment files; it defaults to `1` only to preserve existing version-1 rows:
 
-| Variable | Purpose |
-| --- | --- |
-| `GO_ENV` | Exactly `development` or `production`; there is no implicit default |
+| Variable                       | Purpose                                                                                                  |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `GO_ENV`                       | Exactly `development` or `production`; there is no implicit default                                      |
 | `TOKEN_ENCRYPTION_KEY_VERSION` | Positive `SMALLINT` version for the current encryption key (start at `1`; omitted value defaults to `1`) |
 
 Optional values:
 
-| Variable | Purpose |
-| --- | --- |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | Previous encryption key during key rotation |
+| Variable                                | Purpose                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------ |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | Previous encryption key during key rotation                                    |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous encryption key; set only with that key |
-| `ADMIN_MEMBERSHIP_IDS` | Comma-separated Bungie membership IDs pinned to admin at login |
-| `CORS_ALLOWED_ORIGINS` | Explicit browser origins allowed to call the API |
-| `JWT_ACCESS_TTL` | Access-token lifetime as a Go duration (default `30m`) |
-| `LOG_LEVEL` | `debug`, `info`, `warn`, or `error`; defaults to `info` |
-| `LOG_FORMAT` | `text` or `json`; defaults to `text` in development and `json` in production |
+| `ADMIN_MEMBERSHIP_IDS`                  | Comma-separated Bungie membership IDs pinned to admin at login                 |
+| `CORS_ALLOWED_ORIGINS`                  | Explicit browser origins allowed to call the API                               |
+| `JWT_ACCESS_TTL`                        | Access-token lifetime as a Go duration (default `30m`)                         |
+| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                        |
+| `LOG_FORMAT`                            | `text` or `json`; defaults to `text` in development and `json` in production   |
 
 Do not commit `.env`, generated secrets, manifest databases, cloud credentials, or
 production runbooks.
@@ -159,14 +159,14 @@ See [k8s/README.md](./k8s/README.md) for script details and troubleshooting.
 Host ports are offset where useful so the stack can run beside other local
 projects. Container ports stay fixed.
 
-| Service | Internal | Host / exposed | Defined in |
-| --- | --- | --- | --- |
-| Frontend dev (Vite) | `5273` | `5273` | `frontend/vite.config.ts`, `frontend/Dockerfile.dev` |
-| Frontend prod (nginx) | `8080` | `5273` | `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml` |
-| API service | `8081` | `8081` | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
-| Postgres | `5432` | `5532` | `docker-compose.yml`, `.env.example` |
-| pgAdmin | `80` | `5150` | `docker-compose.yml`, `.env.example` |
-| E2E Postgres | `5432` | `5534` | `docker-compose.yml`, `.env.example` |
+| Service               | Internal | Host / exposed | Defined in                                                                                     |
+| --------------------- | -------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| Frontend dev (Vite)   | `5273`   | `5273`         | `frontend/vite.config.ts`, `frontend/Dockerfile.dev`                                           |
+| Frontend prod (nginx) | `8080`   | `5273`         | `frontend/nginx.conf`, `frontend/Dockerfile`, `docker-compose.yml`                             |
+| API service           | `8081`   | `8081`         | `backend/api-service/config/config.go`, `backend/api-service/Dockerfile`, `docker-compose.yml` |
+| Postgres              | `5432`   | `5532`         | `docker-compose.yml`, `.env.example`                                                           |
+| pgAdmin               | `80`     | `5150`         | `docker-compose.yml`, `.env.example`                                                           |
+| E2E Postgres          | `5432`   | `5534`         | `docker-compose.yml`, `.env.example`                                                           |
 
 Compose mappings:
 
@@ -186,13 +186,13 @@ normal database initializer read-only and resets when its container is removed.
 
 Minikube mappings:
 
-| Object | Port | Notes |
-| --- | --- | --- |
-| api-service Deployment | `containerPort 8081` | liveness `/health`, readiness `/ready` |
-| api-service Service | `8081 -> 8081` | `ClusterIP` |
-| frontend Deployment | `containerPort 8080` | nginx |
-| frontend Service | `80 -> 8080` | `NodePort` |
-| `startup.ps1` port-forward | `localhost:5273 -> frontend:80` | local browser access |
+| Object                     | Port                            | Notes                                  |
+| -------------------------- | ------------------------------- | -------------------------------------- |
+| api-service Deployment     | `containerPort 8081`            | liveness `/health`, readiness `/ready` |
+| api-service Service        | `8081 -> 8081`                  | `ClusterIP`                            |
+| frontend Deployment        | `containerPort 8080`            | nginx                                  |
+| frontend Service           | `80 -> 8080`                    | `NodePort`                             |
+| `startup.ps1` port-forward | `localhost:5273 -> frontend:80` | local browser access                   |
 
 ## Tests and Checks
 

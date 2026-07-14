@@ -36,15 +36,15 @@ The Bungie manifest is a read-only SQLite database managed entirely by `api-serv
 
 The manifest SQLite uses Bungie's own schema — tables store JSON blobs keyed by hash. Key tables queried by Guardian Tracker:
 
-| Table | Contents |
-|---|---|
-| `DestinyInventoryItemDefinition` | All items — weapons, armor, exotics (JSON blob per item) |
-| `DestinyCollectibleDefinition` | Collectible source and acquisition info; `itemHash` field links to items |
-| `DestinyPresentationNodeDefinition` | Collections tree structure (categories, subcategories) |
-| `DestinyMilestoneDefinition` | Weekly milestone names and rewards |
-| `DestinyActivityDefinition` | Activity names and reward info |
-| `DestinyActivityModifierDefinition` | Modifier names for nightfalls etc. |
-| `DestinyRecordDefinition` | Triumph/seal/catalyst record definitions |
+| Table                               | Contents                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------ |
+| `DestinyInventoryItemDefinition`    | All items — weapons, armor, exotics (JSON blob per item)                 |
+| `DestinyCollectibleDefinition`      | Collectible source and acquisition info; `itemHash` field links to items |
+| `DestinyPresentationNodeDefinition` | Collections tree structure (categories, subcategories)                   |
+| `DestinyMilestoneDefinition`        | Weekly milestone names and rewards                                       |
+| `DestinyActivityDefinition`         | Activity names and reward info                                           |
+| `DestinyActivityModifierDefinition` | Modifier names for nightfalls etc.                                       |
+| `DestinyRecordDefinition`           | Triumph/seal/catalyst record definitions                                 |
 
 Rows contain an `id` (int) column and a `json` column (blob). Queries use `json_extract()` for field-level filtering or unmarshal the blob in Go.
 
@@ -60,14 +60,14 @@ rows, err := db.Query(
 
 ### Notable manifest query methods
 
-| Method | Purpose |
-|---|---|
-| `GetItemsByHashes(hashes)` | Batch item definition lookup; chunked at 500 for SQLite IN-clause limits |
-| `GetAllCollectibles()` | All collectible definitions (full table scan) |
-| `GetAllCollectiblesWithItems()` | Collectibles joined to items; holds read lock across both queries |
-| `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by `itemHash`; used for wishlist source strings |
-| `GetFilteredCollectibles()` | Collectibles split into weapon/armor/exotic/cosmetic buckets |
-| `GetWeaponTypesByName()` | Lowercased weapon name → weapon type display name (full table scan; callers cache) |
+| Method                                | Purpose                                                                            |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| `GetItemsByHashes(hashes)`            | Batch item definition lookup; chunked at 500 for SQLite IN-clause limits           |
+| `GetAllCollectibles()`                | All collectible definitions (full table scan)                                      |
+| `GetAllCollectiblesWithItems()`       | Collectibles joined to items; holds read lock across both queries                  |
+| `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by `itemHash`; used for wishlist source strings             |
+| `GetFilteredCollectibles()`           | Collectibles split into weapon/armor/exotic/cosmetic buckets                       |
+| `GetWeaponTypesByName()`              | Lowercased weapon name → weapon type display name (full table scan; callers cache) |
 
 ### Query guidelines
 
@@ -90,17 +90,17 @@ PostgreSQL is the primary persistence layer for all user data. The api-service c
 
 ### DB package structure
 
-| File | Contents |
-|---|---|
-| `db/db.go` | Pool creation (`NewPool`); `Close` |
-| `db/migrate.go` | Migration runner; `schema_migrations` table |
-| `db/stores.go` | `Stores` struct aggregating all store types |
-| `db/users.go` | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions) |
-| `db/tokens.go` | `BungieTokenStore` — encrypted Bungie OAuth tokens |
+| File             | Contents                                                                                                                                                                                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `db/db.go`       | Pool creation (`NewPool`); `Close`                                                                                                                                                                                                                                 |
+| `db/migrate.go`  | Migration runner; `schema_migrations` table                                                                                                                                                                                                                        |
+| `db/stores.go`   | `Stores` struct aggregating all store types                                                                                                                                                                                                                        |
+| `db/users.go`    | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)                                                                                                               |
+| `db/tokens.go`   | `BungieTokenStore` — encrypted Bungie OAuth tokens                                                                                                                                                                                                                 |
 | `db/wishlist.go` | `WishlistStore` — wishlist CRUD, user-scoped; `BulkDelete`/`BulkSetPriority` for `POST /api/wishlist/bulk` (user-scoped `id = ANY($1)`; foreign/missing ids silently skipped; `RowsAffected()` drives the handler's partial-success `{updated, skipped}` response) |
-| `db/prefs.go` | `PrefsStore` — user preferences and irreversible onboarding completion |
-| `db/audit.go` | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune |
-| `db/flags.go` | `FlagsStore` — feature flag get/list/upsert |
+| `db/prefs.go`    | `PrefsStore` — user preferences and irreversible onboarding completion                                                                                                                                                                                             |
+| `db/audit.go`    | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune                                                                                                                      |
+| `db/flags.go`    | `FlagsStore` — feature flag get/list/upsert                                                                                                                                                                                                                        |
 
 ### Bungie token store (`db/tokens.go`)
 
@@ -113,12 +113,14 @@ reuse a version number for different key material.
 **`Get(ctx, membershipID)`** — returns `ErrTokensNotFound` (not a generic error) when no row exists for the membership.
 
 **`Upsert(ctx, membershipID, tokens, prevUpdatedAt)`**:
+
 - Zero `prevUpdatedAt`: unconditional insert/update (login path)
 - Non-zero `prevUpdatedAt`: compare-and-swap against the row's `updated_at` (refresh path — a replica that loses the race gets `updated = false, err = nil`)
 - Returns `ErrNoUserRow` when no `users` row exists for the membership (tokens can't persist)
 - Returns `(newUpdatedAt time.Time, updated bool, err error)` — callers use `newUpdatedAt` as the CAS baseline for future refreshes
 
 **Sentinel errors:**
+
 - `db.ErrTokensNotFound` — translated to `auth.ErrTokensNotFound` in the adapter in `main.go`
 - `db.ErrNoUserRow` — translated to `auth.ErrNoUserRow` in the adapter
 
@@ -176,12 +178,12 @@ Get-Content database/init/01-init.sql | docker exec -i guardian-pg psql -U postg
 
 ## When to use which database
 
-| Use case | Database |
-|---|---|
-| Looking up item names, icons, sources from Bungie | SQLite manifest (read-only) |
-| Storing user wishlists | PostgreSQL (`db/wishlist.go`) |
-| Storing user profile / token_version | PostgreSQL (`db/users.go`) |
-| Storing encrypted Bungie OAuth tokens | PostgreSQL (`db/tokens.go`) |
-| User preferences | PostgreSQL (`db/prefs.go`) |
-| Collections analysis (missing items) | SQLite manifest + Bungie API live data |
-| Weapon type enrichment for catalysts | SQLite manifest (`GetWeaponTypesByName`; cached) |
+| Use case                                          | Database                                         |
+| ------------------------------------------------- | ------------------------------------------------ |
+| Looking up item names, icons, sources from Bungie | SQLite manifest (read-only)                      |
+| Storing user wishlists                            | PostgreSQL (`db/wishlist.go`)                    |
+| Storing user profile / token_version              | PostgreSQL (`db/users.go`)                       |
+| Storing encrypted Bungie OAuth tokens             | PostgreSQL (`db/tokens.go`)                      |
+| User preferences                                  | PostgreSQL (`db/prefs.go`)                       |
+| Collections analysis (missing items)              | SQLite manifest + Bungie API live data           |
+| Weapon type enrichment for catalysts              | SQLite manifest (`GetWeaponTypesByName`; cached) |

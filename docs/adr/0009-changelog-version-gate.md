@@ -17,7 +17,7 @@ check or a human/agent workflow to compute the same answer ahead of the merge.
 ## Decision
 
 Extract the build-number rule from `version.yml` into `scripts/next-version.sh`,
-a single script that prints the version the *next* merge to `main` will mint.
+a single script that prints the version the _next_ merge to `main` will mint.
 Three consumers call it and none reimplement the rule: `version.yml` (tags the
 merge), a new `changelog-version` CI job (verifies a PR agrees with it), and the
 `/ship` skill (`.claude/skills/ship/SKILL.md`, writes the changelog section for

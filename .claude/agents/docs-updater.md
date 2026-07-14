@@ -59,13 +59,13 @@ The docs-updater may update these private planning files only when explicitly
 asked or when the active task already changed them:
 
 | File                              | Audience           | What it covers                                |
-| ---------------------------------- | ------------------ | --------------------------------------------- |
-| `private/IMPLEMENTATION_PLAN.md`   | Developer          | Detailed internal implementation planning     |
-| `private/archive.md`               | Developer          | Internal shipped-work archive                 |
-| `private/InfraTODO.md`             | Developer/operator | Private infrastructure decisions and runbooks |
-| `private/known-bugs.md`            | Developer          | Known-bug tracking not yet public             |
-| `private/security-limitations.md`  | Developer          | Private security limitations and follow-ups   |
-| `private/BungieAPI.md`             | Developer          | Raw Bungie API research notes                 |
+| --------------------------------- | ------------------ | --------------------------------------------- |
+| `private/IMPLEMENTATION_PLAN.md`  | Developer          | Detailed internal implementation planning     |
+| `private/archive.md`              | Developer          | Internal shipped-work archive                 |
+| `private/InfraTODO.md`            | Developer/operator | Private infrastructure decisions and runbooks |
+| `private/known-bugs.md`           | Developer          | Known-bug tracking not yet public             |
+| `private/security-limitations.md` | Developer          | Private security limitations and follow-ups   |
+| `private/BungieAPI.md`            | Developer          | Raw Bungie API research notes                 |
 
 Do not auto-copy private content into public docs. Public docs can say that a
 private runbook exists, but must not include private commands, secrets, resource
