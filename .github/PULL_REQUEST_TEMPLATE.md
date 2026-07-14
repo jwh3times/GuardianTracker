@@ -21,7 +21,7 @@
 - [ ] Code is formatted (`npm run format` / `gofmt -w .`)
 - [ ] Tests pass locally (`npm test` / `go test ./...`)
 - [ ] Added or updated tests for the change
-- [ ] Updated documentation where relevant (`README.md`, `CLAUDE.md`, etc.)
+- [ ] Updated documentation where relevant (`README.md`, `AGENTS.md`, etc.)
 - [ ] All CI status checks are green
 
 ## Screenshots / notes (optional)

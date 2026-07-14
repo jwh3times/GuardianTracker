@@ -67,10 +67,10 @@ warning describing every disabled protection.
 
 Encryption keys also have explicit positive `SMALLINT` versions:
 
-| Variable                                | Purpose                                                        |
-| --------------------------------------- | -------------------------------------------------------------- |
+| Variable                                | Purpose                                                           |
+| --------------------------------------- | ----------------------------------------------------------------- |
 | `TOKEN_ENCRYPTION_KEY_VERSION`          | Current-key ciphertext version (`1` by default for existing rows) |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact version accepted for the optional previous key            |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact version accepted for the optional previous key              |
 
 ### Local Development
 
@@ -134,7 +134,7 @@ errors; do not change a version independently of its key.
 
 - **Role tiers** — `standard(0) < beta(1) < alpha(2) < admin(3)` stored in `users.role`. Authorization **always reads the role from the DB** (the `RevocationChecker` cache now holds `{token_version, role}`), never from the JWT — the JWT carries role only as a display hint. Role changes therefore take effect within the 60-second cache window with no token churn.
 - **Admin bootstrap** — admin can only be minted via `ADMIN_MEMBERSHIP_IDS` (comma-separated Bungie membership IDs pinned to admin on every login upsert) or granted by an existing admin. There is **no self-service path to admin**: `PUT /api/account/role` accepts only standard/beta/alpha and rejects admin callers. `ADMIN_MEMBERSHIP_IDS` is non-secret config (membership IDs), but treat it as sensitive — it controls who holds admin.
-- **Server-side enforcement** — `RequireAdmin`/`RequireTier` gate admin and tier-locked endpoints, and `RequireFlag` enforces feature-flag access (see *Feature-flag enforcement* below); UI hiding mirrors these gates rather than being the boundary. In degraded mode (no DB) roles resolve to standard and admin/tier endpoints return 503 (flag gates fail open).
+- **Server-side enforcement** — `RequireAdmin`/`RequireTier` gate admin and tier-locked endpoints, and `RequireFlag` enforces feature-flag access (see _Feature-flag enforcement_ below); UI hiding mirrors these gates rather than being the boundary. In degraded mode (no DB) roles resolve to standard and admin/tier endpoints return 503 (flag gates fail open).
 - **Last-admin protection** — demoting the final admin is refused inside the same transaction (all admin rows are `SELECT … FOR UPDATE`-locked so concurrent demotions can't race the system to zero admins).
 - **Audit trail** — authentication events (login success/failure, logout, logout-all, token refresh), session security events (refresh-token reuse, session termination), self opt-in role changes, admin role changes, and feature-flag changes are persisted to the unified `audit_log` table and exposed to admins via `GET /api/admin/audit` and the `/admin` Audit Log UI panel. Role and flag changes are written in their mutation transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). **Client IP address and User-Agent are captured and stored** for security forensics, retained for `AUDIT_RETENTION_DAYS` (default 180), and pruned hourly once past expiry. IP addresses are trusted only from `TRUSTED_PROXIES` (gin `SetTrustedProxies`) so they cannot be spoofed by a client; configure this in production to your platform's ingress range.
 

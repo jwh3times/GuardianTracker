@@ -76,6 +76,7 @@ kubectl rollout status deployment/<service-name> --timeout=120s
 ```
 
 If a base image fails to pull (TLS timeout), pre-pull it first:
+
 ```powershell
 & minikube docker-env --shell powershell | Invoke-Expression
 docker pull <image:tag>
@@ -83,16 +84,17 @@ docker pull <image:tag>
 
 ## Image tags
 
-| Service | Tag |
-|---|---|
+| Service     | Tag                                   |
+| ----------- | ------------------------------------- |
 | api-service | `guardian-tracker/api-service:latest` |
-| frontend | `guardian-tracker/frontend:v2` |
+| frontend    | `guardian-tracker/frontend:v2`        |
 
 All deployments use `imagePullPolicy: IfNotPresent`.
 
 ## Layer caching — key ordering rules
 
 Both Dockerfiles follow the same caching pattern:
+
 1. Copy lock files first (`go.mod`/`go.sum` or `package*.json`) — rarely change, keeps install step cached
 2. Run install/restore (`go mod download` or `npm ci`) — expensive, must be cached
 3. Copy source (`COPY . .`) — changes frequently, invalidates from here down
@@ -101,11 +103,11 @@ Never move `COPY . .` before the install step.
 
 ## Base image versions
 
-| Role | Image |
-|---|---|
-| Go builder | `golang:1.25-alpine` |
-| Go runtime | `alpine:3.19` |
-| Node builder (frontend) | `node:26-alpine` |
+| Role                     | Image                                     |
+| ------------------------ | ----------------------------------------- |
+| Go builder               | `golang:1.25-alpine`                      |
+| Go runtime               | `alpine:3.19`                             |
+| Node builder (frontend)  | `node:26-alpine`                          |
 | nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.25-alpine` |
 
 When updating Go: the version must match the `go` directive in `go.mod`.
