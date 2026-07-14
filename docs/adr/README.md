@@ -18,3 +18,4 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0006: Roles, Feature Flags, and Admin Authorization](./0006-roles-feature-flags-and-admin-authorization.md)
 - [ADR 0007: Bungie Public API Weekly and Vendor Limits](./0007-bungie-public-api-weekly-and-vendor-limits.md)
 - [ADR 0008: Browser Refresh Credential Cookie](./0008-browser-refresh-cookie.md)
+- [ADR 0009: Changelog-Version Gate and the Version Oracle](./0009-changelog-version-gate.md)
