@@ -201,7 +201,7 @@ go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 # Frontend (from frontend/)
 npm run type-check
 npm run lint
-npm test
+npm test -- --coverage
 npm run build
 
 # Browser (start from repo root, then run scripts from frontend/)
@@ -213,7 +213,7 @@ npm run e2e
 npm run e2e:visual
 ```
 
-`npm run type-check`, `npm run lint`, `npm test` (Vitest coverage), and `npm run build`
+`npm run type-check`, `npm run lint`, `npm test -- --coverage` (Vitest coverage), and `npm run build`
 are the same steps the `Test Frontend` CI job runs. Playwright reuses any server
 already on 5273/8081 outside CI, so a running Compose app stack silently replaces
 the hermetic one and the suite dies at login with `Failed to fetch`. Visual
@@ -250,7 +250,11 @@ Public docs:
 Private docs:
 
 - `private/IMPLEMENTATION_PLAN.md` - detailed private implementation planning
-- `private/ARCHIVE.md` - shipped private history, retired audits, and durable decisions
+- `private/archive.md` - shipped private history and durable decisions
+- `private/InfraTODO.md` - infrastructure maintenance and deployment notes
+- `private/known-bugs.md` - known issues and tracked defects
+- `private/security-limitations.md` - security constraints and limitations
+- `private/BungieAPI.md` - Bungie API research and protocol documentation
 
 Rules:
 
