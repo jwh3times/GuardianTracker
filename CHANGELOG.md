@@ -5,11 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Guardian Tracker uses the SemVer target version in `VERSION`; every merge to
 `main` is stamped with an annotated version tag and GitHub Release such as
-`v0.3.19`, `v0.3.20`, and `v0.3.21`. One merge to `main` produces exactly one
+`v0.3.20`, `v0.3.21`, and `v0.3.22`. One merge to `main` produces exactly one
 version, so each released section below corresponds to a single merged pull
 request.
 
 ## [Unreleased]
+
+No unreleased changes.
+
+## [0.3.22] - 2026-07-13
 
 ### Added
 
