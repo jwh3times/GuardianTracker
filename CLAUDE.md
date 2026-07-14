@@ -102,16 +102,16 @@ Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`
 | `GO_ENV`                                | Required; exactly `development` or `production`                                                       |
 | `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                               |
 | `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                              |
-| `BUNGIE_API_KEY`                | From <https://www.bungie.net/en/Application>                                                          |
-| `BUNGIE_CLIENT_ID`              | Bungie app settings                                                                                   |
-| `BUNGIE_CLIENT_SECRET`          | Bungie app settings                                                                                   |
-| `JWT_SECRET`                    | 32+ char random string (`openssl rand -base64 32`)                                                    |
-| `DATABASE_URL`                  | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
+| `BUNGIE_API_KEY`                        | From <https://www.bungie.net/en/Application>                                                          |
+| `BUNGIE_CLIENT_ID`                      | Bungie app settings                                                                                   |
+| `BUNGIE_CLIENT_SECRET`                  | Bungie app settings                                                                                   |
+| `JWT_SECRET`                            | 32+ char random string (`openssl rand -base64 32`)                                                    |
+| `DATABASE_URL`                          | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
 | `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
 | `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                           |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                             |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
-| `ADMIN_MEMBERSHIP_IDS`          | (optional) comma-separated Bungie membership IDs pinned to admin role at login                        |
+| `ADMIN_MEMBERSHIP_IDS`                  | (optional) comma-separated Bungie membership IDs pinned to admin role at login                        |
 
 ### Application logging
 
