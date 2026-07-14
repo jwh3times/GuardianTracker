@@ -43,35 +43,24 @@ jobs:
         id: version
         run: |
           target=$(tr -d '[:space:]' < VERSION)
-          if ! echo "$target" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
-            echo "::error::VERSION '$target' is not a plain SemVer x.y.z version."
-            exit 1
-          fi
-
-          IFS=. read -r major minor configured_build <<< "$target"
+          IFS=. read -r major minor _ <<< "$target"
 
           prefix="v${major}.${minor}"
           escaped_prefix="v${major}\.${minor}"
           existing_for_commit=$(git tag --list "${prefix}.*" --points-at "$GITHUB_SHA" | grep -E "^${escaped_prefix}\.[0-9]+$" | sort -V | tail -1 || true)
 
           if [ -n "$existing_for_commit" ]; then
+            # Re-run on an already-tagged commit: reuse rather than mint a second build.
             tag="$existing_for_commit"
             version="${tag#v}"
             build="${version##*.}"
             echo "Commit already has ${tag}; reusing it instead of creating another build."
           else
-            last=$(git tag --list "${prefix}.*" | grep -E "^${escaped_prefix}\.[0-9]+$" | sed -E "s/^${escaped_prefix}\.//" | sort -n | tail -1 || true)
-
-            if [ -z "$last" ]; then
-              build="$configured_build"
-            elif [ "$configured_build" -gt "$last" ]; then
-              build="$configured_build"
-            else
-              build=$(( last + 1 ))
-            fi
-
-            tag="${prefix}.${build}"
-            version="${major}.${minor}.${build}"
+            # The build-number rule lives in scripts/next-version.sh so that CI's
+            # Changelog Version guard and the /ship skill compute the identical value.
+            version=$(bash scripts/next-version.sh)
+            tag="v${version}"
+            build="${version##*.}"
 
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
