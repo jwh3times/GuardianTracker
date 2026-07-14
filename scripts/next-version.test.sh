@@ -38,6 +38,7 @@ run_case "existing tags increment the max"          "0.3.0"  "0.3.22" v0.3.20 v0
 run_case "VERSION bumped past tags wins"            "0.3.30" "0.3.30" v0.3.20 v0.3.21
 run_case "non-contiguous tags use max not count"    "0.3.0"  "0.3.10" v0.3.1 v0.3.9
 run_case "other version lines are ignored"          "0.3.0"  "0.3.2"  v0.3.1 v1.5.99
+run_case "glob-admitted but regex-invalid tags are rejected" "0.3.0" "0.3.2" v0.3.1 v0.3.1.2 v0.3.0-rc1
 run_case "double-digit builds sort numerically"     "0.3.0"  "0.3.24" v0.3.9 v0.3.23
 
 if [ "$failures" -ne 0 ]; then
