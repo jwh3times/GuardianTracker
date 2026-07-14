@@ -1,6 +1,6 @@
 ---
 name: docs-updater
-description: Use to keep Guardian Tracker documentation current after code changes — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, CLAUDE.md, and agent files. Run after completing a feature, endpoint, schema change, security fix, or deployment-affecting change.
+description: Use to keep Guardian Tracker documentation current after code changes — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, and agent files. Run after completing a feature, endpoint, schema change, security fix, or deployment-affecting change.
 tools: Read, Write, Edit, Glob, Grep, Bash
 model: sonnet
 ---
@@ -12,27 +12,38 @@ not exist in the code.
 Guardian Tracker is a public GitHub repository. Keep public docs safe to commit.
 Do not move private operational detail into public docs.
 
+## The AGENTS.md / CLAUDE.md split
+
+`AGENTS.md` is the canonical, tool-neutral agent guide and the **only** place repo
+operating context gets updated — architecture, env vars, ports, CI, testing, known
+limitations, agent routing.
+
+`CLAUDE.md` is a thin `@AGENTS.md` importer. Touch it **only** when Claude Code-specific
+mechanics change: the subagent roster, skills, or hooks. Never move operating context
+back into it, and never duplicate a fact across both files — that duplication is what
+this split exists to eliminate.
+
 ## Documents you maintain
 
-| File | Audience | What it covers |
-| --- | --- | --- |
-| `README.md` | Public contributors | Project overview, feature summary, quick commands, doc index |
-| `SETUP.md` | Developers | Local setup, env files, ports, tests, Compose, Minikube |
-| `docs/README.md` | Maintainers | Public/private documentation boundary and doc ownership |
-| `docs/architecture.md` | Developers/reviewers | Implemented runtime shape, data flow, route groups, security posture |
-| `docs/adr/*.md` | Maintainers | Durable decisions future work must preserve or supersede |
-| `ROADMAP.md` | Contributors/maintainers | Not-yet-implemented public work, gates, likely size |
-| `CHANGELOG.md` | Users/maintainers | Shipped changes by version |
-| `SECURITY.md` | Security reporters/reviewers | Reporting process, controls, security model, checklist |
-| `AGENTS.md` | AI coding agents | Tool-neutral agent operating context, architecture pointers, auth/security notes, known limitations |
-| `CLAUDE.md` | Claude coding agents | Claude-specific operating context, architecture pointers, auth/security notes, known limitations |
-| `.claude/agents/go-services.md` | go-services subagent | Go/Gin patterns, JWT/auth, Bungie OAuth, manifest flow, endpoints |
-| `.claude/agents/react-frontend.md` | react-frontend subagent | React Query patterns, auth flow, components, test rules |
-| `.claude/agents/postgres-specialist.md` | postgres-specialist subagent | PostgreSQL schema, SQLite manifest DB, migrations, query patterns |
-| `.claude/agents/penetration-tester.md` | penetration-tester subagent | Attack surface, security controls, intentional gaps |
-| `.claude/agents/code-reviewer.md` | code-reviewer subagent | Review rules, what to flag, intentional exceptions |
-| `.claude/agents/kubernetes-infrastructure.md` | kubernetes-infrastructure subagent | Minikube topology, manifests, configmaps, scripts |
-| `.claude/agents/docker-containers.md` | docker-containers subagent | Dockerfiles, image builds, base image versions |
+| File                                          | Audience                           | What it covers                                                                                 |
+| --------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `README.md`                                   | Public contributors                | Project overview, feature summary, quick commands, doc index                                   |
+| `SETUP.md`                                    | Developers                         | Local setup, env files, ports, tests, Compose, Minikube                                        |
+| `docs/README.md`                              | Maintainers                        | Public/private documentation boundary and doc ownership                                        |
+| `docs/architecture.md`                        | Developers/reviewers               | Implemented runtime shape, data flow, route groups, security posture                           |
+| `docs/adr/*.md`                               | Maintainers                        | Durable decisions future work must preserve or supersede                                       |
+| `ROADMAP.md`                                  | Contributors/maintainers           | Not-yet-implemented public work, gates, likely size                                            |
+| `CHANGELOG.md`                                | Users/maintainers                  | Shipped changes by version                                                                     |
+| `SECURITY.md`                                 | Security reporters/reviewers       | Reporting process, controls, security model, checklist                                         |
+| `AGENTS.md`                                   | All AI coding agents               | Canonical operating context — architecture, env, CI, testing, agent routing, known limitations |
+| `CLAUDE.md`                                   | Claude Code                        | Thin `@AGENTS.md` importer; Claude-only mechanics (subagents, skills). Rarely changes.         |
+| `.claude/agents/go-services.md`               | go-services subagent               | Go/Gin patterns, JWT/auth, Bungie OAuth, manifest flow, endpoints                              |
+| `.claude/agents/react-frontend.md`            | react-frontend subagent            | React Query patterns, auth flow, components, test rules                                        |
+| `.claude/agents/postgres-specialist.md`       | postgres-specialist subagent       | PostgreSQL schema, SQLite manifest DB, migrations, query patterns                              |
+| `.claude/agents/penetration-tester.md`        | penetration-tester subagent        | Attack surface, security controls, intentional gaps                                            |
+| `.claude/agents/code-reviewer.md`             | code-reviewer subagent             | Review rules, what to flag, intentional exceptions                                             |
+| `.claude/agents/kubernetes-infrastructure.md` | kubernetes-infrastructure subagent | Minikube topology, manifests, configmaps, scripts                                              |
+| `.claude/agents/docker-containers.md`         | docker-containers subagent         | Dockerfiles, image builds, base image versions                                                 |
 
 ## Private docs boundary
 
@@ -47,11 +58,14 @@ Do not move private operational detail into public docs.
 The docs-updater may update these private planning files only when explicitly
 asked or when the active task already changed them:
 
-| File | Audience | What it covers |
-| --- | --- | --- |
-| `private/ROADMAP.md` | Developer | Detailed internal roadmap and sequencing |
-| `private/ARCHIVE.md` | Developer | Internal shipped-work archive |
-| `private/InfraTODO.md` | Developer/operator | Private infrastructure decisions and runbooks |
+| File                              | Audience           | What it covers                                |
+| --------------------------------- | ------------------ | --------------------------------------------- |
+| `private/IMPLEMENTATION_PLAN.md`  | Developer          | Detailed internal implementation planning     |
+| `private/archive.md`              | Developer          | Internal shipped-work archive                 |
+| `private/InfraTODO.md`            | Developer/operator | Private infrastructure decisions and runbooks |
+| `private/known-bugs.md`           | Developer          | Known-bug tracking not yet public             |
+| `private/security-limitations.md` | Developer          | Private security limitations and follow-ups   |
+| `private/BungieAPI.md`            | Developer          | Raw Bungie API research notes                 |
 
 Do not auto-copy private content into public docs. Public docs can say that a
 private runbook exists, but must not include private commands, secrets, resource
@@ -62,7 +76,7 @@ names, or exploit details.
 **New or changed API endpoint**
 
 - `docs/architecture.md`: route group summary if the surface changed
-- `AGENTS.md`, `CLAUDE.md`, and `.claude/agents/go-services.md`: endpoint list/details
+- `AGENTS.md` and `.claude/agents/go-services.md`: endpoint list/details
 - `.claude/agents/penetration-tester.md`: attack surface if auth/security relevant
 - `SECURITY.md`: only if the security model changed
 
@@ -82,16 +96,24 @@ names, or exploit details.
 **Auth, role, flag, admin, audit, or security behavior changed**
 
 - `SECURITY.md`: security model and checklist
-- `AGENTS.md` and `CLAUDE.md`: auth/security operating context
+- `AGENTS.md`: auth/security operating context
 - `.claude/agents/go-services.md`, `penetration-tester.md`, `code-reviewer.md`
 - Add or update an ADR if the decision is durable
 
 **Docker, Compose, Kubernetes, ports, env, or deployment changed**
 
 - `SETUP.md`: ports, env, setup commands
+- `AGENTS.md`: the inline ports and environment table (`## Running Services`,
+  `## Environment Setup`) — this is the only copy tool-neutral agents can read
 - `docs/architecture.md`: runtime/infrastructure summary
 - `.claude/agents/docker-containers.md` or `kubernetes-infrastructure.md`
 - `README.md`: only if quick start changes
+
+**CI workflow or branch-protection changed**
+
+- `AGENTS.md`: its `## CI/CD` section — job names, coverage gates, Staticcheck
+  version, required status checks, versioning/changelog behavior
+- `CONTRIBUTING.md`: contributor-facing CI expectations if they changed
 
 **Feature completed from the public roadmap**
 
@@ -102,7 +124,7 @@ names, or exploit details.
 
 **Known limitation resolved**
 
-- `AGENTS.md` and `CLAUDE.md`: remove or rewrite the limitation only after code confirms it
+- `AGENTS.md`: remove or rewrite the limitation only after code confirms it
 - `ROADMAP.md`: remove or revise the related backlog item
 - `SECURITY.md`: if security-related
 - Relevant agent file
@@ -124,8 +146,9 @@ are portable and permission-free:
 ## What NOT to change
 
 - Do not edit agent frontmatter unless explicitly asked.
-- Do not add aspirational features to `docs/architecture.md`, `AGENTS.md`,
-  `CLAUDE.md`, or agent docs. Those describe implemented behavior.
+- Do not add aspirational features to `docs/architecture.md`, `AGENTS.md`, or agent
+  docs. Those describe implemented behavior.
+- Do not move operating context into `CLAUDE.md`. It is an `@AGENTS.md` importer.
 - Do not remove a known limitation unless it is confirmed resolved in code.
 - Do not put detailed implementation handoff plans under public `docs/`.
 - Do not copy private runbooks, resource names, raw private research, or

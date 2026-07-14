@@ -23,6 +23,7 @@ blocks live in `components/` (design system), `lib/` (cross-cutting helpers), `c
 `types/`, and `styles/`.
 
 Dev commands (run from `frontend/`):
+
 ```powershell
 npm start          # Vite dev server on :5273
 npm run build      # tsc + Vite production build
@@ -131,6 +132,7 @@ frontend/src/
 ```
 
 Deleted files / paths (do not reference):
+
 - `frontend/src/pages/` — page files now live directly at `frontend/src/features/<feature>/`
 - `frontend/src/features/<feature>/pages/`, `.../components/kit/`, `.../lib/` — per-feature nesting flattened; page, component, and helper files now sit directly at the feature root (e.g. `features/admin/Admin.tsx`, `features/admin/AdminKit.tsx`, `features/collections/ItemCard.tsx`)
 - `frontend/src/components/kit/` and `frontend/src/components/ui/` — flattened into `components/`
@@ -163,6 +165,7 @@ const { data } = useQuery({
 ## Shared query definitions
 
 `lib/queries.ts` exports:
+
 - `collectionsQuery(membershipType, membershipId, includeAll?)` — canonical React Query definition for the collections endpoint; Dashboard, Settings, and Collections all use it so they share a single cache entry per (membership, variant) instead of firing separate requests.
 - `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
 - `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
@@ -188,6 +191,7 @@ Auth state lives entirely in `AuthContext` (`contexts/AuthContext.tsx`):
 ## Roles and feature flags
 
 `FlagsContext` (`contexts/FlagsContext.tsx`) queries `GET /api/flags` and exposes:
+
 - `useFlag(key)` — returns `{ enabled, accessible, locked }` for a single flag key
 - `useFlags()` — returns the full resolved flag map + caller's role
 
@@ -219,6 +223,7 @@ authenticated pages go inside this group — do not add inline auth checks or re
 ## OAuth callback flow
 
 `OAuthCallback.tsx` handles the redirect from Bungie at `/auth/callback?code=...&state=...`:
+
 1. Reads `code` and `state` from URL params
 2. POSTs `{ code, state }` to `POST /api/auth/bungie/callback` with `credentials: "include"`
 3. On success: the API sets the refresh cookie; `AuthContext.login()` stores `{token,user}` and redirects to `/dashboard`

@@ -13,10 +13,10 @@ You are managing the Guardian Tracker Kubernetes infrastructure running on Minik
 
 Two deployments in the `default` namespace (the old auth-service, bungie-service, and graphql-service no longer exist):
 
-| Deployment | Image tag | Replicas | Port | Service type |
-|---|---|---|---|---|
-| `api-service` | `guardian-tracker/api-service:latest` | 1 | 8081 | ClusterIP |
-| `frontend` | `guardian-tracker/frontend:v2` | 2 | 80 | NodePort |
+| Deployment    | Image tag                             | Replicas | Port | Service type |
+| ------------- | ------------------------------------- | -------- | ---- | ------------ |
+| `api-service` | `guardian-tracker/api-service:latest` | 1        | 8081 | ClusterIP    |
+| `frontend`    | `guardian-tracker/frontend:v2`        | 2        | 80   | NodePort     |
 
 All images are built directly into Minikube's Docker daemon — they are not pushed to a registry.
 
@@ -32,35 +32,36 @@ cd k8s
 
 ## Manifests (k8s/)
 
-| File | Contents |
-|---|---|
-| `api-service-configmap.yaml` | `api-service-config` ConfigMap — non-sensitive env vars |
-| `api-service-secret.yaml` | `api-service-secrets` Secret — placeholder values (replace before use) |
-| `api-service.yaml` | api-service Deployment + ClusterIP Service + PersistentVolumeClaim (manifest data) |
-| `frontend.yaml` | frontend Deployment + NodePort Service + PodDisruptionBudget |
+| File                         | Contents                                                                           |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `api-service-configmap.yaml` | `api-service-config` ConfigMap — non-sensitive env vars                            |
+| `api-service-secret.yaml`    | `api-service-secrets` Secret — placeholder values (replace before use)             |
+| `api-service.yaml`           | api-service Deployment + ClusterIP Service + PersistentVolumeClaim (manifest data) |
+| `frontend.yaml`              | frontend Deployment + NodePort Service + PodDisruptionBudget                       |
 
 ## ConfigMap — api-service-config
 
 Non-sensitive values that change per environment:
 
-| Key | Default value | Notes |
-|---|---|---|
-| `PORT` | `8081` | |
-| `GO_ENV` | `development` | Development only — no DB required in this mode |
-| `BUNGIE_API_BASE_URL` | `https://www.bungie.net/Platform` | |
-| `AUTH_REDIRECT_URI` | `http://localhost:5273/auth/callback` | Update to ngrok URL for Bungie OAuth |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5273` | |
-| `MANIFEST_DB_PATH` | `/app/data/manifest.sqlite` | On the PVC volume |
-| `MANIFEST_CHECK_INTERVAL` | `3600` | Seconds |
-| `BUNGIE_API_RPS` | `10` | |
-| `BUNGIE_API_BURST` | `20` | |
-| `CACHE_ENABLED` | `true` | |
-| `CACHE_TTL_COLLECTIONS` | `300` | Seconds |
-| `JWT_ACCESS_TTL` | `30m` | Go duration; `JWT_EXPIRY_HOURS` remains a legacy fallback |
-| `JWT_REFRESH_EXPIRY_DAYS` | `30` | |
-| `TOKEN_ENCRYPTION_KEY_VERSION` | `1` | Positive placeholder; no encryption key is configured in this degraded stack |
+| Key                            | Default value                         | Notes                                                                        |
+| ------------------------------ | ------------------------------------- | ---------------------------------------------------------------------------- |
+| `PORT`                         | `8081`                                |                                                                              |
+| `GO_ENV`                       | `development`                         | Development only — no DB required in this mode                               |
+| `BUNGIE_API_BASE_URL`          | `https://www.bungie.net/Platform`     |                                                                              |
+| `AUTH_REDIRECT_URI`            | `http://localhost:5273/auth/callback` | Update to ngrok URL for Bungie OAuth                                         |
+| `CORS_ALLOWED_ORIGINS`         | `http://localhost:5273`               |                                                                              |
+| `MANIFEST_DB_PATH`             | `/app/data/manifest.sqlite`           | On the PVC volume                                                            |
+| `MANIFEST_CHECK_INTERVAL`      | `3600`                                | Seconds                                                                      |
+| `BUNGIE_API_RPS`               | `10`                                  |                                                                              |
+| `BUNGIE_API_BURST`             | `20`                                  |                                                                              |
+| `CACHE_ENABLED`                | `true`                                |                                                                              |
+| `CACHE_TTL_COLLECTIONS`        | `300`                                 | Seconds                                                                      |
+| `JWT_ACCESS_TTL`               | `30m`                                 | Go duration; `JWT_EXPIRY_HOURS` remains a legacy fallback                    |
+| `JWT_REFRESH_EXPIRY_DAYS`      | `30`                                  |                                                                              |
+| `TOKEN_ENCRYPTION_KEY_VERSION` | `1`                                   | Positive placeholder; no encryption key is configured in this degraded stack |
 
 Update `k8s/api-service-configmap.yaml` and apply when the ngrok URL changes:
+
 ```powershell
 kubectl apply -f k8s/api-service-configmap.yaml
 kubectl rollout restart deployment/api-service
@@ -78,16 +79,17 @@ kubectl create secret generic api-service-secrets `
   --from-literal=JWT_SECRET=<32+char-random>
 ```
 
-| Secret key | Purpose |
-|---|---|
-| `BUNGIE_API_KEY` | Bungie API requests |
-| `BUNGIE_CLIENT_ID` | OAuth app client ID |
-| `BUNGIE_CLIENT_SECRET` | OAuth app client secret (required for login) |
-| `JWT_SECRET` | HS256 JWT signing key; also derives the OAuth state HMAC key |
+| Secret key             | Purpose                                                      |
+| ---------------------- | ------------------------------------------------------------ |
+| `BUNGIE_API_KEY`       | Bungie API requests                                          |
+| `BUNGIE_CLIENT_ID`     | OAuth app client ID                                          |
+| `BUNGIE_CLIENT_SECRET` | OAuth app client secret (required for login)                 |
+| `JWT_SECRET`           | HS256 JWT signing key; also derives the OAuth state HMAC key |
 
 Note: `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` are not in the Minikube secret because the stack runs in development mode without Postgres. Do not treat this omission or these manifests as production guidance.
 
 Update a secret in-place:
+
 ```powershell
 kubectl create secret generic api-service-secrets --dry-run=client -o yaml `
   --from-literal=KEY=value ... | kubectl apply -f -
@@ -144,6 +146,7 @@ kubectl apply -f .
 ## Bungie OAuth and ngrok
 
 Bungie OAuth requires a public HTTPS redirect URI. For local development:
+
 1. Start ngrok: `ngrok http 3000`
 2. Copy the HTTPS URL (e.g. `https://abc123.ngrok-free.app`)
 3. Update the Bungie app settings at https://www.bungie.net/en/Application
@@ -152,9 +155,9 @@ Bungie OAuth requires a public HTTPS redirect URI. For local development:
 
 ## Base image versions
 
-| Role | Image |
-|---|---|
-| Go builder | `golang:1.25-alpine` |
-| Go runtime | `alpine:3.19` |
-| Node builder (frontend) | `node:26-alpine` |
+| Role                     | Image                                     |
+| ------------------------ | ----------------------------------------- |
+| Go builder               | `golang:1.25-alpine`                      |
+| Go runtime               | `alpine:3.19`                             |
+| Node builder (frontend)  | `node:26-alpine`                          |
 | nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.25-alpine` |

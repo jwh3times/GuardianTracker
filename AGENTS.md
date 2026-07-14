@@ -1,21 +1,27 @@
 # AGENTS.md
 
-This file gives AI coding agents repo-specific operating context for GuardianTracker. `CLAUDE.md` contains Claude-specific workflow notes; this file is the general agent guide.
+This is the canonical operating guide for AI coding agents working in Guardian Tracker.
+It is tool-neutral and self-contained: agents that read `AGENTS.md` natively (Codex and
+others) get the complete picture from this file alone.
+
+`CLAUDE.md` imports this file via `@AGENTS.md` and adds only Claude Code-specific
+mechanics. **Repo operating context belongs here, not there.**
 
 ## Project Overview
 
-GuardianTracker is a Destiny 2 collection tracker. It authenticates users through Bungie OAuth, ingests profile and manifest data from the Bungie API, tracks collection gaps, supports wishlist planning, and surfaces weekly acquisition recommendations.
+Guardian Tracker is a Destiny 2 collection tracker web app. Players log in via Bungie OAuth; the app analyzes their collections to surface missing items with acquisition difficulty ratings, wish-list management, and weekly recommendations.
 
 Primary stack:
 
-- Frontend: React, TypeScript, Vite, CSS modules
+- Frontend: React, TypeScript, Vite, global CSS with `gt-*` design-token system
 - Backend: Go, Gin, PostgreSQL
 - Local orchestration: Docker Compose
 - Dev-validation orchestration: Kubernetes manifests for Minikube
 
 ## Ground Rules
 
-- Do not build on unverified assumptions about Bungie API behavior, manifest shape, Destiny game data, or OAuth flows. Verify against code, docs, fixtures, or live/local behavior before making load-bearing changes.
+- **Don't build on unverified assumptions — ask.** When a task depends on a fact you can't confirm from the code, the docs, or a quick check — especially **external or domain facts** (Bungie API response shapes, the manifest's presentation-node structure, third-party behavior, game data) — stop and ask before designing against a guess. If ground truth is _obtainable_ (a real Bungie manifest is a public CDN download needing only `BUNGIE_API_KEY` — no OAuth; a running service; a sample response), ask to get it and verify **before** writing the implementation, not as a manual step deferred to the end.
+- A sensible default for a genuinely low-stakes choice is fine — state it and proceed. The bar: would being wrong force a rework or ship something incorrect? If yes, it's load-bearing — ask.
 - Keep public and private documentation separate. This is a public GitHub repo, so public docs must not contain secrets, private deployment details, internal-only notes, or sensitive audit data.
 - Prefer existing project patterns over introducing new abstractions.
 - Keep implementation changes scoped to the request. Do not rewrite unrelated code or docs.
@@ -24,81 +30,116 @@ Primary stack:
 
 ## Architecture
 
+Two services: a Go API backend and a React frontend that calls it directly over REST.
+
 ```text
-React/Vite frontend (:5273) -> Go/Gin API (:8081) -> PostgreSQL
-                               |
-                               +-> Bungie OAuth and Bungie API
+Frontend (React/TS :5273)
+    └─► API Service (Go/Gin :8081)  — OAuth, JWT, manifest, collections
 ```
 
-Key directories:
+For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring — see **[Ports in SETUP.md](./SETUP.md#ports)**.
 
-| Path                        | Purpose                                                            |
-| --------------------------- | ------------------------------------------------------------------ |
-| `backend/api-service/`      | Go API service, auth, Bungie integration, collection logic         |
-| `frontend/src/`             | React application source                                           |
-| `database/init/01-init.sql` | Local database initialization schema                               |
-| `k8s/`                      | Minikube validation manifests                                      |
-| `docs/`                     | Public project documentation                                       |
-| `private/`                  | Local/private planning and archived notes; should remain untracked |
-| `.claude/agents/`           | Claude-specific specialized agent instructions                     |
-| `frontend/e2e/`             | Playwright functional, accessibility, and visual browser tests      |
-| `backend/api-service/cmd/fake-bungie/` | Test-only Bungie/manifest fixture service                |
+### Key directories
 
-## Running Locally
+- `backend/api-service/` — Go API: `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency), `config/`, `cache/`.
+- `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `lib/`, `types/`.
+- `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
+- `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
+- `backend/api-service/cmd/fake-bungie/` — Test-only Bungie/manifest fixture service.
 
-Use `SETUP.md` as the source of truth for setup and troubleshooting.
+### Auth & token flow
 
-Common commands:
+Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the user's
+Bungie tokens **AES-256-GCM encrypted** in Postgres with explicit current/previous key versions.
+It returns a short-lived access JWT for localStorage and sends the per-device rotating refresh JWT
+only in a host-only HttpOnly cookie scoped to `/api/auth`. Callback and refresh require an exact
+allowlisted browser origin; the cookie policy assumes the frontend and API are same-site. Refresh
+sessions retain Postgres-backed revocation and reuse detection. Role tiers (standard / beta / alpha / admin) and feature
+flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login. Security details and the
+credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
 
-```bash
-# Full local stack
-docker compose up -d
+## Running Services
 
-# Backend only
-cd backend/api-service
+- **Docker Compose** (Option A) — one command for the full stack; best default for local dev and integration testing.
+- **Minikube** (Option B) — validates Kubernetes manifests; dev-validation only (no Postgres).
+- **Individual services** (Option C) — fast hot reload during active single-service development.
+
+`SETUP.md` is the human-facing setup guide and remains the fuller reference. The
+agent-facing subset — ports, environment table, test commands — is duplicated
+inline below on purpose, because tool-neutral agents cannot follow links out of
+this file.
+
+### Option A: Docker Compose (full stack)
+
+```powershell
+cp .env.example .env      # fill in BUNGIE_* secrets
+docker compose up --build
+```
+
+- Frontend `http://localhost:5273`, API `http://localhost:8081`, pgAdmin `http://localhost:5150`
+- Postgres `:5532`; Postgres and pgAdmin bind only to `127.0.0.1`
+- Bungie manifest persists in the `manifest-data` named volume.
+- `database/init/01-init.sql` auto-loads into Postgres on first run.
+
+```powershell
+docker compose down        # stop (keeps volumes)
+docker compose down -v     # stop and wipe Postgres/manifest volumes
+```
+
+### Option B: Kubernetes (Minikube)
+
+```powershell
+cd k8s
+./startup.ps1
+```
+
+Dev-validation only — runs `GO_ENV: development` with no Postgres (in-memory token store, no wishlist/preferences persistence).
+
+### Option C: Individual services
+
+```powershell
+# API Service (from backend/api-service/)
 go run .
 
-# Frontend only
-cd frontend
-npm install
-npm run dev
+# Frontend (from frontend/)
+npm start       # Vite dev server on :5273
 ```
 
-Default local ports:
+### Exposing via ngrok (public HTTPS)
 
-| Service    | Port   |
-| ---------- | ------ |
-| Frontend   | `5273` |
-| API        | `8081` |
-| PostgreSQL | `5432` |
+To test Bungie OAuth, tunnel the frontend with ngrok. Add the ngrok URL to `CORS_ALLOWED_ORIGINS` in the root `.env`, rebuild api-service, set `AUTH_REDIRECT_URI` to the ngrok callback, and register that URL in your Bungie app at <https://www.bungie.net/en/Application>. Free ngrok subdomains change on each restart — update all three every time.
 
-Minikube manifests are for development validation only. Do not treat them as production deployment guidance.
+## Environment Setup
 
-## Environment and Secrets
+```powershell
+./setup.ps1     # copies all .env.example files at once
+```
 
-Never commit real secrets. Use `.env` locally and keep generated/private files out of git.
+Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`.
 
-Important local variables:
+**Never commit real secrets. Use `.env` locally and keep generated/private files out of git.**
 
-| Variable                                | Purpose                                                              |
-| --------------------------------------- | -------------------------------------------------------------------- |
-| `GO_ENV`                                | Required runtime mode: exactly `development` or `production`         |
-| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error` (`info` default)                  |
-| `LOG_FORMAT`                            | `text` or `json` (development text; production JSON by default)       |
-| `BUNGIE_CLIENT_ID`                      | Bungie OAuth client ID                                               |
-| `BUNGIE_CLIENT_SECRET`                  | Bungie OAuth client secret                                           |
-| `BUNGIE_API_KEY`                        | Bungie API key                                                       |
-| `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                   |
-| `JWT_SECRET`                            | JWT signing secret                                                   |
-| `TOKEN_ENCRYPTION_KEY`                  | AES-256-GCM token encryption key                                     |
-| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current encryption key              |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | Optional previous decryption key during rotation                     |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                          |
-| `DATABASE_URL`                          | Postgres connection string                                           |
-| `CORS_ALLOWED_ORIGINS`                  | Exact browser origins allowed to call the API                        |
-| `ADMIN_MEMBERSHIP_IDS`                  | Optional comma-separated Bungie membership IDs with admin privileges |
+### Required secrets
 
-Auth and security behavior to preserve:
+| Variable                                | Purpose                                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `GO_ENV`                                | Required; exactly `development` or `production`                                                       |
+| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                               |
+| `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                              |
+| `BUNGIE_API_KEY`                        | From <https://www.bungie.net/en/Application>                                                          |
+| `BUNGIE_CLIENT_ID`                      | Bungie app settings                                                                                   |
+| `BUNGIE_CLIENT_SECRET`                  | Bungie app settings                                                                                   |
+| `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                                                    |
+| `JWT_SECRET`                            | 32+ char random string (`openssl rand -base64 32`)                                                    |
+| `DATABASE_URL`                          | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
+| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
+| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                           |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                             |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
+| `CORS_ALLOWED_ORIGINS`                  | Exact browser origins allowed to call the API                                                         |
+| `ADMIN_MEMBERSHIP_IDS`                  | (optional) comma-separated Bungie membership IDs pinned to admin role at login                        |
+
+### Auth and security behavior to preserve
 
 - OAuth state is HMAC signed.
 - Bungie tokens are encrypted at rest with AES-256-GCM and exact current/previous key versions.
@@ -109,47 +150,88 @@ Auth and security behavior to preserve:
 
 See `SECURITY.md` for public security posture and reporting guidance.
 
-Logging behavior to preserve:
+### Application logging
 
-- Every request receives a server-owned UUID returned as `X-Request-ID` and attached to the request context.
-- Access logs use route templates, method, status, duration, and response bytes; health-probe successes log at debug.
-- Application logs pseudonymize membership, session, user, and character identifiers as deterministic 24-hex values. Exact identifiers belong only in the PostgreSQL audit trail.
-- Never log query strings, bodies, authorization headers, User-Agent values, or routine client IPs.
+The API uses `log/slog` and assigns every request a server-generated UUID exposed
+as `X-Request-ID`. Access records use Gin route templates and include method,
+status, duration, and response bytes. They never include raw URLs/query strings,
+bodies, authorization headers, User-Agent values, or routine client IPs.
+Membership, session, user, and character identifiers are deterministic 24-hex
+pseudonyms in application logs; exact values remain only in the PostgreSQL audit
+trail. Successful app requests log at info, 4xx at warn, 5xx at error, and
+successful health probes at debug.
+
+## CI/CD
+
+GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
+
+1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
+2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
+3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
+4. **build-docker-images** — build validation only (no push configured)
+5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
+   merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
+   Bot-authored PRs are exempt; `/ship` backfills their entries.
+
+`.github/workflows/browser.yml` adds two advisory jobs: **Browser E2E + Axe**
+and **Browser Visual Regression**. They report failures normally (no
+`continue-on-error`) and retain reports/evidence for 14 days. Promote E2E + axe
+to required after ten consecutive clean runs; visual stays optional.
+
+CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
+
+**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v0.2.0`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit.
+
+### Branch protection (`main`)
+
+Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`), code-scanning gate (errors+warnings / medium+), no bypass actors.
+
+To change the gate, update the repository ruleset through GitHub UI or the GitHub API. Required check names must match CI job `name:` exactly.
 
 ## Testing and Validation
 
 Use the narrowest relevant test first, then run broader checks when the change crosses module boundaries.
 
-Common commands:
-
 ```powershell
-# Backend tests (from the repository root)
-cd backend/api-service
+# Go (from backend/api-service/)
 go test ./...
 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
-cd ../..
+./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
-# Frontend checks
-cd frontend
+# Frontend (from frontend/)
+npm run type-check
 npm run lint
+npm test -- --coverage
 npm run build
-cd ..
 
-# Hermetic browser checks (start the e2e Compose profile first)
+# Browser (start from repo root, then run scripts from frontend/)
+docker compose stop frontend api-service   # 5273/8081 would be silently reused
 docker compose --profile e2e up -d --wait e2e-postgres
 $env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
 cd frontend
 npm run e2e
 npm run e2e:visual
-cd ..
-
-# Local CI-equivalent backend coverage script
-cd backend/api-service
-./test-local.ps1
 ```
 
-Required CI checks are documented in `README.md` and workflow files under `.github/workflows/`.
-Browser E2E + Axe is advisory until ten consecutive clean runs; visual regression remains optional.
+`npm run type-check`, `npm run lint`, `npm test -- --coverage` (Vitest coverage), and `npm run build`
+are the same steps the `Test Frontend` CI job runs. Playwright reuses any server
+already on 5273/8081 outside CI, so a running Compose app stack silently replaces
+the hermetic one and the suite dies at login with `Failed to fetch`. Visual
+baselines are Linux renderings and must be regenerated inside the pinned
+`mcr.microsoft.com/playwright` image — never commit snapshots produced on
+Windows. Both procedures, including baseline regeneration, are in
+[frontend/README.md](./frontend/README.md#browser-tests).
+
+### Full Go coverage locally (matches CI)
+
+A plain `go test ./...` under-reports coverage (~52% vs CI's ~63%) because two test groups
+self-skip: sqlite-backed manifest/search tests need **cgo**, and the `db` package integration tests
+need a reachable Postgres via **`TEST_DATABASE_URL`** (distinct from `DATABASE_URL` — unit tests
+must still exercise the degraded no-DB paths). `./test-local.ps1` (from `backend/api-service/`)
+closes both gaps: it starts the throwaway `test-postgres` Compose service on port **5533** (so it
+won't collide with the main Postgres on 5532), exports `CGO_ENABLED=1` + `TEST_DATABASE_URL`, and
+runs `go test -race -coverprofile`. Flags: `-Html` opens the HTML coverage report; `-Down` removes
+the test container afterwards. Migrations are embedded and applied automatically by the harness.
 
 ## Documentation Rules
 
@@ -162,13 +244,17 @@ Public docs:
 - `SECURITY.md` - public security posture and reporting
 - `CHANGELOG.md` - notable shipped changes
 - `docs/adr/` - public architecture decisions
-- `AGENTS.md` - general AI agent operating guide
-- `CLAUDE.md` - Claude-specific operating guide
+- `AGENTS.md` - canonical, tool-neutral agent operating guide (this file)
+- `CLAUDE.md` - thin `@AGENTS.md` importer plus Claude Code-specific mechanics
 
 Private docs:
 
 - `private/IMPLEMENTATION_PLAN.md` - detailed private implementation planning
-- `private/ARCHIVE.md` - shipped private history, retired audits, and durable decisions
+- `private/archive.md` - shipped private history and durable decisions
+- `private/InfraTODO.md` - infrastructure maintenance and deployment notes
+- `private/known-bugs.md` - known issues and tracked defects
+- `private/security-limitations.md` - security constraints and limitations
+- `private/BungieAPI.md` - Bungie API research and protocol documentation
 
 Rules:
 
@@ -177,28 +263,38 @@ Rules:
 - Archive shipped private planning content instead of leaving duplicate active plans.
 - When deleting or consolidating private docs, scrub references to the removed file.
 
+Public committed docs describe implemented behavior, local setup, durable decisions, security
+model, shipped changes, and gated future work. `private/` is gitignored and holds detailed
+implementation plans, deployment runbooks, private security reviews, raw Bungie/API research, and
+environment-specific operations notes. Do not move private operational detail into public docs.
+
 ## Agent Routing
 
-If your agent environment supports specialized subagents, use the local instructions in `.claude/agents/` as task-specific guidance. These files are Claude-specific but still useful as repo notes.
+Specialized agent definitions live in `.claude/agents/`. If your tool supports
+subagents, dispatch them; if not, read the file for the relevant area as repo notes —
+they are useful either way.
 
-| Agent file                                    | Use for                                   |
-| --------------------------------------------- | ----------------------------------------- |
-| `.claude/agents/go-services.md`               | Go API, auth, Bungie API, backend tests   |
-| `.claude/agents/react-frontend.md`            | React, TypeScript, Vite, frontend UX      |
-| `.claude/agents/postgres-specialist.md`       | Schema, migrations, SQL, data integrity   |
-| `.claude/agents/kubernetes-infrastructure.md` | Kubernetes and Minikube validation        |
-| `.claude/agents/docker-containers.md`         | Docker Compose and container build issues |
-| `.claude/agents/penetration-tester.md`        | Security review and threat modeling       |
-| `.claude/agents/code-reviewer.md`             | Focused code review                       |
-| `.claude/agents/docs-updater.md`              | Documentation freshness and doc ownership |
+| Task                                                                                                                          | Agent                       | Definition                                    |
+| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------- |
+| Go backend — Gin handlers, JWT/auth, Bungie OAuth, manifest, collections, records, weekly, search, roles/flags/admin          | `go-services`               | `.claude/agents/go-services.md`               |
+| React frontend — pages, components, design system (`gt-*`), React Query, AuthContext, FlagsContext, Vitest tests              | `react-frontend`            | `.claude/agents/react-frontend.md`            |
+| PostgreSQL schema, migrations, token store, audit log; SQLite manifest queries                                                | `postgres-specialist`       | `.claude/agents/postgres-specialist.md`       |
+| Kubernetes manifests, Minikube, kubectl, secrets, configmaps                                                                  | `kubernetes-infrastructure` | `.claude/agents/kubernetes-infrastructure.md` |
+| Dockerfiles, image builds, layer caching                                                                                      | `docker-containers`         | `.claude/agents/docker-containers.md`         |
+| Security testing — OAuth, JWT, CSRF, data isolation, XSS, CORS, admin endpoints                                               | `penetration-tester`        | `.claude/agents/penetration-tester.md`        |
+| Code review — correctness, security, pattern violations                                                                       | `code-reviewer`             | `.claude/agents/code-reviewer.md`             |
+| Documentation sync — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, agent files | `docs-updater`              | `.claude/agents/docs-updater.md`              |
+
+Skills in `.claude/skills/` are Claude Code-specific and are not portable to other
+tools today. See `CLAUDE.md`.
 
 ## Known Limitations
 
-- Collections remain account-wide; the character switcher scopes authenticated
-  weekly vendor inventory, daily actions, availability ranking, and Xûr location
-  to the selected Guardian.
-- Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds asynchronously.
-- Xur location is resolved best-effort from the authenticated character-vendor
-  component and manifest destination data; it is omitted when unavailable.
-- Missing-count summaries intentionally omit non-raid/dungeon categories because
-  current Bungie milestone and activity rewards do not expose collectible-linked items.
+- Collections data remains account-wide. The character switcher scopes
+  authenticated weekly vendor inventory, daily actions, availability ranking,
+  and Xûr location to the selected Guardian; deeper character surfaces remain P2.
+- Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready)
+- Xûr location is best-effort: the authenticated character-vendor component's
+  location index resolves through the manifest to "The Tower"; failures omit the field.
+- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones
+  omit it because verified current reward definitions contain no collectible-linked items.

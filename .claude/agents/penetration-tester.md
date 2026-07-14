@@ -187,7 +187,7 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 - OAuth state is replayable within its 10-minute TTL — stateless HMAC design cannot enforce one-time use; mitigated by Bungie's single-use authorization code
 - Revocation fails open — a DB outage during the `token_version` check allows the request; closes when DB returns
 - If revocation cannot be observed immediately after logout, access tokens remain valid up to the configured lifetime (30m by default) plus the 60s revocation cache window
-- Per-device session reuse detection revokes only the replayed session — a stolen refresh token that is used *before* the legitimate client rotates it would not be detected until a subsequent rotation attempt
+- Per-device session reuse detection revokes only the replayed session — a stolen refresh token that is used _before_ the legitimate client rotates it would not be detected until a subsequent rotation attempt
 - Auth/session audit events are best-effort — a DB outage during login/logout can drop an audit record (role/flag changes are atomic and cannot be dropped)
 - `style-src 'unsafe-inline'` remains in the frontend CSP while components depend on inline styles; `script-src` must not include it
 - The refresh cookie assumes a same-site frontend/API topology; any future cross-site deployment requires a new cookie and CSRF review
