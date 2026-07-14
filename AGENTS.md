@@ -13,7 +13,7 @@ Guardian Tracker is a Destiny 2 collection tracker web app. Players log in via B
 
 Primary stack:
 
-- Frontend: React, TypeScript, Vite, CSS modules
+- Frontend: React, TypeScript, Vite, global CSS with `gt-*` design-token system
 - Backend: Go, Gin, PostgreSQL
 - Local orchestration: Docker Compose
 - Dev-validation orchestration: Kubernetes manifests for Minikube
@@ -64,7 +64,10 @@ credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
 - **Minikube** (Option B) — validates Kubernetes manifests; dev-validation only (no Postgres).
 - **Individual services** (Option C) — fast hot reload during active single-service development.
 
-`SETUP.md` owns the human setup guide, environment table, ports, and test-command details. Keep this file focused on agent operating context.
+`SETUP.md` is the human-facing setup guide and remains the fuller reference. The
+agent-facing subset — ports, environment table, test commands — is duplicated
+inline below on purpose, because tool-neutral agents cannot follow links out of
+this file.
 
 ### Option A: Docker Compose (full stack)
 
@@ -113,6 +116,8 @@ To test Bungie OAuth, tunnel the frontend with ngrok. Add the ngrok URL to `CORS
 ```
 
 Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`.
+
+**Never commit real secrets. Use `.env` locally and keep generated/private files out of git.**
 
 ### Required secrets
 
@@ -194,7 +199,10 @@ go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
 # Frontend (from frontend/)
+npm run type-check
+npm run lint
 npm test
+npm run build
 
 # Browser (start from repo root, then run scripts from frontend/)
 docker compose stop frontend api-service   # 5273/8081 would be silently reused
@@ -202,13 +210,16 @@ docker compose --profile e2e up -d --wait e2e-postgres
 $env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
 cd frontend
 npm run e2e
+npm run e2e:visual
 ```
 
-Playwright reuses any server already on 5273/8081 outside CI, so a running
-Compose app stack silently replaces the hermetic one and the suite dies at login
-with `Failed to fetch`. Visual baselines are Linux renderings and must be
-regenerated inside the pinned `mcr.microsoft.com/playwright` image — never commit
-snapshots produced on Windows. Both procedures are in
+`npm run type-check`, `npm run lint`, `npm test` (Vitest coverage), and `npm run build`
+are the same steps the `Test Frontend` CI job runs. Playwright reuses any server
+already on 5273/8081 outside CI, so a running Compose app stack silently replaces
+the hermetic one and the suite dies at login with `Failed to fetch`. Visual
+baselines are Linux renderings and must be regenerated inside the pinned
+`mcr.microsoft.com/playwright` image — never commit snapshots produced on
+Windows. Both procedures, including baseline regeneration, are in
 [frontend/README.md](./frontend/README.md#browser-tests).
 
 ### Full Go coverage locally (matches CI)

@@ -58,11 +58,14 @@ this split exists to eliminate.
 The docs-updater may update these private planning files only when explicitly
 asked or when the active task already changed them:
 
-| File                   | Audience           | What it covers                                |
-| ---------------------- | ------------------ | --------------------------------------------- |
-| `private/ROADMAP.md`   | Developer          | Detailed internal roadmap and sequencing      |
-| `private/ARCHIVE.md`   | Developer          | Internal shipped-work archive                 |
-| `private/InfraTODO.md` | Developer/operator | Private infrastructure decisions and runbooks |
+| File                              | Audience           | What it covers                                |
+| ---------------------------------- | ------------------ | --------------------------------------------- |
+| `private/IMPLEMENTATION_PLAN.md`   | Developer          | Detailed internal implementation planning     |
+| `private/archive.md`               | Developer          | Internal shipped-work archive                 |
+| `private/InfraTODO.md`             | Developer/operator | Private infrastructure decisions and runbooks |
+| `private/known-bugs.md`            | Developer          | Known-bug tracking not yet public             |
+| `private/security-limitations.md`  | Developer          | Private security limitations and follow-ups   |
+| `private/BungieAPI.md`             | Developer          | Raw Bungie API research notes                 |
 
 Do not auto-copy private content into public docs. Public docs can say that a
 private runbook exists, but must not include private commands, secrets, resource
@@ -100,9 +103,17 @@ names, or exploit details.
 **Docker, Compose, Kubernetes, ports, env, or deployment changed**
 
 - `SETUP.md`: ports, env, setup commands
+- `AGENTS.md`: the inline ports and environment table (`## Running Services`,
+  `## Environment Setup`) — this is the only copy tool-neutral agents can read
 - `docs/architecture.md`: runtime/infrastructure summary
 - `.claude/agents/docker-containers.md` or `kubernetes-infrastructure.md`
 - `README.md`: only if quick start changes
+
+**CI workflow or branch-protection changed**
+
+- `AGENTS.md`: its `## CI/CD` section — job names, coverage gates, Staticcheck
+  version, required status checks, versioning/changelog behavior
+- `CONTRIBUTING.md`: contributor-facing CI expectations if they changed
 
 **Feature completed from the public roadmap**
 
