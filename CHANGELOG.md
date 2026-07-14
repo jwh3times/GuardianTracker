@@ -13,6 +13,35 @@ request.
 
 No unreleased changes.
 
+## [0.3.25] - 2026-07-14
+
+### Added
+
+- The `Format Check` CI job now runs Prettier over the repository's markdown, not just
+  `frontend/`. Markdown in `README.md`, `SETUP.md`, `docs/`, and `.claude/` was outside
+  the reach of the frontend-scoped run and could land unformatted; it is now gated. Fix
+  formatting from the repository root with
+  `./frontend/node_modules/.bin/prettier --write "**/*.md"`.
+- A root `.prettierignore`, so the repo-wide markdown check skips generated and vendored
+  paths.
+
+### Changed
+
+- `AGENTS.md` is now the canonical, tool-neutral operating guide for AI coding agents,
+  and it is self-contained: agents that read `AGENTS.md` natively — Codex and others —
+  expand no imports, so the agent-facing subset of setup (ports, environment table, test
+  commands) is duplicated inline on purpose rather than linked out. Contributors adding
+  repo operating context should add it here.
+- `CLAUDE.md` is reduced to an `@AGENTS.md` import plus the mechanics that are specific
+  to Claude Code (subagents in `.claude/agents/`, skills in `.claude/skills/`). It no
+  longer carries repo context of its own, so the two files can no longer drift apart.
+- Documentation that pointed contributors and agents at `CLAUDE.md` as the operating
+  guide now points at `AGENTS.md` — `README.md`, `SETUP.md`, `CONTRIBUTING.md`,
+  `docs/README.md`, `SECURITY.md`, `SUPPORT.md`, `PRD.md`, the pull request template,
+  and ADR 0009.
+- The agent definitions in `.claude/agents/` state that `AGENTS.md` is canonical, so a
+  dispatched agent updates the right file.
+
 ## [0.3.24] - 2026-07-13
 
 ### Added
