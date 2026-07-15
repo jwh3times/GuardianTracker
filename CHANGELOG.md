@@ -13,6 +13,29 @@ request.
 
 No unreleased changes.
 
+## [0.3.28] - 2026-07-15
+
+### Changed
+
+- Dependabot now opens dependency update PRs at 05:00 America/New_York instead of
+  07:00. Each ecosystem also stamps its PRs with an ecosystem-specific label
+  (`gomod`, `npm`, `github-actions`, `docker`, `docker-compose`) alongside the
+  existing `dependencies` label, so update PRs can be filtered by ecosystem.
+
+## [0.3.27] - 2026-07-14
+
+### Changed
+
+- Bumped `actions/setup-node` from 6 to 7 in the CI and browser GitHub Actions
+  workflows.
+
+## [0.3.26] - 2026-07-14
+
+### Changed
+
+- Bumped `@playwright/test` from 1.61.0 to 1.61.1 in `frontend/` (npm minor-and-patch
+  update group).
+
 ## [0.3.25] - 2026-07-14
 
 ### Added

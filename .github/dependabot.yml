@@ -12,10 +12,11 @@ updates:
     directory: "/backend/api-service"
     schedule:
       interval: "daily"
-      time: "07:00"
+      time: "05:00"
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "gomod"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -32,10 +33,11 @@ updates:
     directory: "/frontend"
     schedule:
       interval: "daily"
-      time: "07:00"
+      time: "05:00"
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "npm"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -107,10 +109,11 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-      time: "07:00"
+      time: "05:00"
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "github-actions"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -130,10 +133,11 @@ updates:
       - "/backend/api-service"
     schedule:
       interval: "daily"
-      time: "07:00"
+      time: "05:00"
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "docker"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -151,10 +155,11 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-      time: "07:00"
+      time: "05:00"
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "docker-compose"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
