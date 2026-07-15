@@ -16,6 +16,7 @@ updates:
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "gomod"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -36,6 +37,7 @@ updates:
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "npm"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -111,6 +113,7 @@ updates:
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "github-actions"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -134,6 +137,7 @@ updates:
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "docker"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
@@ -155,6 +159,7 @@ updates:
       timezone: "America/New_York"
     labels:
       - "dependencies"
+      - "docker-compose"
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
