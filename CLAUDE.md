@@ -12,6 +12,10 @@ section covers only what is specific to Claude Code as a tool.
 
 The agents listed in AGENTS.md's routing table are dispatchable as Claude Code
 subagents via the Agent tool. Their definitions live in `.claude/agents/`.
+These files are also the source for the generated Codex mirrors in `.codex/agents/`.
+Editing one requires re-running `node scripts/sync-agent-configs.mjs`; CI's
+`format-check` job fails otherwise. The same applies to `.claude/skills/`, which
+generates `.agents/skills/`.
 
 ### Skills
 

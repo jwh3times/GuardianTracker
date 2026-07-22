@@ -108,6 +108,9 @@ Tests, Staticcheck, `govulncheck`, and the Docker build are **not** run here; CI
 them. These are the cheap gates that catch most mistakes in seconds:
 
 ```bash
+# repo root — regenerate the Codex mirrors so CI's drift gate passes
+node scripts/sync-agent-configs.mjs
+
 # repo root — covers README, SETUP, docs/, .claude/ (the frontend run cannot)
 ./frontend/node_modules/.bin/prettier --check "**/*.md"
 

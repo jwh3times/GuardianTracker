@@ -166,6 +166,9 @@ successful health probes at debug.
 GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
+   It also runs `node --test scripts/sync-agent-configs.test.mjs` and
+   `node scripts/sync-agent-configs.mjs --check`, which fail if the generated Codex
+   mirrors are out of sync with `.claude/`. Fix: `node scripts/sync-agent-configs.mjs`.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)
@@ -285,8 +288,13 @@ they are useful either way.
 | Code review — correctness, security, pattern violations                                                                       | `code-reviewer`             | `.claude/agents/code-reviewer.md`             |
 | Documentation sync — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, agent files | `docs-updater`              | `.claude/agents/docs-updater.md`              |
 
-Skills in `.claude/skills/` are Claude Code-specific and are not portable to other
-tools today. See `CLAUDE.md`.
+`.claude/agents/` and `.claude/skills/` are the **source of truth**. The Codex
+mirrors — `.codex/agents/*.toml` and `.agents/skills/` — are generated from them by
+`scripts/sync-agent-configs.mjs` and committed. Never edit a generated file: change
+the `.claude/` source and re-run the script. `format-check` fails on drift.
+
+Codex has no per-agent tool allowlist, so the `tools:` and `model:` frontmatter keys
+are dropped in the generated TOML rather than translated.
 
 ## Known Limitations
 
