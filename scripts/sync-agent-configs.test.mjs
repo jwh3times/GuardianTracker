@@ -1,5 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   normalizeEol,
@@ -8,6 +11,10 @@ import {
   tomlMultilineString,
   renderAgentToml,
   renderSkillMarkdown,
+  computeOutputs,
+  computeExisting,
+  diff,
+  main,
 } from "./sync-agent-configs.mjs";
 
 test("normalizeEol converts CRLF to LF", () => {
@@ -94,4 +101,64 @@ test("renderSkillMarkdown injects provenance inside the frontmatter", () => {
 
 test("renderSkillMarkdown copies a file without frontmatter verbatim", () => {
   assert.equal(renderSkillMarkdown(".claude/skills/ship/notes.md", "plain\n"), "plain\n");
+});
+
+function fixtureRoot() {
+  const root = mkdtempSync(join(tmpdir(), "sync-agent-"));
+  mkdirSync(join(root, ".claude/agents"), { recursive: true });
+  mkdirSync(join(root, ".claude/skills/demo"), { recursive: true });
+  writeFileSync(
+    join(root, ".claude/agents/alpha.md"),
+    "---\nname: alpha\ndescription: Alpha agent.\ntools: Read\nmodel: sonnet\n---\n\nRun .\\startup.ps1 then edit `.claude/agents/alpha.md`.\n",
+  );
+  writeFileSync(
+    join(root, ".claude/skills/demo/SKILL.md"),
+    "---\nname: demo\ndescription: Demo skill.\n---\n\nDemo body.\n",
+  );
+  return root;
+}
+
+test("computeOutputs maps each source to its generated path", () => {
+  const root = fixtureRoot();
+  const outputs = computeOutputs(root);
+  assert.deepEqual([...outputs.keys()].sort(), [".agents/skills/demo/SKILL.md", ".codex/agents/alpha.toml"]);
+  assert.ok(outputs.get(".codex/agents/alpha.toml").includes("Run .\\startup.ps1"));
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("diff reports added, changed, and orphaned files", () => {
+  const outputs = new Map([["a", "1"], ["b", "2"]]);
+  const existing = new Map([["b", "CHANGED"], ["c", "3"]]);
+  assert.deepEqual(diff(outputs, existing), { added: ["a"], changed: ["b"], removed: ["c"] });
+});
+
+test("main writes the mirrors, then --check reports no drift", () => {
+  const root = fixtureRoot();
+  assert.equal(main(["--root", root]), 0);
+  const written = readFileSync(join(root, ".codex/agents/alpha.toml"), "utf8");
+  assert.ok(written.includes("developer_instructions = '''"));
+  assert.equal(computeExisting(root).size, 2);
+  assert.equal(main(["--check", "--root", root]), 0);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("main --check returns 1 after a source changes", () => {
+  const root = fixtureRoot();
+  main(["--root", root]);
+  writeFileSync(
+    join(root, ".claude/agents/alpha.md"),
+    "---\nname: alpha\ndescription: Alpha agent, edited.\n---\n\nNew body.\n",
+  );
+  assert.equal(main(["--check", "--root", root]), 1);
+  rmSync(root, { recursive: true, force: true });
+});
+
+test("main removes an orphaned generated file", () => {
+  const root = fixtureRoot();
+  main(["--root", root]);
+  writeFileSync(join(root, ".codex/agents/ghost.toml"), "stale\n");
+  assert.equal(main(["--check", "--root", root]), 1);
+  assert.equal(main(["--root", root]), 0);
+  assert.equal(main(["--check", "--root", root]), 0);
+  rmSync(root, { recursive: true, force: true });
 });
