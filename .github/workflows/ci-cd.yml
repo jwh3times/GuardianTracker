@@ -35,6 +35,11 @@ jobs:
     # reuses the frontend's Prettier install rather than adding a second package.json.
     # The root .gitignore (private/, docs/superpowers/, node_modules/) and the root
     # .prettierignore (frontend/design) decide what is skipped.
+    #
+    # This job also gates agent-config drift: .codex/agents/ and .agents/skills/ are
+    # generated from .claude/ by scripts/sync-agent-configs.mjs and must be
+    # regenerated whenever a source file changes. Fix locally with:
+    #   node scripts/sync-agent-configs.mjs                  (from the repo root)
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -49,6 +54,15 @@ jobs:
       - name: Install dependencies
         working-directory: ./frontend
         run: npm ci
+
+      # Runs before the Prettier steps so a contributor who edited a source file
+      # sees the actionable "run the sync script" failure rather than a confusing
+      # Prettier diff on a generated file.
+      - name: Test the agent config sync script
+        run: node --test scripts/sync-agent-configs.test.mjs
+
+      - name: Check agent config sync (Claude -> Codex)
+        run: node scripts/sync-agent-configs.mjs --check
 
       - name: Check Prettier formatting (frontend)
         working-directory: ./frontend
