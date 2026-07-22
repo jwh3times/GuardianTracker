@@ -13,6 +13,72 @@ request.
 
 No unreleased changes.
 
+## [0.3.36] - 2026-07-22
+
+### Security
+
+- Bumped the indirect `golang.org/x/text` dependency from 0.38.0 to 0.40.0 in
+  `backend/api-service/`, resolving GO-2026-5970 (infinite loop on invalid input).
+  `govulncheck` found the vulnerable `norm.Form` symbols reachable from `db.Connect`
+  through `pgxpool.NewWithConfig`, so once the advisory was published the
+  `Test Go Services` CI job began failing on `main` and on every open pull request
+  regardless of what that branch changed. `go mod tidy` carried `golang.org/x/sync`
+  from 0.21.0 to 0.22.0 alongside it.
+
+## [0.3.35] - 2026-07-21
+
+### Changed
+
+- Bumped the transitive `brace-expansion` dependency from 5.0.6 to 5.0.7 in
+  `frontend/`. Lockfile-only update; no direct dependency changed.
+
+## [0.3.34] - 2026-07-21
+
+### Changed
+
+- Bumped `@testing-library/jest-dom` from 6.9.1 to 7.0.0 in `frontend/` (testing-library
+  update group). Test-only dependency; application code is unaffected.
+
+## [0.3.33] - 2026-07-21
+
+### Changed
+
+- Bumped `@tanstack/react-query` from 5.101.2 to 5.101.3, `postcss` from 8.5.20 to
+  8.5.21, and `prettier` from 3.9.5 to 3.9.6 in `frontend/` (npm minor-and-patch update
+  group).
+
+## [0.3.32] - 2026-07-20
+
+### Changed
+
+- Bumped 15 packages in `frontend/` (npm minor-and-patch update group): the Radix UI
+  primitives `react-alert-dialog` 1.1.19 to 1.1.20, `react-avatar` 1.2.2 to 1.2.3,
+  `react-dropdown-menu` 2.1.20 to 2.1.21, `react-form` 0.1.12 to 0.1.13,
+  `react-navigation-menu` 1.2.18 to 1.2.19, `react-progress` 1.1.12 to 1.1.13,
+  `react-select` 2.3.3 to 2.3.4, `react-separator` 1.1.11 to 1.1.12, `react-switch`
+  1.3.3 to 1.3.4, `react-tabs` 1.1.17 to 1.1.18, `react-toast` 1.2.19 to 1.2.20, and
+  `react-tooltip` 1.2.12 to 1.2.13, plus `@tanstack/react-virtual` 3.14.6 to 3.14.7,
+  `react-hook-form` 7.81.0 to 7.82.0, and `postcss` 8.5.19 to 8.5.20.
+
+## [0.3.31] - 2026-07-17
+
+### Changed
+
+- Bumped `lucide-react` from 1.24.0 to 1.25.0 and `@tailwindcss/postcss` from 4.3.2 to
+  4.3.3 in `frontend/` (npm minor-and-patch update group).
+
+## [0.3.30] - 2026-07-16
+
+### Changed
+
+- Bumped `actions/setup-go` from 6 to 7 in the CI and browser GitHub Actions workflows.
+
+## [0.3.29] - 2026-07-16
+
+### Changed
+
+- Bumped `vite` from 8.1.4 to 8.1.5 in `frontend/` (npm minor-and-patch update group).
+
 ## [0.3.28] - 2026-07-15
 
 ### Changed
