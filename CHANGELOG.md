@@ -13,6 +13,40 @@ request.
 
 No unreleased changes.
 
+## [0.3.38] - 2026-07-22
+
+### Added
+
+- `.claude/agents/` and `.claude/skills/` are now the single source of truth for
+  AI-agent configuration, with the Codex equivalents (`.codex/agents/*.toml` and
+  `.agents/skills/`) generated from them by a new zero-dependency Node script,
+  `scripts/sync-agent-configs.mjs`. Editing a source and re-running the script keeps
+  both tools in sync; the generated mirrors are committed so a fresh clone works for
+  Claude Code and Codex immediately. The `tools:` and `model:` frontmatter are dropped
+  in the generated TOML because Codex has no per-agent tool allowlist or model
+  selector, and agent bodies are copied verbatim.
+- The `Format Check` CI job now runs the script's tests and
+  `scripts/sync-agent-configs.mjs --check`, failing the build if a `.claude/` source
+  was edited without regenerating the Codex mirrors.
+
+### Fixed
+
+- Corrected the generated `docs-updater` Codex mirror, which a prior hand-conversion
+  had garbled — rewriting `.claude/` paths to `.Codex/` (wrong case and extension) and
+  inverting a rule by swapping `CLAUDE.md` for `AGENTS.md`. Regenerating from source
+  restores the correct text, and the CI drift gate prevents the class of error from
+  recurring.
+
+## [0.3.37] - 2026-07-22
+
+### Changed
+
+- Bumped the `npm-minor-and-patch` group in `frontend/` (8 updates): `react` and
+  `react-dom` 19.2.7 to 19.2.8, `@tanstack/react-query` 5.101.3 to 5.101.4,
+  `@tanstack/react-virtual` 3.14.7 to 3.14.8, `@vitejs/plugin-react` 6.0.3 to 6.0.4,
+  `eslint` 10.6.0 to 10.7.0, `postcss` 8.5.21 to 8.5.22, and `typescript-eslint`
+  8.63.0 to 8.65.0.
+
 ## [0.3.36] - 2026-07-22
 
 ### Security

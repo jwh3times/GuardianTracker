@@ -11,7 +11,9 @@ section covers only what is specific to Claude Code as a tool.
 ### Subagents
 
 The agents listed in AGENTS.md's routing table are dispatchable as Claude Code
-subagents via the Agent tool. Their definitions live in `.claude/agents/`.
+subagents via the Agent tool. Their definitions live in `.claude/agents/`, which
+is also the source for the generated Codex mirror in `.codex/agents/` — see the
+sync contract in AGENTS.md.
 
 ### Skills
 

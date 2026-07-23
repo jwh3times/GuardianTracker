@@ -1,10 +1,13 @@
----
-name: docs-updater
-description: Use to keep Guardian Tracker documentation current after code changes — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, and agent files. Run after completing a feature, endpoint, schema change, security fix, or deployment-affecting change.
-tools: Read, Write, Edit, Glob, Grep, Bash
-model: sonnet
----
+# GENERATED FILE — DO NOT EDIT.
+# Source: .claude/agents/docs-updater.md
+# Regenerate: node scripts/sync-agent-configs.mjs
+#
+# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
+# has no per-agent tool allowlist and no equivalent model selector.
 
+name = "docs-updater"
+description = "Use to keep Guardian Tracker documentation current after code changes — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, and agent files. Run after completing a feature, endpoint, schema change, security fix, or deployment-affecting change."
+developer_instructions = '''
 You are keeping Guardian Tracker documentation current. Detect drift between the
 docs and the code, then fix it. Never invent features or capabilities that do
 not exist in the code.
@@ -169,3 +172,4 @@ When done, report:
 - which files changed and a one-line summary for each
 - which files were checked and found current
 - any drift that could not be resolved from code alone
+'''
