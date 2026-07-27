@@ -289,10 +289,10 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests
 - Mock `AuthContext` when testing pages that call `useAuth()`
 - Do not use `MockedProvider` from Apollo — there is no Apollo Client in this project
-- Browser suites live under `frontend/e2e/` and use Playwright 1.61.0 plus `@axe-core/playwright`. Run `npm run e2e` for functional + accessibility + destructive-auth projects and `npm run e2e:visual` for visual comparison.
+- Browser suites live under `frontend/e2e/` and use Playwright 1.62.0 plus `@axe-core/playwright`. Run `npm run e2e` for functional + accessibility + destructive-auth projects and `npm run e2e:visual` for visual comparison.
 - Start `docker compose --profile e2e up -d --wait e2e-postgres` first and set `E2E_FIXED_TIME=2026-07-18T18:00:00Z`. Playwright launches fake Bungie, the real API, and Vite; never substitute live Bungie calls.
 - Keep `workers: 1` because fixtures mutate shared account/scenario state. Destructive logout tests run only after functional and accessibility projects.
-- CI has exactly one retry for functional/axe, traces on the first retry, and retains reports/screenshots/video/diffs for 14 days. Visual baselines use 1440x900 Chromium in `mcr.microsoft.com/playwright:v1.61.0-noble` and stay advisory.
+- CI has exactly one retry for functional/axe, traces on the first retry, and retains reports/screenshots/video/diffs for 14 days. Visual baselines use 1440x900 Chromium in `mcr.microsoft.com/playwright:v1.62.0-noble` and stay advisory.
 
 ## Known limitations / TODOs
 
