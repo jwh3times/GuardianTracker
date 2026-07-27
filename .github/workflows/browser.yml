@@ -190,7 +190,7 @@ jobs:
             -e E2E_FIXED_TIME="$E2E_FIXED_TIME" \
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
-            mcr.microsoft.com/playwright:v1.61.0-noble \
+            mcr.microsoft.com/playwright:v1.62.0-noble \
             bash -lc "npm ci && npm run e2e:visual" \
             2>&1 | tee browser-logs/playwright-visual.log
 

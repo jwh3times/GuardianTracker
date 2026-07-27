@@ -195,7 +195,7 @@ docker run --rm --init --ipc=host --network guardiantracker_default `
   -e E2E_FAKE_COMMAND=/out/fake-bungie -e E2E_API_COMMAND=/out/api-service `
   -e E2E_DATABASE_URL="postgres://guardian_app:guardian_dev_password@e2e-postgres:5432/guardian_tracker?sslmode=disable" `
   -v "${repo}:/repo" -v "/repo/frontend/node_modules" -v guardian-e2e-bin:/out -w /repo/frontend `
-  mcr.microsoft.com/playwright:v1.61.0-noble `
+  mcr.microsoft.com/playwright:v1.62.0-noble `
   bash -lc "npm ci && npm run e2e:update-snapshots"
 ```
 
