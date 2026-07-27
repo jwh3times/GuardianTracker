@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { sampleUser } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";

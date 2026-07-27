@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import type { Difficulty, Rarity } from "../../types/design";
 import { DIFFS, RARITIES } from "../../lib/constants";
 

@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse, delay } from "msw";
 import { API, sampleUser, sampleWeekly, server } from "../../test/testServer";

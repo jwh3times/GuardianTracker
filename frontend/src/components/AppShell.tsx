@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
