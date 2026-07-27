@@ -13,6 +13,41 @@ request.
 
 No unreleased changes.
 
+## [0.3.41] - 2026-07-27
+
+### Fixed
+
+- The visual-regression CI job now derives its Playwright container tag from
+  `frontend/package-lock.json` instead of carrying a hardcoded one. The job runs
+  the suite inside that container and installs dependencies there, so the image
+  had to match `@playwright/test` exactly — its browsers live at a
+  version-stamped path. Dependabot cannot bump an image literal written into a
+  workflow step (its Docker updater reads only Dockerfiles, and the Compose
+  updater only Compose files), so every Playwright minor bump silently broke the
+  job until someone noticed. The tag and the package can no longer drift apart.
+- The baseline-regeneration recipe in `frontend/README.md` derives the tag the
+  same way, so following the documented steps can no longer produce snapshots
+  from a mismatched browser.
+
+## [0.3.40] - 2026-07-27
+
+### Changed
+
+- Bumped the npm minor-and-patch group in `frontend/` (20 packages), including
+  `@playwright/test` 1.61.1 to 1.62.0, `@hookform/resolvers` 5.4.0 to 5.5.7,
+  `react-hook-form` 7.82.0 to 7.83.0, `lucide-react` 1.26.0 to 1.27.0, `postcss`
+  8.5.22 to 8.5.23, and thirteen `@radix-ui/*` primitives.
+- Moved the visual-regression job's Playwright image to `v1.62.0-noble` to match
+  the new `@playwright/test`. Without it the container's browser build no longer
+  matched the installed package and every visual test failed to launch Chromium.
+
+## [0.3.39] - 2026-07-23
+
+### Changed
+
+- Bumped the npm minor-and-patch group in `frontend/` (16 packages), including
+  `lucide-react` 1.25.0 to 1.26.0 and thirteen `@radix-ui/*` primitives.
+
 ## [0.3.38] - 2026-07-22
 
 ### Added

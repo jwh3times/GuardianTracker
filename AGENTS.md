@@ -221,8 +221,9 @@ npm run e2e:visual
 are the same steps the `Test Frontend` CI job runs. Playwright reuses any server
 already on 5273/8081 outside CI, so a running Compose app stack silently replaces
 the hermetic one and the suite dies at login with `Failed to fetch`. Visual
-baselines are Linux renderings and must be regenerated inside the pinned
-`mcr.microsoft.com/playwright` image — never commit snapshots produced on
+baselines are Linux renderings and must be regenerated inside the
+`mcr.microsoft.com/playwright` image whose tag matches the installed
+`@playwright/test` — never commit snapshots produced on
 Windows. Both procedures, including baseline regeneration, are in
 [frontend/README.md](./frontend/README.md#browser-tests).
 

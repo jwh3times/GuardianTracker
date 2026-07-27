@@ -122,7 +122,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 ## Browser-test checks
 
 - Browser tests must use `cmd/fake-bungie`, the runtime-generated fixture manifest, and loopback `e2e-postgres`; flag any live Bungie dependency or committed loose manifest database.
-- Keep Playwright package/image versions equal at 1.61.0, `workers: 1`, exactly one functional CI retry, and destructive auth sequenced after shared journeys.
+- The visual job's Playwright image tag is derived from `frontend/package-lock.json` at runtime — flag any change that hardcodes it back, because a literal tag cannot be bumped by Dependabot and silently breaks the job on the next Playwright minor. Keep `workers: 1`, exactly one functional CI retry, and destructive auth sequenced after shared journeys.
 - Browser workflow failures must not be hidden with `continue-on-error`. E2E + axe stays advisory until ten clean runs and then becomes required; visual regression remains advisory.
 
 ## Intentional exceptions (do not flag)

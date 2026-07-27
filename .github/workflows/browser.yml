@@ -142,8 +142,8 @@ jobs:
       - name: Start isolated E2E Postgres
         run: docker compose --profile e2e up -d --wait e2e-postgres
 
-      # The pinned Playwright image supplies the deterministic browser. Services
-      # run on the host so the Go toolchain/CGO match the normal backend build.
+      # The Playwright image supplies the deterministic browser. Services run on
+      # the host so the Go toolchain/CGO match the normal backend build.
       - name: Start fake Bungie
         run: |
           mkdir -p browser-logs "$(dirname "$MANIFEST_DB_PATH")"
@@ -178,7 +178,29 @@ jobs:
           cat browser-logs/vite.log
           exit 1
 
-      - name: Run visual suite in pinned Playwright image
+      # The container's browsers live at a version-stamped path, so its tag must
+      # match the installed @playwright/test exactly — a stale tag fails every
+      # test with "Executable doesn't exist at /ms-playwright/...". Dependabot
+      # cannot keep a hardcoded tag current: its docker ecosystem reads only
+      # Dockerfiles and docker-compose reads only compose files, so an image
+      # literal in a workflow step is invisible to every ecosystem. Deriving the
+      # tag from the lockfile makes the two impossible to drift apart.
+      #
+      # Read the lockfile, not package.json: it records the resolved version and
+      # so stays correct if the dependency is ever loosened to a range.
+      # Microsoft publishes a -noble image for every stable Playwright release.
+      - name: Resolve Playwright image tag from the lockfile
+        id: playwright-image
+        run: |
+          version=$(node -p "require('./frontend/package-lock.json').packages['node_modules/@playwright/test'].version")
+          if [ -z "$version" ] || [ "$version" = "undefined" ]; then
+            echo "Could not resolve @playwright/test from frontend/package-lock.json" >&2
+            exit 1
+          fi
+          echo "tag=mcr.microsoft.com/playwright:v${version}-noble" >> "$GITHUB_OUTPUT"
+          echo "Resolved Playwright image: mcr.microsoft.com/playwright:v${version}-noble"
+
+      - name: Run visual suite in the matching Playwright image
         run: |
           set -o pipefail
           docker run --rm --init --ipc=host --network host \
@@ -190,7 +212,7 @@ jobs:
             -e E2E_FIXED_TIME="$E2E_FIXED_TIME" \
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
-            mcr.microsoft.com/playwright:v1.62.0-noble \
+            ${{ steps.playwright-image.outputs.tag }} \
             bash -lc "npm ci && npm run e2e:visual" \
             2>&1 | tee browser-logs/playwright-visual.log
 

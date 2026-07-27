@@ -151,8 +151,9 @@ See [SECURITY.md](../SECURITY.md) for the security guide and checklist.
 
 The browser workflow keeps functional/axe and visual jobs advisory during
 stabilization. E2E/axe becomes required only after ten consecutive clean runs;
-visual comparison remains optional and runs in the Playwright 1.61.0 Noble
-image that matches the pinned frontend package.
+visual comparison remains optional and runs in the Playwright Noble image whose
+tag CI derives from the frontend lockfile, so the container's browsers always
+match the installed `@playwright/test`.
 
 ## Related Decisions
 
