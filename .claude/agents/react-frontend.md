@@ -11,6 +11,8 @@ You are working inside the Guardian Tracker React frontend (`frontend/src/`). Kn
 
 React + TypeScript + Vite + **TanStack React Query** (REST, not GraphQL). All source in `frontend/src/`. There is no Apollo Client and no GraphQL layer.
 
+Routing is **React Router v8**. Import from `react-router` — `react-router-dom` was removed in v8 and is not installed, so an import from it fails to resolve. The app routes declaratively (`<BrowserRouter>` + `Routes`/`Route`, `MemoryRouter` in tests); there is no data router, so no `createBrowserRouter`, `RouterProvider`, loaders, or actions.
+
 The UI uses the custom **Guardian Tracker design system**: oklch design tokens + `gt-*`
 CSS classes in `src/styles/{tokens,kit,app,admin}.css`, with reusable design-system
 components in `components/` (`primitives.tsx`, `composite.tsx`, `Icon.tsx`). Build new UI
