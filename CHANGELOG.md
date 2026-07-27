@@ -13,7 +13,25 @@ request.
 
 No unreleased changes.
 
-## [0.3.41] - 2026-07-27
+## [0.3.42] - 2026-07-27
+
+### Changed
+
+- Upgraded React Router from 7.18.1 to 8.3.0. The `react-router-dom` package was
+  removed in v8, so all 26 imports across the app and its tests now come from
+  `react-router`. No routing behavior changed: the app routes declaratively and
+  uses none of the APIs v8 altered — no data router, loaders, or actions — and
+  the v8 baselines (Node 22.22+, React 19.2.7+, Vite 7+, ESM-only) were already
+  met by React 19.2.8, Vite 8.1.5, and Node 26.
+
+### Security
+
+- Resolves Dependabot alert GHSA-qwww-vcr4-c8h2 (CSRF bypass in React Router's
+  unstable RSC code paths), which flagged every 7.12.0-8.3.0 install. Guardian
+  Tracker was never exposed: the advisory affects only the unstable RSC APIs, and
+  this frontend is a static single-page bundle served by nginx with no server
+  runtime, no RSC usage, and no router actions. The upgrade clears the alert
+  rather than fixing a reachable vulnerability.
 
 ### Fixed
 

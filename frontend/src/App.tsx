@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from "react";
-import { Routes, Route, Navigate, Outlet, useNavigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, useNavigate } from "react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { CharacterProvider } from "./contexts/CharacterContext";

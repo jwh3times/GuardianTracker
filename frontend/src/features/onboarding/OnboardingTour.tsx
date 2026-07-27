@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import { Button } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
 import { useAuth } from "../../contexts/AuthContext";

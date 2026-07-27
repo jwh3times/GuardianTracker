@@ -7,7 +7,7 @@ React + TypeScript SPA for Guardian Tracker, a Destiny 2 collection tracking app
 - **Framework**: React 19 + TypeScript
 - **Build/Dev**: Vite
 - **Data fetching**: TanStack React Query + `lib/api.ts` (`apiFetch` REST helper)
-- **Routing**: React Router v7
+- **Routing**: React Router v8 — import from `react-router`; the `react-router-dom` package no longer exists
 - **Styling**: Custom "Guardian Tracker" design system — oklch design tokens + `gt-*` CSS classes (`src/styles/`). Tailwind is still installed for a few legacy primitives but new UI uses the design system.
 - **Icons**: in-house single-path line set (`components/Icon.tsx`)
 - **Forms/Validation**: React Hook Form + Zod (available)
