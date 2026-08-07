@@ -25,26 +25,26 @@ this split exists to eliminate.
 
 ## Documents you maintain
 
-| File                                          | Audience                           | What it covers                                                                                 |
-| --------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `README.md`                                   | Public contributors                | Project overview, feature summary, quick commands, doc index                                   |
-| `SETUP.md`                                    | Developers                         | Local setup, env files, ports, tests, Compose, Minikube                                        |
-| `docs/README.md`                              | Maintainers                        | Public/private documentation boundary and doc ownership                                        |
-| `docs/architecture.md`                        | Developers/reviewers               | Implemented runtime shape, data flow, route groups, security posture                           |
-| `docs/adr/*.md`                               | Maintainers                        | Durable decisions future work must preserve or supersede                                       |
-| `ROADMAP.md`                                  | Contributors/maintainers           | Not-yet-implemented public work, gates, likely size                                            |
-| `CHANGELOG.md`                                | Users/maintainers                  | Shipped changes by version                                                                     |
-| `SECURITY.md`                                 | Security reporters/reviewers       | Reporting process, controls, security model, checklist                                         |
-| `AGENTS.md`                                   | All AI coding agents               | Canonical operating context — architecture, env, CI, testing, agent routing, known limitations |
-| `CLAUDE.md`                                   | Claude Code                        | Thin `@AGENTS.md` importer; Claude-only mechanics (subagents, skills). Rarely changes.         |
-| `.claude/agents/go-services.md`               | go-services subagent               | Go/Gin patterns, JWT/auth, Bungie OAuth, manifest flow, endpoints                              |
-| `.claude/agents/react-frontend.md`            | react-frontend subagent            | React Query patterns, auth flow, components, test rules                                        |
-| `.claude/agents/postgres-specialist.md`       | postgres-specialist subagent       | PostgreSQL schema, SQLite manifest DB, migrations, query patterns                              |
-| `.claude/agents/penetration-tester.md`        | penetration-tester subagent        | Attack surface, security controls, intentional gaps                                            |
-| `.claude/agents/code-reviewer.md`             | code-reviewer subagent             | Review rules, what to flag, intentional exceptions                                             |
-| `.claude/agents/kubernetes-infrastructure.md` | kubernetes-infrastructure subagent | Minikube topology, manifests, configmaps, scripts                                              |
-| `.claude/agents/docker-containers.md`         | docker-containers subagent         | Dockerfiles, image builds, base image versions                                                 |
-| `scripts/sync-agent-configs.mjs`              | Maintainers                        | Generates the Codex mirrors from `.claude/`; edit when the sync contract changes               |
+| File                                          | Audience                           | What it covers                                                                                                                      |
+| --------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `README.md`                                   | Public contributors                | Project overview, feature summary, quick commands, doc index                                                                        |
+| `SETUP.md`                                    | Developers                         | Local setup, env files, ports, tests, Compose, Minikube                                                                             |
+| `docs/README.md`                              | Maintainers                        | Public/private documentation boundary and doc ownership                                                                             |
+| `docs/architecture.md`                        | Developers/reviewers               | Implemented runtime shape, data flow, route groups, security posture                                                                |
+| `docs/adr/*.md`                               | Maintainers                        | Durable decisions future work must preserve or supersede                                                                            |
+| `ROADMAP.md`                                  | Contributors/maintainers           | Not-yet-implemented public work, gates, likely size                                                                                 |
+| `CHANGELOG.md`                                | Users/maintainers                  | Shipped changes by version                                                                                                          |
+| `SECURITY.md`                                 | Security reporters/reviewers       | Reporting process, controls, security model, checklist                                                                              |
+| `AGENTS.md`                                   | All AI coding agents               | Canonical operating context — architecture, env, CI, testing, agent routing, known limitations                                      |
+| `CLAUDE.md`                                   | Claude Code                        | Thin `@AGENTS.md` importer; Claude-only mechanics (subagents, skills). Rarely changes.                                              |
+| `.claude/agents/go-services.md`               | go-services subagent               | Go/Gin patterns, JWT/auth, Bungie OAuth, manifest flow, endpoints                                                                   |
+| `.claude/agents/react-frontend.md`            | react-frontend subagent            | React Query patterns, auth flow, components, test rules                                                                             |
+| `.claude/agents/postgres-specialist.md`       | postgres-specialist subagent       | PostgreSQL schema, SQLite manifest DB, migrations, query patterns                                                                   |
+| `.claude/agents/penetration-tester.md`        | penetration-tester subagent        | Attack surface, security controls, intentional gaps                                                                                 |
+| `.claude/agents/code-reviewer.md`             | code-reviewer subagent             | Review rules, what to flag, intentional exceptions                                                                                  |
+| `.claude/agents/kubernetes-infrastructure.md` | kubernetes-infrastructure subagent | Minikube topology, manifests, configmaps, scripts                                                                                   |
+| `.claude/agents/docker-containers.md`         | docker-containers subagent         | Dockerfiles, image builds, base image versions                                                                                      |
+| `scripts/sync-agent-configs.mjs`              | Maintainers                        | Generates `.codex/agents/` from `.claude/agents/` and `.claude/skills/` from `.agents/skills/`; edit when the sync contract changes |
 
 ## Private docs boundary
 
@@ -158,9 +158,11 @@ are portable and permission-free:
   deployment behavior actually changed.
 - Do not edit `kubernetes-infrastructure.md` based on local cluster state; only
   update it after confirmed manifest or script changes.
-- Do not edit `.codex/agents/*.toml` or `.agents/skills/**`. They are generated from
-  `.claude/` by `scripts/sync-agent-configs.mjs`. Edit the `.claude/` source instead;
-  the script regenerates the mirrors and CI fails if they drift.
+- Do not edit `.codex/agents/*.toml` or `.claude/skills/**`. They are generated —
+  `.codex/agents/` from `.claude/agents/`, `.claude/skills/` from `.agents/skills/` —
+  by `scripts/sync-agent-configs.mjs`. Edit the authored source instead (`.claude/agents/`
+  for agents, `.agents/skills/` for skills); the script regenerates the mirrors and CI
+  fails if they drift.
 
 ## Output
 
