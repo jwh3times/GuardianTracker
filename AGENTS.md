@@ -167,9 +167,12 @@ GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
    It also runs `node --test scripts/sync-agent-configs.test.mjs`, which exercises
-   the generator's own logic, and `node scripts/sync-agent-configs.mjs --check`, which
-   fails if the generated Codex mirrors are out of sync with `.claude/`. Fix:
-   `node scripts/sync-agent-configs.mjs`.
+   the generator's own logic, and `npm run sync:agents -- --check`, which fails if
+   `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
+   (generated from `.agents/skills/`) is out of sync with its source. Fix:
+   `npm run sync:agents`. Run `./frontend/node_modules/.bin/prettier --write "**/*.md"`
+   first if you edited a skill's markdown — regenerating before formatting mirrors
+   unformatted content and drifts again on the next format pass.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)
@@ -290,10 +293,24 @@ they are useful either way.
 | Code review — correctness, security, pattern violations                                                                       | `code-reviewer`             | `.claude/agents/code-reviewer.md`             |
 | Documentation sync — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, agent files | `docs-updater`              | `.claude/agents/docs-updater.md`              |
 
-`.claude/agents/` and `.claude/skills/` are the **source of truth**. The Codex
-mirrors — `.codex/agents/*.toml` and `.agents/skills/` — are generated from them by
-`scripts/sync-agent-configs.mjs` and committed. Never edit a generated file: change
-the `.claude/` source and re-run the script. `format-check` fails on drift.
+`.claude/agents/` and `.agents/skills/` are the **source of truth** — the former is
+the Claude Code convention; the latter is where third-party skill installers write
+(and where a human edits a skill by hand), so installing or updating a skill stays a
+one-way operation with no manual copying. The generated mirrors — `.codex/agents/*.toml`
+and `.claude/skills/**` — are produced from them by `scripts/sync-agent-configs.mjs`
+(via `npm run sync:agents`) and committed. The mirror covers a skill's entire
+directory, not just `SKILL.md` — reference docs, `scripts/*.sh`, `agents/*.yaml`, all
+of it. Never edit a generated file: change the authored source and re-run the sync.
+`format-check` fails on drift.
+
+**Never symlink `.claude/skills/<name>` to `.agents/skills/<name>` (or vice versa)
+instead of running the sync.** This repo has `git config core.symlinks` set to
+`false`, so `git add` on a symlinked directory silently stages the real file
+contents instead of a link — a commit would duplicate every file rather than
+recording one. A directory-walking generator also can't see into a symlink
+(`entry.isDirectory()` is false for a symlink), so it would treat the linked-to
+skill as untracked source and, in write mode, delete the mirrored copy as an
+orphan. Both failure modes have happened in this repo; regenerate instead.
 
 Codex has no per-agent tool allowlist, so the `tools:` and `model:` frontmatter keys
 are dropped in the generated TOML rather than translated.

@@ -13,6 +13,20 @@ request.
 
 No unreleased changes.
 
+## [0.3.52] - 2026-08-07
+
+### Changed
+
+- Inverted the generated-skill sync direction: `.agents/skills/**` is now the
+  authored source and `.claude/skills/**` is generated, the opposite of before.
+  A third-party skill installer had been writing skill sources into
+  `.agents/skills/<name>` and symlinking `.claude/skills/<name>` to them, which
+  didn't work in this repo: `git config core.symlinks` is `false`, so committing
+  the symlinks would have silently duplicated every file instead of recording a
+  link, and the existing drift-checking generator couldn't see through a symlink
+  to find the source at all. `npm run sync:agents` (new root `package.json`)
+  regenerates both mirrors; `npm run sync:agents -- --check` is what CI runs.
+
 ## [0.3.42] - 2026-07-27
 
 ### Changed
