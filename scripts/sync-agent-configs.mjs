@@ -1,14 +1,26 @@
 #!/usr/bin/env node
-// Generates the Codex agent and skill mirrors from the Claude Code sources.
+// Generates the Codex agent mirror and the Claude Code skill mirror.
 //
-//   .claude/agents/<name>.md  ->  .codex/agents/<name>.toml
-//   .claude/skills/**         ->  .agents/skills/**
+//   .claude/agents/<name>.md  ->  .codex/agents/<name>.toml   (Claude Code authored)
+//   .agents/skills/<name>/**  ->  .claude/skills/<name>/**    (installer/author writes here)
 //
-// The Claude Code tree is the source of truth. Generated files are committed so a
-// fresh clone works for both tools; CI re-runs this with --check and fails on drift.
+// Two different tools own the authored side of each pair: agents are authored in
+// .claude/ (the Claude Code convention) and mirrored out to Codex's .codex/ format;
+// skills are authored in .agents/ (where third-party skill installers write, and
+// where a human edits by hand) and mirrored into .claude/skills/ for Claude Code to
+// load. Generated files are committed so a fresh clone works for both tools; CI
+// re-runs this with --check and fails on drift.
 //
 // Bodies are copied byte-for-byte. References to `CLAUDE.md` and `.claude/` inside a
 // body are deliberately NOT rewritten: they name the source files both tools edit.
+//
+// Never hand-edit a generated file (.codex/agents/**, .claude/skills/**) or a symlink
+// will look like the easy fix — it isn't. This repo has `git config core.symlinks`
+// false, so `git add` on a symlinked directory silently stages the real file
+// contents instead of a link (verified with `git add -n`), and a directory-walking
+// generator like this one sees a symlink's `isDirectory()` as false, so it treats
+// the linked-to content as untracked and — in write mode — deletes it as "orphaned".
+// Both failure modes have happened in this repo. Regenerate instead.
 //
 // Usage:
 //   node scripts/sync-agent-configs.mjs           write the mirrors
@@ -96,8 +108,8 @@ export const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 export const AGENT_SRC_DIR = ".claude/agents";
 export const AGENT_OUT_DIR = ".codex/agents";
-export const SKILL_SRC_DIR = ".claude/skills";
-export const SKILL_OUT_DIR = ".agents/skills";
+export const SKILL_SRC_DIR = ".agents/skills";
+export const SKILL_OUT_DIR = ".claude/skills";
 
 // Skill assets are assumed to be UTF-8 text. The only skill today is markdown.
 function walk(dir) {
@@ -178,7 +190,7 @@ export function main(argv) {
       console.log(`Agent config mirrors are in sync (${outputs.size} generated files).`);
       return 0;
     }
-    console.error("Generated agent config mirrors are out of sync with .claude/:");
+    console.error("Generated agent config mirrors are out of sync with their sources:");
     for (const rel of added) console.error(`  missing: ${rel}`);
     for (const rel of changed) console.error(`  stale:   ${rel}`);
     for (const rel of removed) console.error(`  orphan:  ${rel}`);

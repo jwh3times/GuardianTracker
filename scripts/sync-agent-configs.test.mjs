@@ -92,27 +92,27 @@ test("renderAgentToml never rewrites CLAUDE.md or .claude/ in the body", () => {
 });
 
 test("renderSkillMarkdown injects provenance inside the frontmatter", () => {
-  const out = renderSkillMarkdown(".claude/skills/ship/SKILL.md", "---\nname: ship\ndescription: d\n---\n\nBody.\n");
+  const out = renderSkillMarkdown(".agents/skills/ship/SKILL.md", "---\nname: ship\ndescription: d\n---\n\nBody.\n");
   assert.ok(out.startsWith("---\n# GENERATED FILE"));
-  assert.ok(out.includes("# Source: .claude/skills/ship/SKILL.md"));
+  assert.ok(out.includes("# Source: .agents/skills/ship/SKILL.md"));
   assert.ok(out.includes("name: ship"));
   assert.ok(out.endsWith("\nBody.\n"));
 });
 
 test("renderSkillMarkdown copies a file without frontmatter verbatim", () => {
-  assert.equal(renderSkillMarkdown(".claude/skills/ship/notes.md", "plain\n"), "plain\n");
+  assert.equal(renderSkillMarkdown(".agents/skills/ship/notes.md", "plain\n"), "plain\n");
 });
 
 function fixtureRoot() {
   const root = mkdtempSync(join(tmpdir(), "sync-agent-"));
   mkdirSync(join(root, ".claude/agents"), { recursive: true });
-  mkdirSync(join(root, ".claude/skills/demo"), { recursive: true });
+  mkdirSync(join(root, ".agents/skills/demo"), { recursive: true });
   writeFileSync(
     join(root, ".claude/agents/alpha.md"),
     "---\nname: alpha\ndescription: Alpha agent.\ntools: Read\nmodel: sonnet\n---\n\nRun .\\startup.ps1 then edit `.claude/agents/alpha.md`.\n",
   );
   writeFileSync(
-    join(root, ".claude/skills/demo/SKILL.md"),
+    join(root, ".agents/skills/demo/SKILL.md"),
     "---\nname: demo\ndescription: Demo skill.\n---\n\nDemo body.\n",
   );
   return root;
@@ -121,7 +121,7 @@ function fixtureRoot() {
 test("computeOutputs maps each source to its generated path", () => {
   const root = fixtureRoot();
   const outputs = computeOutputs(root);
-  assert.deepEqual([...outputs.keys()].sort(), [".agents/skills/demo/SKILL.md", ".codex/agents/alpha.toml"]);
+  assert.deepEqual([...outputs.keys()].sort(), [".claude/skills/demo/SKILL.md", ".codex/agents/alpha.toml"]);
   assert.ok(outputs.get(".codex/agents/alpha.toml").includes("Run .\\startup.ps1"));
   rmSync(root, { recursive: true, force: true });
 });
@@ -137,6 +137,9 @@ test("main writes the mirrors, then --check reports no drift", () => {
   assert.equal(main(["--root", root]), 0);
   const written = readFileSync(join(root, ".codex/agents/alpha.toml"), "utf8");
   assert.ok(written.includes("developer_instructions = '''"));
+  const skillWritten = readFileSync(join(root, ".claude/skills/demo/SKILL.md"), "utf8");
+  assert.ok(skillWritten.includes("# GENERATED FILE"));
+  assert.ok(skillWritten.includes("# Source: .agents/skills/demo/SKILL.md"));
   assert.equal(computeExisting(root).size, 2);
   assert.equal(main(["--check", "--root", root]), 0);
   rmSync(root, { recursive: true, force: true });
@@ -146,8 +149,8 @@ test("main --check returns 1 after a source changes", () => {
   const root = fixtureRoot();
   main(["--root", root]);
   writeFileSync(
-    join(root, ".claude/agents/alpha.md"),
-    "---\nname: alpha\ndescription: Alpha agent, edited.\n---\n\nNew body.\n",
+    join(root, ".agents/skills/demo/SKILL.md"),
+    "---\nname: demo\ndescription: Demo skill, edited.\n---\n\nNew body.\n",
   );
   assert.equal(main(["--check", "--root", root]), 1);
   rmSync(root, { recursive: true, force: true });
