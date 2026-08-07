@@ -13,6 +13,15 @@ request.
 
 No unreleased changes.
 
+## [0.3.53] - 2026-08-07
+
+### Added
+
+- Backfilled the changelog entries for v0.3.43 through v0.3.51 — nine consecutive
+  Dependabot dependency-bump merges that the `Changelog Version` CI guard's bot
+  exemption let through without a section, leaving the changelog silently missing
+  nine released versions.
+
 ## [0.3.52] - 2026-08-07
 
 ### Changed
@@ -26,6 +35,68 @@ No unreleased changes.
   link, and the existing drift-checking generator couldn't see through a symlink
   to find the source at all. `npm run sync:agents` (new root `package.json`)
   regenerates both mirrors; `npm run sync:agents -- --check` is what CI runs.
+
+## [0.3.51] - 2026-08-07
+
+### Changed
+
+- Bumped `@testing-library/user-event` from 14.6.1 to 14.6.3 in `frontend/`.
+
+## [0.3.50] - 2026-08-05
+
+### Changed
+
+- Bumped `@hookform/resolvers` from 5.5.8 to 5.7.1 in `frontend/`.
+
+## [0.3.49] - 2026-08-04
+
+### Changed
+
+- Bumped the npm minor-and-patch group in `frontend/` (2 updates): `@hookform/resolvers`
+  5.5.7 to 5.5.8 and `react-hook-form` 7.83.0 to 7.84.0.
+
+## [0.3.48] - 2026-08-03
+
+### Changed
+
+- Bumped the npm minor-and-patch group in `frontend/` (5 updates): `@types/react`
+  19.2.17 to 19.2.18, `@types/react-dom` 19.2.3 to 19.2.4, `@playwright/test` 1.62.0
+  to 1.62.1, `@vitejs/plugin-react` 6.0.4 to 6.0.5, and `vite` 8.1.5 to 8.2.0.
+
+## [0.3.47] - 2026-08-03
+
+### Changed
+
+- Bumped the `dpage/pgadmin4` Compose image from 9.16 to 9.17.
+
+## [0.3.46] - 2026-07-30
+
+### Changed
+
+- Bumped the npm minor-and-patch group in `frontend/` (2 updates): `lucide-react`
+  1.27.0 to 1.28.0 and `postcss` 8.5.24 to 8.5.25.
+
+## [0.3.45] - 2026-07-29
+
+### Changed
+
+- Bumped `jsdom` from 29.1.1 to 30.0.1 in `frontend/`.
+
+## [0.3.44] - 2026-07-29
+
+### Changed
+
+- Bumped `github.com/mattn/go-sqlite3` from 1.14.48 to 1.14.49 in
+  `backend/api-service/`.
+
+## [0.3.43] - 2026-07-29
+
+### Changed
+
+- Bumped the npm minor-and-patch group in `frontend/` (5 updates):
+  `@tanstack/react-virtual` 3.14.8 to 3.14.9, `@types/node` 26.1.1 to 26.1.2,
+  `eslint` 10.7.0 to 10.8.0, `globals` 17.7.0 to 17.8.0, and `postcss` 8.5.23 to
+  8.5.24.
 
 ## [0.3.42] - 2026-07-27
 
