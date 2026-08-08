@@ -141,6 +141,8 @@ private/                  Gitignored private plans, runbooks, and research
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - contribution workflow and CI gates.
 - [AGENTS.md](./AGENTS.md) - canonical AI agent operating guide (all tools).
 - [CLAUDE.md](./CLAUDE.md) - Claude Code specifics; imports AGENTS.md.
+- [docs/agents/](./docs/agents/) - per-repo configuration for third-party
+  engineering skills (issue tracker, triage labels, domain docs).
 - [frontend/README.md](./frontend/README.md) - frontend-specific guide.
 - [k8s/README.md](./k8s/README.md) - Minikube validation guide.
 
