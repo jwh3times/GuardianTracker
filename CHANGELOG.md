@@ -13,6 +13,17 @@ request.
 
 No unreleased changes.
 
+## [0.3.54] - 2026-08-08
+
+### Added
+
+- Added per-repo configuration for third-party "Matt Pocock" engineering skills
+  (`to-tickets`, `triage`, `to-spec`, etc.) installed under `.agents/skills/`:
+  `docs/agents/issue-tracker.md` (GitHub Issues via `gh`), `docs/agents/triage-labels.md`
+  (default canonical label vocabulary), and `docs/agents/domain.md` (single-context
+  domain-docs layout). Documented the new directory in AGENTS.md's `## Agent skills`
+  section and in the README.md / docs/README.md documentation indexes.
+
 ## [0.3.53] - 2026-08-07
 
 ### Added

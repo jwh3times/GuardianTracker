@@ -254,6 +254,8 @@ Public docs:
 - `docs/adr/` - public architecture decisions
 - `AGENTS.md` - canonical, tool-neutral agent operating guide (this file)
 - `CLAUDE.md` - thin `@AGENTS.md` importer plus Claude Code-specific mechanics
+- `docs/agents/` - per-repo configuration for third-party engineering skills
+  (issue tracker, triage labels, domain docs); see `## Agent skills` above
 
 Private docs:
 
