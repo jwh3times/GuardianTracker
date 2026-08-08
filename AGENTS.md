@@ -315,6 +315,20 @@ orphan. Both failure modes have happened in this repo; regenerate instead.
 Codex has no per-agent tool allowlist, so the `tools:` and `model:` frontmatter keys
 are dropped in the generated TOML rather than translated.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`jwh3times/GuardianTracker`), managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default canonical vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout: root `CONTEXT.md` (created lazily) + existing `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Known Limitations
 
 - Collections data remains account-wide. The character switcher scopes
