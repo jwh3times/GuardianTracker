@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -111,6 +112,20 @@ func (m *ManifestService) snapshotParticipants() []SwapParticipant {
 	return append([]SwapParticipant{}, m.participants...)
 }
 
+// swapRoleName is the type name of a registered participant or observer, used
+// to identify it in failure logs. reflect rather than fmt.Sprintf("%T", x):
+// both yield only the dynamic type name, but passing the value itself into a
+// formatting call inside a log statement trips CodeQL's clear-text-logging
+// taint analysis — these values transitively reference the Bungie client, and
+// therefore its API key.
+func swapRoleName(v any) string {
+	t := reflect.TypeOf(v)
+	if t == nil {
+		return "unknown"
+	}
+	return t.String()
+}
+
 // closeParticipants releases every open handle on the manifest file. Runs
 // immediately before os.Rename.
 func (m *ManifestService) closeParticipants() {
@@ -127,7 +142,7 @@ func (m *ManifestService) reopenParticipants() {
 	for _, p := range m.snapshotParticipants() {
 		if err := p.Reopen(); err != nil {
 			slog.Warn("manifest swap participant reopen failed",
-				slog.String("participant", fmt.Sprintf("%T", p)),
+				slog.String("participant", swapRoleName(p)),
 				observability.Err(err),
 			)
 		}
@@ -143,7 +158,7 @@ func (m *ManifestService) notifyObservers(version string) {
 	for _, o := range observers {
 		if err := o.OnVersionChanged(version); err != nil {
 			slog.Warn("manifest version-change observer failed",
-				slog.String("observer", fmt.Sprintf("%T", o)),
+				slog.String("observer", swapRoleName(o)),
 				slog.String("manifest_version", version),
 				observability.Err(err),
 			)
