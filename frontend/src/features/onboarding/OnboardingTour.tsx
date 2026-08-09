@@ -36,26 +36,22 @@ export function OnboardingTour() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const query = collectionsQuery(
-    user?.membershipType,
-    user?.membershipId,
-    false,
-  );
+  const query = collectionsQuery(user?.membershipType, user?.membershipId);
   const { data: collections } = useQuery({
     ...query,
     enabled: query.enabled && preferencesReady && onboardedAt === null,
   });
 
   const progress = useMemo(() => {
-    const categories = collections
-      ? Object.values(collections.summary).filter(
-          (category) => category.total > category.collected,
-        )
-      : [];
+    // summary arrives from the adapter as an ordered array of
+    // { count: [collected, total] } rather than a raw four-key record.
+    const incomplete = (collections?.summary ?? []).filter(
+      ({ count: [collected, total] }) => total > collected,
+    );
     return {
-      categories: categories.length,
-      missing: categories.reduce(
-        (total, category) => total + category.total - category.collected,
+      categories: incomplete.length,
+      missing: incomplete.reduce(
+        (sum, { count: [collected, total] }) => sum + total - collected,
         0,
       ),
     };

@@ -1,42 +1,19 @@
-import type { APIUserCollections } from "../../types/api";
+import type { CollectionsView } from "../../lib/collectionsView";
 import type { GTItem } from "../../types/design";
-import { toGTItem } from "../../lib/adapters";
-import { gatherItemHashes } from "../collections/collectionTree";
 import { COSMETIC_TYPE_SET } from "./cosmeticBuckets";
 
 /**
- * Build the cosmetic GTItem list from an include=all collections payload:
- * walk every tree root for leaf hashes, map details via toGTItem, keep only
- * cosmetic itemTypes, and resolve ownership and live availability.
+ * The cosmetic slice of a player's collections.
  *
- * `toGTItem` hardcodes `collected: false` and `obtainable: false`, so both must
- * be joined here from `collectedHashes` and `availableNow`. This mirrors the
- * same join in Collections (`Collections.tsx` `baseItems`) — omitting the
- * availability half is what previously left cosmetics without the "Available
- * now" badge for an item a vendor was actively selling.
+ * This used to walk the tree and join ownership and vendor availability itself —
+ * the third copy of that join, and the one that was incomplete: it set
+ * `collected` but never `obtainable` or `availFrom`, so a cosmetic a vendor was
+ * actively selling showed no "Available now" badge here while the identical item
+ * did on Collections. The adapter owns the join now, and what is genuinely
+ * cosmetics-specific — which item types count as cosmetics — stays here.
  */
-export function cosmeticItems(data: APIUserCollections): GTItem[] {
-  const itemsMap = data.items ?? {};
-  const collected = new Set(data.collectedHashes ?? []);
-  const availableNow = data.availableNow ?? {};
-  const seen = new Set<string>();
-  const out: GTItem[] = [];
-  for (const root of data.tree) {
-    for (const hash of gatherItemHashes(root)) {
-      if (seen.has(hash)) continue;
-      seen.add(hash);
-      const detail = itemsMap[hash];
-      if (!detail) continue;
-      const gt = toGTItem(detail);
-      if (!COSMETIC_TYPE_SET.has(gt.type)) continue;
-      const vendor = availableNow[hash];
-      gt.collected = collected.has(hash);
-      gt.obtainable = !!vendor;
-      gt.availFrom = vendor;
-      out.push(gt);
-    }
-  }
-  return out;
+export function cosmeticItems(view: CollectionsView): GTItem[] {
+  return view.allItems().filter((i) => COSMETIC_TYPE_SET.has(i.type));
 }
 
 /** Group cosmetics by their type string (insertion order = first-seen order). */

@@ -23,22 +23,16 @@ import { usePreferences } from "../../contexts/PreferencesContext";
 import { apiFetch } from "../../lib/api";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import {
-  collectionsQuery,
+  collectionsFullQuery,
   itemPerksQuery,
   itemByHashQuery,
 } from "../../lib/queries";
-import { toGTItem, toGTItemView } from "../../lib/adapters";
-import {
-  apiNodeToTreeNode,
-  gatherItemHashes,
-  findNodePath,
-} from "./collectionTree";
+import { toGTItemView } from "../../lib/adapters";
 import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
 import type {
   ProfileResponse,
-  APICollectionNode,
   APICacheRefreshResponse,
   WishListItem,
 } from "../../types/api";
@@ -56,31 +50,6 @@ const DIFF_RANK: Record<Difficulty, number> = {
   easy: 2,
   unrated: 3,
 };
-
-// Root→node hash path to the node whose own hash is `nodeHash` (distinct from
-// `findNodePath`, which locates the node owning an *item* hash). Used to
-// reveal a category restored directly from a `?node=` URL. Root-level nodes
-// are always visible in the sidebar without opening anything, so callers only
-// need to act on paths longer than one entry.
-function findPathToNode(
-  nodes: APICollectionNode[],
-  nodeHash: string,
-): string[] | null {
-  const dfs = (node: APICollectionNode, trail: string[]): string[] | null => {
-    const here = [...trail, node.hash];
-    if (node.hash === nodeHash) return here;
-    for (const c of node.children ?? []) {
-      const found = dfs(c, here);
-      if (found) return found;
-    }
-    return null;
-  };
-  for (const root of nodes) {
-    const found = dfs(root, []);
-    if (found) return found;
-  }
-  return null;
-}
 
 export function Collections() {
   const { showToast } = useToast();
@@ -142,7 +111,7 @@ export function Collections() {
     isLoading: loading,
     error,
     refetch,
-  } = useQuery(collectionsQuery(membershipType, membershipId, true));
+  } = useQuery(collectionsFullQuery(membershipType, membershipId));
 
   const perksQuery = useQuery(itemPerksQuery(detail?.id));
 
@@ -222,22 +191,14 @@ export function Collections() {
   // cascading render on deep-link navigation is intentional.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!itemParam || !collections?.items) return;
-    const d = collections.items[itemParam];
-    const path = findNodePath(collections.tree, itemParam);
-    if (d && path) {
+    if (!itemParam || !collections) return;
+    const item = collections.itemByHash(itemParam);
+    const path = collections.pathToItem(itemParam);
+    if (item && path) {
       const owningNode = path[path.length - 1];
       setExpandPath(path);
-      const isCollected = (collections.collectedHashes ?? []).includes(
-        itemParam,
-      );
-      const vendor = collections.availableNow?.[itemParam];
-      setDetail({
-        ...toGTItem(d),
-        collected: isCollected,
-        obtainable: !!vendor,
-        availFrom: vendor,
-      });
+      const isCollected = item.collected;
+      setDetail(item);
       // One atomic URL write: select the owning node (reveal collected items too)
       // and consume the item param, preserving existing filters.
       setFilters(
@@ -270,28 +231,9 @@ export function Collections() {
 
   const hasReal = !!collections;
 
-  // Sidebar tree built from the API forest.
-  const treeNodes: TreeNode[] = useMemo(
-    () => (collections?.tree ?? []).map(apiNodeToTreeNode),
-    [collections],
-  );
-
-  // hash→node map for item gathering + the selected node's rolled-up counts.
-  const nodeByHash = useMemo(() => {
-    const map = new Map<string, APICollectionNode>();
-    const walk = (n: APICollectionNode) => {
-      map.set(n.hash, n);
-      (n.children ?? []).forEach(walk);
-    };
-    (collections?.tree ?? []).forEach(walk);
-    return map;
-  }, [collections]);
-
-  // Owned item hashes — per-item collected state for the missing-only filter.
-  const collectedSet = useMemo(
-    () => new Set(collections?.collectedHashes ?? []),
-    [collections],
-  );
+  // The sidebar tree, the node lookup and the per-item collected state are all
+  // derived once by the collections adapter — this page just reads them.
+  const treeNodes: TreeNode[] = collections?.roots ?? [];
 
   // Default the selection to the first root once data arrives. Guarded on
   // `itemParam` so this doesn't race the deep-link effect above: without the
@@ -303,15 +245,15 @@ export function Collections() {
   // which pushes) because seeding a default is URL canonicalization, not a
   // user navigation — it shouldn't create a Back-button stop.
   useEffect(() => {
-    if (itemParam || !collections?.tree?.length) return;
+    if (itemParam || !collections?.rootHashes.length) return;
     // Seed the first root when nothing is selected, OR when a restored/shared
     // `?node=` points at a hash that isn't in the current tree (stale or tampered
     // URL) — otherwise the grid would be stuck empty with no way to recover.
-    if (!active || !nodeByHash.has(active)) {
-      setFilters({ node: collections.tree[0].hash }, { replace: true });
+    if (!active || !collections.node(active)) {
+      setFilters({ node: collections.rootHashes[0] }, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collections, active, itemParam, nodeByHash]);
+  }, [collections, active, itemParam]);
 
   // Reveal a node restored directly from a `?node=` URL (a bookmarked link, or
   // a persisted/shared filter state) so the sidebar opens down to it — mirrors
@@ -320,32 +262,21 @@ export function Collections() {
   // roots are already visible without opening anything.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!active || expandPath.length > 0 || !collections?.tree?.length) return;
-    const path = findPathToNode(collections.tree, active);
+    if (!active || expandPath.length > 0 || !collections) return;
+    const path = collections.pathToNode(active);
     if (path && path.length > 1) setExpandPath(path);
   }, [active, expandPath, collections]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const activeNode = active ? nodeByHash.get(active) : undefined;
+  const activeNode = active ? collections?.node(active) : undefined;
 
+  // Items arrive fully joined; the only thing left here is the state-dependent
+  // missing-only filter, which belongs with the other filters below.
   const baseItems: GTItem[] = useMemo(() => {
-    if (!activeNode || !collections?.items) return [];
-    const out: GTItem[] = [];
-    for (const h of gatherItemHashes(activeNode)) {
-      const d = collections.items[h];
-      if (!d) continue;
-      const collected = collectedSet.has(h);
-      if (missingOnly && collected) continue;
-      const vendor = collections.availableNow?.[h];
-      out.push({
-        ...toGTItem(d),
-        collected,
-        obtainable: !!vendor,
-        availFrom: vendor,
-      });
-    }
-    return out;
-  }, [activeNode, collections, missingOnly, collectedSet]);
+    if (!collections || !active) return [];
+    const all = collections.itemsUnder(active);
+    return missingOnly ? all.filter((i) => !i.collected) : all;
+  }, [collections, active, missingOnly]);
 
   const items = useMemo(() => {
     let list = baseItems.slice();

@@ -1,6 +1,6 @@
 import React from "react";
 import { Badge } from "../../components/primitives";
-import { relTime } from "../../lib/adapters";
+import { relTime } from "../../lib/format";
 import type { APIAuditEntry } from "../../types/api";
 
 const EVENT_LABEL: Record<string, string> = {

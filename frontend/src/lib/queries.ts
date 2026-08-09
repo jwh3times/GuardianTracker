@@ -1,23 +1,15 @@
 import { apiFetch } from "./api";
+import { toCollections, toCollectionsSummary } from "./collectionsView";
 import type {
   APIItemPerks,
   APIItemView,
   APIUserCollections,
 } from "../types/api";
 
-/**
- * Shared collections query definition. Dashboard, Settings, and the Collections
- * page all read the same endpoint; routing them through one helper keeps their
- * React Query keys consistent so they share a single cache entry per
- * (membership, includeAll) variant instead of each firing its own request.
- *
- * `includeAll` controls both the cache-key suffix and the `?include=all` param,
- * so the "missing" and "all" variants never collide.
- */
-export function collectionsQuery(
+function collectionsBase(
   membershipType: number | undefined,
   membershipId: string | undefined,
-  includeAll = false,
+  includeAll: boolean,
 ) {
   return {
     queryKey: [
@@ -31,6 +23,48 @@ export function collectionsQuery(
         `/api/collections/${membershipType}/${membershipId}${includeAll ? "?include=all" : ""}`,
       ),
     enabled: membershipType != null && !!membershipId,
+  };
+}
+
+/**
+ * The counts-only collections query — the tree, the four-category summary and
+ * the fetch timestamp. Used by the Dashboard, Settings and the onboarding tour.
+ *
+ * Routing every reader through these helpers keeps the React Query keys
+ * consistent, so the two variants share one cache entry each instead of every
+ * page firing its own request. `select` adapts the payload at the seam, so no
+ * feature module ever sees the wire shape.
+ *
+ * `select` must stay a stable module-level reference: React Query memoises it
+ * per observer keyed on function identity, and an inline arrow would re-run the
+ * adapter on every render.
+ */
+export function collectionsQuery(
+  membershipType: number | undefined,
+  membershipId: string | undefined,
+) {
+  return {
+    ...collectionsBase(membershipType, membershipId, false),
+    select: toCollectionsSummary,
+  };
+}
+
+/**
+ * The full collections query, carrying every item. Used by the Collections page
+ * and the Cosmetics gallery.
+ *
+ * Separate from {@link collectionsQuery} rather than a boolean parameter so the
+ * returned view type differs: only this variant's payload has items, so only
+ * this one exposes an item surface. Asking the counts-only view for items is a
+ * compile error rather than an empty array.
+ */
+export function collectionsFullQuery(
+  membershipType: number | undefined,
+  membershipId: string | undefined,
+) {
+  return {
+    ...collectionsBase(membershipType, membershipId, true),
+    select: toCollections,
   };
 }
 

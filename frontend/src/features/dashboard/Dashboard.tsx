@@ -21,11 +21,7 @@ import { errorState } from "../../lib/errorState";
 import { collectionsQuery } from "../../lib/queries";
 import { toWishlistEntry } from "../../lib/adapters";
 import type { DailyAction, SummaryCategory, Weekly } from "../../types/design";
-import type {
-  ProfileResponse,
-  APICategoryCount,
-  WishListItem,
-} from "../../types/api";
+import type { ProfileResponse, WishListItem } from "../../types/api";
 
 function formatDuration(
   d: import("../../types/design").Duration | undefined,
@@ -44,6 +40,15 @@ const emblemStyle = (url?: string): React.CSSProperties | undefined =>
         backgroundPosition: "center",
       }
     : undefined;
+
+// Shown until the summary arrives. The adapter always returns all four
+// categories, so this is only ever the loading placeholder.
+const EMPTY_SUMMARY: SummaryCategory[] = [
+  { id: "weapons", label: "Weapons", pct: 0, count: [0, 0] },
+  { id: "armor", label: "Armor", pct: 0, count: [0, 0] },
+  { id: "exotics", label: "Exotics", pct: 0, count: [0, 0] },
+  { id: "cosmetics", label: "Cosmetics", pct: 0, count: [0, 0] },
+];
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -68,7 +73,7 @@ export function Dashboard() {
     isError: collectionsFailed,
     error: collectionsError,
     refetch: refetchCollections,
-  } = useQuery(collectionsQuery(membershipType, membershipId, false));
+  } = useQuery(collectionsQuery(membershipType, membershipId));
 
   const {
     data: weeklyData,
@@ -101,54 +106,10 @@ export function Dashboard() {
   const wishlistEntries = (wishlistItems ?? []).map(toWishlistEntry);
   const availableNowCount = wishlistEntries.filter((e) => e.avail.now).length;
 
-  const fromReal = (
-    c: APICategoryCount | undefined,
-    fallback: SummaryCategory,
-  ): SummaryCategory => {
-    if (c && c.total > 0) {
-      return {
-        id: fallback.id,
-        label: fallback.label,
-        pct: Math.round((c.collected / c.total) * 100),
-        count: [c.collected, c.total],
-      };
-    }
-    return fallback;
-  };
-
-  const mWeapons: SummaryCategory = {
-    id: "weapons",
-    label: "Weapons",
-    pct: 0,
-    count: [0, 0],
-  };
-  const mArmor: SummaryCategory = {
-    id: "armor",
-    label: "Armor",
-    pct: 0,
-    count: [0, 0],
-  };
-  const mExotics: SummaryCategory = {
-    id: "exotics",
-    label: "Exotics",
-    pct: 0,
-    count: [0, 0],
-  };
-  const mCosmetics: SummaryCategory = {
-    id: "cosmetics",
-    label: "Cosmetics",
-    pct: 0,
-    count: [0, 0],
-  };
-  const categories: SummaryCategory[] = [
-    fromReal(real?.summary.weapons, mWeapons),
-    fromReal(real?.summary.armor, mArmor),
-    fromReal(real?.summary.exotics, mExotics),
-    fromReal(real?.summary.cosmetics, mCosmetics),
-  ];
-  const overall = Math.round(
-    categories.reduce((sum, c) => sum + c.pct, 0) / categories.length,
-  );
+  // The summary shape, its category order and the overall percentage are all
+  // derived by the collections adapter now — this page only renders them.
+  const categories: SummaryCategory[] = real?.summary ?? EMPTY_SUMMARY;
+  const overall = real?.overallPct ?? 0;
 
   return (
     <div className="gt-page gt-dash" data-onboarding-target="dashboard">

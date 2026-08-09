@@ -9,7 +9,7 @@ import { FlagCard, UserRow } from "./AdminKit";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch, ApiError } from "../../lib/api";
-import { relTime } from "../../lib/adapters";
+import { relTime } from "../../lib/format";
 import {
   ROLES,
   ROLE_LABEL,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { cosmeticItems, groupByType } from "./cosmeticItems";
+import { toCollections } from "../../lib/collectionsView";
 import type { APIUserCollections } from "../../types/api";
 
 const data = {
@@ -104,7 +105,7 @@ const data = {
 
 describe("cosmeticItems", () => {
   it("keeps only cosmetic-typed items and tags collected state", () => {
-    const items = cosmeticItems(data);
+    const items = cosmeticItems(toCollections(data));
     expect(items.map((i) => i.name).sort()).toEqual([
       "Emblem A",
       "Emblem B",
@@ -116,7 +117,7 @@ describe("cosmeticItems", () => {
   });
 
   it("groups items by their type string", () => {
-    const groups = groupByType(cosmeticItems(data));
+    const groups = groupByType(cosmeticItems(toCollections(data)));
     expect(groups.get("Emblem")).toHaveLength(2);
     expect(groups.get("Ornament")).toHaveLength(1);
     expect(groups.get("Finisher")).toHaveLength(1);
@@ -133,7 +134,7 @@ describe("cosmeticItems", () => {
       availableNow: { "101": "Xûr", "102": "Ada-1" },
     } as unknown as APIUserCollections;
 
-    const items = cosmeticItems(withVendor);
+    const items = cosmeticItems(toCollections(withVendor));
     const byId = new Map(items.map((i) => [i.id, i]));
 
     expect(byId.get("101")?.obtainable).toBe(true);
@@ -147,7 +148,7 @@ describe("cosmeticItems", () => {
   });
 
   it("treats a missing availableNow map as nothing on sale", () => {
-    const items = cosmeticItems(data);
+    const items = cosmeticItems(toCollections(data));
     expect(items.every((i) => i.obtainable === false)).toBe(true);
     expect(items.every((i) => i.availFrom === undefined)).toBe(true);
   });
