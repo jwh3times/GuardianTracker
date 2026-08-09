@@ -59,7 +59,10 @@ backend/api-service/
                                            milestone data; reset time math; ManifestRepo interface
   services/weekly/availability.go      ← LiveVendorItemHashes: best-effort all-rotating-vendor item
                                            availability (Xûr, Banshee-44, Ada-1, ritual vendors) for wishlist
-  services/search/service.go           ← Manifest item search index with versioned disk snapshots; async rebuild on update
+  services/search/service.go           ← Manifest item search index with versioned disk snapshots; opens its
+                                           own SQLite handle on the manifest (not manifest.Provider), so it
+                                           registers its own CloseForSwap/Reopen swap hook pair; async rebuild
+                                           on update, aborted mid-scan if a swap starts
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; WeaponTypesCacheKey
   cache/cache.go                       ← In-memory cache (and no-op cache interface)
@@ -183,7 +186,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 
 - `services/manifest/repository.go` — raw SQLite queries. All public methods acquire `r.mu` (RWMutex); locked variants (`*Locked`) for composite operations that must hold the lock across multiple queries.
 - `services/manifest/provider.go` — single `*Provider` shared by all consumers. Opens lazily on first use; `CloseForSwap()` / `Reopen()` coordinate the hourly file swap. Returns `ErrNotReady` (503 `MANIFEST_NOT_READY`) while absent or swapping.
-- `services/bungie/manifest.go` — `RegisterSwapHooks(before, after)` fires around the file rename. The `after` hook calls `Reopen()`, evicts `records.WeaponTypesCacheKey` and `records.CatalystLinksCacheKey`, and rebuilds the search index.
+- `services/bungie/manifest.go` — `RegisterSwapHooks(before, after)` fires around the file rename. **Any consumer that opens its own handle on the manifest file, rather than reading through `manifest.Provider`, must register its own `before`/`after` pair** — the provider's hooks only cover consumers that go through it. Two pairs are registered in `main.go`: the search service's (`search.Service.CloseForSwap` before, `Reopen()` + `go BuildIndex()` after — `search.Service` opens its own SQLite handle) and the provider's (`Reopen()`, evicts `records.WeaponTypesCacheKey`, `records.CatalystLinksCacheKey`, and `weekly.PublicWeeklyCacheKey`, invalidates the collections tree cache, and rebuilds the efficiency index).
 
 ## Notable manifest methods
 
@@ -218,6 +221,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 
 ## Weekly service
 
+- `PublicWeeklyCacheKey` (`"weekly:public"`) exported for eviction from the after-swap hook — its milestone names and reward labels resolve through the manifest (mirrors `records.WeaponTypesCacheKey`)
 - `Weekly` struct has `ResetAt`, `FetchedAt`, `Degraded` fields
 - `Xur.Location` is optional and best-effort: character-vendor component 400 supplies
   `vendorLocationIndex`, the manifest resolves its destination, and the known Last City

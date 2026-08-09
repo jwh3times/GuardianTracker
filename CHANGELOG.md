@@ -13,6 +13,46 @@ request.
 
 No unreleased changes.
 
+## [0.3.55] - 2026-08-09
+
+### Fixed
+
+- Fixed the search index holding an open handle on the Destiny manifest database
+  across the hourly manifest swap. The search service opens its own SQLite
+  connection rather than going through the shared manifest provider, so the
+  provider's before-swap hook never covered it and a full item-table scan could
+  still be running when the new manifest was moved into place. On Windows the
+  move failed and the server silently kept serving the previous manifest; on
+  Linux it succeeded but the index was recorded against a manifest version whose
+  contents it had never read, so item search stayed stale until the next manifest
+  update. The search service now closes down before the swap and rebuilds after
+  it, and an interrupted build is discarded rather than recorded.
+- Fixed stale milestone names and reward labels on This Week after a manifest
+  update; the shared weekly payload is now evicted when the manifest changes
+  instead of persisting until the weekly reset. Per-character vendor caches are
+  unaffected by this change and can still show manifest labels up to one daily
+  reset old.
+- Fixed Wishlist, Admin, This Week, and header search reporting a failed request
+  as an empty result. A failed wishlist load told the user "Your wishlist is
+  empty" and offered to start a new one; Admin reported "No members match" on a
+  failed member load; This Week rendered an empty week; and header search
+  reported no matching items. All four now show the same failure panel the
+  Collections pages use, with an explanation, a Bungie privacy-settings link when
+  privacy is the cause, and a retry — except header search, which shows a
+  "Search unavailable" line to suit the dropdown.
+- Fixed the Cosmetics gallery never showing the "Available now" marker. Cosmetics
+  did not carry live vendor availability, and the gallery had nowhere to display
+  it, so an emblem or shader a vendor was actively selling looked identical to
+  one that was unobtainable — while the same item showed as available in
+  Collections. Cosmetic tiles and the cosmetic detail panel now name the vendor
+  selling an item the player does not yet own.
+
+### Changed
+
+- The failed-request panel shared by Collections, Catalysts, and Triumphs now
+  lives in one place and is reused by every page that loads data, so failure
+  wording, the privacy-settings link, and retry behave the same everywhere.
+
 ## [0.3.54] - 2026-08-08
 
 ### Added
