@@ -9,55 +9,23 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/sources"
 )
 
-func TestClassifyDifficulty(t *testing.T) {
-	cases := []struct {
-		name     string
-		source   string
-		isExotic bool
-		want     string
-	}{
-		{"raid keyword", "Found in the raid \"Last Wish\"", false, "Challenging"},
-		{"vault of glass", "Vault of Glass raid", false, "Challenging"},
-		{"kings fall", "King's Fall", false, "Challenging"},
-		{"root of nightmares", "Root of Nightmares completion", false, "Challenging"},
-		{"crota", "Crota's End", false, "Challenging"},
-		{"deep stone", "Deep Stone Crypt", false, "Challenging"},
-		{"garden", "Garden of Salvation", false, "Challenging"},
-		{"dungeon", "Found in the dungeon", false, "Moderate"},
-		{"prophecy", "Prophecy dungeon reward", false, "Moderate"},
-		{"grasp", "Grasp of Avarice", false, "Moderate"},
-		{"duality", "Duality dungeon", false, "Moderate"},
-		{"spire", "Spire of the Watcher", false, "Moderate"},
-		{"shattered throne", "The Shattered Throne", false, "Moderate"},
-		{"pit of heresy", "Pit of Heresy", false, "Moderate"},
-		{"trials", "Trials of Osiris reward", false, "Challenging"},
-		{"competitive", "Competitive Crucible", false, "Challenging"},
-		{"iron banner", "Iron Banner engrams", false, "Challenging"},
-		{"glory", "Glory rank rewards", false, "Challenging"},
-		{"nightfall", "Nightfall: The Ordeal", false, "Moderate"},
-		{"exotic quest", "Complete the exotic quest", true, "Moderate"},
-		{"exotic no source", "", true, "Unrated"},
-		{"plain world drop", "World drops", false, "Easy"},
-		{"empty non-exotic", "", false, "Unrated"},
-		{"case insensitive", "FOUND IN THE RAID", false, "Challenging"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := ClassifyDifficulty(tc.source, tc.isExotic); got != tc.want {
-				t.Errorf("ClassifyDifficulty(%q, %v) = %q, want %q", tc.source, tc.isExotic, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestClassifyDifficultyExported(t *testing.T) {
-	if got := ClassifyDifficulty(`Source: "Vault of Glass" Raid`, false); got != "Challenging" {
-		t.Errorf("VoG difficulty = %q, want Challenging", got)
-	}
-	if got := ClassifyDifficulty("Source: Complete strikes", false); got != "Easy" {
-		t.Errorf("strikes difficulty = %q, want Easy", got)
+// The keyword vocabulary is owned and exhaustively tested by services/sources.
+// What matters here is that this package's seam delegates to it rather than
+// carrying a second copy that can drift.
+func TestClassifyDifficulty_DelegatesToSources(t *testing.T) {
+	for _, source := range []string{
+		`Source: "Vault of Glass" Raid`,
+		"Source: Complete strikes",
+		"Grandmaster Nightfall",
+		"Random Perks: This item cannot be reacquired from Collection",
+		"",
+	} {
+		if got, want := ClassifyDifficulty(source, false), sources.Difficulty(source); got != want {
+			t.Errorf("ClassifyDifficulty(%q) = %q, want sources.Difficulty = %q", source, got, want)
+		}
 	}
 }
 
@@ -239,33 +207,6 @@ func TestGetUserCollections_Projects(t *testing.T) {
 			}
 			return ks
 		}())
-	}
-}
-
-func TestClassifyDifficulty_Tiers(t *testing.T) {
-	cases := []struct {
-		source   string
-		isExotic bool
-		want     string
-	}{
-		{"Source: Vault of Glass Raid", false, "Challenging"},
-		{"Grandmaster Nightfall", false, "Challenging"}, // Challenging beats Moderate "nightfall"
-		{"Source: Trials of Osiris", false, "Challenging"},
-		{"Source: Prophecy dungeon", false, "Moderate"},
-		{"Source: Nightfall", false, "Moderate"},
-		{"Source: Season of the Witch", false, "Moderate"},
-		{"Source: Earn rank-up packages from Banshee-44.", false, "Easy"},
-		{"Source: Open Legendary engrams", false, "Easy"},
-		{"Source: World drops", false, "Easy"},
-		{"", false, "Unrated"},
-		{"   ", true, "Unrated"},
-		{"Random Perks: This item cannot be reacquired from Collection", false, "Unrated"},
-		{"Source: A brand new activity nobody mapped", true, "Unrated"}, // unmatched exotic → Unrated (no floor)
-	}
-	for _, c := range cases {
-		if got := ClassifyDifficulty(c.source, c.isExotic); got != c.want {
-			t.Errorf("ClassifyDifficulty(%q,%v) = %q, want %q", c.source, c.isExotic, got, c.want)
-		}
 	}
 }
 
