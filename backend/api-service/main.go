@@ -199,40 +199,49 @@ func main() {
 	charactersService := characters.NewService(bungieClient, appCache, cfg.CacheTTLCollections)
 	collectionsService := collections.NewService(bungieClient, manifestService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
-	// Hooks must be registered before EnsureReady can trigger a download: close
-	// SQLite handles before the file swap (the rename fails on Windows otherwise),
-	// reopen + rebuild the search index after the new version is installed, and
-	// evict manifest-derived caches (e.g. weapon types and the collections tree)
-	// so they don't serve stale data until their TTL expires (B10).
-	// The search service opens its own SQLite handle on the manifest rather than
-	// going through manifestProvider, so the provider's hook does not cover it and
-	// it needs its own swap participation: block/abort builds before the rename,
-	// then re-admit and rebuild. Registered as one hook pair so Reopen can never
-	// be ordered after the rebuild it enables.
-	manifestService.RegisterSwapHooks(
-		searchService.CloseForSwap,
-		func(version string) {
-			searchService.Reopen()
-			go searchService.BuildIndex()
-		},
-	)
-	manifestService.RegisterSwapHooks(
-		manifestProvider.CloseForSwap,
-		func(version string) {
-			if err := manifestProvider.Reopen(); err != nil {
-				slog.Warn("manifest provider reopen failed", observability.Err(err))
-			}
-			appCache.Delete(records.WeaponTypesCacheKey)
-			appCache.Delete(records.ExoticWeaponsCacheKey)
-			appCache.Delete(records.CatalystLinksCacheKey)
-			appCache.Delete(weekly.PublicWeeklyCacheKey)
-			collectionsService.InvalidateTreeCache()
-			go efficiencyEngine.BuildIndex()
-		},
-	)
-	manifestService.RegisterSwapHooks(nil, func(version string) {
-		itemsService.InvalidateCache()
-	})
+	// Weekly service
+	var weeklyWishlist weekly.WishlistReader
+	if stores.Wishlist != nil {
+		weeklyWishlist = &weeklyWishlistAdapter{s: stores.Wishlist}
+	}
+	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, manifestService)
+	if cfg.E2EFixedTime != nil {
+		fixedTime := *cfg.E2EFixedTime
+		weeklyService = weekly.NewServiceWithClock(
+			bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, manifestService,
+			func() time.Time { return fixedTime },
+		)
+	}
+	weeklyHandler := handlers.NewWeeklyHandler(weeklyService, tokenStore)
+
+	// Records service (catalysts, crafting, seals)
+	recordsService := records.NewService(bungieClient, manifestProvider, appCache, cfg.CacheTTLRecords)
+	recordsHandler := handlers.NewRecordsHandler(recordsService, tokenStore)
+	searchHandler := handlers.NewSearchHandler(searchService)
+
+	// Manifest swap enrolment. Must happen before EnsureReady can trigger a
+	// download, and therefore after every participant and observer exists.
+	//
+	// Participants hold an OS handle on the manifest file and are closed before
+	// the rename, then reopened after it (including on the rollback path).
+	// manifestProvider goes first: observers may query the manifest, and every
+	// lazily-rebuilding consumer reaches it through the provider.
+	//
+	// searchService is a participant in its own right because it opens its own
+	// SQLite connection instead of sharing the provider — the omission that let a
+	// full index scan straddle os.Rename.
+	manifestService.RegisterParticipant(manifestProvider)
+	manifestService.RegisterParticipant(searchService)
+
+	// Observers hold manifest-derived state and are told only when a new version
+	// actually landed. Each owns what that means for it; main.go deliberately
+	// knows none of it.
+	manifestService.RegisterObserver(recordsService)
+	manifestService.RegisterObserver(weeklyService)
+	manifestService.RegisterObserver(collectionsService)
+	manifestService.RegisterObserver(itemsService)
+	manifestService.RegisterObserver(searchService)
+	manifestService.RegisterObserver(efficiencyEngine)
 
 	go func() {
 		slog.Info("checking manifest status")
@@ -242,28 +251,10 @@ func main() {
 	}()
 	manifestService.StartBackgroundUpdater(ctx)
 
-	// Weekly service
-	var weeklyWishlist weekly.WishlistReader
-	if stores.Wishlist != nil {
-		weeklyWishlist = &weeklyWishlistAdapter{s: stores.Wishlist}
-	}
-	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine)
-	if cfg.E2EFixedTime != nil {
-		fixedTime := *cfg.E2EFixedTime
-		weeklyService = weekly.NewServiceWithClock(
-			bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine,
-			func() time.Time { return fixedTime },
-		)
-	}
-	weeklyHandler := handlers.NewWeeklyHandler(weeklyService, tokenStore)
-
+	// Initial builds for the already-installed manifest. A swap triggered by
+	// EnsureReady above notifies these through OnVersionChanged instead.
 	go searchService.BuildIndex()
 	go efficiencyEngine.BuildIndex()
-	searchHandler := handlers.NewSearchHandler(searchService)
-
-	// Records service (catalysts, crafting, seals)
-	recordsService := records.NewService(bungieClient, manifestProvider, appCache, cfg.CacheTTLRecords)
-	recordsHandler := handlers.NewRecordsHandler(recordsService, tokenStore)
 
 	// Handlers
 	// Pass audit as a true-nil interface in degraded mode so handlers' nil-guards

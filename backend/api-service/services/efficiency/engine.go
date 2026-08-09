@@ -1,6 +1,8 @@
 package efficiency
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"sync"
 
@@ -56,6 +58,17 @@ func (e *Engine) ensureIndex() {
 	}
 }
 
+// OnVersionChanged rebuilds the source-bucket index against the new manifest.
+// Implements bungie.ManifestObserver.
+//
+// The build is asynchronous: it reads every collectible row and must not block
+// the swap. Rank and MissingForMilestone serve the previous index until it
+// lands, and ensureIndex re-kicks the build if this one loses a race.
+func (e *Engine) OnVersionChanged(version string) error {
+	go e.BuildIndex()
+	return nil
+}
+
 // BuildIndex (re)builds the source-bucket index. Safe to call concurrently; a
 // concurrent call is a no-op while a build is already running. Mirrors search.BuildIndex.
 func (e *Engine) BuildIndex() {
@@ -81,7 +94,15 @@ func (e *Engine) BuildIndex() {
 	}
 	rows, err := e.source.GetAllCollectiblesWithItems()
 	if err != nil {
-		slog.Error("efficiency index collectible lookup failed",
+		// A build racing a manifest swap gets ErrNotReady from the provider.
+		// That is expected and self-healing — builtVersion is left untouched, so
+		// ensureIndex re-kicks on the next Rank/MissingForMilestone call — so it
+		// logs at debug. Anything else is a real fault.
+		level := slog.LevelError
+		if errors.Is(err, manifest.ErrNotReady) {
+			level = slog.LevelDebug
+		}
+		slog.LogAttrs(context.Background(), level, "efficiency index collectible lookup failed",
 			slog.String("manifest_version", version),
 			observability.Err(err),
 		)

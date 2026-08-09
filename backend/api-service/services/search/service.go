@@ -278,10 +278,10 @@ func (s *Service) swapRequested() bool {
 
 // CloseForSwap blocks new index builds and waits for an in-flight build to
 // release its handle on the manifest database, so the caller can rename the new
-// file over it. Registered as a before-swap hook alongside
-// manifest.Provider.CloseForSwap — unlike every other manifest consumer, the
-// search service opens its own SQLite connection rather than going through the
-// shared Provider, so the Provider's hook does not cover it.
+// file over it. The search service is a bungie.SwapParticipant in its own right
+// because — unlike every other manifest consumer — it opens its own SQLite
+// connection rather than going through the shared manifest.Provider, so the
+// Provider's participation does not cover it.
 func (s *Service) CloseForSwap() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -291,12 +291,23 @@ func (s *Service) CloseForSwap() {
 	}
 }
 
-// Reopen re-admits index builds after a manifest swap. It does not build —
-// the after-swap hook kicks BuildIndex once the new version is installed.
-func (s *Service) Reopen() {
+// Reopen re-admits index builds. It deliberately does not build: it also runs on
+// the rollback path, where the manifest did not change and the existing index is
+// still correct. Rebuilding is OnVersionChanged's job.
+func (s *Service) Reopen() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.swapping = false
+	return nil
+}
+
+// OnVersionChanged rebuilds the index against the newly installed manifest. The
+// build is asynchronous — a full item-table scan takes seconds and must not
+// block the swap — so this returns immediately; Search serves the previous
+// index until the new one lands.
+func (s *Service) OnVersionChanged(version string) error {
+	go s.BuildIndex()
+	return nil
 }
 
 // loadSnapshot restores a snapshot only when its embedded manifest version

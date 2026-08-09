@@ -137,15 +137,15 @@ func NewService(b *bungie.Client, m ManifestRepo, c cache.Cache, ttl time.Durati
 	return &Service{bungie: b, manifest: m, cache: c, ttl: ttl}
 }
 
-// WeaponTypesCacheKey is the cache key for the weapon name→type map. Exported so
-// main.go can evict it from the after-swap hook — otherwise stale weapon-type
-// labels would be served for up to an hour after a manifest update (B10).
-const WeaponTypesCacheKey = "manifest:weaponTypesByName"
+// weaponTypesCacheKey is the cache key for the weapon name→type map. Evicted by
+// OnVersionChanged — otherwise stale weapon-type labels would be served for up
+// to an hour after a manifest update (B10).
+const weaponTypesCacheKey = "manifest:weaponTypesByName"
 
-// ExoticWeaponsCacheKey is the cache key for the exotic weapon name→{type,icon}
-// map (catalyst weapon-picture resolution). Exported for the same after-swap
-// eviction reason as WeaponTypesCacheKey.
-const ExoticWeaponsCacheKey = "manifest:exoticWeaponsByName"
+// exoticWeaponsCacheKey is the cache key for the exotic weapon name→{type,icon}
+// map (catalyst weapon-picture resolution). Evicted for the same reason as
+// weaponTypesCacheKey.
+const exoticWeaponsCacheKey = "manifest:exoticWeaponsByName"
 
 // recordHashKey formats a record hash as the decimal string key Bungie uses to
 // index the profile records map.
@@ -157,7 +157,7 @@ func recordHashKey(hash uint32) string {
 // used to enrich catalyst and crafting entries (B10). Failures return an empty
 // map (entries fall back to a generic type) and are not cached.
 func (s *Service) weaponTypesByName() map[string]string {
-	if cached, ok := s.cache.Get(WeaponTypesCacheKey); ok {
+	if cached, ok := s.cache.Get(weaponTypesCacheKey); ok {
 		if m, ok := cached.(map[string]string); ok {
 			return m
 		}
@@ -166,7 +166,7 @@ func (s *Service) weaponTypesByName() map[string]string {
 	if err != nil || len(m) == 0 {
 		return map[string]string{}
 	}
-	s.cache.Set(WeaponTypesCacheKey, m, time.Hour)
+	s.cache.Set(weaponTypesCacheKey, m, time.Hour)
 	return m
 }
 
@@ -175,7 +175,7 @@ func (s *Service) weaponTypesByName() map[string]string {
 // Failures return an empty map (entries fall back to a type glyph) and are not
 // cached.
 func (s *Service) exoticWeaponsByName() map[string]manifestrepo.ExoticWeapon {
-	if cached, ok := s.cache.Get(ExoticWeaponsCacheKey); ok {
+	if cached, ok := s.cache.Get(exoticWeaponsCacheKey); ok {
 		if m, ok := cached.(map[string]manifestrepo.ExoticWeapon); ok {
 			return m
 		}
@@ -184,7 +184,7 @@ func (s *Service) exoticWeaponsByName() map[string]manifestrepo.ExoticWeapon {
 	if err != nil || len(m) == 0 {
 		return map[string]manifestrepo.ExoticWeapon{}
 	}
-	s.cache.Set(ExoticWeaponsCacheKey, m, time.Hour)
+	s.cache.Set(exoticWeaponsCacheKey, m, time.Hour)
 	return m
 }
 
@@ -226,16 +226,16 @@ func resolveCatalystWeapon(catalystName, description string, exotics map[string]
 	return manifestrepo.ExoticWeapon{}
 }
 
-// CatalystLinksCacheKey is the cache key for the exotic-weapon catalyst linkage
+// catalystLinksCacheKey is the cache key for the exotic-weapon catalyst linkage
 // data (weapon name, unlock-objective hashes, resolved catalyst-perk text).
-// Exported for the same after-swap eviction reason as WeaponTypesCacheKey.
-const CatalystLinksCacheKey = "manifest:catalystLinks"
+// Evicted for the same reason as weaponTypesCacheKey.
+const catalystLinksCacheKey = "manifest:catalystLinks"
 
 // catalystLinks returns the cached per-weapon catalyst linkage data. Failures
 // return nil (every record then falls back to its own description) and are not
 // cached.
 func (s *Service) catalystLinks() []manifestrepo.CatalystLink {
-	if cached, ok := s.cache.Get(CatalystLinksCacheKey); ok {
+	if cached, ok := s.cache.Get(catalystLinksCacheKey); ok {
 		if l, ok := cached.([]manifestrepo.CatalystLink); ok {
 			return l
 		}
@@ -244,7 +244,7 @@ func (s *Service) catalystLinks() []manifestrepo.CatalystLink {
 	if err != nil || len(links) == 0 {
 		return nil
 	}
-	s.cache.Set(CatalystLinksCacheKey, links, time.Hour)
+	s.cache.Set(catalystLinksCacheKey, links, time.Hour)
 	return links
 }
 
@@ -380,6 +380,18 @@ func recordsCacheKey(membershipType int, membershipID string) string {
 // InvalidateCache drops the cached profile records for a user (e.g. on refresh).
 func (s *Service) InvalidateCache(membershipType int, membershipID string) {
 	s.cache.Delete(recordsCacheKey(membershipType, membershipID))
+}
+
+// OnVersionChanged drops the three manifest-derived lookup tables so they
+// rebuild from the new manifest. Implements bungie.ManifestObserver.
+//
+// The per-user `records:*` entries are deliberately left alone — they hold raw
+// Bungie profile data, which a manifest swap does not invalidate.
+func (s *Service) OnVersionChanged(version string) error {
+	s.cache.Delete(weaponTypesCacheKey)
+	s.cache.Delete(exoticWeaponsCacheKey)
+	s.cache.Delete(catalystLinksCacheKey)
+	return nil
 }
 
 // getProfileRecords fetches and caches the profile records component (900) for a user.

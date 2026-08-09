@@ -154,7 +154,28 @@ type Service struct {
 	wishlist    WishlistReader
 	cache       cache.Cache
 	efficiency  *efficiency.Engine
+	version     versioner
 	now         func() time.Time
+}
+
+// versioner reports the current manifest version. Satisfied by
+// *bungie.ManifestService. Mirrors the identical interface in services/efficiency.
+type versioner interface {
+	Version() string
+}
+
+// manifestVersion returns the installed manifest version, or "none" before the
+// first manifest lands. Used to scope cache keys whose values carry
+// manifest-resolved labels, so a swap orphans them rather than requiring an
+// eviction sweep the cache has no API for.
+func (s *Service) manifestVersion() string {
+	if s.version == nil {
+		return "none"
+	}
+	if v := s.version.Version(); v != "" {
+		return v
+	}
+	return "none"
 }
 
 // ManifestRepo is the subset of the manifest repository the weekly service uses.
@@ -180,15 +201,15 @@ type WishlistItem struct {
 }
 
 // NewService creates a new weekly recommendations service.
-func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine) *Service {
-	return NewServiceWithClock(b, m, c, w, appCache, eng, time.Now)
+func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner) *Service {
+	return NewServiceWithClock(b, m, c, w, appCache, eng, v, time.Now)
 }
 
 // NewServiceWithClock creates a weekly service with an injected clock. The
 // production constructor above always uses time.Now; the alternate constructor
 // exists so hermetic browser tests can keep Xur in a deterministic weekend
 // window without changing production behavior.
-func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, now func() time.Time) *Service {
+func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner, now func() time.Time) *Service {
 	if now == nil {
 		now = time.Now
 	}
@@ -199,8 +220,19 @@ func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c *collections.Servic
 		wishlist:    w,
 		cache:       appCache,
 		efficiency:  eng,
+		version:     v,
 		now:         now,
 	}
+}
+
+// OnVersionChanged drops the global weekly payload, whose milestone names and
+// reward labels are manifest-resolved. Implements bungie.ManifestObserver.
+//
+// The per-character `daily:vendors:*` entries need no eviction: their key is
+// scoped by manifest version, so a swap orphans them automatically.
+func (s *Service) OnVersionChanged(version string) error {
+	s.cache.Delete(publicWeeklyCacheKey)
+	return nil
 }
 
 func (s *Service) nowUTC() time.Time {
@@ -629,15 +661,14 @@ func (s *Service) buildRecommended(pub *publicWeeklyCache, missing, wishlist map
 	return actions
 }
 
-// PublicWeeklyCacheKey holds the global weekly payload, whose milestone names
-// and reward labels are resolved through the manifest. Exported so the manifest
-// swap hook can evict it — otherwise it serves stale labels until the weekly
-// reset. Mirrors the records package's manifest-derived cache keys.
-const PublicWeeklyCacheKey = "weekly:public"
+// publicWeeklyCacheKey holds the global weekly payload, whose milestone names
+// and reward labels are resolved through the manifest. Evicted by
+// OnVersionChanged — otherwise it serves stale labels until the weekly reset.
+const publicWeeklyCacheKey = "weekly:public"
 
 // getPublicWeekly builds or retrieves the cached global weekly payload.
 func (s *Service) getPublicWeekly(ctx context.Context, now time.Time) (*publicWeeklyCache, error) {
-	const cacheKey = PublicWeeklyCacheKey
+	const cacheKey = publicWeeklyCacheKey
 	if cached, ok := s.cache.Get(cacheKey); ok {
 		if p, ok := cached.(*publicWeeklyCache); ok {
 			return p, nil
@@ -887,10 +918,23 @@ func (s *Service) fetchMilestones(ctx context.Context, pub *publicWeeklyCache) {
 	}
 }
 
+// dailyVendorsCacheKey scopes the cached daily-vendor rows by manifest version,
+// because those rows carry manifest-resolved item names and types. A swap
+// therefore orphans the old entries (they expire on their existing TTL) rather
+// than needing an eviction sweep the cache has no API for, and the rebuild is
+// cheap: the underlying Bungie vendor response is cached separately under an
+// unversioned key, so nothing refetches from Bungie.
+//
+// A method rather than a bare fmt.Sprintf at the use site so tests seed the
+// cache through the same constructor instead of transcribing the format.
+func (s *Service) dailyVendorsCacheKey(membershipType int, membershipID, characterID string) string {
+	return fmt.Sprintf("daily:vendors:%s:%d:%s:%s", s.manifestVersion(), membershipType, membershipID, characterID)
+}
+
 // getDailyVendorItems fetches Ada-1 and Banshee-44 inventory via the character vendor endpoint.
 // Component 402 can vary by class, so the result is cached per validated character.
 func (s *Service) getDailyVendorItems(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, now time.Time) []dailyVendorItem {
-	cacheKey := fmt.Sprintf("daily:vendors:%d:%s:%s", membershipType, membershipID, characterID)
+	cacheKey := s.dailyVendorsCacheKey(membershipType, membershipID, characterID)
 	if cached, ok := s.cache.Get(cacheKey); ok {
 		if items, ok := cached.([]dailyVendorItem); ok {
 			return items

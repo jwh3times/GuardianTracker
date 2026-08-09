@@ -121,6 +121,7 @@ func TestGetXurLocation_UsesCharacterVendorCache(t *testing.T) {
 		nil,
 		c,
 		nil,
+		fakeVersioner{"v-test"},
 	)
 
 	for range 2 {
@@ -170,7 +171,7 @@ func TestCategoryFromMilestoneName(t *testing.T) {
 
 func TestNewServiceWithClockUsesInjectedUTCClock(t *testing.T) {
 	fixed := time.Date(2026, 7, 11, 18, 30, 0, 0, time.FixedZone("EDT", -4*60*60))
-	s := NewServiceWithClock(nil, nil, nil, nil, cache.NewNoOpCache(), nil, func() time.Time { return fixed })
+	s := NewServiceWithClock(nil, nil, nil, nil, cache.NewNoOpCache(), nil, fakeVersioner{"v-test"}, func() time.Time { return fixed })
 	if got, want := s.nowUTC(), fixed.UTC(); !got.Equal(want) || got.Location() != time.UTC {
 		t.Fatalf("nowUTC() = %v, want %v", got, want)
 	}
