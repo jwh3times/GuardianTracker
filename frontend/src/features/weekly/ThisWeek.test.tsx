@@ -1,39 +1,19 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { useLocation } from "react-router";
 import { http, HttpResponse, delay } from "msw";
-import { API, sampleUser, sampleWeekly, server } from "../../test/testServer";
-import { AuthProvider } from "../../contexts/AuthContext";
-import {
-  CharacterProvider,
-  useCharacters,
-} from "../../contexts/CharacterContext";
-import { ToastProvider } from "../../components/Toast";
+import { API, sampleWeekly, server } from "../../test/testServer";
+import { renderWithProviders } from "../../test/renderWithProviders";
+import { useCharacters } from "../../contexts/CharacterContext";
 import { ThisWeek } from "./ThisWeek";
 
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 
 function renderPage(ui: React.ReactNode, route = "/") {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={qc}>
-      <AuthProvider>
-        <CharacterProvider>
-          <ToastProvider>
-            <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-          </ToastProvider>
-        </CharacterProvider>
-      </AuthProvider>
-    </QueryClientProvider>,
-  );
+  return renderWithProviders(ui, { route });
 }
 
 describe("ThisWeek page", () => {

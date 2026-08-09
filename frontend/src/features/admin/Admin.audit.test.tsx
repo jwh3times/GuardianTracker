@@ -1,43 +1,17 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { API, sampleUser, server } from "../../test/testServer";
-import { AuthProvider } from "../../contexts/AuthContext";
-import { PreferencesProvider } from "../../contexts/PreferencesContext";
-import { ToastProvider } from "../../components/Toast";
+import { API, server } from "../../test/testServer";
+import { renderWithProviders } from "../../test/renderWithProviders";
 import { Admin } from "./Admin";
-
-// Harness copied from pages-manage.test.tsx (Settings/WishList tests).
-// Admin uses useAuth (needs AuthProvider), useToast (needs ToastProvider),
-// and React Query hooks (needs QueryClientProvider + MemoryRouter for any
-// internal link rendering).
 
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 
 function renderAdmin() {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={qc}>
-      <AuthProvider>
-        <PreferencesProvider>
-          <ToastProvider>
-            <MemoryRouter>
-              <Admin />
-            </MemoryRouter>
-          </ToastProvider>
-        </PreferencesProvider>
-      </AuthProvider>
-    </QueryClientProvider>,
-  );
+  return renderWithProviders(<Admin />, { route: "/admin" });
 }
 
 describe("Admin Audit panel", () => {

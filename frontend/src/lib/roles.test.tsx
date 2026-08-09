@@ -2,46 +2,28 @@ import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
+import { renderWithProviders } from "../test/renderWithProviders";
 import { queryClient } from "./api";
 import App from "../App";
 import { Admin } from "../features/admin/Admin";
-import { FlagsProvider, useFlag } from "../contexts/FlagsContext";
+import { useFlag } from "../contexts/FlagsContext";
 import { LockedFeature } from "../features/admin/AdminKit";
-import { AuthProvider } from "../contexts/AuthContext";
-import { ToastProvider } from "../components/Toast";
-
-const authed = () => {
-  localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
-  // Not an onboarding test — mark first-run done so the Dashboard greeting
-};
 
 beforeEach(() => {
   localStorage.clear();
   // App uses the singleton queryClient; clear it so a cached ["flags"] role from
   // a prior test doesn't leak into the next.
   queryClient.clear();
-  authed();
+  // The bare <App /> renders in this file build their own tower, so they need
+  // the signed-in user seeded here; renderWithProviders seeds its own.
+  localStorage.setItem("guardian_token", "test-token");
+  localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 
 function wrap(ui: React.ReactNode) {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={qc}>
-      <AuthProvider>
-        <ToastProvider>
-          <MemoryRouter>
-            <FlagsProvider>{ui}</FlagsProvider>
-          </MemoryRouter>
-        </ToastProvider>
-      </AuthProvider>
-    </QueryClientProvider>,
-  );
+  return renderWithProviders(ui);
 }
 
 function FlagProbe({ flagKey }: { flagKey: string }) {
@@ -184,7 +166,9 @@ describe("admin route guard", () => {
     );
     // Falls back to the dashboard hero rather than the admin console.
     expect(
-      await screen.findByText(/Welcome, TestGuardian/),
+      // Mounts the whole app (lazy chunk + several round-trips), so the RTL
+      // 1s default is too tight under a loaded parallel suite.
+      await screen.findByText(/Welcome, TestGuardian/, {}, { timeout: 5000 }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Admin Console")).not.toBeInTheDocument();
   });

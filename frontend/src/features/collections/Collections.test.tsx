@@ -1,39 +1,18 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, useLocation, useNavigate } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { useLocation, useNavigate } from "react-router";
 import { http, HttpResponse } from "msw";
-import { API, sampleUser, server } from "../../test/testServer";
-import { AuthProvider } from "../../contexts/AuthContext";
-import { CharacterProvider } from "../../contexts/CharacterContext";
-import { PreferencesProvider } from "../../contexts/PreferencesContext";
-import { ToastProvider } from "../../components/Toast";
+import { API, server } from "../../test/testServer";
+import { renderWithProviders } from "../../test/renderWithProviders";
 import { Collections } from "./Collections";
 
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 
 function renderPage(ui: React.ReactNode, route = "/") {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={qc}>
-      <AuthProvider>
-        <PreferencesProvider>
-          <CharacterProvider>
-            <ToastProvider>
-              <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-            </ToastProvider>
-          </CharacterProvider>
-        </PreferencesProvider>
-      </AuthProvider>
-    </QueryClientProvider>,
-  );
+  return renderWithProviders(ui, { route });
 }
 
 function renderCollections(search = "") {
@@ -439,32 +418,17 @@ describe("Collections default-root seeding (regression)", () => {
 
   it("a cold /collections load canonicalizes to the first root via a REPLACE (Back isn't trapped)", async () => {
     server.use(treeCollectionsHandler);
-    const qc = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    });
-    render(
-      <QueryClientProvider client={qc}>
-        <AuthProvider>
-          <PreferencesProvider>
-            <CharacterProvider>
-              <ToastProvider>
-                <MemoryRouter
-                  initialEntries={["/elsewhere", "/collections"]}
-                  initialIndex={1}
-                >
-                  <Collections />
-                  <LocationProbe />
-                  <PathProbe />
-                  <BackButton />
-                </MemoryRouter>
-              </ToastProvider>
-            </CharacterProvider>
-          </PreferencesProvider>
-        </AuthProvider>
-      </QueryClientProvider>,
+    // Two history entries, starting on the second: the assertion below needs
+    // somewhere for Back to land, to prove the canonicalizing seed was a
+    // REPLACE rather than a push.
+    renderWithProviders(
+      <>
+        <Collections />
+        <LocationProbe />
+        <PathProbe />
+        <BackButton />
+      </>,
+      { initialEntries: ["/elsewhere", "/collections"], initialIndex: 1 },
     );
 
     // No node/filters in the URL, so the default-root effect seeds node=10
