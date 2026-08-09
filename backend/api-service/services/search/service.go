@@ -150,7 +150,7 @@ func (s *Service) Search(q string, limit int) []Entry {
 // BuildIndex builds the search index from the manifest SQLite database.
 // Safe to call concurrently — a concurrent call is a no-op if a build is already
 // running, and a no-op entirely while a manifest swap is in progress (the index
-// is rebuilt by the after-swap hook once the new file is installed).
+// is rebuilt by OnVersionChanged once the new file is installed).
 func (s *Service) BuildIndex() {
 	s.mu.Lock()
 	if s.building || s.swapping {
@@ -246,7 +246,7 @@ func (s *Service) BuildIndex() {
 	// A swap may have been requested since the last in-loop check. Committing
 	// here would be correct (CloseForSwap waits for the build to finish, so this
 	// still precedes the rename) but the snapshot write is wasted work the
-	// after-swap rebuild immediately supersedes.
+	// post-swap rebuild immediately supersedes.
 	if s.swapRequested() {
 		slog.Info("search index build discarded for manifest swap",
 			slog.String("manifest_version", version),
@@ -278,10 +278,10 @@ func (s *Service) swapRequested() bool {
 
 // CloseForSwap blocks new index builds and waits for an in-flight build to
 // release its handle on the manifest database, so the caller can rename the new
-// file over it. Registered as a before-swap hook alongside
-// manifest.Provider.CloseForSwap — unlike every other manifest consumer, the
-// search service opens its own SQLite connection rather than going through the
-// shared Provider, so the Provider's hook does not cover it.
+// file over it. The search service is a bungie.SwapParticipant in its own right
+// because — unlike every other manifest consumer — it opens its own SQLite
+// connection rather than going through the shared manifest.Provider, so the
+// Provider's participation does not cover it.
 func (s *Service) CloseForSwap() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -291,12 +291,23 @@ func (s *Service) CloseForSwap() {
 	}
 }
 
-// Reopen re-admits index builds after a manifest swap. It does not build —
-// the after-swap hook kicks BuildIndex once the new version is installed.
-func (s *Service) Reopen() {
+// Reopen re-admits index builds. It deliberately does not build: it also runs on
+// the rollback path, where the manifest did not change and the existing index is
+// still correct. Rebuilding is OnVersionChanged's job.
+func (s *Service) Reopen() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.swapping = false
+	return nil
+}
+
+// OnVersionChanged rebuilds the index against the newly installed manifest. The
+// build is asynchronous — a full item-table scan takes seconds and must not
+// block the swap — so this returns immediately; Search serves the previous
+// index until the new one lands.
+func (s *Service) OnVersionChanged(version string) error {
+	go s.BuildIndex()
+	return nil
 }
 
 // loadSnapshot restores a snapshot only when its embedded manifest version

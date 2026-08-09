@@ -122,9 +122,11 @@ func TestLiveVendorItemsCacheIsolatedByCharacter(t *testing.T) {
 	c.Set("vendors:character:3:member-1:char-warlock", warlockResponse, time.Minute)
 	c.Set("live:vendoritems:3:member-1:char-hunter", map[uint32]string{101: "Banshee-44"}, time.Minute)
 	c.Set("live:vendoritems:3:member-1:char-warlock", map[uint32]string{202: "Banshee-44"}, time.Minute)
-	c.Set("daily:vendors:3:member-1:char-hunter", []dailyVendorItem{{ItemHash: 101}}, time.Minute)
-	c.Set("daily:vendors:3:member-1:char-warlock", []dailyVendorItem{{ItemHash: 202}}, time.Minute)
 	s := &Service{cache: c}
+	// Seeded through the constructor, not a transcribed format string: the key
+	// is scoped by manifest version, which the service owns.
+	c.Set(s.dailyVendorsCacheKey(3, "member-1", "char-hunter"), []dailyVendorItem{{ItemHash: 101}}, time.Minute)
+	c.Set(s.dailyVendorsCacheKey(3, "member-1", "char-warlock"), []dailyVendorItem{{ItemHash: 202}}, time.Minute)
 
 	if got := s.getCharacterVendors(context.Background(), 3, "member-1", "char-hunter", "token"); got != hunterResponse {
 		t.Error("hunter 400/402 response crossed character cache boundary")

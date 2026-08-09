@@ -21,8 +21,8 @@ The Bungie manifest is a read-only SQLite database managed entirely by `api-serv
 1. On startup, `services/bungie/manifest.go` fetches manifest metadata from `https://www.bungie.net/Platform/Destiny2/Manifest/`
 2. Compares current version against `./data/manifest_version.txt`
 3. If new or missing: downloads the English `.content` ZIP, extracts to `./data/manifest.sqlite`, writes new version to `manifest_version.txt`
-4. Before renaming the new file over the live one, fires `before` swap hooks (closes open SQLite handles via `manifest.Provider.CloseForSwap()`)
-5. After the rename, fires `after` swap hooks (reopens handles via `manifest.Provider.Reopen()`, evicts `records.WeaponTypesCacheKey`, rebuilds search index)
+4. Before renaming the new file over the live one, closes every registered `bungie.SwapParticipant`'s open handle (`manifest.Provider.CloseForSwap()`, `search.Service.CloseForSwap()`)
+5. After the rename, reopens every participant (`Reopen()`), then — only if the rename succeeded — notifies every registered `bungie.ManifestObserver` (`OnVersionChanged`), which is what evicts manifest-derived cache entries and rebuilds the search/efficiency indexes. See `.claude/agents/go-services.md` for the full participant/observer contract
 6. Background goroutine re-checks every hour (`MANIFEST_CHECK_INTERVAL` seconds, default 3600)
 7. Until manifest is ready, all endpoints that use it return 503 (`MANIFEST_NOT_READY`)
 8. Check readiness via `GET /api/manifest/status`

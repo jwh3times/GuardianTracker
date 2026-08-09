@@ -4,14 +4,59 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+// fakeParticipant records the swap lifecycle calls it receives.
+type fakeParticipant struct {
+	mu        sync.Mutex
+	closed    int
+	reopened  int
+	reopenErr error
+}
+
+func (f *fakeParticipant) CloseForSwap() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closed++
+}
+
+func (f *fakeParticipant) Reopen() error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reopened++
+	return f.reopenErr
+}
+
+// fakeObserver records every version it is told about, so a test can assert
+// both what it saw and that it was not notified at all.
+type fakeObserver struct {
+	mu   sync.Mutex
+	seen []string
+	err  error
+}
+
+func (f *fakeObserver) OnVersionChanged(version string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.seen = append(f.seen, version)
+	return f.err
+}
+
+func (f *fakeObserver) versions() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return strings.Join(f.seen, ",")
+}
 
 func TestNewManifestService_ReadsVersionFile(t *testing.T) {
 	dir := t.TempDir()
@@ -46,21 +91,52 @@ func TestManifestService_IsReady(t *testing.T) {
 	}
 }
 
-func TestRegisterSwapHooks_RunsRegisteredHooks(t *testing.T) {
+func TestRegisterParticipantAndObserver_Run(t *testing.T) {
 	ms := NewManifestService(NewClient("k", "http://x", 100, 100), "db.sqlite", time.Hour)
-	var before int
-	var afterVersion string
-	ms.RegisterSwapHooks(func() { before++ }, func(v string) { afterVersion = v })
-	// nil hooks must be ignored without panicking.
-	ms.RegisterSwapHooks(nil, nil)
+	p := &fakeParticipant{}
+	o := &fakeObserver{}
+	ms.RegisterParticipant(p)
+	ms.RegisterObserver(o)
+	// nil registrations must be ignored without panicking.
+	ms.RegisterParticipant(nil)
+	ms.RegisterObserver(nil)
 
-	ms.runBeforeSwapHooks()
-	ms.runAfterSwapHooks("v2")
-	if before != 1 {
-		t.Errorf("before hook ran %d times, want 1", before)
+	ms.closeParticipants()
+	ms.reopenParticipants()
+	ms.notifyObservers("v2")
+
+	if p.closed != 1 {
+		t.Errorf("CloseForSwap ran %d times, want 1", p.closed)
 	}
-	if afterVersion != "v2" {
-		t.Errorf("after hook version = %q, want v2", afterVersion)
+	if p.reopened != 1 {
+		t.Errorf("Reopen ran %d times, want 1", p.reopened)
+	}
+	if o.versions() != "v2" {
+		t.Errorf("observer version = %q, want v2", o.versions())
+	}
+}
+
+// A failing participant or observer must not stop the ones behind it: a
+// participant left closed would serve ErrNotReady forever.
+func TestSwapRunners_ContinuePastFailures(t *testing.T) {
+	ms := NewManifestService(NewClient("k", "http://x", 100, 100), "db.sqlite", time.Hour)
+	bad := &fakeParticipant{reopenErr: errors.New("boom")}
+	good := &fakeParticipant{}
+	badObs := &fakeObserver{err: errors.New("boom")}
+	goodObs := &fakeObserver{}
+	ms.RegisterParticipant(bad)
+	ms.RegisterParticipant(good)
+	ms.RegisterObserver(badObs)
+	ms.RegisterObserver(goodObs)
+
+	ms.reopenParticipants()
+	ms.notifyObservers("v3")
+
+	if good.reopened != 1 {
+		t.Error("a participant registered after a failing one was not reopened")
+	}
+	if goodObs.versions() != "v3" {
+		t.Error("an observer registered after a failing one was not notified")
 	}
 }
 
@@ -135,16 +211,19 @@ func TestExtractManifest_WritesContentFileAndRunsHooks(t *testing.T) {
 	dbPath := filepath.Join(dir, "sub", "manifest.sqlite") // nested dir is created
 	ms := NewManifestService(NewClient("k", "http://x", 100, 100), dbPath, time.Hour)
 
-	var beforeRan bool
-	ms.RegisterSwapHooks(func() { beforeRan = true }, nil)
+	p := &fakeParticipant{}
+	ms.RegisterParticipant(p)
 
 	zipData := zipWith(t, "world_en.content", []byte("SQLITE-BYTES"))
 	zipPath := writeZipFile(t, zipData)
 	if err := ms.extractManifest(zipPath); err != nil {
 		t.Fatalf("extractManifest: %v", err)
 	}
-	if !beforeRan {
-		t.Error("before-swap hook should run before the file rename")
+	if p.closed != 1 {
+		t.Error("participants should be closed before the file rename")
+	}
+	if p.reopened != 0 {
+		t.Error("a successful extract must not reopen participants; Download does that")
 	}
 	got, err := os.ReadFile(dbPath)
 	if err != nil {
@@ -205,8 +284,8 @@ func TestDownload_HappyPath_UsesCDNBaseURLAndRunsHooks(t *testing.T) {
 	dbPath := filepath.Join(dir, "manifest.sqlite")
 	ms := NewManifestService(client, dbPath, time.Hour)
 
-	var afterVersion string
-	ms.RegisterSwapHooks(nil, func(v string) { afterVersion = v })
+	o := &fakeObserver{}
+	ms.RegisterObserver(o)
 
 	if err := ms.Download(context.Background()); err != nil {
 		t.Fatalf("Download: %v", err)
@@ -221,8 +300,8 @@ func TestDownload_HappyPath_UsesCDNBaseURLAndRunsHooks(t *testing.T) {
 	if string(got) != "SQLITE-BYTES" {
 		t.Errorf("installed db = %q", got)
 	}
-	if afterVersion != "v-cdn-test" {
-		t.Errorf("after-swap hook version = %q, want v-cdn-test", afterVersion)
+	if o.versions() != "v-cdn-test" {
+		t.Errorf("observer version = %q, want v-cdn-test", o.versions())
 	}
 	if ms.Version() != "v-cdn-test" {
 		t.Errorf("Version() = %q", ms.Version())

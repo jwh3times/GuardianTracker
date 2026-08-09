@@ -164,12 +164,21 @@ type DestinyItem struct {
 }
 
 // analysis is the cached, per-user canonical dataset that both projections read.
+//
+// Treat an *analysis as immutable once cached: concurrent requests share the
+// pointer without a lock, so refreshing it means building a replacement, never
+// mutating in place (see refreshManifestParts).
 type analysis struct {
 	collectibles []manifest.CollectibleWithItem
 	collected    map[uint32]bool // collectible-hash-keyed, straight from the profile response
 	owned        map[uint32]bool // itemHash-keyed: true if ANY of the item's collectibles is acquired (see deriveOwnedItems)
 	tree         *TreeStructure
 	fetchedAt    time.Time
+	// manifestVersion stamps which manifest the manifest-derived fields above
+	// (collectibles, tree, owned) were built from. A cache hit whose stamp no
+	// longer matches the installed manifest is refreshed in place of an
+	// eviction — see getAnalysis.
+	manifestVersion string
 }
 
 // deriveOwnedItems collapses collectible-hash-level acquisition to itemHash-level
@@ -195,7 +204,20 @@ func (s *Service) getAnalysis(ctx context.Context, membershipType int, membershi
 	cacheKey := fmt.Sprintf("collections:%d:%s", membershipType, membershipID)
 	if cached, found := s.cache.Get(cacheKey); found {
 		if a, ok := cached.(*analysis); ok {
-			return a, nil
+			// The manifest-derived half of a cached analysis goes stale on a
+			// manifest swap, but the expensive half — `collected`, a rate-limited
+			// Bungie profile fetch — does not. Rebuild only what the manifest
+			// owns and keep the profile data, so a swap costs local SQLite reads
+			// instead of a refetch storm across every active user. This is why
+			// `collections:*` is not evicted by OnVersionChanged.
+			refreshed, err := s.refreshManifestParts(a)
+			if err != nil {
+				return nil, err
+			}
+			if refreshed != a {
+				s.cache.Set(cacheKey, refreshed, s.cacheTTL)
+			}
+			return refreshed, nil
 		}
 	}
 
@@ -253,7 +275,14 @@ func (s *Service) getAnalysis(ctx context.Context, membershipType int, membershi
 
 	owned := deriveOwnedItems(collectibles, collected)
 
-	a := &analysis{collectibles: collectibles, collected: collected, owned: owned, tree: tree, fetchedAt: time.Now().UTC()}
+	a := &analysis{
+		collectibles:    collectibles,
+		collected:       collected,
+		owned:           owned,
+		tree:            tree,
+		fetchedAt:       time.Now().UTC(),
+		manifestVersion: s.manifestVersion(),
+	}
 	s.cache.Set(cacheKey, a, s.cacheTTL)
 	return a, nil
 }
@@ -424,10 +453,77 @@ func (s *Service) InvalidateCache(membershipType int, membershipID string) {
 	s.cache.Delete(fmt.Sprintf("collections:%d:%s", membershipType, membershipID))
 }
 
-// InvalidateTreeCache drops the cached tree structure so it rebuilds from the new
-// manifest after a swap. Per-user analysis entries self-expire on their TTL.
+// InvalidateTreeCache drops the shared, user-independent tree so it rebuilds
+// from the new manifest.
+//
+// This alone is not sufficient: each cached per-user analysis holds its own
+// pointer to the tree it was built with, so dropping the shared copy does not
+// reach them. refreshManifestParts is what repairs those, lazily, on read.
 func (s *Service) InvalidateTreeCache() {
 	s.treeMu.Lock()
 	s.treeStruct = nil
 	s.treeMu.Unlock()
+}
+
+// manifestVersion returns the installed manifest version, or "" when no version
+// is knowable — no manifest service (tests) or nothing downloaded yet. An empty
+// version disables the staleness check rather than forcing a rebuild on every
+// read, since "" can never equal a real stamp.
+func (s *Service) manifestVersion() string {
+	if s.manifestService == nil {
+		return ""
+	}
+	return s.manifestService.Version()
+}
+
+// OnVersionChanged drops the shared tree so the next request rebuilds it from
+// the new manifest. Implements bungie.ManifestObserver.
+//
+// Per-user `collections:*` entries are deliberately NOT evicted — see the
+// comment in getAnalysis. Evicting them would discard a rate-limited Bungie
+// profile fetch per active user on every hourly swap; refreshManifestParts
+// rebuilds just the manifest-derived half instead.
+func (s *Service) OnVersionChanged(version string) error {
+	s.InvalidateTreeCache()
+	return nil
+}
+
+// refreshManifestParts returns an analysis whose manifest-derived fields match
+// the installed manifest, reusing the caller's profile data. It returns `a`
+// unchanged when the stamp already matches, so the common path allocates
+// nothing.
+//
+// It never mutates `a`: concurrent requests share that pointer without a lock,
+// so a replacement is built and the caller re-caches it.
+func (s *Service) refreshManifestParts(a *analysis) (*analysis, error) {
+	current := s.manifestVersion()
+	if current == "" || a.manifestVersion == current {
+		return a, nil
+	}
+
+	collectibles, err := s.manifest.GetAllCollectiblesWithItems()
+	if err != nil {
+		if errors.Is(err, ErrManifestNotReady) {
+			// Mid-swap. Serving the previous manifest's labels for one more
+			// request beats a 503 on data we already hold.
+			return a, nil
+		}
+		return nil, fmt.Errorf("collections: manifest query failed: %w", err)
+	}
+	tree, err := s.getTreeStructure(collectibles)
+	if err != nil {
+		if errors.Is(err, ErrManifestNotReady) {
+			return a, nil
+		}
+		return nil, fmt.Errorf("collections: tree build failed: %w", err)
+	}
+
+	return &analysis{
+		collectibles:    collectibles,
+		collected:       a.collected,
+		owned:           deriveOwnedItems(collectibles, a.collected),
+		tree:            tree,
+		fetchedAt:       a.fetchedAt,
+		manifestVersion: current,
+	}, nil
 }

@@ -129,7 +129,14 @@ func (s *Service) GetCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, erro
 	return cats, nil
 }
 
-// InvalidateCache drops every cached entry in all three caches. Wired to the manifest swap hook.
+// OnVersionChanged drops every cached projection so it rebuilds from the new
+// manifest. Implements bungie.ManifestObserver.
+func (s *Service) OnVersionChanged(version string) error {
+	s.InvalidateCache()
+	return nil
+}
+
+// InvalidateCache drops every cached entry in all three caches.
 func (s *Service) InvalidateCache() {
 	s.mu.Lock()
 	s.cache = map[uint32][]manifest.PerkColumn{}
