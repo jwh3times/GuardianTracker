@@ -8,15 +8,10 @@ import {
   afterAll,
   beforeEach,
 } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { API, sampleUser, server } from "../../test/testServer";
-import { AuthProvider } from "../../contexts/AuthContext";
-import { CharacterProvider } from "../../contexts/CharacterContext";
-import { PreferencesProvider } from "../../contexts/PreferencesContext";
-import { ToastProvider } from "../../components/Toast";
+import { API, server } from "../../test/testServer";
+import { renderWithProviders } from "../../test/renderWithProviders";
 import { Cosmetics } from "./Cosmetics";
 
 class ResizeObserverStub {
@@ -56,8 +51,6 @@ afterAll(() => {
 
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 
 const cosmeticsData = {
@@ -141,24 +134,7 @@ const cosmeticsData = {
 };
 
 function renderCosmetics() {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={qc}>
-      <AuthProvider>
-        <PreferencesProvider>
-          <CharacterProvider>
-            <ToastProvider>
-              <MemoryRouter initialEntries={["/cosmetics"]}>
-                <Cosmetics />
-              </MemoryRouter>
-            </ToastProvider>
-          </CharacterProvider>
-        </PreferencesProvider>
-      </AuthProvider>
-    </QueryClientProvider>,
-  );
+  return renderWithProviders(<Cosmetics />, { route: "/cosmetics" });
 }
 
 describe("Cosmetics", () => {

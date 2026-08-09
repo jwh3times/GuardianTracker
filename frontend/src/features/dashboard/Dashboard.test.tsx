@@ -1,39 +1,17 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { screen } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { API, sampleUser, server } from "../../test/testServer";
-import { AuthProvider } from "../../contexts/AuthContext";
-import { CharacterProvider } from "../../contexts/CharacterContext";
-import { PreferencesProvider } from "../../contexts/PreferencesContext";
-import { ToastProvider } from "../../components/Toast";
+import { API, server } from "../../test/testServer";
+import { renderWithProviders } from "../../test/renderWithProviders";
 import { Dashboard } from "./Dashboard";
 
 beforeEach(() => {
   localStorage.clear();
-  localStorage.setItem("guardian_token", "test-token");
-  localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
 
 function renderPage(ui: React.ReactNode, route = "/") {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  return render(
-    <QueryClientProvider client={qc}>
-      <AuthProvider>
-        <PreferencesProvider>
-          <CharacterProvider>
-            <ToastProvider>
-              <MemoryRouter initialEntries={[route]}>{ui}</MemoryRouter>
-            </ToastProvider>
-          </CharacterProvider>
-        </PreferencesProvider>
-      </AuthProvider>
-    </QueryClientProvider>,
-  );
+  return renderWithProviders(ui, { route });
 }
 
 describe("Dashboard", () => {

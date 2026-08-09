@@ -1,15 +1,11 @@
 import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate, Outlet, useNavigate } from "react-router";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { CharacterProvider } from "./contexts/CharacterContext";
-import { PreferencesProvider } from "./contexts/PreferencesContext";
-import { FlagsProvider, useFlags } from "./contexts/FlagsContext";
-import { queryClient } from "./lib/api";
+import { useAuth } from "./contexts/AuthContext";
+import { useFlags } from "./contexts/FlagsContext";
+import { AppProviders, AuthedProviders } from "./contexts/AppProviders";
 import { AppShell } from "./components/AppShell";
 import { LockedFeature } from "./features/admin/AdminKit";
 import { LoadingSpinner } from "./components/LoadingSpinner";
-import { ToastProvider } from "./components/Toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { OnboardingTour } from "./features/onboarding/OnboardingTour";
 
@@ -90,16 +86,14 @@ const ProtectedLayout: React.FC = () => {
   }
 
   return (
-    <FlagsProvider>
-      <CharacterProvider>
-        <AppShell>
-          <Suspense fallback={<PageLoader />}>
-            <Outlet />
-          </Suspense>
-          <OnboardingTour />
-        </AppShell>
-      </CharacterProvider>
-    </FlagsProvider>
+    <AuthedProviders>
+      <AppShell>
+        <Suspense fallback={<PageLoader />}>
+          <Outlet />
+        </Suspense>
+        <OnboardingTour />
+      </AppShell>
+    </AuthedProviders>
   );
 };
 
@@ -212,17 +206,12 @@ const AppContent: React.FC = () => {
 };
 
 function App() {
+  // ErrorBoundary stays outside AppProviders on purpose — see the note there.
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <PreferencesProvider>
-            <ToastProvider>
-              <AppContent />
-            </ToastProvider>
-          </PreferencesProvider>
-        </AuthProvider>
-      </QueryClientProvider>
+      <AppProviders>
+        <AppContent />
+      </AppProviders>
     </ErrorBoundary>
   );
 }

@@ -2,17 +2,12 @@ import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
+import { renderWithProviders } from "../test/renderWithProviders";
 import App from "../App";
 import { queryClient } from "../lib/api";
 import { AppShell } from "./AppShell";
-import { AuthProvider } from "../contexts/AuthContext";
-import { CharacterProvider } from "../contexts/CharacterContext";
-import { PreferencesProvider } from "../contexts/PreferencesContext";
-import { FlagsProvider } from "../contexts/FlagsContext";
-import { ToastProvider } from "./Toast";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoadingSpinner } from "./LoadingSpinner";
 
@@ -43,7 +38,9 @@ describe("App routing", () => {
     );
     // AppShell sidebar nav renders alongside the dashboard content
     expect(
-      await screen.findByText(/Welcome, TestGuardian/),
+      // Mounts the whole app (lazy chunk + several round-trips), so the RTL
+      // 1s default is too tight under a loaded parallel suite.
+      await screen.findByText(/Welcome, TestGuardian/, {}, { timeout: 5000 }),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Collections").length).toBeGreaterThan(0);
   });
@@ -56,7 +53,9 @@ describe("App routing", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByText(/Welcome, TestGuardian/),
+      // Mounts the whole app (lazy chunk + several round-trips), so the RTL
+      // 1s default is too tight under a loaded parallel suite.
+      await screen.findByText(/Welcome, TestGuardian/, {}, { timeout: 5000 }),
     ).toBeInTheDocument();
   });
 });
@@ -64,43 +63,27 @@ describe("App routing", () => {
 describe("AppShell interactions", () => {
   beforeEach(() => {
     localStorage.clear();
+    // renderShell seeds its own auth, but several tests in this block render a
+    // bare <App /> to exercise real route gating, and those build their own
+    // tower — so the signed-in user has to exist before they render.
     authed();
   });
 
   function renderShell(route = "/dashboard") {
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    return render(
-      <QueryClientProvider client={qc}>
-        <AuthProvider>
-          <PreferencesProvider>
-            <MemoryRouter initialEntries={[route]}>
-              <FlagsProvider>
-                <CharacterProvider>
-                  <ToastProvider>
-                    <Routes>
-                      <Route
-                        path="/dashboard"
-                        element={
-                          <AppShell>
-                            <div>shell-child</div>
-                          </AppShell>
-                        }
-                      />
-                      <Route path="/login" element={<div>login-stub</div>} />
-                      <Route
-                        path="/collections"
-                        element={<div>collections-stub</div>}
-                      />
-                    </Routes>
-                  </ToastProvider>
-                </CharacterProvider>
-              </FlagsProvider>
-            </MemoryRouter>
-          </PreferencesProvider>
-        </AuthProvider>
-      </QueryClientProvider>,
+    return renderWithProviders(
+      <Routes>
+        <Route
+          path="/dashboard"
+          element={
+            <AppShell>
+              <div>shell-child</div>
+            </AppShell>
+          }
+        />
+        <Route path="/login" element={<div>login-stub</div>} />
+        <Route path="/collections" element={<div>collections-stub</div>} />
+      </Routes>,
+      { route },
     );
   }
 
@@ -269,7 +252,9 @@ describe("AppShell interactions", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByText(/Welcome, TestGuardian/),
+      // Mounts the whole app (lazy chunk + several round-trips), so the RTL
+      // 1s default is too tight under a loaded parallel suite.
+      await screen.findByText(/Welcome, TestGuardian/, {}, { timeout: 5000 }),
     ).toBeInTheDocument();
   });
 
@@ -330,7 +315,9 @@ describe("AppShell interactions", () => {
       </MemoryRouter>,
     );
     expect(
-      await screen.findByText(/Welcome, TestGuardian/),
+      // Mounts the whole app (lazy chunk + several round-trips), so the RTL
+      // 1s default is too tight under a loaded parallel suite.
+      await screen.findByText(/Welcome, TestGuardian/, {}, { timeout: 5000 }),
     ).toBeInTheDocument();
   });
 

@@ -26,12 +26,14 @@ interface CharacterContextValue {
   isLoading: boolean;
 }
 
-const CharacterContext = createContext<CharacterContextValue>({
-  characters: [],
-  activeCharacter: null,
-  setActiveCharacter: () => undefined,
-  isLoading: false,
-});
+// Undefined rather than a default value, so a consumer rendered outside the
+// provider fails loudly. A default of `characters: []` made that mistake
+// indistinguishable from a real empty roster: a page hoisted above
+// ProtectedLayout would quietly ship an empty character list forever. Matches
+// AuthContext, FlagsContext and PreferencesContext.
+const CharacterContext = createContext<CharacterContextValue | undefined>(
+  undefined,
+);
 
 const storageKey = (membershipId: string) =>
   `guardian_active_character:${membershipId}`;
@@ -87,5 +89,9 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useCharacters(): CharacterContextValue {
-  return useContext(CharacterContext);
+  const ctx = useContext(CharacterContext);
+  if (!ctx) {
+    throw new Error("useCharacters must be used within a CharacterProvider");
+  }
+  return ctx;
 }

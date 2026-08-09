@@ -40,15 +40,30 @@ npm run lint       # ESLint
 
 ```
 frontend/src/
-  App.tsx                      ← Router, lazy-loaded pages, ProtectedLayout (CharacterProvider + AppShell + auth gate)
+  App.tsx                      ← Router, lazy-loaded pages, ProtectedLayout (AuthedProviders + AppShell + auth gate)
   index.tsx                    ← Root: AuthProvider, PreferencesProvider; imports styles/*.css
   contexts/
+    AppProviders.tsx             ← The single definition of the context tower. `AppProviders`
+                                   (QueryClientProvider > AuthProvider > PreferencesProvider >
+                                   ToastProvider; optional `client` prop, defaults to the
+                                   lib/api singleton) wraps the whole app in App.tsx.
+                                   `AuthedProviders` (FlagsProvider > CharacterProvider) mounts
+                                   only below ProtectedLayout's auth gate. Deliberately excludes
+                                   the router (index.tsx owns BrowserRouter; tests use
+                                   MemoryRouter; some need real Routes/Route matching) and
+                                   ErrorBoundary (stays outermost in App.tsx — inside the tower
+                                   it would swallow render errors, including the "hook throws
+                                   outside its provider" test assertions). Compose these; don't
+                                   nest providers inline in App.tsx or a test.
     AuthContext.tsx             ← Auth state, localStorage persistence, token refresh;
                                    logout (this device) + logoutAll (everywhere)
     PreferencesContext.tsx      ← Card style + "for you" badge prefs; account-backed onboarding completion
     CharacterContext.tsx        ← Characters query + persisted active-character pick; scopes weekly vendors
     FlagsContext.tsx            ← GET /api/flags query; useFlag(key) / useFlags() resolved gating
                                    state + role
+                                 All four hooks — useAuth, usePreferences, useFlags/useFlag, and
+                                 useCharacters — throw when called outside their provider. There
+                                 is no silent default state for any of them.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -138,6 +153,7 @@ frontend/src/
   test/                        ← Shared test infra (referenced by vite.config setupFiles)
     setup.ts                   ← Vitest setup file
     testServer.ts              ← MSW server + shared fixtures
+    renderWithProviders.tsx    ← Standard test render helper — see Testing below
     dockerComposeSecurity.test.ts ← Parses root docker-compose.yml and pins postgres/pgadmin/
                                    test-postgres/e2e-postgres to 127.0.0.1-only port bindings
                                    (api-service/frontend intentionally excluded)
@@ -217,7 +233,7 @@ Use `useFlag` to gate UI — never make server-side enforcement decisions in the
 ## Protected routes
 
 `App.tsx` groups authenticated pages under a single layout route, `ProtectedLayout`, which
-wraps `CharacterProvider`, `AppShell`, and `<Outlet/>`:
+wraps `AuthedProviders` (see `contexts/AppProviders.tsx` above), `AppShell`, and `<Outlet/>`:
 
 ```tsx
 <Route element={<ProtectedLayout />}>
@@ -233,7 +249,7 @@ authenticated pages go inside this group — do not add inline auth checks or re
 
 ## Character context
 
-`CharacterContext` (`contexts/CharacterContext.tsx`) fetches and caches the character list, and persists the active character selection per account. `useCharacters()` returns `{ characters, activeCharacter, setActiveCharacter }`. Collections, catalysts, and seals remain account-wide; Dashboard and This Week include the active character ID in weekly query keys and requests so authenticated vendor context follows the selected Guardian.
+`CharacterContext` (`contexts/CharacterContext.tsx`) fetches and caches the character list, and persists the active character selection per account. `useCharacters()` returns `{ characters, activeCharacter, setActiveCharacter }` and throws when called outside `CharacterProvider`, matching `useAuth`, `useFlags`, and `usePreferences` — there is no silent `characters: []` default. Collections, catalysts, and seals remain account-wide; Dashboard and This Week include the active character ID in weekly query keys and requests so authenticated vendor context follows the selected Guardian.
 
 ## OAuth callback flow
 
@@ -297,6 +313,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Framework: Vitest + React Testing Library
 - Setup file: `src/test/setup.ts` (MSW server + fixtures in `src/test/testServer.ts`)
 - Tests are colocated with the code they cover: lib tests in `lib/`, component tests in `components/`, and each feature's page tests inside `features/<feature>/`
+- `renderWithProviders` (`src/test/renderWithProviders.tsx`) is the standard way to render a page under test — it mounts `ui` inside `AppProviders` + `MemoryRouter`, and, when `authed` (default `true`), also wraps `AuthedProviders` and seeds `guardian_token`/`guardian_user` in localStorage. Options: `route`, `initialEntries`, `initialIndex`, `authed`, `client` (a fresh retry-disabled `QueryClient` by default). Pass a `<Routes>` element as `ui` when a test needs real route matching. Three test files deliberately keep their own hand-rolled tower instead of `renderWithProviders`: `contexts/contexts.test.tsx` (tests the contexts directly), `features/auth/OAuthCallback.test.tsx` (needs `StrictMode` mounted as a double-invoke regression guard), and `lib/units.test.tsx` (renders providers in isolation). Reach for `renderWithProviders` for any new page test rather than hand-rolling a tower.
 - Run: `npm test` (from `frontend/`)
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests
 - Mock `AuthContext` when testing pages that call `useAuth()`
