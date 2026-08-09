@@ -13,6 +13,20 @@ request.
 
 No unreleased changes.
 
+## [0.3.58] - 2026-08-09
+
+### Changed
+
+- The Destiny source vocabulary — the keywords that decide an item's difficulty
+  estimate, whether its source is a raid or dungeon, whether it is something you
+  can go and do, and which category a weekly milestone belongs to — now lives in
+  one place instead of being transcribed into four separate lists across three
+  parts of the backend. The lists overlapped almost entirely but nothing kept
+  them in step, so adding a new dungeon meant editing three files and missing one
+  made the raid milestone's missing-item count quietly stop appearing, with
+  nothing reported. Behaviour is unchanged; the arrangement now makes that class
+  of mistake fail a test instead of shipping.
+
 ## [0.3.57] - 2026-08-09
 
 ### Fixed

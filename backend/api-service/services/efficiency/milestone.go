@@ -1,28 +1,10 @@
 package efficiency
 
-import "strings"
+import (
+	"strings"
 
-// raidDungeonKeywords mark a source bucket as raid/dungeon loot. The per-milestone
-// missing-count join is restricted to these specific, named sources so a milestone
-// name cannot loosely match a short/generic bucket label. Verified against the real
-// manifest (2026-06-30): the ~10 weekly raid milestones map 1:1 to these buckets.
-var raidDungeonKeywords = []string{
-	"raid", "dungeon", "vault of glass", "king's fall", "root of nightmares",
-	"crota", "deep stone", "garden of salvation", "last wish", "vow of the disciple",
-	"salvation's edge", "desert perpetual", "prophecy", "grasp of avarice", "duality",
-	"spire of the watcher", "shattered throne", "pit of heresy", "ghosts of the deep",
-	"warlord", "sundered doctrine", "vesper",
-}
-
-func bucketIsRaidDungeon(sourceString string) bool {
-	s := strings.ToLower(sourceString)
-	for _, kw := range raidDungeonKeywords {
-		if strings.Contains(s, kw) {
-			return true
-		}
-	}
-	return false
-}
+	"guardian-tracker/api-service/services/sources"
+)
 
 // MissingForMilestone returns how many of the player's missing items drop from the
 // raid/dungeon source bucket(s) this milestone covers, and whether any bucket matched.
@@ -41,7 +23,7 @@ func (e *Engine) MissingForMilestone(milestoneName string, missing map[uint32]st
 	count := 0
 	matched := false
 	for _, b := range e.buckets {
-		if b.Kind != "activity" || b.Label == "" || !bucketIsRaidDungeon(b.SourceString) {
+		if b.Kind != "activity" || b.Label == "" || !sources.IsRaidOrDungeon(b.SourceString) {
 			continue
 		}
 		if !strings.Contains(name, strings.ToLower(b.Label)) {

@@ -14,6 +14,7 @@ import (
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/sources"
 )
 
 // ManifestRepo is the subset of the manifest repository the collections service
@@ -362,67 +363,14 @@ func toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
 	return di
 }
 
-// Difficulty keyword tiers — verified against the real manifest source-string
-// histogram (2026-06-30). Checked Challenging → Moderate → Easy, first hit wins, so
-// "Grandmaster Nightfall" scores Challenging before the Moderate "nightfall" rule.
-// Every entry is a positive match; anything unmatched is honestly "Unrated" (never a
-// catch-all "Easy"). Extend these lists freely.
-var (
-	challengingDiffKeywords = []string{
-		"raid", "vault of glass", "king's fall", "root of nightmares", "crota",
-		"deep stone", "garden of salvation", "last wish", "vow of the disciple",
-		"salvation's edge", "desert perpetual",
-		"trials", "competitive", "iron banner", "glory", "grandmaster", "pantheon",
-	}
-	moderateDiffKeywords = []string{
-		"dungeon", "prophecy", "grasp of avarice", "duality", "spire of the watcher",
-		"shattered throne", "pit of heresy", "ghosts of the deep", "warlord", "vesper",
-		"sundered doctrine",
-		"nightfall", "lost sector", "exotic quest", "exotic mission", "dreaming city",
-		"season of", "seasonal", "episode", "into the light", "solstice", "exploring",
-		"kepler", "wellspring", "dares", "black armory", "sparrow racing",
-	}
-	easyDiffKeywords = []string{
-		"rank-up package", "rank up package", "earned while leveling", "engram",
-		"season pass", "eververse", "bright dust", "focusing", "world drop",
-		"complete crucible", "complete gambit", "complete strikes", "complete vanguard",
-		"rank-up", "vendor", "banshee", "ada-1", "xûr", "xur", "tower", "monument",
-		"deluxe edition", "pre-order", "preorder", "charity", "special offer",
-		"rewards pass", "new monarchy", "dead orbit", "future war cult", "saint-14",
-	}
-)
-
-// ClassifyDifficulty infers an acquisition-difficulty estimate from a collectible's
-// source string. Every non-Unrated result is a real keyword match; unmatched sources
-// (and empty / "cannot be reacquired" ones) return "Unrated" rather than a misleading
-// default. isExotic is retained for a future exotic-aware tie-break; it is not used as
-// a default today.
+// ClassifyDifficulty infers an acquisition-difficulty estimate from a
+// collectible's source string. The vocabulary itself lives in services/sources,
+// which owns every classification derived from it; this stays as the name the
+// collections callers already use.
+//
+// isExotic is retained for a future exotic-aware tie-break; it is not used today.
 func ClassifyDifficulty(source string, isExotic bool) string {
-	s := strings.ToLower(strings.TrimSpace(source))
-	switch {
-	case s == "":
-		return "Unrated"
-	// Checked before the keyword tiers: reacquirable raid/dungeon collectibles never carry this string (verified against the manifest), so this short-circuit can't steal a real rating.
-	case strings.Contains(s, "cannot be reacquired"):
-		return "Unrated"
-	case matchesAnyKeyword(s, challengingDiffKeywords):
-		return "Challenging"
-	case matchesAnyKeyword(s, moderateDiffKeywords):
-		return "Moderate"
-	case matchesAnyKeyword(s, easyDiffKeywords):
-		return "Easy"
-	default:
-		return "Unrated"
-	}
-}
-
-func matchesAnyKeyword(s string, keywords []string) bool {
-	for _, kw := range keywords {
-		if strings.Contains(s, kw) {
-			return true
-		}
-	}
-	return false
+	return sources.Difficulty(source)
 }
 
 // GetMissingItemHashes returns not-collected weapon/armor/exotic item hashes

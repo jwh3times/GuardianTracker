@@ -14,6 +14,7 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/collections"
 	"guardian-tracker/api-service/services/efficiency"
+	"guardian-tracker/api-service/services/sources"
 )
 
 // Weekly is the assembled weekly recommendations payload sent to the frontend.
@@ -1133,21 +1134,5 @@ func (s *Service) enrichDailyVendorItems(resp *bungie.CharacterVendorsResponse) 
 }
 
 func categoryFromMilestoneName(name string) string {
-	lower := strings.ToLower(name)
-	switch {
-	case strings.Contains(lower, "nightfall") || strings.Contains(lower, "ordeal"):
-		return "Nightfall"
-	case strings.Contains(lower, "raid"):
-		return "Featured Raid"
-	case strings.Contains(lower, "dungeon"):
-		return "Featured Dungeon"
-	case strings.Contains(lower, "crucible") || strings.Contains(lower, "iron banner") || strings.Contains(lower, "trials"):
-		return "Crucible"
-	case strings.Contains(lower, "gambit"):
-		return "Gambit"
-	case strings.Contains(lower, "strike") || strings.Contains(lower, "vanguard"):
-		return "Strikes"
-	default:
-		return "Weekly Activity"
-	}
+	return sources.MilestoneCategory(name)
 }

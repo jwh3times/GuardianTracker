@@ -72,6 +72,9 @@ backend/api-service/
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; OnVersionChanged (ManifestObserver)
                                            evicts its three manifest-derived cache keys
+  services/sources/sources.go          ← Destiny source-string vocabulary: Difficulty, IsRaidOrDungeon,
+                                           ActionKind, MilestoneCategory — one faceted keyword table,
+                                           not four parallel ones; collections/efficiency/weekly delegate
   cache/cache.go                       ← In-memory cache (and no-op cache interface)
   db/db.go, db/migrate.go              ← Postgres pool; migration runner (each migration runs in a tx)
   db/stores.go                         ← Stores struct aggregating all store types
@@ -222,13 +225,38 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 - `InvalidateCache(membershipType, membershipId)` drops cached profile records (called by RefreshCollections)
 - `Triumph.Objectives []TriumphObjective` (`omitempty`) — per-objective drill-down built by `GetSeals`: excludes explicitly-hidden objectives (`RecordObjective.Visible *bool`; `nil` = absent = visible — a plain `bool` would decode Bungie's absent-field-means-visible default backwards), falls back to `Objective N` for a blank `progressDescription` (numbered over the objectives that survive visibility filtering), normalizes a zero `completionValue` to `Max=1`, and forces `Done=true`/`Cur==Max` on every objective when the parent record is redeemed regardless of stale objective payloads. The existing top-level `Triumph.Cur`/`Max` is unchanged for response compatibility.
 
+## Source vocabulary (`services/sources`)
+
+Owns the Destiny source-string keyword vocabulary and every classification
+derived from it, behind one faceted table (`{keyword, tier, raidDungeon}`)
+instead of the four parallel keyword lists that used to live separately in
+`collections`, `efficiency`, and `weekly` — nothing forced those to stay in
+step, so shipping a new dungeon meant editing three files, and forgetting one
+made a milestone's missing-count badge silently not appear.
+
+- `Difficulty(source)` — `Challenging`/`Moderate`/`Easy`/`Unrated`; stops at the
+  first table hit, so "Grandmaster Nightfall" scores Challenging before the
+  Moderate "nightfall" rule.
+- `IsRaidOrDungeon(source)` — scans the whole table rather than stopping at the
+  first hit, so the same "Grandmaster Nightfall"-in-a-dungeon string still
+  counts as dungeon loot even though it tiers on "grandmaster".
+- `ActionKind(sourceHash, source)` — `KindExcluded`/`KindVendor`/`KindActivity` for
+  the efficiency engine's "go do this" bucket classification.
+- `MilestoneCategory(name)` — buckets a weekly milestone by display name.
+- `services/sources/sources_test.go` asserts invariants unrepresentable across
+  separate tables: raid/dungeon facets agree with `IsRaidOrDungeon` and are
+  never tiered Easy, tiers stay grouped so first-hit-wins holds, and no keyword
+  is duplicated.
+
 ## Collections service
 
 - `ErrManifestNotReady` exported (aliases `manifest.ErrNotReady`); handler maps it to 503
 - `UserCollections` has `FetchedAt` field
 - `CollectionSummary` has `CollectedItems` field (stripped from response unless `?include=all`)
 - `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
-- `ClassifyDifficulty(source, isExotic)` — positive-match table; returns `"Unrated"` for unmatched sources (no catch-all "Easy"); exported for use by the efficiency engine
+- `ClassifyDifficulty(source, isExotic)` — thin delegate to `services/sources.Difficulty`, which owns the
+  positive-match table; returns `"Unrated"` for unmatched sources (no catch-all "Easy"); called here and
+  from `weekly.service.go` (wishlist difficulty labels)
 - `DestinyItem.FarmOnly` — set `true` when the collectible source string contains "cannot be reacquired"; surfaced as a "Farm only" chip in the UI
 - `DestinyItem.ItemType` — `toDestinyItem` names all verified cosmetic types via `bungie.ItemTypeName`, so cosmetics carry real strings (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`/`Ornament`/`Finisher`) instead of `"Unknown"`; the frontend gallery classifies by these strings
 - Shaders and ornaments both use `itemType=19` (mod), with verified subtypes 20 and 21 respectively. Gate both by subtype in `manifest.CollectibleCategory`; do NOT add all of item type 19 to `cosmeticItemTypes`. Finishers use verified item type 29.

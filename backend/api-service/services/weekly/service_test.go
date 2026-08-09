@@ -12,6 +12,7 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/sources"
 )
 
 // fakeManifest satisfies weekly.ManifestRepo.
@@ -148,23 +149,17 @@ func TestGetXurLocation_OmitsUnknownLocation(t *testing.T) {
 	}
 }
 
-func TestCategoryFromMilestoneName(t *testing.T) {
-	cases := map[string]string{
-		"Nightfall: The Ordeal":   "Nightfall",
-		"The Ordeal":              "Nightfall",
-		"Weekly Raid Challenge":   "Featured Raid",
-		"Featured Dungeon":        "Featured Dungeon",
-		"Crucible Playlist":       "Crucible",
-		"Iron Banner":             "Crucible",
-		"Trials of Osiris":        "Crucible",
-		"Gambit Weekly":           "Gambit",
-		"Vanguard Ops":            "Strikes",
-		"Strike Playlist":         "Strikes",
-		"Something Else Entirely": "Weekly Activity",
-	}
-	for in, want := range cases {
-		if got := categoryFromMilestoneName(in); got != want {
-			t.Errorf("categoryFromMilestoneName(%q) = %q, want %q", in, got, want)
+// The milestone-name vocabulary is owned and tested by services/sources; this
+// only pins the delegation.
+func TestCategoryFromMilestoneName_DelegatesToSources(t *testing.T) {
+	for _, name := range []string{
+		"Nightfall: The Ordeal",
+		"Weekly Raid Challenge",
+		"Featured Dungeon",
+		"Something Else Entirely",
+	} {
+		if got, want := categoryFromMilestoneName(name), sources.MilestoneCategory(name); got != want {
+			t.Errorf("categoryFromMilestoneName(%q) = %q, want %q", name, got, want)
 		}
 	}
 }
