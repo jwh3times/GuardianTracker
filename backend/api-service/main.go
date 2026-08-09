@@ -160,7 +160,7 @@ func main() {
 
 	// Single manifest repository shared by all consumers: opens lazily once the
 	// manifest file exists (no restart needed after a cold-start download) and
-	// reconnects across the hourly manifest swap via the hooks below.
+	// reconnects across the hourly manifest swap as a registered participant.
 	manifestProvider := manifestrepo.NewProvider(cfg.ManifestDBPath)
 	itemsService := items.NewService(manifestProvider)
 
@@ -171,7 +171,7 @@ func main() {
 	// Efficiency engine — scores items by acquisition difficulty; index built async
 	efficiencyEngine := efficiency.NewEngine(manifestProvider, manifestService)
 
-	// Cache — created before the swap hooks so the after-swap hook can evict
+	// Cache — created before the swap registrations below so observers can evict
 	// manifest-derived cache entries.
 	var appCache cache.Cache
 	if cfg.CacheEnabled {

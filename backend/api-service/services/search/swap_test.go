@@ -125,7 +125,7 @@ func TestBuildIndex_RefusesWhileSwapping(t *testing.T) {
 	}
 
 	// Reopen re-admits builds. It deliberately does not build on its own — the
-	// after-swap hook kicks BuildIndex once the new version is installed.
+	// OnVersionChanged kicks BuildIndex once the new version is installed.
 	svc.Reopen()
 	svc.BuildIndex()
 

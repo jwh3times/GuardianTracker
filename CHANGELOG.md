@@ -13,6 +13,37 @@ request.
 
 No unreleased changes.
 
+## [0.3.56] - 2026-08-09
+
+### Changed
+
+- Reworked how services take part in the hourly Destiny manifest update. Taking
+  part used to mean registering a pair of anonymous callbacks, a shape that could
+  not express what any given service needed — which is how the item-search index
+  came to be left out of it entirely. Services now declare their role: those
+  holding an open handle on the manifest file are closed before it is replaced and
+  reopened afterwards, and those holding data derived from the manifest are told
+  when a new version has actually been installed. Each service decides for itself
+  what to discard or rebuild, so adding one no longer means editing startup code
+  that has to know its internals.
+- A manifest update that fails partway through no longer discards good data.
+  Previously a failed file replacement still cleared every manifest-derived cache
+  and restarted both background index builds, even though the manifest had not
+  changed. Services are now reconnected to the existing manifest and left
+  otherwise untouched.
+
+### Fixed
+
+- Fixed the Collections page serving a stale category tree after a manifest update
+  until a user's cached data expired. The tree and item definitions are now
+  refreshed from the new manifest on the next request, while the player's
+  collection progress — which is fetched from Bungie and unaffected by a manifest
+  change — is kept, so the refresh costs no additional Bungie requests.
+- Fixed "Do This Today" vendor rows keeping item names and types from the previous
+  manifest until the next daily reset.
+- Reduced log noise: an index rebuild that briefly overlaps a manifest update is an
+  expected, self-correcting condition and is no longer recorded as an error.
+
 ## [0.3.55] - 2026-08-09
 
 ### Fixed

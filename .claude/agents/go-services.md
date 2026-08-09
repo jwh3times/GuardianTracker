@@ -11,7 +11,8 @@ You are working inside the Guardian Tracker Go backend. There is **one** service
 
 ```
 backend/api-service/
-  main.go                              ← Gin router, slog/request middleware, dependency wiring, manifest startup + swap hooks
+  main.go                              ← Gin router, slog/request middleware, dependency wiring, manifest startup +
+                                           swap participant/observer registration
   config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
   auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
   auth/middleware.go                   ← JWT middleware for protected routes
@@ -41,27 +42,33 @@ backend/api-service/
   api/handlers/common.go               ← Shared handler helpers (parseMembershipParams, ownershipCheck…)
   services/bungie/client.go            ← HTTP client with rate limiting + retry
   services/bungie/manifest.go          ← Manifest download, version tracking, SQLite extraction;
-                                           RegisterSwapHooks for before/after file-rename callbacks
+                                           RegisterParticipant/RegisterObserver coordinate the file swap
+                                           (see "Manifest repository, provider, and swap seam" below)
   services/bungie/types.go             ← All Bungie API types, constants, helpers
   services/collections/service.go      ← Collection analysis + difficulty classification + cosmetics;
                                            uses ManifestRepo interface (satisfied by *manifest.Provider)
   services/characters/service.go       ← Character fetching; InvalidateCache method
   services/items/service.go            ← Cached weapon-perks lookup (GetWeaponPerks), item-view lookup
                                            (GetItem), and catalyst-pool lookup (GetCatalysts); all three caches
-                                           cleared by InvalidateCache on manifest swap
+                                           cleared by InvalidateCache, called from OnVersionChanged (ManifestObserver)
   services/manifest/repository.go      ← SQLite read-only queries against manifest DB
-  services/manifest/provider.go        ← Shared lazy-opening repository; CloseForSwap/Reopen for
-                                           hourly manifest swap; satisfies all consumer ManifestRepo interfaces
+  services/manifest/provider.go        ← Shared lazy-opening repository; implements bungie.SwapParticipant
+                                           (CloseForSwap/Reopen) for the hourly manifest swap; satisfies all
+                                           consumer ManifestRepo interfaces
   services/weekly/service.go           ← Weekly recommendations; Xûr inventory + XurItemHashes();
-                                           milestone data; reset time math; ManifestRepo interface
+                                           milestone data; reset time math; ManifestRepo interface;
+                                           bungie.ManifestObserver
   services/weekly/availability.go      ← LiveVendorItemHashes: best-effort all-rotating-vendor item
                                            availability (Xûr, Banshee-44, Ada-1, ritual vendors) for wishlist
   services/search/service.go           ← Manifest item search index with versioned disk snapshots; opens its
                                            own SQLite handle on the manifest (not manifest.Provider), so it
-                                           registers its own CloseForSwap/Reopen swap hook pair; async rebuild
-                                           on update, aborted mid-scan if a swap starts
+                                           registers itself as its own bungie.SwapParticipant (CloseForSwap/
+                                           Reopen) in addition to being a bungie.ManifestObserver
+                                           (OnVersionChanged kicks BuildIndex); async rebuild on update,
+                                           aborted mid-scan if a swap starts
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
-                                           interface; InvalidateCache; WeaponTypesCacheKey
+                                           interface; InvalidateCache; OnVersionChanged (ManifestObserver)
+                                           evicts its three manifest-derived cache keys
   cache/cache.go                       ← In-memory cache (and no-op cache interface)
   db/db.go, db/migrate.go              ← Postgres pool; migration runner (each migration runs in a tx)
   db/stores.go                         ← Stores struct aggregating all store types
@@ -179,11 +186,18 @@ Each login (and callback) creates a `refresh_sessions` row; the `sid` JWT claim 
 
 Events persisted to `audit_log`: login, logout, logout-all, refresh failure, refresh reuse, session termination, self opt-in role changes, admin role changes, feature-flag changes. Role/flag changes are written in the mutation's transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). Client IP (validated via `TRUSTED_PROXIES`) and User-Agent are retained for `AUDIT_RETENTION_DAYS` (default 180) days; an hourly pruner removes older rows.
 
-## Manifest repository and provider
+## Manifest repository, provider, and swap seam
 
 - `services/manifest/repository.go` — raw SQLite queries. All public methods acquire `r.mu` (RWMutex); locked variants (`*Locked`) for composite operations that must hold the lock across multiple queries.
-- `services/manifest/provider.go` — single `*Provider` shared by all consumers. Opens lazily on first use; `CloseForSwap()` / `Reopen()` coordinate the hourly file swap. Returns `ErrNotReady` (503 `MANIFEST_NOT_READY`) while absent or swapping.
-- `services/bungie/manifest.go` — `RegisterSwapHooks(before, after)` fires around the file rename. **Any consumer that opens its own handle on the manifest file, rather than reading through `manifest.Provider`, must register its own `before`/`after` pair** — the provider's hooks only cover consumers that go through it. Two pairs are registered in `main.go`: the search service's (`search.Service.CloseForSwap` before, `Reopen()` + `go BuildIndex()` after — `search.Service` opens its own SQLite handle) and the provider's (`Reopen()`, evicts `records.WeaponTypesCacheKey`, `records.CatalystLinksCacheKey`, and `weekly.PublicWeeklyCacheKey`, invalidates the collections tree cache, and rebuilds the efficiency index).
+- `services/manifest/provider.go` — single `*Provider` shared by all consumers. Opens lazily on first use; implements `bungie.SwapParticipant` (`CloseForSwap()` / `Reopen() error`). Returns `ErrNotReady` (503 `MANIFEST_NOT_READY`) while absent or swapping.
+- `services/bungie/manifest.go` defines the swap seam as two interfaces. Both are registered on `*bungie.ManifestService` in `main.go`, in registration order — `manifest.Provider` is registered first, since observers may query the manifest through it — and registration must happen before the first download can fire:
+  - `SwapParticipant { CloseForSwap(); Reopen() error }` — for a module holding an OS-level handle on the manifest file. `RegisterParticipant(p)`. Registered participants: `manifest.Provider`, `search.Service` (search opens its own SQLite connection instead of sharing the Provider).
+  - `ManifestObserver { OnVersionChanged(version string) error }` — for a module holding manifest-derived state (a cache, an index). `RegisterObserver(o)`. Registered observers: `records`, `weekly`, `collections`, `items`, `search`, `efficiency`.
+  - Swap sequence: close every participant → `os.Rename` → reopen every participant → notify every observer, in that order (observers may query the already-reopened manifest). On a **failed** rename (rollback), participants are still reopened — against the still-present old file — but observers are **deliberately not notified**, because the version did not change; `Reopen` means "reopen against whatever manifest is now live", not "a new version was installed".
+  - A failing participant or observer is logged (with its `%T` type) and the loop continues rather than aborting — aborting would strand later registrants closed.
+  - **Any new module that opens its own handle on the manifest file must register as a `SwapParticipant`**, or `os.Rename` runs under its open handle (fails outright on Windows; serves a deleted inode on Linux). Any module holding manifest-derived state should register as a `ManifestObserver` instead of relying on an ad hoc eviction call from `main.go`.
+- `services/collections/service.go` is an observer but does not evict its per-user cache on swap: `OnVersionChanged` drops only the shared cross-user tree; each cached `*analysis` carries a `manifestVersion` stamp, and `getAnalysis` lazily rebuilds the stale manifest-derived fields (`collectibles`/`tree`/`owned`) via `refreshManifestParts` on the next read, reusing the already-fetched (rate-limited) Bungie `collected` data. `refreshManifestParts` is copy-on-write — it returns a new `*analysis` rather than mutating the cached one, since concurrent requests share that pointer without a lock.
+- `services/weekly/service.go`'s per-character `daily:vendors:*` cache entries are scoped by manifest version (via a `versioner` dependency satisfied by `*bungie.ManifestService`) instead of being evicted on swap, so a swap orphans the old entries and they expire on their existing TTL; the underlying Bungie vendor response stays cached separately under an unversioned key, so nothing refetches from Bungie.
 
 ## Notable manifest methods
 
@@ -194,14 +208,14 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 | `GetWeaponPerks(itemHash)`            | Socket-category → plug-set → plug-item traversal yielding ordered perk columns across every weapon socket category (Intrinsic/Barrel/Magazine/Trait N/Origin plus Scope/Launcher Barrel/Battery/Stock/Blade/Guard/Arrow/Bowstring/Haft/Grip/Rail/Bolt, and a generic "Perks" fallback for unrecognized plug-category-identifiers); weapon-only (itemType 3 + weapon socket categories); `isJunkPCI` blacklist-filters kill-tracker/empty/catalyst-socket plugs (catalysts render separately via `GetWeaponCatalysts`) instead of allowlisting known categories, so no perk-bearing column is silently dropped; dedupes by name; also exposed via `services/items/service.go` cached wrapper |
 | `GetItemView(itemHash)`               | Minimal item projection (`ItemView` — name, icon, itemType, tierType, rarity, description); returns `(nil, nil)` for unknown hash; no item-type restriction (all collectible/non-collectible items); also exposed via `services/items/service.go` cached wrapper                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `GetWeaponCatalysts(itemHash)`        | Catalyst-socket plug-set traversal yielding an exotic weapon's catalyst name/description pool; `(nil, nil)` for non-weapons, non-exotics, or exotics without a detected catalyst socket; also exposed via `services/items/service.go` cached wrapper (`GetCatalysts`)                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `GetCatalystLinks()`                  | Full-manifest scan returning per-exotic-weapon catalyst text + unlock-objective hashes (`CatalystLink`); cached by `services/records` as `CatalystLinksCacheKey` for hash-first catalyst-record→weapon linkage                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `GetCatalystLinks()`                  | Full-manifest scan returning per-exotic-weapon catalyst text + unlock-objective hashes (`CatalystLink`); cached by `services/records` (evicted by its `OnVersionChanged`) for hash-first catalyst-record→weapon linkage                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Records service
 
 - `GetCatalysts / GetCrafting / GetSeals` return `([]T, time.Time, error)` — second value is `fetchedAt`
 - `Catalyst` struct has `Type` (weapon type), `Icon` (record icon), and `Effect` (catalyst-perk effect text) fields
 - `Effect` is resolved by `resolveCatalystEffect`: links the catalyst record to its weapon via `GetCatalystLinks()` objective-hash overlap first (unambiguous on both the weapon and record side), then a stripped-name match, then a catalyst-plug-name match, falling back to the record's own description and then `""`
-- `WeaponTypesCacheKey` / `CatalystLinksCacheKey` exported for eviction from the after-swap hook
+- `OnVersionChanged` (`bungie.ManifestObserver`) evicts its three manifest-derived cache keys (weapon types, exotic weapons, catalyst links) so stale labels don't outlive a swap; per-user `records:*` profile entries are untouched — they hold raw Bungie data, which a manifest swap does not invalidate
 - `InvalidateCache(membershipType, membershipId)` drops cached profile records (called by RefreshCollections)
 - `Triumph.Objectives []TriumphObjective` (`omitempty`) — per-objective drill-down built by `GetSeals`: excludes explicitly-hidden objectives (`RecordObjective.Visible *bool`; `nil` = absent = visible — a plain `bool` would decode Bungie's absent-field-means-visible default backwards), falls back to `Objective N` for a blank `progressDescription` (numbered over the objectives that survive visibility filtering), normalizes a zero `completionValue` to `Max=1`, and forces `Done=true`/`Cur==Max` on every objective when the parent record is redeemed regardless of stale objective payloads. The existing top-level `Triumph.Cur`/`Max` is unchanged for response compatibility.
 
@@ -218,7 +232,7 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh failure, ref
 
 ## Weekly service
 
-- `PublicWeeklyCacheKey` (`"weekly:public"`) exported for eviction from the after-swap hook — its milestone names and reward labels resolve through the manifest (mirrors `records.WeaponTypesCacheKey`)
+- `OnVersionChanged` (`bungie.ManifestObserver`) evicts the cached global weekly payload, whose milestone names and reward labels resolve through the manifest; per-character `daily:vendors:*` entries need no eviction call — their key is scoped by manifest version (see "Manifest repository, provider, and swap seam" above), so a swap orphans them automatically
 - `Weekly` struct has `ResetAt`, `FetchedAt`, `Degraded` fields
 - `Xur.Location` is optional and best-effort: character-vendor component 400 supplies
   `vendorLocationIndex`, the manifest resolves its destination, and the known Last City

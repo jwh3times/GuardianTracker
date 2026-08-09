@@ -44,6 +44,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 - All manifest consumers must use `*manifest.Provider` (or its interface) — never open a `*manifest.Repository` directly in a handler or service after startup. Flag code that calls `manifest.NewRepository()` outside of `manifest.Provider`.
 - Flag service constructors that take a concrete `*manifest.Repository` — they should accept the appropriate consumer interface (`ManifestRepo`) instead.
+- Flag any new module that opens its own OS-level handle on the manifest file without registering as a `bungie.SwapParticipant` (`main.go`'s `RegisterParticipant`) — an unregistered handle sits open across the swap's `os.Rename`, which fails outright on Windows and serves a deleted inode on Linux. Flag a module holding manifest-derived cached state that invalidates itself some other way instead of registering as a `bungie.ManifestObserver` (`RegisterObserver`).
 
 **Cache invalidation**
 

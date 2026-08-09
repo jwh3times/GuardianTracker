@@ -150,7 +150,7 @@ func (s *Service) Search(q string, limit int) []Entry {
 // BuildIndex builds the search index from the manifest SQLite database.
 // Safe to call concurrently — a concurrent call is a no-op if a build is already
 // running, and a no-op entirely while a manifest swap is in progress (the index
-// is rebuilt by the after-swap hook once the new file is installed).
+// is rebuilt by OnVersionChanged once the new file is installed).
 func (s *Service) BuildIndex() {
 	s.mu.Lock()
 	if s.building || s.swapping {
@@ -246,7 +246,7 @@ func (s *Service) BuildIndex() {
 	// A swap may have been requested since the last in-loop check. Committing
 	// here would be correct (CloseForSwap waits for the build to finish, so this
 	// still precedes the rename) but the snapshot write is wasted work the
-	// after-swap rebuild immediately supersedes.
+	// post-swap rebuild immediately supersedes.
 	if s.swapRequested() {
 		slog.Info("search index build discarded for manifest swap",
 			slog.String("manifest_version", version),
