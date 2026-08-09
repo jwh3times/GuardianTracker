@@ -37,6 +37,13 @@ type Service struct {
 	entries         []Entry
 	builtVersion    string
 	building        bool
+	// swapping is true between CloseForSwap and Reopen. BuildIndex refuses to
+	// start while set and aborts an in-flight scan, so no handle on the manifest
+	// file survives into os.Rename. Mirrors manifest.Provider's swap discipline.
+	swapping bool
+	// idle broadcasts when a build finishes, so CloseForSwap can wait for an
+	// in-flight scan to release its handle before the caller renames the file.
+	idle *sync.Cond
 }
 
 const (
@@ -44,6 +51,12 @@ const (
 	searchSnapshotSuffix = ".json.gz"
 	searchSnapshotFormat = 1
 )
+
+// swapCheckInterval is how many scanned rows pass between abort checks during a
+// build. The table holds tens of thousands of rows, so this bounds how long a
+// pending manifest swap waits on the read handle without adding a lock
+// acquisition per row.
+const swapCheckInterval = 1024
 
 type indexSnapshot struct {
 	Format  int     `json:"format"`
@@ -71,6 +84,7 @@ func NewService(ms *bungie.ManifestService, dbPath string) *Service {
 		dbPath:          dbPath,
 		snapshotDir:     filepath.Dir(dbPath),
 	}
+	s.idle = sync.NewCond(&s.mu)
 	if ms != nil && s.loadSnapshot(ms.Version()) {
 		slog.Info("search index snapshot restored",
 			slog.String("manifest_version", ms.Version()),
@@ -134,10 +148,12 @@ func (s *Service) Search(q string, limit int) []Entry {
 }
 
 // BuildIndex builds the search index from the manifest SQLite database.
-// Safe to call concurrently — a concurrent call is a no-op if a build is already running.
+// Safe to call concurrently — a concurrent call is a no-op if a build is already
+// running, and a no-op entirely while a manifest swap is in progress (the index
+// is rebuilt by the after-swap hook once the new file is installed).
 func (s *Service) BuildIndex() {
 	s.mu.Lock()
-	if s.building {
+	if s.building || s.swapping {
 		s.mu.Unlock()
 		return
 	}
@@ -147,6 +163,7 @@ func (s *Service) BuildIndex() {
 	defer func() {
 		s.mu.Lock()
 		s.building = false
+		s.idle.Broadcast()
 		s.mu.Unlock()
 	}()
 
@@ -180,7 +197,20 @@ func (s *Service) BuildIndex() {
 	defer rows.Close()
 
 	var entries []Entry
+	scanned := 0
 	for rows.Next() {
+		// Release the manifest handle promptly when a swap starts: the full scan
+		// takes seconds, and holding a read handle across os.Rename fails the
+		// rename on Windows and leaves Linux reading a deleted inode. Checking on
+		// an interval keeps the per-row cost off the hot path.
+		scanned++
+		if scanned%swapCheckInterval == 0 && s.swapRequested() {
+			slog.Info("search index build aborted for manifest swap",
+				slog.String("manifest_version", version),
+				slog.Int("rows_scanned", scanned),
+			)
+			return
+		}
 		var blob string
 		if err := rows.Scan(&blob); err != nil {
 			continue
@@ -213,6 +243,17 @@ func (s *Service) BuildIndex() {
 		return
 	}
 
+	// A swap may have been requested since the last in-loop check. Committing
+	// here would be correct (CloseForSwap waits for the build to finish, so this
+	// still precedes the rename) but the snapshot write is wasted work the
+	// after-swap rebuild immediately supersedes.
+	if s.swapRequested() {
+		slog.Info("search index build discarded for manifest swap",
+			slog.String("manifest_version", version),
+		)
+		return
+	}
+
 	s.mu.Lock()
 	s.entries = entries
 	s.builtVersion = version
@@ -227,6 +268,35 @@ func (s *Service) BuildIndex() {
 		slog.Int("item_count", len(entries)),
 		slog.String("manifest_version", version),
 	)
+}
+
+func (s *Service) swapRequested() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.swapping
+}
+
+// CloseForSwap blocks new index builds and waits for an in-flight build to
+// release its handle on the manifest database, so the caller can rename the new
+// file over it. Registered as a before-swap hook alongside
+// manifest.Provider.CloseForSwap — unlike every other manifest consumer, the
+// search service opens its own SQLite connection rather than going through the
+// shared Provider, so the Provider's hook does not cover it.
+func (s *Service) CloseForSwap() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.swapping = true
+	for s.building {
+		s.idle.Wait()
+	}
+}
+
+// Reopen re-admits index builds after a manifest swap. It does not build —
+// the after-swap hook kicks BuildIndex once the new version is installed.
+func (s *Service) Reopen() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.swapping = false
 }
 
 // loadSnapshot restores a snapshot only when its embedded manifest version

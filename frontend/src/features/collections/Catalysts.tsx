@@ -11,7 +11,7 @@ import { Icon } from "../../components/Icon";
 import { PageHead } from "../../components/composite";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "../../lib/api";
-import { errorState } from "../../lib/errorState";
+import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
 import type { Catalyst, CraftPattern } from "../../types/design";
 import type { APIRecordsEnvelope } from "../../types/api";
@@ -162,46 +162,19 @@ export function Catalysts() {
   // Surface real failures (private profile, manifest warming up, Bungie down)
   // instead of rendering an empty grid that looks like "you have nothing".
   if (catsError || craftError) {
-    const es = errorState(catsErr ?? craftErr);
     return (
       <div className="gt-page">
         <PageHead
           title="Catalysts & Crafting"
           sub="Long-grind progress, all in one place"
         />
-        <div className="gt-card">
-          <EmptyState
-            icon={es.icon}
-            color="var(--c-text-3)"
-            title={es.title}
-            body={es.body}
-            action={
-              <div style={{ display: "flex", gap: "var(--s-2)" }}>
-                {es.privacyLink && (
-                  <a
-                    href="https://www.bungie.net/7/en/User/Account/Privacy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Button variant="outline" sm icon="external">
-                      Bungie privacy settings
-                    </Button>
-                  </a>
-                )}
-                <Button
-                  variant="outline"
-                  sm
-                  onClick={() => {
-                    void refetchCats();
-                    void refetchCraft();
-                  }}
-                >
-                  Retry
-                </Button>
-              </div>
-            }
-          />
-        </div>
+        <QueryErrorPanel
+          error={catsErr ?? craftErr}
+          onRetry={() => {
+            void refetchCats();
+            void refetchCraft();
+          }}
+        />
       </div>
     );
   }

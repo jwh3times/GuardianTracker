@@ -421,3 +421,53 @@ describe("WishList bulk actions", () => {
     expect(await screen.findByText("Banshee-44")).toBeInTheDocument();
   });
 });
+
+// Regression: `data` defaults to [] on failure, so a failed fetch fell straight
+// through to the empty state and told the user their wishlist was empty —
+// inviting them to start over on data that was merely unreachable.
+describe("WishList failure states", () => {
+  it("reports a failed fetch instead of claiming the wishlist is empty", async () => {
+    server.use(
+      http.get(`${API}/api/wishlist`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+
+    expect(await screen.findByText(/couldn't load data/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/your wishlist is empty/i),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /browse collections/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers the privacy affordance when Bungie privacy blocks the fetch", async () => {
+    server.use(
+      http.get(`${API}/api/wishlist`, () =>
+        HttpResponse.json(
+          { error: "private", code: "PRIVACY_RESTRICTION" },
+          { status: 403 },
+        ),
+      ),
+    );
+    renderPage(<WishList />, "/wishlist");
+
+    expect(
+      await screen.findByText(/your destiny profile is private/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /bungie privacy settings/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("still shows the empty state when the fetch genuinely returns nothing", async () => {
+    server.use(http.get(`${API}/api/wishlist`, () => HttpResponse.json([])));
+    renderPage(<WishList />, "/wishlist");
+
+    expect(
+      await screen.findByText(/your wishlist is empty/i),
+    ).toBeInTheDocument();
+  });
+});

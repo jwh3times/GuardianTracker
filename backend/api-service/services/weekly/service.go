@@ -629,9 +629,15 @@ func (s *Service) buildRecommended(pub *publicWeeklyCache, missing, wishlist map
 	return actions
 }
 
+// PublicWeeklyCacheKey holds the global weekly payload, whose milestone names
+// and reward labels are resolved through the manifest. Exported so the manifest
+// swap hook can evict it — otherwise it serves stale labels until the weekly
+// reset. Mirrors the records package's manifest-derived cache keys.
+const PublicWeeklyCacheKey = "weekly:public"
+
 // getPublicWeekly builds or retrieves the cached global weekly payload.
 func (s *Service) getPublicWeekly(ctx context.Context, now time.Time) (*publicWeeklyCache, error) {
-	const cacheKey = "weekly:public"
+	const cacheKey = PublicWeeklyCacheKey
 	if cached, ok := s.cache.Get(cacheKey); ok {
 		if p, ok := cached.(*publicWeeklyCache); ok {
 			return p, nil

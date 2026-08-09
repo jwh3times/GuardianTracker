@@ -210,6 +210,24 @@ describe("AppShell interactions", () => {
     ).toBeInTheDocument();
   });
 
+  // Regression: a failed search rendered the same "No items match" text as a
+  // genuinely empty result, so an outage looked like a bad search term.
+  it("distinguishes a failed search from a no-match search", async () => {
+    server.use(
+      http.get(`${API}/api/items/search`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderShell();
+    fireEvent.change(screen.getByPlaceholderText("Search items…"), {
+      target: { value: "zzz" },
+    });
+    expect(
+      await screen.findByText(/search unavailable/i, {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/No items match/)).not.toBeInTheDocument();
+  });
+
   it("labels the icon-only controls", () => {
     renderShell();
     expect(

@@ -36,6 +36,26 @@ describe("CosmeticTile", () => {
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "1" }));
   });
 
+  it("flags an item a vendor is selling, but only when not already collected", () => {
+    const onSale = { ...item, obtainable: true, availFrom: "Xûr" };
+
+    const { unmount } = render(
+      <CosmeticTile item={{ ...onSale, collected: false }} onOpen={() => {}} />,
+    );
+    expect(screen.getByRole("button")).toHaveAttribute(
+      "title",
+      "Calus Selected — available now from Xûr",
+    );
+    unmount();
+
+    // Already owned: nothing to act on, so no badge and no availability title.
+    render(<CosmeticTile item={onSale} onOpen={() => {}} />);
+    expect(screen.getByRole("button")).toHaveAttribute(
+      "title",
+      "Calus Selected",
+    );
+  });
+
   it("renders the Bungie CDN icon image when the item has an icon", () => {
     const { container } = render(
       <CosmeticTile

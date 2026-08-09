@@ -122,4 +122,33 @@ describe("cosmeticItems", () => {
     expect(groups.get("Finisher")).toHaveLength(1);
     expect(groups.has("Hand Cannon")).toBe(false);
   });
+
+  // Regression: this join previously set `collected` and nothing else, so a
+  // cosmetic a vendor was actively selling carried obtainable=false — the
+  // "Available now" affordance never appeared on /cosmetics even though the
+  // identical item showed it on /collections.
+  it("resolves live availability from availableNow", () => {
+    const withVendor = {
+      ...data,
+      availableNow: { "101": "Xûr", "102": "Ada-1" },
+    } as unknown as APIUserCollections;
+
+    const items = cosmeticItems(withVendor);
+    const byId = new Map(items.map((i) => [i.id, i]));
+
+    expect(byId.get("101")?.obtainable).toBe(true);
+    expect(byId.get("101")?.availFrom).toBe("Xûr");
+    expect(byId.get("102")?.obtainable).toBe(true);
+    expect(byId.get("102")?.availFrom).toBe("Ada-1");
+
+    // Not on sale → not obtainable, and no phantom vendor.
+    expect(byId.get("100")?.obtainable).toBe(false);
+    expect(byId.get("100")?.availFrom).toBeUndefined();
+  });
+
+  it("treats a missing availableNow map as nothing on sale", () => {
+    const items = cosmeticItems(data);
+    expect(items.every((i) => i.obtainable === false)).toBe(true);
+    expect(items.every((i) => i.availFrom === undefined)).toBe(true);
+  });
 });

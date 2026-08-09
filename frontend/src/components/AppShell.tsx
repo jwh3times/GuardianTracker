@@ -195,7 +195,11 @@ function SearchBar() {
     return () => document.removeEventListener("click", h);
   }, []);
 
-  const { data: results = [], isLoading: searching } = useQuery({
+  const {
+    data: results = [],
+    isLoading: searching,
+    isError: searchFailed,
+  } = useQuery({
     queryKey: ["search", debouncedQ],
     queryFn: () =>
       apiFetch<APISearchResult[]>(
@@ -224,6 +228,11 @@ function SearchBar() {
         <div className="gt-search-menu">
           {searching ? (
             <div className="gt-search-empty mono">Searching…</div>
+          ) : searchFailed ? (
+            // A one-line message rather than the shared QueryErrorPanel: a
+            // gt-card with an icon, body and two buttons would break this
+            // dropdown's layout.
+            <div className="gt-search-empty mono">Search unavailable</div>
           ) : results.length ? (
             results.slice(0, 6).map((i) => (
               <button
