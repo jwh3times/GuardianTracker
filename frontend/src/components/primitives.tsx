@@ -7,7 +7,7 @@ import {
   RARITY_LABEL,
   TYPE_GLYPH,
 } from "../lib/constants";
-import { relTime } from "../lib/adapters";
+import { relTime } from "../lib/format";
 
 /** Allow CSS custom properties in inline styles without fighting the type. */
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;

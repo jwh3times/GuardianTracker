@@ -13,14 +13,17 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
   return {
     ...actual,
+    // This mock bypasses collectionsQuery's `select`, so it must supply the
+    // adapted view shape directly: summary is an ordered array of
+    // { count: [collected, total] }, not the raw four-key record.
     useQuery: () => ({
       data: {
-        summary: {
-          weapons: { total: 10, collected: 7 },
-          armor: { total: 8, collected: 8 },
-          exotics: { total: 5, collected: 4 },
-          cosmetics: { total: 12, collected: 9 },
-        },
+        summary: [
+          { id: "weapons", label: "Weapons", pct: 70, count: [7, 10] },
+          { id: "armor", label: "Armor", pct: 100, count: [8, 8] },
+          { id: "exotics", label: "Exotics", pct: 80, count: [4, 5] },
+          { id: "cosmetics", label: "Cosmetics", pct: 75, count: [9, 12] },
+        ],
       },
     }),
   };

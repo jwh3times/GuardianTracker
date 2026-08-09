@@ -13,6 +13,19 @@ request.
 
 No unreleased changes.
 
+## [0.3.59] - 2026-08-09
+
+### Changed
+
+- The collections data the app fetches — the category tree, every item's detail,
+  what the player owns, and what a vendor is selling right now — is now assembled
+  in one place before any page sees it. Five pages previously read it raw and
+  three of them combined those pieces themselves; the copies drifted, which is
+  what left the Cosmetics gallery unable to show "Available now" until it was
+  fixed by hand last release. Combining them once means a page cannot get a
+  half-complete item, and the pages that only need progress totals can no longer
+  ask for item data that their request never included. No user-visible change.
+
 ## [0.3.58] - 2026-08-09
 
 ### Changed

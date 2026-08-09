@@ -11,7 +11,8 @@ import { usePreferences } from "../../contexts/PreferencesContext";
 import { useToast } from "../../components/Toast";
 import { apiFetch, ApiError } from "../../lib/api";
 import { collectionsQuery } from "../../lib/queries";
-import { relTime, toCharacter } from "../../lib/adapters";
+import { toCharacter } from "../../lib/adapters";
+import { relTime } from "../../lib/format";
 import { MIN_TIERS, ROLE_LABEL, roleColor, type Tier } from "../../lib/roles";
 import type {
   APICharacter,
@@ -80,7 +81,7 @@ export function Settings() {
   // the Collections page's missing view, so this is free once any of them has
   // loaded. Supplies real fetchedAt (B8).
   const { data: collections } = useQuery(
-    collectionsQuery(user?.membershipType, user?.membershipId, false),
+    collectionsQuery(user?.membershipType, user?.membershipId),
   );
 
   const queryClient = useQueryClient();

@@ -72,13 +72,36 @@ frontend/src/
   lib/
     api.ts                     ← apiFetch helper + ApiError (status/code/retryAfter) + QueryClient;
                                    API_URL exported; all REST calls go through apiFetch
-    adapters.ts                ← API response types → design GTItem/WishlistEntry; relTime (guards zero-time);
-                                   toGTItemView(APIItemView) — maps a manifest-only item view to a view-only GTItem
+    collectionsView.ts         ← The sole adapter for the collections payload (APIUserCollections → design
+                                   types). toCollectionsSummary(raw) returns CollectionsSummaryView (roots,
+                                   rootHashes, summary, overallPct, fetchedAt, node(), pathToNode()) for the
+                                   counts-only payload; toCollections(raw) returns CollectionsView, which adds
+                                   the item surface (itemByHash, itemsUnder, allItems, pathToItem) that only the
+                                   `?include=all` payload supports. Two view types on purpose: a single view
+                                   returning `[]` for items on the lighter payload would make "no items" and
+                                   "wrong variant" indistinguishable, so the counts-only view has no item
+                                   surface and the compiler enforces it. The item join (detail + collectedHashes
+                                   + availableNow) happens once here, in a private toItem() — this is where the
+                                   types/api.ts → types/design.ts wire-to-domain split is actually enforced for
+                                   this payload; no feature module sees APIUserCollections or builds a GTItem
+                                   from it directly.
+    adapters.ts                ← API response types → design Character/GTItem(view-only)/WishlistEntry:
+                                   toCharacter, toGTItemView(APIItemView) — maps a manifest-only item view to a
+                                   view-only GTItem, toWishlistEntry. toGTItem is NOT exported here — collection
+                                   items only ever come from collectionsView.ts, which alone can join ownership
+                                   and availability.
+    format.ts                  ← relTime (guards zero-time)
     constants.ts               ← Label constants (RARITIES, glyphs) + BUNGIE_CDN base URL
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
-    queries.ts                 ← collectionsQuery() — shared React Query definition used by multiple pages;
+    queries.ts                 ← collectionsQuery(membershipType, membershipId) — counts-only collections
+                                   query (select: toCollectionsSummary), used by Dashboard, Settings, and
+                                   OnboardingTour; collectionsFullQuery(membershipType, membershipId) — full
+                                   collections query with items (select: toCollections), used by Collections
+                                   and Cosmetics. Two functions rather than a boolean flag because the variants
+                                   return different view types (see lib/collectionsView.ts); cache keys are
+                                   unchanged: ["collections", type, id, "all" | "missing"].
                                    itemPerksQuery(itemHash) — lazy perk-pool fetch (staleTime: Infinity);
                                    itemByHashQuery(itemHash) — minimal item view for deep-link miss resolution
                                    (staleTime: Infinity, retry: false)
@@ -111,13 +134,14 @@ frontend/src/
                                  and tests — all flat at the feature root (no pages/, components/kit/,
                                  or lib/ subfolders)
     auth/                      ← Login.tsx (OAuth initiation), OAuthCallback.tsx (code exchange)
-    collections/               ← Collections.tsx (tree + grid/list + detail drawer; ?include=all for
-                                   collected items; search deep-link ?item=<hash>; add/remove wishlist),
+    collections/               ← Collections.tsx (tree + grid/list + detail drawer via collectionsFullQuery;
+                                   search deep-link ?item=<hash>; add/remove wishlist; the sidebar tree, node
+                                   lookups, and the item join all come from lib/collectionsView.ts — this page
+                                   only renders them),
                                    Catalysts.tsx (cards render `effect` text when present; "complete" status
                                    shows a full progress bar instead of "Not yet acquired"), Triumphs.tsx
                                    ({ items, fetchedAt } envelopes),
                                    ItemCard.tsx (collection-only item card),
-                                   collectionTree.ts (API node → TreeNode adapters, collection-specific),
                                    useCollectionsFilters.ts (URL-sourced filter/category state — see
                                    "Collections page features" below)
     cosmetics/                 ← browsable /cosmetics gallery (Road to v1 §1). Cosmetics.tsx (type tabs +
@@ -127,9 +151,9 @@ frontend/src/
                                    CosmeticsGrid.tsx (virtualized tile grid via @tanstack/react-virtual),
                                    CosmeticDetail.tsx (dedicated view-only drawer — shared ItemDetailDrawer
                                    left untouched — + the same "Available now — <vendor>" affordance),
-                                   cosmeticItems.ts (classify by itemType + group; joins `obtainable` and
-                                   `availFrom` from the collections payload's `availableNow`, since
-                                   `toGTItem` hardcodes both false), cosmeticBuckets.ts
+                                   cosmeticItems.ts (filters lib/collectionsView.ts's already-joined
+                                   `allItems()` down to cosmetic itemTypes — the ownership/availability join
+                                   lives in the adapter, not here), cosmeticBuckets.ts
                                    (COSMETIC_TYPES: Emblem/Shader/Ghost/Ship/Sparrow/Emote/Ornament/Finisher)
     onboarding/                ← account-backed first-run welcome + three-step guided tour
     wishlist/WishList.tsx      ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
@@ -140,7 +164,7 @@ frontend/src/
                                    admin-gated route), AdminKit.tsx (RoleBadge, Switch, RoleSelect,
                                    TierSegment, FlagCard, UserRow, LockedFeature), AuditTable.tsx
                                (Tests colocate per feature, e.g. features/dashboard/Dashboard.test.tsx,
-                                features/collections/collectionTree.test.ts.)
+                                features/collections/Collections.test.tsx.)
   types/
     api.ts                     ← API response types (APIUser, AuthTokenResponse, WishListItem with
                                    icon/availableNow/availableFrom, APIUserCollections with fetchedAt,
@@ -172,6 +196,8 @@ Deleted files / paths (do not reference):
 - `frontend/src/lib/apollo.ts`
 - `frontend/src/lib/mockData.ts`
 - `frontend/src/graphql/` directory
+- `frontend/src/features/collections/collectionTree.ts` and its test — the three helpers
+  (`apiNodeToTreeNode`, `gatherItemHashes`, `findNodePath`) are folded into `lib/collectionsView.ts`
 
 ## Data fetching
 
@@ -197,7 +223,8 @@ const { data } = useQuery({
 
 `lib/queries.ts` exports:
 
-- `collectionsQuery(membershipType, membershipId, includeAll?)` — canonical React Query definition for the collections endpoint; Dashboard, Settings, and Collections all use it so they share a single cache entry per (membership, variant) instead of firing separate requests.
+- `collectionsQuery(membershipType, membershipId)` — the counts-only collections query (`select: toCollectionsSummary` from `lib/collectionsView.ts`); Dashboard, Settings, and OnboardingTour all use it so they share a single cache entry per membership instead of firing separate requests.
+- `collectionsFullQuery(membershipType, membershipId)` — the full collections query with items (`select: toCollections`); used by Collections and Cosmetics. A separate function rather than a boolean `includeAll` parameter because the two variants return different view types — asking the counts-only view for items is a compile error, not an empty array. Cache keys are unchanged: `["collections", type, id, "all" | "missing"]`.
 - `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
 - `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
 

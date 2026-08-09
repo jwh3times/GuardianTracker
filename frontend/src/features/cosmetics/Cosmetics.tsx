@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, Skeleton } from "../../components/primitives";
 import { useAuth } from "../../contexts/AuthContext";
 import { errorState } from "../../lib/errorState";
-import { collectionsQuery } from "../../lib/queries";
+import { collectionsFullQuery } from "../../lib/queries";
 import { COSMETIC_TYPES } from "./cosmeticBuckets";
 import { cosmeticItems, groupByType } from "./cosmeticItems";
 import { CosmeticsGrid } from "./CosmeticsGrid";
@@ -24,7 +24,7 @@ const FILTERS: Filter[] = ["all", "owned", "missing"];
 export function Cosmetics() {
   const { user } = useAuth();
   const { data, isLoading, isError, error, refetch } = useQuery(
-    collectionsQuery(user?.membershipType, user?.membershipId, true),
+    collectionsFullQuery(user?.membershipType, user?.membershipId),
   );
 
   const items = useMemo(() => (data ? cosmeticItems(data) : []), [data]);

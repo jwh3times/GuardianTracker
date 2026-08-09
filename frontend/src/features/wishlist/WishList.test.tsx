@@ -200,7 +200,10 @@ describe("WishList bulk actions", () => {
           action: string;
           ids: number[];
         };
-        await delay(100);
+        // Wide enough that the optimistic assertion below cannot lose a race
+        // to it under a loaded parallel suite or coverage instrumentation.
+        // Nothing waits on this delay, so it costs the suite no wall-clock.
+        await delay(2000);
         postResolved = true;
         if (body.action === "delete") {
           items = items.filter((i) => !body.ids.includes(Number(i.id)));
