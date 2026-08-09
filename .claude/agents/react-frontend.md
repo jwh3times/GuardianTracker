@@ -70,6 +70,10 @@ frontend/src/
                                    flag-gated nav + admin nav link
     Brand.tsx                  ← Logo mark
     ErrorBoundary.tsx          ← App-wide error boundary
+    QueryErrorPanel.tsx        ← Shared failed-fetch panel: errorState() copy + icon, the Bungie privacy
+                                   link on PRIVACY_RESTRICTION, and a Retry button wired to the query's
+                                   refetch; renders a gt-card, so it fits a page/panel slot — use it for
+                                   any new view's fetch-error branch instead of a one-off empty state
     Icon.tsx                   ← single-path line-icon set
     primitives.tsx             ← Badge, Button, ProgressBar, RadialProgress, StatTile, EmptyState,
                                    Textarea, FilterChip, CountdownChip, DataFreshnessChip, Skeleton…
@@ -100,10 +104,14 @@ frontend/src/
                                    "Collections page features" below)
     cosmetics/                 ← browsable /cosmetics gallery (Road to v1 §1). Cosmetics.tsx (type tabs +
                                    owned/missing/all filter over ?include=all data), CosmeticTile.tsx
-                                   (image-forward tile + owned/missing state), CosmeticsGrid.tsx
-                                   (virtualized tile grid via @tanstack/react-virtual), CosmeticDetail.tsx
-                                   (dedicated view-only drawer — shared ItemDetailDrawer left untouched),
-                                   cosmeticItems.ts (classify by itemType + group), cosmeticBuckets.ts
+                                   (image-forward tile + owned/missing state + "Available now" Badge,
+                                   same obtainable-and-not-collected rule as Collections' ItemCard),
+                                   CosmeticsGrid.tsx (virtualized tile grid via @tanstack/react-virtual),
+                                   CosmeticDetail.tsx (dedicated view-only drawer — shared ItemDetailDrawer
+                                   left untouched — + the same "Available now — <vendor>" affordance),
+                                   cosmeticItems.ts (classify by itemType + group; joins `obtainable` and
+                                   `availFrom` from the collections payload's `availableNow`, since
+                                   `toGTItem` hardcodes both false), cosmeticBuckets.ts
                                    (COSMETIC_TYPES: Emblem/Shader/Ghost/Ship/Sparrow/Emote/Ornament/Finisher)
     onboarding/                ← account-backed first-run welcome + three-step guided tour
     wishlist/WishList.tsx      ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
@@ -163,6 +171,8 @@ const { data } = useQuery({
 **Never call `fetch()` directly** for API operations (except the OAuth callback flow which has no token yet). The `apiFetch` helper handles token injection, 401 refresh, and error shaping.
 
 `ApiError` carries `.status` (HTTP status) and `.code` (backend machine-readable code). Use `errorState(error)` from `lib/errorState.ts` to map errors to UI copy — it branches on `PRIVACY_RESTRICTION`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`.
+
+**Every view that renders a `useQuery` result must have an `isError` branch that renders `<QueryErrorPanel error={...} onRetry={refetch} />`.** A failed fetch must never fall through to the same-looking empty state as "you have zero of these" — that gap previously shipped on WishList, Admin, This Week, and header search. The one narrow exception is a dropdown-style menu (header search) where a `gt-card` panel would break the container's layout; use a one-line message there instead, matching `AppShell.tsx`'s `SearchBar`.
 
 ## Shared query definitions
 

@@ -10,6 +10,7 @@ import {
   XurModule,
 } from "../../components/composite";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
+import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
 import { apiFetch } from "../../lib/api";
@@ -52,7 +53,13 @@ export function ThisWeek() {
 
   const characterID = activeCharacter?.id;
 
-  const { data: w, isLoading } = useQuery({
+  const {
+    data: w,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["weekly", characterID ?? null],
     queryFn: () =>
       apiFetch<Weekly>(
@@ -106,6 +113,22 @@ export function ThisWeek() {
         }}
       >
         <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  // Without this the page renders "0/0 done" over empty Xûr and milestone
+  // panels, which reads as a quiet week rather than a failed fetch.
+  if (isError) {
+    return (
+      <div className="gt-page" data-onboarding-target="this-week">
+        <PageHead title="This Week" sub="Weekly activities" />
+        <QueryErrorPanel
+          error={error}
+          onRetry={() => {
+            void refetch();
+          }}
+        />
       </div>
     );
   }

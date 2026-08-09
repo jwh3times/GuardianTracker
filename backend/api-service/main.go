@@ -204,6 +204,18 @@ func main() {
 	// reopen + rebuild the search index after the new version is installed, and
 	// evict manifest-derived caches (e.g. weapon types and the collections tree)
 	// so they don't serve stale data until their TTL expires (B10).
+	// The search service opens its own SQLite handle on the manifest rather than
+	// going through manifestProvider, so the provider's hook does not cover it and
+	// it needs its own swap participation: block/abort builds before the rename,
+	// then re-admit and rebuild. Registered as one hook pair so Reopen can never
+	// be ordered after the rebuild it enables.
+	manifestService.RegisterSwapHooks(
+		searchService.CloseForSwap,
+		func(version string) {
+			searchService.Reopen()
+			go searchService.BuildIndex()
+		},
+	)
 	manifestService.RegisterSwapHooks(
 		manifestProvider.CloseForSwap,
 		func(version string) {
@@ -213,8 +225,8 @@ func main() {
 			appCache.Delete(records.WeaponTypesCacheKey)
 			appCache.Delete(records.ExoticWeaponsCacheKey)
 			appCache.Delete(records.CatalystLinksCacheKey)
+			appCache.Delete(weekly.PublicWeeklyCacheKey)
 			collectionsService.InvalidateTreeCache()
-			go searchService.BuildIndex()
 			go efficiencyEngine.BuildIndex()
 		},
 	)

@@ -49,4 +49,24 @@ describe("CosmeticDetail", () => {
     fireEvent.keyDown(document.body, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("names the vendor selling an uncollected item", () => {
+    render(
+      <CosmeticDetail
+        item={{ ...item, collected: false, obtainable: true, availFrom: "Xûr" }}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText("Available now — Xûr")).toBeInTheDocument();
+  });
+
+  it("omits availability for an item the player already owns", () => {
+    render(
+      <CosmeticDetail
+        item={{ ...item, collected: true, obtainable: true, availFrom: "Xûr" }}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByText(/available now/i)).not.toBeInTheDocument();
+  });
 });

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { GTItem } from "../../types/design";
-import { ItemTile, Button } from "../../components/primitives";
+import { Badge, ItemTile, Button } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
 
 export function CosmeticDetail({
@@ -53,6 +53,17 @@ export function CosmeticDetail({
             </div>
           </div>
         </div>
+        {item.obtainable && !item.collected && (
+          <div className="gt-drawer-avail">
+            <Badge kind="avail-now" dot icon="bolt" lg />
+            <span>
+              {item.availFrom
+                ? `Available now — ${item.availFrom}`
+                : "Obtainable right now."}
+            </span>
+          </div>
+        )}
+
         {item.desc && <p className="gt-drawer-desc">{item.desc}</p>}
         <div className="gt-drawer-actions">
           <Button

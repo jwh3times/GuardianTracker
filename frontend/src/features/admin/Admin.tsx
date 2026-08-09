@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuditTable } from "./AuditTable";
 import { EmptyState, FilterChip, StatTile } from "../../components/primitives";
 import { PageHead } from "../../components/composite";
+import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { Icon } from "../../components/Icon";
 import { FlagCard, UserRow } from "./AdminKit";
 import { useToast } from "../../components/Toast";
@@ -222,6 +223,15 @@ export function Admin() {
               <div style={{ padding: "var(--s-6)" }}>
                 <EmptyState icon="users" title="Loading members…" />
               </div>
+            ) : usersQuery.isError ? (
+              // Without this branch a failed /api/admin/users renders "No
+              // members match" — an empty roster reads as a filter problem.
+              <QueryErrorPanel
+                error={usersQuery.error}
+                onRetry={() => {
+                  void usersQuery.refetch();
+                }}
+              />
             ) : filtered.length === 0 ? (
               <div style={{ padding: "var(--s-6)" }}>
                 <EmptyState
@@ -276,6 +286,13 @@ export function Admin() {
           </div>
           {flagsQuery.isLoading ? (
             <EmptyState icon="flag" title="Loading feature flags…" />
+          ) : flagsQuery.isError ? (
+            <QueryErrorPanel
+              error={flagsQuery.error}
+              onRetry={() => {
+                void flagsQuery.refetch();
+              }}
+            />
           ) : (
             <div className="gt-flag-grid">
               {flags.map((f) => (

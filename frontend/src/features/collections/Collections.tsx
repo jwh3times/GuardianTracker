@@ -21,7 +21,7 @@ import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { apiFetch } from "../../lib/api";
-import { errorState } from "../../lib/errorState";
+import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import {
   collectionsQuery,
   itemPerksQuery,
@@ -140,7 +140,6 @@ export function Collections() {
   const {
     data: collections,
     isLoading: loading,
-    isError,
     error,
     refetch,
   } = useQuery(collectionsQuery(membershipType, membershipId, true));
@@ -391,8 +390,6 @@ export function Collections() {
   const collected = activeNode?.collected ?? 0;
   const missing = Math.max(total - collected, 0);
 
-  const errState = errorState(error);
-
   return (
     <div
       className="gt-page gt-collections"
@@ -548,38 +545,12 @@ export function Collections() {
               ))}
             </div>
           ) : !hasReal ? (
-            <div className="gt-card">
-              <EmptyState
-                icon={errState.icon}
-                color="var(--c-text-3)"
-                title={errState.title}
-                body={errState.body}
-                action={
-                  <div style={{ display: "flex", gap: "var(--s-2)" }}>
-                    {isError && errState.privacyLink && (
-                      <a
-                        href="https://www.bungie.net/7/en/User/Account/Privacy"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <Button variant="outline" sm icon="external">
-                          Bungie privacy settings
-                        </Button>
-                      </a>
-                    )}
-                    <Button
-                      variant="outline"
-                      sm
-                      onClick={() => {
-                        void refetch();
-                      }}
-                    >
-                      Retry
-                    </Button>
-                  </div>
-                }
-              />
-            </div>
+            <QueryErrorPanel
+              error={error}
+              onRetry={() => {
+                void refetch();
+              }}
+            />
           ) : items.length === 0 ? (
             <div className="gt-card">
               <EmptyState

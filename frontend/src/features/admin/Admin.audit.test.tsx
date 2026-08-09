@@ -138,3 +138,32 @@ describe("Admin Audit panel", () => {
     );
   });
 });
+
+// Regression: a failed /api/admin/users rendered "No members match. Try a
+// different search or role filter." — an outage disguised as a filter problem,
+// on the one screen where an admin most needs to trust what they see.
+describe("Admin failure states", () => {
+  it("reports a failed member fetch instead of an empty roster", async () => {
+    server.use(
+      http.get(`${API}/api/admin/users`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderAdmin();
+
+    expect(await screen.findByText(/couldn't load data/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no members match/i)).not.toBeInTheDocument();
+  });
+
+  it("reports a failed flag fetch on the Flags tab", async () => {
+    server.use(
+      http.get(`${API}/api/admin/flags`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderAdmin();
+    fireEvent.click(screen.getByText(/Feature Flags/i));
+
+    expect(await screen.findByText(/couldn't load data/i)).toBeInTheDocument();
+  });
+});

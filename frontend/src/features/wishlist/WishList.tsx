@@ -12,6 +12,7 @@ import { Dropdown, PageHead } from "../../components/composite";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
+import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { apiFetch } from "../../lib/api";
 import { toWishlistEntry } from "../../lib/adapters";
 import type { WishListItem } from "../../types/api";
@@ -37,7 +38,13 @@ export function WishList() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNotes, setDraftNotes] = useState("");
 
-  const { data: rawItems = [], isLoading } = useQuery({
+  const {
+    data: rawItems = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["wishlist"],
     queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
   });
@@ -241,6 +248,23 @@ export function WishList() {
         >
           <LoadingSpinner />
         </div>
+      </div>
+    );
+  }
+
+  // Must precede the empty-state branch: `data` defaults to [] on failure, so a
+  // failed fetch would otherwise render "Your wishlist is empty" and invite the
+  // user to start over.
+  if (isError) {
+    return (
+      <div className="gt-page">
+        <PageHead title="Wishlist" />
+        <QueryErrorPanel
+          error={error}
+          onRetry={() => {
+            void refetch();
+          }}
+        />
       </div>
     );
   }

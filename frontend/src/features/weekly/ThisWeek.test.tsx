@@ -295,3 +295,33 @@ describe("ThisWeek page", () => {
     await waitFor(() => expect(requestedCharacters).toContain("char-warlock"));
   });
 });
+
+// Regression: a failed weekly fetch rendered the full page with "0/0 done" and
+// empty Xûr and milestone panels — indistinguishable from a quiet week.
+describe("ThisWeek failure states", () => {
+  it("reports a failed fetch instead of rendering an empty week", async () => {
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderPage(<ThisWeek />);
+
+    expect(await screen.findByText(/couldn't load data/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0\/0 done/i)).not.toBeInTheDocument();
+  });
+
+  it("explains a warming-up manifest rather than showing nothing", async () => {
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json(
+          { error: "not ready", code: "MANIFEST_NOT_READY" },
+          { status: 503 },
+        ),
+      ),
+    );
+    renderPage(<ThisWeek />);
+
+    expect(await screen.findByText(/warming up/i)).toBeInTheDocument();
+  });
+});
