@@ -13,6 +13,27 @@ request.
 
 No unreleased changes.
 
+## [0.3.57] - 2026-08-09
+
+### Fixed
+
+- Fixed a page rendered outside the character context silently showing an empty
+  Guardian list instead of reporting the mistake. Three of the app's four shared
+  data contexts already failed loudly when used from the wrong place; the
+  character one returned an empty result that was indistinguishable from an
+  account with no Guardians. It now behaves like the other three. No page in the
+  app was affected — this closes a way for a future one to break quietly.
+
+### Changed
+
+- The set of shared data contexts every page runs inside is now defined in one
+  place rather than assembled by hand at each use. The arrangement is not
+  interchangeable — some contexts depend on others — and the tests had drifted
+  into ten different versions of it, none matching the app, so adding a feature
+  flag or Guardian-aware element to a page could break unrelated tests or, worse,
+  pass while shipping something broken. Tests now render pages through the same
+  arrangement the app uses. No user-visible change.
+
 ## [0.3.56] - 2026-08-09
 
 ### Changed
