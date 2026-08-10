@@ -33,7 +33,7 @@ import (
 
 // tokenRepoAdapter wraps db.BungieTokenStore to satisfy auth.TokenRepo.
 // This adapter lives in main.go to avoid an import cycle between auth and db packages.
-type tokenRepoAdapter struct{ s *db.BungieTokenStore }
+type tokenRepoAdapter struct{ s db.TokenRepo }
 
 func (a *tokenRepoAdapter) Get(ctx context.Context, membershipID string) (*auth.EncryptedTokenRecord, error) {
 	t, err := a.s.Get(ctx, membershipID)
@@ -73,7 +73,7 @@ func (a *tokenRepoAdapter) Delete(ctx context.Context, membershipID string) erro
 
 // weeklyWishlistAdapter wraps db.WishlistStore to satisfy weekly.WishlistReader.
 // This adapter lives in main.go to avoid an import cycle between weekly and db packages.
-type weeklyWishlistAdapter struct{ s *db.WishlistStore }
+type weeklyWishlistAdapter struct{ s db.WishlistRepo }
 
 func (a *weeklyWishlistAdapter) GetUserID(ctx context.Context, membershipID string) (int64, error) {
 	return a.s.GetUserID(ctx, membershipID)
@@ -142,10 +142,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Auth — pass DB repo + cipher when both are available
+	// Auth — the token repo is always wired; without a cipher there is nothing
+	// safe to persist, so that stays a real condition.
 	jwtHelper := auth.NewJWTWithTTL(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshExpiryDays)
 	var tokenRepo auth.TokenRepo
-	if stores.Tokens != nil && tokenCipher != nil {
+	if tokenCipher != nil {
 		tokenRepo = &tokenRepoAdapter{s: stores.Tokens}
 	}
 	tokenStore := auth.NewTokenStore(ctx, cfg.BungieClientID, cfg.BungieClientSecret, cfg.BungieTokenURL, tokenRepo, tokenCipher)
@@ -180,19 +181,21 @@ func main() {
 		appCache = cache.NewNoOpCache()
 	}
 
-	// Revocation checker — nil store = skip version check (degraded mode)
-	var revoker *auth.RevocationChecker
-	if stores.Users != nil {
-		revoker = auth.NewRevocationChecker(stores.Users, appCache)
+	// The revocation checker is always wired: it fails open on a store error, so
+	// in degraded mode it simply skips the version check. The pruners are gated
+	// on Available() because a background loop that can only ever fail is noise,
+	// not resilience.
+	revoker := auth.NewRevocationChecker(stores.Users, appCache)
+	if stores.Available() {
 		startSessionPruner(ctx, stores.Users)
-		if stores.Audit != nil {
-			startAuditPruner(ctx, stores.Audit, cfg.AuditRetentionDays)
-		}
+		startAuditPruner(ctx, stores.Audit, cfg.AuditRetentionDays)
 	}
 
-	// Tier gating — enabled only when a DB-backed user store is available; in
-	// degraded mode role-gated endpoints return 503 (roles are unavailable).
-	authz := auth.NewAuthz(stores.Users != nil)
+	// Tier gating. Not the same question as "would a query fail": RequireTier
+	// reads the role claim from the JWT and never touches a store. What it needs
+	// to know is whether those claims are authoritative, which they are only when
+	// roles can be read back from the database.
+	authz := auth.NewAuthz(stores.Available())
 
 	// Services — all manifest consumers share manifestProvider (lazy open,
 	// reconnects across manifest swaps).
@@ -200,10 +203,7 @@ func main() {
 	collectionsService := collections.NewService(bungieClient, manifestService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
 	// Weekly service
-	var weeklyWishlist weekly.WishlistReader
-	if stores.Wishlist != nil {
-		weeklyWishlist = &weeklyWishlistAdapter{s: stores.Wishlist}
-	}
+	weeklyWishlist := weekly.WishlistReader(&weeklyWishlistAdapter{s: stores.Wishlist})
 	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, manifestService)
 	if cfg.E2EFixedTime != nil {
 		fixedTime := *cfg.E2EFixedTime
@@ -257,54 +257,23 @@ func main() {
 	go efficiencyEngine.BuildIndex()
 
 	// Handlers
-	// Pass audit as a true-nil interface in degraded mode so handlers' nil-guards
-	// engage (a typed-nil *db.AuditStore would make `!= nil` true and panic).
-	var auditLogger handlers.AuditLogger
-	if stores.Audit != nil {
-		auditLogger = stores.Audit
-	}
+	auditLogger := handlers.AuditLogger(stores.Audit)
 	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger)
 	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore)
-	// Pass the DB pool as a true-nil interface in degraded mode so /ready's
-	// nil-guard engages (a typed-nil *pgxpool.Pool would make `!= nil` true
-	// and panic on Ping) — same trap as the audit logger above.
-	var dbPinger handlers.DBPinger
-	if pool != nil {
-		dbPinger = pool
-	}
-	healthHandler := handlers.NewHealthHandler(manifestService, dbPinger)
+	healthHandler := handlers.NewHealthHandler(manifestService, stores.Pinger)
 	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
 	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore, weeklyService)
 	itemsHandler := handlers.NewItemsHandler(itemsService)
 
-	// Roles, feature flags & admin console. In degraded mode pass true-nil stores
-	// so the handlers' nil-guards engage (vs. a typed-nil interface).
-	var accountHandler *handlers.AccountHandler
-	var adminHandler *handlers.AdminHandler
-	if stores.Users != nil {
-		accountHandler = handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger)
-		adminHandler = handlers.NewAdminHandler(stores.Users, stores.Flags, appCache)
-	} else {
-		accountHandler = handlers.NewAccountHandler(nil, nil, appCache, auditLogger)
-		adminHandler = handlers.NewAdminHandler(nil, nil, appCache)
-	}
-
-	var auditHandler *handlers.AuditHandler
-	if stores.Audit != nil {
-		auditHandler = handlers.NewAuditHandler(stores.Audit)
-	} else {
-		auditHandler = handlers.NewAuditHandler(nil)
-	}
+	// Roles, feature flags & admin console.
+	accountHandler := handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger)
+	adminHandler := handlers.NewAdminHandler(stores.Users, stores.Flags, appCache)
+	auditHandler := handlers.NewAuditHandler(stores.Audit)
 
 	// Shared flag resolver for server-side enforcement. Uses the same appCache and
 	// flags:all key as AccountHandler's resolver, so both read one cache entry
-	// (evicted together by AdminHandler.UpdateFlag). True-nil store in degraded mode.
-	var enforceFlags *handlers.FlagResolver
-	if stores.Flags != nil {
-		enforceFlags = handlers.NewFlagResolver(stores.Flags, appCache)
-	} else {
-		enforceFlags = handlers.NewFlagResolver(nil, appCache)
-	}
+	// (evicted together by AdminHandler.UpdateFlag).
+	enforceFlags := handlers.NewFlagResolver(stores.Flags, appCache)
 
 	// Router
 	router := gin.New()
@@ -423,7 +392,7 @@ func main() {
 // startSessionPruner periodically deletes expired refresh sessions so abandoned
 // sessions (never rotated, never logged out) don't accumulate. It runs until ctx is
 // cancelled at shutdown.
-func startSessionPruner(ctx context.Context, users *db.UserStore) {
+func startSessionPruner(ctx context.Context, users db.UserRepo) {
 	const interval = time.Hour
 	go func() {
 		ticker := time.NewTicker(interval)
@@ -447,7 +416,7 @@ func startSessionPruner(ctx context.Context, users *db.UserStore) {
 // startAuditPruner periodically deletes audit_log rows older than retentionDays,
 // bounding table growth and the retention window for stored client IPs. Runs until
 // ctx is cancelled at shutdown.
-func startAuditPruner(ctx context.Context, audit *db.AuditStore, retentionDays int) {
+func startAuditPruner(ctx context.Context, audit db.AuditRepo, retentionDays int) {
 	const interval = time.Hour
 	go func() {
 		ticker := time.NewTicker(interval)

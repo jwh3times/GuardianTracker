@@ -136,7 +136,8 @@ func TestSetRole_AdminCallerRefused(t *testing.T) {
 }
 
 func TestSetRole_DegradedMode503(t *testing.T) {
-	h := NewAccountHandler(nil, nil, newCache(), nil)
+	degraded := db.NewStores(nil)
+	h := NewAccountHandler(degraded.Users, degraded.Flags, newCache(), nil)
 	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -172,7 +173,7 @@ func TestGetFlags_TruthTable(t *testing.T) {
 		}},
 	}
 	for _, tc := range cases {
-		h := NewAccountHandler(nil, &fakeFlagStore{list: flags}, newCache(), nil)
+		h := NewAccountHandler(db.NewStores(nil).Users, &fakeFlagStore{list: flags}, newCache(), nil)
 		r := roleTestRouter("member-1", tc.role, func(e *gin.Engine) { e.GET("/api/flags", h.GetFlags) })
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/flags", nil))

@@ -89,23 +89,15 @@ type wishlistResponse struct {
 
 // GetWishlist handles GET /api/wishlist
 func (h *WishlistHandler) GetWishlist(c *gin.Context) {
-	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not configured"})
-		return
-	}
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist user lookup failed")
 		return
 	}
 	items, err := h.store.List(c.Request.Context(), userID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist listing failed",
-			observability.IntID("user", userID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist listing failed")
 		return
 	}
 	c.JSON(http.StatusOK, h.enrichItems(items, h.liveVendorMap(c)))
@@ -113,10 +105,6 @@ func (h *WishlistHandler) GetWishlist(c *gin.Context) {
 
 // AddToWishlist handles POST /api/wishlist
 func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
-	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not configured"})
-		return
-	}
 	var body struct {
 		ItemHash uint32 `json:"itemHash" binding:"required"`
 		Priority string `json:"priority"`
@@ -155,9 +143,7 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist user lookup failed")
 		return
 	}
 	item, err := h.store.Add(c.Request.Context(), userID, body.ItemHash, prio, body.Notes)
@@ -166,9 +152,7 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "item already in wishlist"})
 			return
 		}
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist item creation failed",
-			observability.IntID("user", userID), "item_hash", body.ItemHash, observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist item creation failed")
 		return
 	}
 	c.JSON(http.StatusCreated, h.enrichOne(*item, h.liveVendorMap(c)))
@@ -176,10 +160,6 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 
 // UpdateWishlistItem handles PUT /api/wishlist/:id
 func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
-	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not configured"})
-		return
-	}
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
@@ -209,9 +189,7 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist user lookup failed")
 		return
 	}
 	item, err := h.store.Update(c.Request.Context(), userID, id, prio, body.Notes)
@@ -220,9 +198,7 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "wishlist item not found"})
 			return
 		}
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist item update failed",
-			observability.IntID("user", userID), "wishlist_item_id", id, observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist item update failed")
 		return
 	}
 	c.JSON(http.StatusOK, h.enrichOne(*item, h.liveVendorMap(c)))
@@ -230,10 +206,6 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 
 // RemoveFromWishlist handles DELETE /api/wishlist/:id
 func (h *WishlistHandler) RemoveFromWishlist(c *gin.Context) {
-	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not configured"})
-		return
-	}
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
@@ -242,16 +214,12 @@ func (h *WishlistHandler) RemoveFromWishlist(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist user lookup failed")
 		return
 	}
 	found, err := h.store.Delete(c.Request.Context(), userID, id)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist item deletion failed",
-			observability.IntID("user", userID), "wishlist_item_id", id, observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist item deletion failed")
 		return
 	}
 	if !found {
@@ -267,10 +235,6 @@ const bulkMaxIDs = 100
 // items in one request. Partial success: foreign/missing ids are silently skipped
 // and counted. Body: {action, ids, priority?}; response: {updated, skipped}.
 func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
-	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not configured"})
-		return
-	}
 	var body struct {
 		Action   string  `json:"action"`
 		IDs      []int64 `json:"ids"`
@@ -320,9 +284,7 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist user lookup failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist user lookup failed")
 		return
 	}
 
@@ -334,9 +296,7 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 		updated, err = h.store.BulkSetPriority(c.Request.Context(), userID, ids, prio)
 	}
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "wishlist bulk update failed",
-			observability.IntID("user", userID), "action", body.Action, observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "wishlist bulk update failed")
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"updated": updated, "skipped": int64(len(ids)) - updated})
@@ -344,24 +304,23 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 
 // GetPreferences handles GET /api/preferences
 func (h *WishlistHandler) GetPreferences(c *gin.Context) {
-	if h.prefs == nil {
-		// Return defaults when DB not configured
-		c.JSON(http.StatusOK, gin.H{"cardStyle": "framed", "personalize": true, "onboardedAt": nil})
-		return
-	}
 	membershipID := c.GetString("membership_id")
 	userID, err := h.getUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference user lookup failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		if errors.Is(err, db.ErrUnavailable) {
+			c.JSON(http.StatusOK, defaultPreferences())
+			return
+		}
+		HandleStoreError(c, err, "preference user lookup failed")
 		return
 	}
 	p, err := h.prefs.Get(c.Request.Context(), userID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference listing failed",
-			observability.IntID("user", userID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		if errors.Is(err, db.ErrUnavailable) {
+			c.JSON(http.StatusOK, defaultPreferences())
+			return
+		}
+		HandleStoreError(c, err, "preference listing failed")
 		return
 	}
 	c.JSON(http.StatusOK, preferencesResponse(p))
@@ -369,10 +328,6 @@ func (h *WishlistHandler) GetPreferences(c *gin.Context) {
 
 // UpdatePreferences handles PUT /api/preferences
 func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
-	if h.prefs == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "database not configured"})
-		return
-	}
 	var body struct {
 		CardStyle          string `json:"cardStyle"`
 		Personalize        *bool  `json:"personalize"`
@@ -393,17 +348,13 @@ func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	userID, err := h.getUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference user lookup failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "preference user lookup failed")
 		return
 	}
 	// Read current prefs to fill in defaults for missing fields
 	current, err := h.prefs.Get(c.Request.Context(), userID)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "current preference lookup failed",
-			observability.IntID("user", userID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "current preference lookup failed")
 		return
 	}
 	cardStyle := current.CardStyle
@@ -417,12 +368,16 @@ func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
 	completeOnboarding := body.OnboardingComplete != nil && *body.OnboardingComplete
 	p, err := h.prefs.Upsert(c.Request.Context(), userID, cardStyle, personalize, completeOnboarding)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "preference update failed",
-			observability.IntID("user", userID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "preference update failed")
 		return
 	}
 	c.JSON(http.StatusOK, preferencesResponse(p))
+}
+
+// defaultPreferences is what the UI gets when there is nowhere to store a
+// preference: the same shape a fresh account would have.
+func defaultPreferences() gin.H {
+	return gin.H{"cardStyle": "framed", "personalize": true, "onboardedAt": nil}
 }
 
 func preferencesResponse(p *db.UserPreferences) gin.H {

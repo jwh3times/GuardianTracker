@@ -70,7 +70,9 @@ func TestListAudit_ReturnsEntriesAndPassesFilters(t *testing.T) {
 
 func TestListAudit_DegradedMode503(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := NewAuditHandler(nil) // no store -> degraded
+	// Degraded mode is the adapter set, not a nil store — build it the way
+	// production does so the test exercises the real path.
+	h := NewAuditHandler(db.NewStores(nil).Audit)
 	r := gin.New()
 	r.GET("/api/admin/audit", h.ListAudit)
 	req := httptest.NewRequest(http.MethodGet, "/api/admin/audit", nil)

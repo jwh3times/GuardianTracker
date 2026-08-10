@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"guardian-tracker/api-service/cache"
@@ -38,8 +39,10 @@ func NewFlagResolver(flags flagLister, c cache.Cache) *FlagResolver {
 }
 
 // List returns the full flag catalog from a 60s cache, reading the store on a miss.
-// In degraded mode (nil store) it returns (nil, nil) — callers treat that as "no
-// flags configured" (fail open / nothing hidden).
+// Without a database it returns (nil, nil) — "no flags configured" — rather than
+// the store's ErrUnavailable. Flags are rollout and upsell controls, not a
+// security boundary, so an absent database must not hide pages or fail the flag
+// catalog; RequireFlag and the account handler both fail open on this.
 func (r *FlagResolver) List(ctx context.Context) ([]db.FeatureFlag, error) {
 	if r.flags == nil {
 		return nil, nil
@@ -53,6 +56,9 @@ func (r *FlagResolver) List(ctx context.Context) ([]db.FeatureFlag, error) {
 		}
 	}
 	flags, err := r.flags.List(ctx)
+	if errors.Is(err, db.ErrUnavailable) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, err
 	}
