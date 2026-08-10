@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	"guardian-tracker/api-service/services/search"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const testUserID = "4611686018467260757"
@@ -105,6 +107,75 @@ func TestSearchHandler(t *testing.T) {
 	// Valid query but index not ready → 503.
 	if w := do(r, http.MethodGet, "/api/items/search?q=gjallarhorn&limit=99"); w.Code != http.StatusServiceUnavailable {
 		t.Errorf("not-ready search = %d, want 503", w.Code)
+	}
+}
+
+// searchManifestDB writes a minimal manifest SQLite file plus its sibling
+// version file, and skips when the sqlite3 driver is a CGO-disabled stub.
+func searchManifestDB(t *testing.T) string {
+	t.Helper()
+	probe, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Skipf("sqlite3 driver unavailable: %v", err)
+	}
+	defer probe.Close()
+	if err := probe.Ping(); err != nil {
+		t.Skipf("sqlite3 driver unavailable (CGO disabled?): %v", err)
+	}
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "manifest.sqlite")
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE DestinyInventoryItemDefinition (id INTEGER PRIMARY KEY, json TEXT)`); err != nil {
+		t.Fatalf("create table: %v", err)
+	}
+	blob := `{"hash":1,"displayProperties":{"name":"Gjallarhorn"},"itemType":3,"itemSubType":10,"inventory":{"tierType":6}}`
+	if _, err := db.Exec(`INSERT INTO DestinyInventoryItemDefinition (id, json) VALUES (0, ?)`, blob); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	db.Close()
+
+	if err := os.WriteFile(filepath.Join(dir, "manifest_version.txt"), []byte("v-test"), 0644); err != nil {
+		t.Fatalf("write version: %v", err)
+	}
+	return dbPath
+}
+
+// The regression for the cold-start retry gap: the handler returned 503 on
+// !IsReady *before* reaching Search, the only caller of the index's retry path.
+// An index that was never built (or whose first build failed) therefore stayed
+// dead until the next hourly manifest swap. Serving a not-ready request must
+// itself kick the rebuild.
+func TestSearchHandler_NotReadyKicksIndexBuild(t *testing.T) {
+	dbPath := searchManifestDB(t)
+	ms := bungie.NewManifestService(bungie.NewClient("k", "http://unused", 100, 100), dbPath, time.Hour)
+	svc := search.NewService(ms, dbPath)
+	if svc.IsReady() {
+		t.Fatal("index should start unbuilt — nothing has called BuildIndex")
+	}
+
+	r := gin.New()
+	r.GET("/api/items/search", NewSearchHandler(svc).Search)
+
+	// The build is asynchronous, so this request still gets its 503 …
+	if w := do(r, http.MethodGet, "/api/items/search?q=gjallarhorn"); w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("first search = %d, want 503", w.Code)
+	}
+
+	// … but it must have started the build the 503 path used to skip.
+	deadline := time.Now().Add(5 * time.Second)
+	for !svc.IsReady() {
+		if time.Now().After(deadline) {
+			t.Fatal("a not-ready search never triggered an index build")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	if w := do(r, http.MethodGet, "/api/items/search?q=gjallarhorn"); w.Code != http.StatusOK {
+		t.Errorf("search after recovery = %d, want 200", w.Code)
 	}
 }
 
