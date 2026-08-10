@@ -119,6 +119,13 @@ one; observers do not fire on the rollback path. See
 manifest database. Returns `manifest.ErrNotReady` while the file is downloading
 or mid-swap; that is a 503, not an error.
 
+**Missing item reader** (`weekly.MissingItemReader`) — the one method
+`services/weekly` uses from `services/collections`: the user's missing-item
+hashes. Consumer-side, so `weekly` does not import `collections` at all, and
+difficulty classification goes to `services/sources` directly rather than
+through `collections.ClassifyDifficulty`. Required, never nil — a reader that
+degraded to an empty set would report a complete collection.
+
 **CollectionsView / CollectionsSummaryView** (`lib/collectionsView.ts`) — the
 adapted collections payload the frontend reads. Two types because the endpoint
 has two shapes: `CollectionsSummaryView` carries tree counts and the summary,

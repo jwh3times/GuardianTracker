@@ -15,8 +15,8 @@ func TestOnVersionChanged_DropsPublicWeeklyOnly(t *testing.T) {
 	s := &Service{cache: c, version: fakeVersioner{"v1"}}
 
 	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{}, time.Minute)
-	c.Set("weekly:roster:3:member-1", []string{"char-1"}, time.Minute)
-	c.Set("vendors:character:3:member-1:char-1", "raw-bungie-response", time.Minute)
+	c.Set(rosterCacheKey(3, "member-1"), []string{"char-1"}, time.Minute)
+	c.Set(characterVendorsCacheKey(3, "member-1", "char-1"), "raw-bungie-response", time.Minute)
 
 	if err := s.OnVersionChanged("v2"); err != nil {
 		t.Fatalf("OnVersionChanged: %v", err)
@@ -25,10 +25,10 @@ func TestOnVersionChanged_DropsPublicWeeklyOnly(t *testing.T) {
 	if _, ok := c.Get(publicWeeklyCacheKey); ok {
 		t.Error("weekly:public survived a manifest swap; its milestone labels are manifest-resolved")
 	}
-	if _, ok := c.Get("weekly:roster:3:member-1"); !ok {
+	if _, ok := c.Get(rosterCacheKey(3, "member-1")); !ok {
 		t.Error("weekly:roster was evicted; it holds Bungie character data, not manifest data")
 	}
-	if _, ok := c.Get("vendors:character:3:member-1:char-1"); !ok {
+	if _, ok := c.Get(characterVendorsCacheKey(3, "member-1", "char-1")); !ok {
 		t.Error("the raw vendor response was evicted; a swap must not force a Bungie refetch")
 	}
 }

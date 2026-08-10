@@ -60,11 +60,11 @@ func TestLiveVendorItemHashes_MergesXurAndVendors(t *testing.T) {
 	friday := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC) // Xûr present
 
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
-	c.Set("weekly:public", &publicWeeklyCache{
+	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 111}, {Hash: 222}},
 	}, time.Minute)
-	c.Set("live:vendoritems:3:member-1:char-1", map[uint32]string{333: "Banshee-44"}, time.Minute)
+	c.Set(liveVendorItemsCacheKey(3, "member-1", "char-1"), map[uint32]string{333: "Banshee-44"}, time.Minute)
 	s := &Service{cache: c}
 
 	got := s.liveVendorItemHashesAtCharacter(context.Background(), 3, "member-1", "char-1", "token", friday)
@@ -85,11 +85,11 @@ func TestLiveVendorItemHashes_XurWinsTie(t *testing.T) {
 
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
 	// Hash 555 is sold by both a vendor and Xûr — Xûr must win the label.
-	c.Set("weekly:public", &publicWeeklyCache{
+	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 555}},
 	}, time.Minute)
-	c.Set("live:vendoritems:3:member-1:char-1", map[uint32]string{555: "Banshee-44"}, time.Minute)
+	c.Set(liveVendorItemsCacheKey(3, "member-1", "char-1"), map[uint32]string{555: "Banshee-44"}, time.Minute)
 	s := &Service{cache: c}
 
 	got := s.liveVendorItemHashesAtCharacter(context.Background(), 3, "member-1", "char-1", "token", friday)
@@ -118,10 +118,10 @@ func TestLiveVendorItemsCacheIsolatedByCharacter(t *testing.T) {
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
 	hunterResponse := &bungie.CharacterVendorsResponse{}
 	warlockResponse := &bungie.CharacterVendorsResponse{}
-	c.Set("vendors:character:3:member-1:char-hunter", hunterResponse, time.Minute)
-	c.Set("vendors:character:3:member-1:char-warlock", warlockResponse, time.Minute)
-	c.Set("live:vendoritems:3:member-1:char-hunter", map[uint32]string{101: "Banshee-44"}, time.Minute)
-	c.Set("live:vendoritems:3:member-1:char-warlock", map[uint32]string{202: "Banshee-44"}, time.Minute)
+	c.Set(characterVendorsCacheKey(3, "member-1", "char-hunter"), hunterResponse, time.Minute)
+	c.Set(characterVendorsCacheKey(3, "member-1", "char-warlock"), warlockResponse, time.Minute)
+	c.Set(liveVendorItemsCacheKey(3, "member-1", "char-hunter"), map[uint32]string{101: "Banshee-44"}, time.Minute)
+	c.Set(liveVendorItemsCacheKey(3, "member-1", "char-warlock"), map[uint32]string{202: "Banshee-44"}, time.Minute)
 	s := &Service{cache: c}
 	// Seeded through the constructor, not a transcribed format string: the key
 	// is scoped by manifest version, which the service owns.

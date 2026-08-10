@@ -99,7 +99,7 @@ func TestResolveCharacterValidatesAndFallsBack(t *testing.T) {
 		},
 		PrimaryID: "char-hunter",
 	}
-	c.Set("weekly:roster:3:member-1", roster, time.Minute)
+	c.Set(rosterCacheKey(3, "member-1"), roster, time.Minute)
 	svc := &Service{cache: c}
 
 	if id, classType := svc.resolveCharacter(context.Background(), 3, "member-1", "token", "char-warlock"); id != "char-warlock" || classType != 2 {

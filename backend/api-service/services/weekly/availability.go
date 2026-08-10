@@ -80,6 +80,13 @@ func (s *Service) liveVendorItemHashesAtCharacter(ctx context.Context, membershi
 	return out
 }
 
+// characterVendorsCacheKey holds the raw authenticated vendor response. Not
+// scoped by manifest version: the value carries no manifest-resolved labels, so
+// it deliberately survives a swap (asserted in swap_test.go).
+func characterVendorsCacheKey(membershipType int, membershipID, characterID string) string {
+	return fmt.Sprintf("vendors:character:%d:%s:%s", membershipType, membershipID, characterID)
+}
+
 // getCharacterVendors returns the authenticated 400+402 vendor response for a
 // user's validated selected character. The short character-scoped cache lets
 // Xûr location, daily actions, and availability enrichment share one response
@@ -88,7 +95,7 @@ func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, m
 	if bungieToken == "" || characterID == "" {
 		return nil
 	}
-	cacheKey := fmt.Sprintf("vendors:character:%d:%s:%s", membershipType, membershipID, characterID)
+	cacheKey := characterVendorsCacheKey(membershipType, membershipID, characterID)
 	if s.cache != nil {
 		if cached, ok := s.cache.Get(cacheKey); ok {
 			if resp, ok := cached.(*bungie.CharacterVendorsResponse); ok {
@@ -116,11 +123,18 @@ func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, m
 	return resp
 }
 
+// liveVendorItemsCacheKey holds allowlisted vendor sale items. Not scoped by
+// manifest version: the vendor names come from a static in-code allowlist, not
+// from the manifest.
+func liveVendorItemsCacheKey(membershipType int, membershipID, characterID string) string {
+	return fmt.Sprintf("live:vendoritems:%d:%s:%s", membershipType, membershipID, characterID)
+}
+
 // getLiveVendorItems fetches the allowlisted character vendors' sale items,
 // cached daily per character because component 402 can be class-specific.
 // Returns nil when the fetch is impossible (no client/token/character) or fails.
 func (s *Service) getLiveVendorItems(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, now time.Time) map[uint32]string {
-	cacheKey := fmt.Sprintf("live:vendoritems:%d:%s:%s", membershipType, membershipID, characterID)
+	cacheKey := liveVendorItemsCacheKey(membershipType, membershipID, characterID)
 	if cached, ok := s.cache.Get(cacheKey); ok {
 		if m, ok := cached.(map[uint32]string); ok {
 			return m
