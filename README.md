@@ -133,6 +133,7 @@ private/                  Gitignored private plans, runbooks, and research
 ## Documentation
 
 - [SETUP.md](./SETUP.md) - local setup, environment, ports, tests.
+- [CONTEXT.md](./CONTEXT.md) - project glossary; what each domain term means.
 - [docs/architecture.md](./docs/architecture.md) - implemented architecture.
 - [docs/README.md](./docs/README.md) - public/private documentation boundary.
 - [ROADMAP.md](./ROADMAP.md) - not-yet-implemented work and gates.

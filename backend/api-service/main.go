@@ -1,8 +1,14 @@
+// Command api-service is the Guardian Tracker backend.
+//
+// This file is a composition root and nothing else: load configuration,
+// construct every service and handler, declare who participates in the manifest
+// swap, hand the result to api.NewRouter, serve, shut down. Logic that used to
+// live here — the route table, the CORS middleware, the db-to-consumer adapters,
+// the background pruners — moved into packages where it can be tested.
 package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,12 +16,13 @@ import (
 	"syscall"
 	"time"
 
+	"guardian-tracker/api-service/api"
 	"guardian-tracker/api-service/api/handlers"
-	"guardian-tracker/api-service/api/middleware"
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
 	"guardian-tracker/api-service/db"
+	"guardian-tracker/api-service/db/adapters"
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/characters"
@@ -30,66 +37,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
-
-// tokenRepoAdapter wraps db.BungieTokenStore to satisfy auth.TokenRepo.
-// This adapter lives in main.go to avoid an import cycle between auth and db packages.
-type tokenRepoAdapter struct{ s db.TokenRepo }
-
-func (a *tokenRepoAdapter) Get(ctx context.Context, membershipID string) (*auth.EncryptedTokenRecord, error) {
-	t, err := a.s.Get(ctx, membershipID)
-	if err != nil {
-		if errors.Is(err, db.ErrTokensNotFound) {
-			return nil, auth.ErrTokensNotFound
-		}
-		return nil, err
-	}
-	return &auth.EncryptedTokenRecord{
-		AccessTokenEnc:   t.AccessTokenEnc,
-		RefreshTokenEnc:  t.RefreshTokenEnc,
-		AccessExpiresAt:  t.AccessExpiresAt,
-		RefreshExpiresAt: t.RefreshExpiresAt,
-		KeyVersion:       t.KeyVersion,
-		UpdatedAt:        t.UpdatedAt,
-	}, nil
-}
-
-func (a *tokenRepoAdapter) Upsert(ctx context.Context, membershipID string, t *auth.EncryptedTokenRecord, prev time.Time) (time.Time, bool, error) {
-	at, ok, err := a.s.Upsert(ctx, membershipID, &db.EncryptedTokens{
-		AccessTokenEnc:   t.AccessTokenEnc,
-		RefreshTokenEnc:  t.RefreshTokenEnc,
-		AccessExpiresAt:  t.AccessExpiresAt,
-		RefreshExpiresAt: t.RefreshExpiresAt,
-		KeyVersion:       t.KeyVersion,
-	}, prev)
-	if errors.Is(err, db.ErrNoUserRow) {
-		return at, ok, auth.ErrNoUserRow
-	}
-	return at, ok, err
-}
-
-func (a *tokenRepoAdapter) Delete(ctx context.Context, membershipID string) error {
-	return a.s.Delete(ctx, membershipID)
-}
-
-// weeklyWishlistAdapter wraps db.WishlistStore to satisfy weekly.WishlistReader.
-// This adapter lives in main.go to avoid an import cycle between weekly and db packages.
-type weeklyWishlistAdapter struct{ s db.WishlistRepo }
-
-func (a *weeklyWishlistAdapter) GetUserID(ctx context.Context, membershipID string) (int64, error) {
-	return a.s.GetUserID(ctx, membershipID)
-}
-
-func (a *weeklyWishlistAdapter) List(ctx context.Context, userID int64) ([]weekly.WishlistItem, error) {
-	items, err := a.s.List(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]weekly.WishlistItem, len(items))
-	for i, it := range items {
-		out[i] = weekly.WishlistItem{ItemHash: it.ItemHash}
-	}
-	return out, nil
-}
 
 func main() {
 	if err := godotenv.Load(); err != nil {
@@ -147,7 +94,7 @@ func main() {
 	jwtHelper := auth.NewJWTWithTTL(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshExpiryDays)
 	var tokenRepo auth.TokenRepo
 	if tokenCipher != nil {
-		tokenRepo = &tokenRepoAdapter{s: stores.Tokens}
+		tokenRepo = adapters.NewTokenRepo(stores.Tokens)
 	}
 	tokenStore := auth.NewTokenStore(ctx, cfg.BungieClientID, cfg.BungieClientSecret, cfg.BungieTokenURL, tokenRepo, tokenCipher)
 
@@ -187,8 +134,8 @@ func main() {
 	// not resilience.
 	revoker := auth.NewRevocationChecker(stores.Users, appCache)
 	if stores.Available() {
-		startSessionPruner(ctx, stores.Users)
-		startAuditPruner(ctx, stores.Audit, cfg.AuditRetentionDays)
+		db.StartSessionPruner(ctx, stores.Users, db.DefaultPruneInterval)
+		db.StartAuditPruner(ctx, stores.Audit, cfg.AuditRetentionDays, db.DefaultPruneInterval)
 	}
 
 	// Tier gating. Not the same question as "would a query fail": RequireTier
@@ -203,7 +150,7 @@ func main() {
 	collectionsService := collections.NewService(bungieClient, manifestService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
 	// Weekly service
-	weeklyWishlist := weekly.WishlistReader(&weeklyWishlistAdapter{s: stores.Wishlist})
+	weeklyWishlist := adapters.NewWeeklyWishlist(stores.Wishlist)
 	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, manifestService)
 	if cfg.E2EFixedTime != nil {
 		fixedTime := *cfg.E2EFixedTime
@@ -212,12 +159,9 @@ func main() {
 			func() time.Time { return fixedTime },
 		)
 	}
-	weeklyHandler := handlers.NewWeeklyHandler(weeklyService, tokenStore)
 
 	// Records service (catalysts, crafting, seals)
 	recordsService := records.NewService(bungieClient, manifestProvider, appCache, cfg.CacheTTLRecords)
-	recordsHandler := handlers.NewRecordsHandler(recordsService, tokenStore)
-	searchHandler := handlers.NewSearchHandler(searchService)
 
 	// Manifest swap enrolment. Must happen before EnsureReady can trigger a
 	// download, and therefore after every participant and observer exists.
@@ -258,101 +202,34 @@ func main() {
 
 	// Handlers
 	auditLogger := handlers.AuditLogger(stores.Audit)
-	authHandler := handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger)
-	wishlistHandler := handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore)
-	healthHandler := handlers.NewHealthHandler(manifestService, stores.Pinger)
-	charactersHandler := handlers.NewCharactersHandler(charactersService, tokenStore)
-	collectionsHandler := handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore, weeklyService)
-	itemsHandler := handlers.NewItemsHandler(itemsService)
-
-	// Roles, feature flags & admin console.
-	accountHandler := handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger)
-	adminHandler := handlers.NewAdminHandler(stores.Users, stores.Flags, appCache)
-	auditHandler := handlers.NewAuditHandler(stores.Audit)
 
 	// Shared flag resolver for server-side enforcement. Uses the same appCache and
 	// flags:all key as AccountHandler's resolver, so both read one cache entry
 	// (evicted together by AdminHandler.UpdateFlag).
 	enforceFlags := handlers.NewFlagResolver(stores.Flags, appCache)
 
-	// Router
-	router := gin.New()
-	router.Use(observability.HTTPMiddleware(logger))
-	// Trust only configured proxies for X-Forwarded-For so the audit-logged client
-	// IP can't be spoofed by clients. Empty list (local dev) trusts none.
-	if err := router.SetTrustedProxies(cfg.TrustedProxies); err != nil {
-		slog.Warn("trusted proxy configuration rejected", observability.Err(err))
-	}
-	router.Use(middleware.APISecurityHeaders())
-	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
-	router.Use(middleware.MaxBodyBytes(cfg.MaxBodyBytes))
-	// One shared limiter instance across the public auth endpoints (per-IP
-	// buckets are inside it) — constructed once so the sweeper isn't duplicated.
-	authLimiter := middleware.PerIPRateLimit(float64(cfg.AuthRateLimitRPS), cfg.AuthRateLimitBurst)
-
-	router.GET("/health", healthHandler.Health)
-	router.GET("/ready", healthHandler.Ready)
-
-	api := router.Group("/api")
-	{
-		api.GET("/manifest/status", healthHandler.ManifestStatus)
-
-		// Auth responses are never cacheable. Callback and refresh both establish
-		// or rotate the refresh cookie, so they also require an exact browser Origin.
-		authRoutes := api.Group("/auth", middleware.NoStore())
-		authRoutes.GET("/bungie", authLimiter, authHandler.GetBungieAuthURL)
-		authRoutes.POST("/bungie/callback", middleware.RequireAllowedOrigin(cfg.CORSAllowedOrigins), authLimiter, authHandler.BungieCallback)
-		authRoutes.POST("/refresh", middleware.RequireAllowedOrigin(cfg.CORSAllowedOrigins), authLimiter, authHandler.RefreshToken)
-		authRoutes.GET("/validate", jwtHelper.Middleware(revoker), authHandler.ValidateToken)
-		authRoutes.GET("/profile", jwtHelper.Middleware(revoker), authHandler.GetProfile)
-		authRoutes.POST("/logout", jwtHelper.Middleware(revoker), authHandler.Logout)
-		authRoutes.POST("/logout/all", jwtHelper.Middleware(revoker), authHandler.LogoutAll)
-
-		// Wishlist
-		api.GET("/wishlist", jwtHelper.Middleware(revoker), wishlistHandler.GetWishlist)
-		api.POST("/wishlist", jwtHelper.Middleware(revoker), wishlistHandler.AddToWishlist)
-		api.PUT("/wishlist/:id", jwtHelper.Middleware(revoker), wishlistHandler.UpdateWishlistItem)
-		api.DELETE("/wishlist/:id", jwtHelper.Middleware(revoker), wishlistHandler.RemoveFromWishlist)
-		api.POST("/wishlist/bulk", jwtHelper.Middleware(revoker), wishlistHandler.BulkUpdate)
-
-		// Preferences
-		api.GET("/preferences", jwtHelper.Middleware(revoker), wishlistHandler.GetPreferences)
-		api.PUT("/preferences", jwtHelper.Middleware(revoker), wishlistHandler.UpdatePreferences)
-
-		// Account self-service role opt-in + resolved feature-flag state
-		api.PUT("/account/role", jwtHelper.Middleware(revoker), accountHandler.SetRole)
-		api.GET("/flags", jwtHelper.Middleware(revoker), accountHandler.GetFlags)
-
-		// Admin console — JWT + RequireAdmin (503 in degraded mode)
-		admin := api.Group("/admin", jwtHelper.Middleware(revoker), authz.RequireAdmin())
-		{
-			admin.GET("/users", adminHandler.ListUsers)
-			admin.PUT("/users/:id/role", adminHandler.SetUserRole)
-			admin.GET("/flags", adminHandler.ListFlags)
-			admin.PUT("/flags/:key", adminHandler.UpdateFlag)
-			admin.GET("/audit", auditHandler.ListAudit)
-		}
-
-		// Characters
-		api.GET("/characters/:membershipType/:membershipId", jwtHelper.Middleware(revoker), charactersHandler.GetCharacters)
-
-		// Collections
-		api.GET("/collections/:membershipType/:membershipId", jwtHelper.Middleware(revoker), collectionsHandler.GetCollections)
-		api.POST("/collections/:membershipType/:membershipId/refresh", jwtHelper.Middleware(revoker), collectionsHandler.RefreshCollections)
-
-		// Weekly recommendations
-		api.GET("/weekly/recommendations", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagWeeklyPlanner), weeklyHandler.GetWeekly)
-
-		// Item search (in-memory index from manifest)
-		api.GET("/items/search", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagGlobalSearch), searchHandler.Search)
-		api.GET("/items/:itemHash", jwtHelper.Middleware(revoker), itemsHandler.GetItem)
-		api.GET("/items/:itemHash/perks", jwtHelper.Middleware(revoker), itemsHandler.GetPerks)
-
-		// Catalysts, crafting patterns, and seals
-		api.GET("/catalysts/:membershipType/:membershipId", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagCatalystsCrafting), recordsHandler.GetCatalysts)
-		api.GET("/crafting/:membershipType/:membershipId", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagCatalystsCrafting), recordsHandler.GetCrafting)
-		api.GET("/seals/:membershipType/:membershipId", jwtHelper.Middleware(revoker), authz.RequireFlag(enforceFlags, handlers.FlagTriumphsSeals), recordsHandler.GetSeals)
-	}
+	router := api.NewRouter(api.Deps{
+		Config:  cfg,
+		Logger:  logger,
+		JWT:     jwtHelper,
+		Revoker: revoker,
+		Authz:   authz,
+		Flags:   enforceFlags,
+		Handlers: api.Handlers{
+			Health:      handlers.NewHealthHandler(manifestService, stores.Pinger),
+			Auth:        handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger),
+			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore),
+			Account:     handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger),
+			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),
+			Audit:       handlers.NewAuditHandler(stores.Audit),
+			Characters:  handlers.NewCharactersHandler(charactersService, tokenStore),
+			Collections: handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore, weeklyService),
+			Items:       handlers.NewItemsHandler(itemsService),
+			Weekly:      handlers.NewWeeklyHandler(weeklyService, tokenStore),
+			Records:     handlers.NewRecordsHandler(recordsService, tokenStore),
+			Search:      handlers.NewSearchHandler(searchService),
+		},
+	})
 
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
@@ -387,72 +264,4 @@ func main() {
 		slog.Warn("manifest provider close failed", observability.Err(err))
 	}
 	slog.Info("API service stopped")
-}
-
-// startSessionPruner periodically deletes expired refresh sessions so abandoned
-// sessions (never rotated, never logged out) don't accumulate. It runs until ctx is
-// cancelled at shutdown.
-func startSessionPruner(ctx context.Context, users db.UserRepo) {
-	const interval = time.Hour
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				n, err := users.DeleteExpiredSessions(ctx)
-				if err != nil {
-					slog.Error("session pruning failed", observability.Err(err))
-				} else if n > 0 {
-					slog.Info("expired sessions pruned", "count", n)
-				}
-			}
-		}
-	}()
-}
-
-// startAuditPruner periodically deletes audit_log rows older than retentionDays,
-// bounding table growth and the retention window for stored client IPs. Runs until
-// ctx is cancelled at shutdown.
-func startAuditPruner(ctx context.Context, audit db.AuditRepo, retentionDays int) {
-	const interval = time.Hour
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				cutoff := time.Now().AddDate(0, 0, -retentionDays)
-				n, err := audit.DeleteOlderThan(ctx, cutoff)
-				if err != nil {
-					slog.Error("audit pruning failed", observability.Err(err))
-				} else if n > 0 {
-					slog.Info("expired audit rows pruned", "count", n)
-				}
-			}
-		}
-	}()
-}
-
-func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		origin := c.Request.Header.Get("Origin")
-		c.Header("Vary", "Origin")
-		if middleware.OriginAllowed(origin, allowedOrigins) {
-			c.Header("Access-Control-Allow-Origin", origin)
-		}
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		c.Header("Access-Control-Expose-Headers", "X-Request-ID")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-		c.Next()
-	}
 }

@@ -98,7 +98,13 @@ Primary route groups:
 - admin: users, roles, flags, audit log
 - health: `/health` liveness and `/ready` readiness
 
-See `backend/api-service/main.go` for the authoritative route registration.
+See `backend/api-service/api/router.go` for the authoritative route
+registration. Authentication is applied once to the authenticated group rather
+than per route, and the invariants — every `/api` route behind the JWT gate,
+each flag-gated route enforcing its own flag key, admin routes refusing
+non-admins and degraded builds — are asserted against the built route table in
+`api/router_test.go`. See
+[ADR 0011](./adr/0011-route-table-as-a-testable-composition-root.md).
 
 ## Request Logging
 

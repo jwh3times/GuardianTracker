@@ -20,3 +20,4 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0008: Browser Refresh Credential Cookie](./0008-browser-refresh-cookie.md)
 - [ADR 0009: Changelog-Version Gate and the Version Oracle](./0009-changelog-version-gate.md)
 - [ADR 0010: Manifest Swap Participants and Observers](./0010-manifest-swap-participants-and-observers.md)
+- [ADR 0011: Route Table as a Testable Composition Root](./0011-route-table-as-a-testable-composition-root.md)

@@ -14,8 +14,11 @@ You are working inside the Guardian Tracker Go backend. There is **one** service
 
 ```
 backend/api-service/
-  main.go                              ← Gin router, slog/request middleware, dependency wiring, manifest startup +
-                                           swap participant/observer registration
+  main.go                              ← Composition root only: config, dependency wiring, manifest startup +
+                                           swap participant/observer registration, server lifecycle
+  api/router.go                        ← The route table. NewRouter(Deps) *gin.Engine; auth applied per group
+  db/adapters/adapters.go              ← db → auth/weekly consumer-interface adapters (sentinel translation)
+  db/pruner.go                         ← Session and audit retention pruners (injectable interval)
   config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
   auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
   auth/middleware.go                   ← JWT middleware for protected routes
@@ -236,6 +239,29 @@ Each login (and callback) creates a `refresh_sessions` row; the `sid` JWT claim 
 ## Audit logging (`db/audit.go`)
 
 Events persisted to `audit_log`: login, logout, logout-all, refresh failure, refresh reuse, session termination, self opt-in role changes, admin role changes, feature-flag changes. Role/flag changes are written in the mutation's transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). Client IP (validated via `TRUSTED_PROXIES`) and User-Agent are retained for `AUDIT_RETENTION_DAYS` (default 180) days; an hourly pruner removes older rows.
+
+## Route table (`api/router.go`)
+
+`NewRouter(Deps) *gin.Engine` owns every route. `main.go` builds `Deps` and
+serves; it registers no routes itself.
+
+- **Authentication is applied once per group**, not per route:
+  `authed := api.Group("", d.JWT.Middleware(d.Revoker))`. Register every
+  authenticated route on `authed`, or on the `admin` subgroup inside it. Do not
+  reintroduce a per-route `Middleware(...)` argument — the 24× repetition it
+  replaced is what made "forgot the middleware on the new route" a silent way to
+  publish an unauthenticated endpoint.
+- **A new public `/api` route also needs an entry in `publicAPIRoutes` in
+  `api/router_test.go`.** That allowlist deliberately lives in the test, not the
+  router, so `TestEveryAPIRouteRequiresAuthentication` fails until someone grants
+  the exemption on purpose. The test walks `Engine.Routes()`, so authenticated
+  routes are covered automatically.
+- **Flag-gated routes** pair a route with a key via
+  `d.Authz.RequireFlag(d.Flags, handlers.FlagX)`. `RequireFlag` fails open on an
+  unresolvable key (ADR 0006), so a wrong key gates nothing; add the route to
+  `TestFlagGatedRoutesEnforceTheirOwnFlag`, which disables one key at a time and
+  asserts exactly the routes gated on it are blocked.
+- See [ADR 0011](../../docs/adr/0011-route-table-as-a-testable-composition-root.md).
 
 ## Manifest repository, provider, and swap seam
 

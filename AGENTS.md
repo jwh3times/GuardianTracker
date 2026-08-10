@@ -41,7 +41,7 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 
 ### Key directories
 
-- `backend/api-service/` — Go API: `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency, sources), `config/`, `cache/`.
+- `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into the `auth`/`weekly` consumer interfaces), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency, sources), `config/`, `cache/`.
 - `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `lib/`, `types/`.
 - `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
 - `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
@@ -247,6 +247,8 @@ Public docs:
 
 - `README.md` - project overview, quickstart, and doc index
 - `SETUP.md` - local setup and troubleshooting
+- `CONTEXT.md` - project glossary: the domain vocabulary and the seam names, one
+  owner per term. Read it before naming a concept in code, a test, or an issue.
 - `docs/architecture.md` - current implemented architecture
 - `ROADMAP.md` - public future-looking roadmap
 - `SECURITY.md` - public security posture and reporting
