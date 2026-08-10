@@ -138,12 +138,20 @@ Triumphs & Seals, Wishlist, Settings.
 npm start           # Vite dev server (port 5273)
 npm run build       # tsc + Vite production build → /dist
 npm test            # Vitest
-npm run lint        # ESLint (flat config)
-npm run lint:fix    # ESLint with auto-fix
+npm run lint        # Oxlint, including type-aware TypeScript checks
+npm run lint:fix    # Apply safe Oxlint fixes
 npm run type-check  # tsc --noEmit
 npm run e2e         # functional + axe + destructive auth (one shared worker)
 npm run e2e:visual  # visual project; canonical CI rendering uses pinned Linux image
 ```
+
+Oxlint is the sole linter. Its type-aware TypeScript rules run through
+`oxlint-tsgolint` for `src/`, `vite.config.ts`, and the TypeScript files under
+`e2e/`; the current adoption backlog is reported as warnings so it does not
+block CI. `playwright.config.ts` receives Oxlint's native rules but is outside
+the type-aware scope. The React compiler rule is also warning-only. Prettier
+remains the formatter, and `npm run type-check` remains the TypeScript
+compilation gate.
 
 ## Browser Tests
 

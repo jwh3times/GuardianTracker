@@ -75,7 +75,7 @@ export function ThisWeek() {
   const [version, bump] = useReducer((x: number) => x + 1, 0);
   const doneIds = useMemo(
     () => loadDoneIds(resetAt),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- version invalidates the localStorage read
+    // oxlint-disable-next-line react/exhaustive-deps -- version invalidates the localStorage read
     [resetAt, version],
   );
 

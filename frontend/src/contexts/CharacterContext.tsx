@@ -59,7 +59,7 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
   const pickedId = useMemo(
     () =>
       membershipId ? localStorage.getItem(storageKey(membershipId)) : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- version invalidates the localStorage read
+    // oxlint-disable-next-line react/exhaustive-deps -- version invalidates the localStorage read
     [membershipId, version],
   );
 
@@ -87,7 +87,7 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
+// oxlint-disable-next-line react/only-export-components
 export function useCharacters(): CharacterContextValue {
   const ctx = useContext(CharacterContext);
   if (!ctx) {

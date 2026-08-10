@@ -33,8 +33,21 @@ Dev commands (run from `frontend/`):
 npm start          # Vite dev server on :5273
 npm run build      # tsc + Vite production build
 npm test           # Vitest
-npm run lint       # ESLint
+npm run lint       # Oxlint, including type-aware TypeScript checks
+npm run lint:fix   # Apply safe Oxlint fixes
 ```
+
+Oxlint is the sole linter. Type-aware analysis uses `oxlint-tsgolint` 7.0.2001;
+23 rules from typescript-eslint's `recommended-type-checked-only` preset run as
+warnings for `src/`, `vite.config.ts`, and all 10 TypeScript files under `e2e/`.
+They expose the TypeScript 7 adoption backlog without blocking CI.
+`playwright.config.ts` remains native-rule-only because tsgolint does not match
+it even though `frontend/e2e/tsconfig.json` includes it. The root TypeScript
+configuration includes Node ambient types, and the e2e project extends it.
+Native `react/react-compiler` also runs as a warning and replaces the individual
+recommended-latest compiler rules; preserve that intentional severity and
+suppression policy. `npm run type-check` (`tsc --noEmit`) remains the type gate,
+and Prettier remains the formatter.
 
 ## File structure
 
