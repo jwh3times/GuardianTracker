@@ -13,6 +13,17 @@ request.
 
 No unreleased changes.
 
+## [0.3.68] - 2026-08-10
+
+### Removed
+
+- The retired `private/known-bugs.md` tracker no longer appears in the private-doc
+  lists in `AGENTS.md` and the `docs-updater` agent definition, which pointed
+  contributors and agents at a file that no longer exists. Its contents were folded
+  into the private work archive, and defect reports already belong in GitHub Issues —
+  the tracker of record documented in `docs/agents/issue-tracker.md`. No public
+  documentation, product behavior, or API surface changes.
+
 ## [0.3.67] - 2026-08-10
 
 ### Changed
