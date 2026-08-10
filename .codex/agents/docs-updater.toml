@@ -67,7 +67,6 @@ asked or when the active task already changed them:
 | `private/IMPLEMENTATION_PLAN.md`  | Developer          | Detailed internal implementation planning     |
 | `private/archive.md`              | Developer          | Internal shipped-work archive                 |
 | `private/InfraTODO.md`            | Developer/operator | Private infrastructure decisions and runbooks |
-| `private/known-bugs.md`           | Developer          | Known-bug tracking not yet public             |
 | `private/security-limitations.md` | Developer          | Private security limitations and follow-ups   |
 | `private/BungieAPI.md`            | Developer          | Raw Bungie API research notes                 |
 

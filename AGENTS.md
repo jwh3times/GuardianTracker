@@ -264,7 +264,6 @@ Private docs:
 - `private/IMPLEMENTATION_PLAN.md` - detailed private implementation planning
 - `private/archive.md` - shipped private history and durable decisions
 - `private/InfraTODO.md` - infrastructure maintenance and deployment notes
-- `private/known-bugs.md` - known issues and tracked defects
 - `private/security-limitations.md` - security constraints and limitations
 - `private/BungieAPI.md` - Bungie API research and protocol documentation
 
