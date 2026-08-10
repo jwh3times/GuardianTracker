@@ -13,6 +13,16 @@ request.
 
 No unreleased changes.
 
+## [0.3.61] - 2026-08-09
+
+### Changed
+
+- Shipping a branch now evaluates its highest-impact change before choosing the
+  release line. Incompatible changes start a new major version,
+  backward-compatible capabilities start a new minor version, and maintenance
+  changes retain the standard auto-incrementing build number. The shipping
+  report includes the classification and its rationale.
+
 ## [0.3.60] - 2026-08-09
 
 ### Fixed

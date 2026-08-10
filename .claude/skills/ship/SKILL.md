@@ -3,13 +3,14 @@
 # Source: .agents/skills/ship/SKILL.md
 # Regenerate: node scripts/sync-agent-configs.mjs
 name: ship
-description: Ship the current branch — refresh docs, write the CHANGELOG entry for the version this merge will mint, run fast checks, push, and open or update the PR. Use when a feature branch is ready for review, or when the user says "ship it", "open a PR", or "push this".
+description: Ship the current branch — evaluate whether its release is major, minor, or build-only; set the version line; refresh docs; update the changelog; run fast checks; push; and open or update the PR. Use when a feature branch is ready for review, or when the user says "ship it", "open a PR", or "push this".
 ---
 
 # Ship
 
-Take the current branch from "code is done" to "PR is open and green-able", and
-make sure the changelog names the version this merge will actually create.
+Take the current branch from "code is done" to "PR is open and green-able",
+choose the release level its changes warrant, and make sure the changelog names
+the version this merge will actually create.
 
 **Announce at start:** "I'm using the ship skill to open a PR for this branch."
 
@@ -18,9 +19,10 @@ make sure the changelog names the version this merge will actually create.
 Every merge to `main` is auto-tagged `v<major>.<minor>.<build>` by
 `.github/workflows/version.yml`, where `build` auto-increments. So a branch's
 changelog entry must be written for **the version its merge will mint** — an
-`[Unreleased]` section is always wrong the moment it lands. `/ship` computes that
-version and writes the entry, and the `Changelog Version` CI job verifies the
-prediction still holds at merge time.
+`[Unreleased]` section is always wrong the moment it lands. `/ship` first decides
+whether the branch stays on the current major/minor line or starts a new one,
+then computes the exact version and writes the entry. The `Changelog Version` CI
+job verifies the prediction still holds at merge time.
 
 ## Steps
 
@@ -51,7 +53,50 @@ in the right position. Keep it factual — name the packages and versions.
 This is what makes the bot exemption safe. Skipping it lets the changelog silently
 lose versions.
 
-### 3. Compute the target version
+### 3. Evaluate the release level and compute the target version
+
+Review the complete committed branch diff, not just commit messages or the
+changelog:
+
+```bash
+base=$(git merge-base main HEAD)
+git diff --stat "$base"..HEAD
+git diff "$base"..HEAD
+git show "$base:VERSION"
+```
+
+Classify the branch by its **highest-impact** change:
+
+- **Major** — an incompatible change that requires users, operators, or API
+  consumers to change behavior or migrate. Examples: removing or incompatibly
+  changing a REST contract, destructive or non-backward-compatible stored-data
+  changes, or incompatible auth, configuration, or deployment behavior.
+- **Minor** — a backward-compatible capability or meaningful expansion. Examples:
+  a user-visible feature, a new endpoint, optional configuration, or an additive
+  data-model change.
+- **Build** — compatible maintenance on the current feature line. Examples: bug
+  and security fixes, performance improvements, dependency updates, refactors,
+  tests, docs, and user-interface polish that adds no distinct capability.
+
+A dependency's own major version does not automatically make Guardian Tracker's
+release major. Judge the resulting product contract and behavior. Record a
+one-sentence rationale for the classification; if the impact is genuinely
+ambiguous, stop and ask the user before changing `VERSION`.
+
+Read the version at the merge base as `<major>.<minor>.<build>` and select the
+line the branch should release on:
+
+- **Major** → `<major + 1>.0.0`
+- **Minor** → `<major>.<minor + 1>.0`
+- **Build** → leave `VERSION` on the merge base's existing major/minor line; the
+  build number will auto-increment.
+
+Treat a branch-authored `VERSION` change as a proposal. If it matches the
+classification, keep it. If it conflicts, stop and ask before overwriting
+user-authored version intent. Otherwise, write the selected major or minor line
+to `VERSION`; do not edit `VERSION` for a build release.
+
+Now compute the exact target version:
 
 ```bash
 bash scripts/next-version.sh
@@ -158,13 +203,15 @@ gh pr list --head "$(git branch --show-current)" --state open --json number -q '
 
 ### 9. Report
 
-Give the user: the PR URL, the version this merge will mint, and anything the fast
-checks or backfill surfaced. State plainly that tests run in CI, not locally — do not
-imply the branch is verified beyond the fast checks.
+Give the user: the PR URL; the major, minor, or build classification and its
+one-sentence rationale; the exact version this merge will mint; and anything the
+fast checks or backfill surfaced. State plainly that tests run in CI, not locally
+— do not imply the branch is verified beyond the fast checks.
 
 ## Do not
 
 - Merge the PR. The repo self-merges once green; `/ship` stops at "PR open".
 - Push to `main`.
 - Run the full test suites — that is CI's job and it makes this skill slow.
-- Invent the version number. Always call `scripts/next-version.sh`.
+- Invent the final version number. Classify the release, update `VERSION` only as
+  specified above, then call `scripts/next-version.sh`.
