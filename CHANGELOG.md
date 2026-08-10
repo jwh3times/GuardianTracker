@@ -13,6 +13,24 @@ request.
 
 No unreleased changes.
 
+## [0.3.66] - 2026-08-10
+
+### Changed
+
+- Frontend linting now runs entirely on Oxlint, including type-aware checks for
+  application, test, Vite, and Playwright end-to-end TypeScript sources. The new
+  typed findings are reported as warnings so the existing cleanup backlog is
+  visible without making the migration itself block CI, and the TypeScript 6
+  compiler check remains in place ahead of a separate TypeScript 7 upgrade.
+- React Hooks and React Compiler diagnostics now use Oxlint's native React rules.
+  The compiler diagnostics are reported through Oxlint's consolidated
+  warning-level rule rather than ESLint's individually configurable checks.
+
+### Removed
+
+- Removed ESLint, typescript-eslint, their React plugins, compatibility config,
+  and frontend ESLint configuration. Prettier remains the formatting owner.
+
 ## [0.3.65] - 2026-08-10
 
 ### Fixed
@@ -335,6 +353,8 @@ No unreleased changes.
   this frontend is a static single-page bundle served by nginx with no server
   runtime, no RSC usage, and no router actions. The upgrade clears the alert
   rather than fixing a reachable vulnerability.
+
+## [0.3.41] - 2026-07-27
 
 ### Fixed
 
