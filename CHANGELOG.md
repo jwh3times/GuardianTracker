@@ -13,6 +13,35 @@ request.
 
 No unreleased changes.
 
+## [0.3.63] - 2026-08-10
+
+### Added
+
+- `CONTEXT.md`, a project glossary defining the domain vocabulary and the
+  architectural seam names, with one canonical owner per term.
+- Route-table tests asserting that every `/api` endpoint sits behind
+  authentication, that each feature-flag-gated endpoint enforces the flag key it
+  claims, and that admin endpoints refuse non-admins and refuse to serve a
+  build running without a database.
+
+### Changed
+
+- The API route table moved out of the service entry point into its own package,
+  and authentication is now applied once to the authenticated route group rather
+  than repeated on each of the 24 protected routes. The set of routes and their
+  behavior are unchanged; adding a new endpoint without authentication now fails
+  the test suite instead of shipping silently. Recorded as
+  [ADR 0011](docs/adr/0011-route-table-as-a-testable-composition-root.md).
+- The database-to-consumer adapters and the session and audit retention pruners
+  moved into testable packages. Their behavior is unchanged.
+
+## [0.3.62] - 2026-08-10
+
+### Changed
+
+- Updated frontend dependencies: `lucide-react` 1.28 to 1.29, `postcss` 8.5.25
+  to 8.5.26, and `vite` 8.2.0 to 8.2.1.
+
 ## [0.3.61] - 2026-08-09
 
 ### Changed
