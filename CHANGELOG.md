@@ -13,6 +13,15 @@ request.
 
 No unreleased changes.
 
+## [0.3.67] - 2026-08-10
+
+### Changed
+
+- Upgraded the frontend compiler from TypeScript 6.0.3 to 7.0.2. The existing
+  type-check, Oxlint type-aware analysis, Vite build, tests, and production
+  Alpine image now run on the TypeScript 7 toolchain; application behavior and
+  public interfaces are unchanged.
+
 ## [0.3.66] - 2026-08-10
 
 ### Changed
