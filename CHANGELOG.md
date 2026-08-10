@@ -13,6 +13,29 @@ request.
 
 No unreleased changes.
 
+## [0.3.60] - 2026-08-09
+
+### Fixed
+
+- Fixed the admin console crashing the request instead of reporting a problem
+  when the server runs without its account database. Three admin endpoints
+  assumed the database was present; they were shielded only because the
+  admin-access check happened to reject the request first, so anything that
+  changed that order would have produced a crash rather than an explanation.
+  They now report the same unavailable message as everywhere else.
+
+### Changed
+
+- Wishlist and preference endpoints now report an unavailable account database
+  with the same machine-readable code as the rest of the app. They previously
+  returned an error the frontend could not identify, so the app showed generic
+  "couldn't load" copy instead of explaining that the feature needs a database.
+  All such messages now read identically wherever they come from.
+- Running without an account database is now handled in one place rather than
+  re-decided at each endpoint. Behaviour is unchanged: role-gated features still
+  return unavailable, feature flags still stay visible rather than hiding pages,
+  and preferences still fall back to defaults so the app renders.
+
 ## [0.3.59] - 2026-08-09
 
 ### Changed

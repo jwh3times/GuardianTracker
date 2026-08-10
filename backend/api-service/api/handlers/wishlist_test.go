@@ -226,7 +226,8 @@ func TestGetWishlist_ReturnsItems(t *testing.T) {
 }
 
 func TestGetWishlist_DegradedMode_Returns503(t *testing.T) {
-	h := NewWishlistHandler(nil, nil, nil, nil, nil)
+	degraded := db.NewStores(nil)
+	h := NewWishlistHandler(degraded.Wishlist, nil, degraded.Prefs, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
@@ -558,7 +559,8 @@ func TestUpdateWishlistItem_Success(t *testing.T) {
 }
 
 func TestGetPreferences_DegradedMode_ReturnsDefaults(t *testing.T) {
-	h := NewWishlistHandler(nil, nil, nil, nil, nil)
+	degraded := db.NewStores(nil)
+	h := NewWishlistHandler(degraded.Wishlist, nil, degraded.Prefs, nil, nil)
 	r := newTestRouter(h)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/preferences", nil)
@@ -872,7 +874,8 @@ func TestBulkUpdate_Validation(t *testing.T) {
 }
 
 func TestBulkUpdate_DegradedMode_Returns503(t *testing.T) {
-	h := NewWishlistHandler(nil, nil, nil, nil, nil)
+	degraded := db.NewStores(nil)
+	h := NewWishlistHandler(degraded.Wishlist, nil, degraded.Prefs, nil, nil)
 	r := newTestRouter(h)
 	req, w := bulkReq(`{"action":"delete","ids":[1]}`)
 	r.ServeHTTP(w, req)

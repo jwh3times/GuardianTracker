@@ -56,7 +56,7 @@ func TestFlagResolver_ResolveKnownKeys(t *testing.T) {
 }
 
 func TestFlagResolver_DegradedNilStore(t *testing.T) {
-	r := NewFlagResolver(nil, cache.NewMemoryCache(time.Minute, time.Minute))
+	r := NewFlagResolver(db.NewStores(nil).Flags, cache.NewMemoryCache(time.Minute, time.Minute))
 	list, err := r.List(context.Background())
 	if err != nil || list != nil {
 		t.Fatalf("degraded List = (%v, %v), want (nil, nil)", list, err)

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"guardian-tracker/api-service/db"
-	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,7 +18,7 @@ type auditReadStore interface {
 
 // AuditHandler serves the admin audit feed. Mounted behind RequireAdmin.
 type AuditHandler struct {
-	store auditReadStore // nil in degraded mode
+	store auditReadStore
 }
 
 func NewAuditHandler(store auditReadStore) *AuditHandler { return &AuditHandler{store: store} }
@@ -43,10 +42,6 @@ type auditEntryResponse struct {
 
 // ListAudit handles GET /api/admin/audit (admin-gated upstream).
 func (h *AuditHandler) ListAudit(c *gin.Context) {
-	if h.store == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Audit log requires the database, which is not configured.", "code": "DB_UNAVAILABLE"})
-		return
-	}
 
 	f := db.AuditFilter{
 		EventType: c.Query("type"),
@@ -73,8 +68,7 @@ func (h *AuditHandler) ListAudit(c *gin.Context) {
 
 	entries, nextCursor, err := h.store.List(c.Request.Context(), f)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin audit listing failed", observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "admin audit listing failed")
 		return
 	}
 

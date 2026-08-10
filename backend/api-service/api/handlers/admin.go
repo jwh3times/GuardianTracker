@@ -53,8 +53,7 @@ type adminUserResponse struct {
 func (h *AdminHandler) ListUsers(c *gin.Context) {
 	users, err := h.users.ListUsers(c.Request.Context(), c.Query("q"), 200)
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin user listing failed", observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "admin user listing failed")
 		return
 	}
 	out := make([]adminUserResponse, len(users))
@@ -143,8 +142,7 @@ func toAdminFlag(f *db.FeatureFlag) adminFlagResponse {
 func (h *AdminHandler) ListFlags(c *gin.Context) {
 	flags, err := h.flags.List(c.Request.Context())
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin feature flag listing failed", observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "admin feature flag listing failed")
 		return
 	}
 	out := make([]adminFlagResponse, len(flags))
@@ -186,9 +184,7 @@ func (h *AdminHandler) UpdateFlag(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "unknown flag"})
 			return
 		}
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "admin feature flag update failed",
-			"flag", key, observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "admin feature flag update failed")
 		return
 	}
 	// Evict the cached flag list so GET /api/flags reflects the change immediately.

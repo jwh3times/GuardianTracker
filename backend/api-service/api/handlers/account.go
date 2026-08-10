@@ -25,7 +25,7 @@ type flagLister interface {
 
 // AccountHandler serves the per-user role opt-in and resolved feature-flag state.
 type AccountHandler struct {
-	users    roleSelfStore // nil = degraded mode
+	users    roleSelfStore
 	resolver *FlagResolver
 	cache    cache.Cache // for evicting tver: entries
 	audit    AuditLogger // nil = best-effort (no-op)
@@ -39,10 +39,6 @@ func NewAccountHandler(users roleSelfStore, flags flagLister, c cache.Cache, aud
 // Allows standard/beta/alpha only; admin is never self-assignable, and an admin
 // caller is refused (so they can't accidentally demote themselves via opt-in).
 func (h *AccountHandler) SetRole(c *gin.Context) {
-	if h.users == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Account roles require the database, which is not configured.", "code": "DB_UNAVAILABLE"})
-		return
-	}
 	var body struct {
 		Role string `json:"role"`
 	}
@@ -65,9 +61,7 @@ func (h *AccountHandler) SetRole(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "self-service role update failed",
-			observability.ID("membership", membershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		HandleStoreError(c, err, "self-service role update failed")
 		return
 	}
 	// Evict the revocation cache entry so the new role is read from the DB on the
