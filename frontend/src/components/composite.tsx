@@ -125,7 +125,6 @@ export function CategoryTree({
   // manually-opened ids are preserved. The `expand` prop is the external system
   // being synchronized into local open state here, so the in-effect setState is
   // intentional.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!expand || expand.length === 0) return;
     setOpen((s) => {
@@ -134,7 +133,6 @@ export function CategoryTree({
       return n;
     });
   }, [expand]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const renderNode = (node: TreeNode, depth: number): ReactNode => {
     const hasChildren = !!node.children && node.children.length > 0;

@@ -189,7 +189,6 @@ export function Collections() {
   // the tree, select its owning node, open its drawer, and clear the param.
   // The URL is the external system being synchronized here; the one-off
   // cascading render on deep-link navigation is intentional.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!itemParam || !collections) return;
     const item = collections.itemByHash(itemParam);
@@ -211,11 +210,9 @@ export function Collections() {
       setViewOnlyHash(itemParam);
       setFilters({}, { replace: true, drop: ["item"] });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [itemParam, collections]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!viewOnlyHash) return;
     if (itemViewQuery.data) {
@@ -225,9 +222,8 @@ export function Collections() {
       showToast("That item isn't in your trackable collections", "info");
       setViewOnlyHash(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [viewOnlyHash, itemViewQuery.data, itemViewQuery.isError]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const hasReal = !!collections;
 
@@ -252,7 +248,7 @@ export function Collections() {
     if (!active || !collections.node(active)) {
       setFilters({ node: collections.rootHashes[0] }, { replace: true });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // oxlint-disable-next-line react/exhaustive-deps
   }, [collections, active, itemParam]);
 
   // Reveal a node restored directly from a `?node=` URL (a bookmarked link, or
@@ -260,13 +256,11 @@ export function Collections() {
   // the deep-link effect's own `setExpandPath(path)`. Root-level selections
   // (including the "default to first root" effect above) need no reveal since
   // roots are already visible without opening anything.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!active || expandPath.length > 0 || !collections) return;
     const path = collections.pathToNode(active);
     if (path && path.length > 1) setExpandPath(path);
   }, [active, expandPath, collections]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const activeNode = active ? collections?.node(active) : undefined;
 
