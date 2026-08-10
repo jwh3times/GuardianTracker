@@ -77,6 +77,8 @@ docker-compose.override.yml
 
 # Testing
 coverage/
+# Extensionless Go coverage profile (`go test -coverprofile coverage`); *.out misses it
+coverage
 *.cover
 *.coverprofile
 frontend/playwright/.auth/
