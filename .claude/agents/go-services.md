@@ -40,6 +40,9 @@ backend/api-service/
                                            config, audit log feed
   api/handlers/health.go               ← Health, ready, manifest status endpoints
   api/handlers/common.go               ← Shared handler helpers (parseMembershipParams, ownershipCheck…)
+  api/handlers/storeerror.go           ← HandleStoreError(c, err, logMsg) — maps db.ErrUnavailable to a
+                                           503 DB_UNAVAILABLE and anything else to a logged 500 INTERNAL_ERROR;
+                                           mirrors handleBungieError
   services/bungie/client.go            ← HTTP client with rate limiting + retry
   services/bungie/manifest.go          ← Manifest download, version tracking, SQLite extraction;
                                            RegisterParticipant/RegisterObserver coordinate the file swap
@@ -74,7 +77,11 @@ backend/api-service/
                                            not four parallel ones; collections/efficiency/weekly delegate
   cache/cache.go                       ← In-memory cache (and no-op cache interface)
   db/db.go, db/migrate.go              ← Postgres pool; migration runner (each migration runs in a tx)
-  db/stores.go                         ← Stores struct aggregating all store types
+  db/stores.go                         ← Stores struct — interface fields, never nil; NewStores(nil)
+                                           returns the degraded set; Available() reports whether a real DB backs it
+  db/degraded.go                       ← ErrUnavailable sentinel; the six store interfaces (UserRepo,
+                                           TokenRepo, WishlistRepo, PrefsRepo, FlagRepo, AuditRepo) + Pinger;
+                                           degraded implementations whose every method returns ErrUnavailable
   db/migrations/0001_init.sql          ← Base schema DDL
   db/migrations/0002_roles_flags.sql   ← Adds role column to users, feature_flags table, role_audit
   db/migrations/0003_refresh_sessions.sql ← Adds refresh_sessions for per-device sessions + reuse detection
@@ -156,6 +163,44 @@ Sentinel errors:
 
 - `auth.ErrTokensNotFound` — no token row exists
 - `auth.ErrNoUserRow` — no users row for the membership
+
+## Store availability (degraded mode, `db/degraded.go`)
+
+`db.NewStores(pool)` never returns a nil field. With a `nil` pool it returns
+degraded implementations of every store interface (`UserRepo`, `TokenRepo`,
+`WishlistRepo`, `PrefsRepo`, `FlagRepo`, `AuditRepo`, `Pinger`) whose every
+method returns `db.ErrUnavailable`. There is no store nil-guard convention —
+handlers call the store directly and handle the error like any other:
+
+```go
+items, err := h.store.List(c.Request.Context(), userID)
+if err != nil {
+    handlers.HandleStoreError(c, err, "wishlist listing failed")
+    return
+}
+```
+
+`HandleStoreError(c, err, logMsg) bool` maps `errors.Is(err, db.ErrUnavailable)`
+to `503 {"error": "...", "code": "DB_UNAVAILABLE"}` and anything else to a
+logged `500 INTERNAL_ERROR`. All seven wishlist/preferences handlers and the
+admin/audit/account handlers route store errors through it, so a missing
+database now produces one response shape everywhere instead of the bare
+`{"error": "database not configured"}` the wishlist handlers used to emit.
+`auth.RequireTier`'s own 503 (no store involved — it never reads one) uses
+matching wording so both paths read as the same failure.
+
+`Stores.Available() bool` is the only legitimate "is there a real database"
+check — used in `main.go` to gate the session/audit pruners and to decide
+whether `RequireTier`'s role claims are authoritative (`auth.NewAuthz(stores.Available())`).
+Do not resurrect a `store == nil` check; every store field is always a valid,
+callable interface.
+
+Two callers stay deliberately lenient on `ErrUnavailable` rather than
+surfacing it: `FlagResolver.List` treats it as "no flags configured" (flags
+are rollout controls, not a security boundary, so an absent DB must not hide
+pages), and `GET /api/preferences` returns default preferences with `200`
+instead of a 503 (the UI needs preferences to render). `auth.RevocationChecker`
+already failed open on any store error before this existed.
 
 ## Middleware
 
