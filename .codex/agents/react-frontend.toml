@@ -40,14 +40,17 @@ npm run lint:fix   # Apply safe Oxlint fixes
 Oxlint is the sole linter. Type-aware analysis uses `oxlint-tsgolint` 7.0.2001;
 23 rules from typescript-eslint's `recommended-type-checked-only` preset run as
 warnings for `src/`, `vite.config.ts`, and all 10 TypeScript files under `e2e/`.
-They expose the TypeScript 7 adoption backlog without blocking CI.
+They expose the type-safety cleanup backlog without blocking CI.
 `playwright.config.ts` remains native-rule-only because tsgolint does not match
 it even though `frontend/e2e/tsconfig.json` includes it. The root TypeScript
 configuration includes Node ambient types, and the e2e project extends it.
 Native `react/react-compiler` also runs as a warning and replaces the individual
 recommended-latest compiler rules; preserve that intentional severity and
-suppression policy. `npm run type-check` (`tsc --noEmit`) remains the type gate,
-and Prettier remains the formatter.
+suppression policy. TypeScript 7 is the project compiler; `npm run type-check`
+(`tsc --noEmit`) remains the main frontend project's type gate, and Prettier
+remains the formatter. The standalone e2e project currently reports six
+pre-existing Playwright fixture typing errors under both TypeScript 6 and 7;
+treat those as separate cleanup rather than a compiler-upgrade regression.
 
 ## File structure
 

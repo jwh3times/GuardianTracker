@@ -147,11 +147,11 @@ npm run e2e:visual  # visual project; canonical CI rendering uses pinned Linux i
 
 Oxlint is the sole linter. Its type-aware TypeScript rules run through
 `oxlint-tsgolint` for `src/`, `vite.config.ts`, and the TypeScript files under
-`e2e/`; the current adoption backlog is reported as warnings so it does not
-block CI. `playwright.config.ts` receives Oxlint's native rules but is outside
-the type-aware scope. The React compiler rule is also warning-only. Prettier
-remains the formatter, and `npm run type-check` remains the TypeScript
-compilation gate.
+`e2e/`; the current type-safety cleanup backlog is reported as warnings so it
+does not block CI. `playwright.config.ts` receives Oxlint's native rules but is
+outside the type-aware scope. The React compiler rule is also warning-only.
+TypeScript 7 is the project compiler, Prettier remains the formatter, and
+`npm run type-check` remains the main frontend project's compilation gate.
 
 ## Browser Tests
 
