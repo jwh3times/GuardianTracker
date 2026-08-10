@@ -39,6 +39,13 @@ func (h *SearchHandler) Search(c *gin.Context) {
 		limit = 50
 	}
 
+	// Ask before reporting unavailable, not after: Search is what normally calls
+	// EnsureIndex, and it is unreachable from here. Without this, a cold-start
+	// build that failed left the index empty with nothing to retry it until the
+	// next hourly manifest swap. The rebuild is asynchronous, so this request
+	// still gets its 503 — a later one sees the recovered index.
+	h.svc.EnsureIndex()
+
 	if !h.svc.IsReady() {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "Search index not ready — manifest may still be downloading",

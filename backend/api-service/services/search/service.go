@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
@@ -44,6 +45,14 @@ type Service struct {
 	// idle broadcasts when a build finishes, so CloseForSwap can wait for an
 	// in-flight scan to release its handle before the caller renames the file.
 	idle *sync.Cond
+	// lastBuildAttempt is when EnsureIndex last kicked a build. It bounds retry
+	// frequency, so a persistently failing build costs one attempt per
+	// buildRetryInterval rather than one per request. Builds started directly
+	// (startup, OnVersionChanged) deliberately do not spend the retry budget.
+	lastBuildAttempt time.Time
+	// now is an injectable clock; nil means time.Now. Tests set it to drive the
+	// retry interval without sleeping.
+	now func() time.Time
 }
 
 const (
@@ -57,6 +66,12 @@ const (
 // pending manifest swap waits on the read handle without adding a lock
 // acquisition per row.
 const swapCheckInterval = 1024
+
+// buildRetryInterval bounds how often EnsureIndex may kick a rebuild. A build
+// that fails leaves builtVersion empty, so every subsequent request would
+// otherwise start a fresh one; this caps a broken manifest at one attempt per
+// interval while still recovering promptly once the cause clears.
+const buildRetryInterval = 30 * time.Second
 
 type indexSnapshot struct {
 	Format  int     `json:"format"`
@@ -108,7 +123,7 @@ func (s *Service) Search(q string, limit int) []Entry {
 	if limit <= 0 || limit > maxSearchLimit {
 		limit = defaultSearchLimit
 	}
-	s.ensureIndex()
+	s.EnsureIndex()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if len(s.entries) == 0 {
@@ -462,18 +477,52 @@ func sanitizeVersion(version string) string {
 	return cleaned
 }
 
-// ensureIndex kicks an async rebuild if the manifest version changed since last build.
-func (s *Service) ensureIndex() {
-	if s.manifestService == nil {
-		return
-	}
-	s.mu.RLock()
-	current := s.manifestService.Version()
-	needsRebuild := current != "" && s.builtVersion != current && !s.building
-	s.mu.RUnlock()
-	if needsRebuild {
+// EnsureIndex kicks an asynchronous rebuild when the index is missing or stale
+// for the installed manifest. "Missing" covers a build that failed: it leaves
+// builtVersion empty, and until this is reachable from the not-ready path
+// nothing retried it before the next manifest swap. Safe to call per request —
+// attempts are throttled to one per buildRetryInterval and the rebuild is
+// asynchronous, so the caller that triggers it still sees the old readiness.
+func (s *Service) EnsureIndex() {
+	if s.shouldKickBuild() {
 		go s.BuildIndex()
 	}
+}
+
+// shouldKickBuild reports whether EnsureIndex should start a build now, and
+// records the attempt when it says yes. Split out from EnsureIndex so the
+// scheduling decision is testable without spawning a build.
+func (s *Service) shouldKickBuild() bool {
+	if s.manifestService == nil {
+		return false
+	}
+	// Read the manifest version outside our own lock: it takes the manifest
+	// service's lock, and nothing here needs the two held together.
+	current := s.manifestService.Version()
+	if current == "" {
+		return false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// A build already running, a swap in progress, or an index already current
+	// for this version — none of these should spend the retry budget.
+	if s.builtVersion == current || s.building || s.swapping {
+		return false
+	}
+	now := s.clock()
+	if !s.lastBuildAttempt.IsZero() && now.Sub(s.lastBuildAttempt) < buildRetryInterval {
+		return false
+	}
+	s.lastBuildAttempt = now
+	return true
+}
+
+func (s *Service) clock() time.Time {
+	if s.now == nil {
+		return time.Now()
+	}
+	return s.now()
 }
 
 func itemTypeName(def bungie.InventoryItemDefinition) string {

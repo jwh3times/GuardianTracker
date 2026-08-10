@@ -13,6 +13,22 @@ request.
 
 No unreleased changes.
 
+## [0.3.65] - 2026-08-10
+
+### Fixed
+
+- Item search now recovers on its own after a failed search-index build. The
+  index is built asynchronously at startup; if that first build failed, the
+  search endpoint reported "index not ready" and returned 503 without ever
+  reaching the code that retries the build, so header search stayed unavailable
+  until the next hourly manifest update happened to rebuild it. A search request
+  that finds the index unready now starts the rebuild itself. The rebuild still
+  runs in the background — a full item-table scan takes seconds and must not
+  block a request — so the request that triggers it still gets 503 and a later
+  one returns results. Repeat attempts are limited to one every 30 seconds, so a
+  manifest that cannot be indexed is retried steadily rather than once per
+  keystroke. The 503 response body and its `SEARCH_NOT_READY` code are unchanged.
+
 ## [0.3.64] - 2026-08-10
 
 ### Fixed

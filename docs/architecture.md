@@ -78,8 +78,10 @@ dependent services to rebuild manifest-derived indexes.
 Collections, cosmetics, catalysts, crafting, triumphs, search, and item detail
 views all depend on the manifest. The search index restores a matching versioned
 snapshot from beside the manifest on startup, then rebuilds asynchronously when
-the snapshot is missing or the manifest changes. Other affected endpoints can
-return warming responses during cold start or manifest swap.
+the snapshot is missing or the manifest changes. A build that fails is retried by
+the next search request rather than waiting for the next manifest swap, throttled
+to one attempt per 30 seconds. Other affected endpoints can return warming
+responses during cold start or manifest swap.
 
 ## API Surface
 
