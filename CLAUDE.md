@@ -19,6 +19,7 @@ sync contract in AGENTS.md.
 
 Docs freshness is handled at push time by the `/ship` skill
 (`.claude/skills/ship/SKILL.md`), not by a per-turn hook. `/ship` invokes the
-`docs-updater` subagent against the branch diff, writes the `CHANGELOG.md` section for
-the version the merge will mint, runs the fast checks, pushes, and opens or updates the
-PR. Run it when a branch is ready for review.
+`docs-updater` subagent against the branch diff, classifies the release as major,
+minor, or build-only, updates `VERSION` for major and minor releases, writes the
+`CHANGELOG.md` section for the version the merge will mint, runs the fast checks,
+pushes, and opens or updates the PR. Run it when a branch is ready for review.
