@@ -13,6 +13,16 @@ request.
 
 No unreleased changes.
 
+## [0.3.64] - 2026-08-10
+
+### Fixed
+
+- A stale Go coverage profile committed at `backend/api-service/coverage` is no
+  longer tracked. Every local test run with coverage rewrote it, so it appeared
+  as a large unrelated modification in otherwise unrelated pull requests. The
+  extensionless name escaped the existing `*.out` ignore rule; the file is now
+  ignored by name. No build, test, or CI path read it.
+
 ## [0.3.63] - 2026-08-10
 
 ### Added
