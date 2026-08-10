@@ -42,6 +42,28 @@ func OriginAllowed(origin string, allowedOrigins []string) bool {
 	return false
 }
 
+// CORS answers preflights and reflects an exact allowlisted Origin. It always
+// sets Vary: Origin, including on a denied origin, so a shared cache cannot
+// serve one origin's allow header to another.
+func CORS(allowedOrigins []string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.Request.Header.Get("Origin")
+		c.Header("Vary", "Origin")
+		if OriginAllowed(origin, allowedOrigins) {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Access-Control-Expose-Headers", "X-Request-ID")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
+}
+
 // RequireAllowedOrigin rejects requests without an exact allowlisted Origin.
 // It is applied to callback and refresh because both establish/rotate a
 // credential-bearing cookie without requiring an access token.

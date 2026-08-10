@@ -56,13 +56,19 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Token store / DB sentinel errors**
 
-- The adapter in `main.go` must translate `db.ErrTokensNotFound` → `auth.ErrTokensNotFound` and `db.ErrNoUserRow` → `auth.ErrNoUserRow`. Flag any adapter that swallows these sentinels or maps them to a generic error.
+- The adapter in `db/adapters` must translate `db.ErrTokensNotFound` → `auth.ErrTokensNotFound` and `db.ErrNoUserRow` → `auth.ErrNoUserRow`, and must pass every _other_ error through untranslated — `auth.TokenStore`'s CAS reconciliation treats "definitively absent" and "the read failed" as opposite cases. Flag any adapter that swallows these sentinels, maps them to a generic error, or reports a transient failure as not-found.
 
 **Store availability**
 
 - `db.Stores` fields are interfaces and are never nil — without a database, `db.NewStores(nil)` returns degraded implementations whose every method returns `db.ErrUnavailable`. Flag any new or edited handler that nil-checks a store (`h.store == nil`, `if stores.X != nil`, etc.); that convention no longer applies and cannot fire.
 - A handler that gets an error back from a store call must route it through `handlers.HandleStoreError(c, err, logMsg)`, not a hand-rolled `errors.Is(err, db.ErrUnavailable)` branch or a generic 500. Exceptions are the two documented fail-open/default paths: `FlagResolver.List` (absent DB → "no flags configured") and `GET /api/preferences` (absent DB → default preferences with `200`).
 - Flag any code that checks `stores.Available()` where the intent is really an error-handling decision — it exists only for the two use cases in `main.go` (gating the pruners, and deciding whether `RequireTier`'s role claims are authoritative), not as a substitute for handling a store's returned error.
+
+## Route table
+
+- Routes live in `api/router.go`, never in `main.go`. Authentication is applied per group (`authed := api.Group("", d.JWT.Middleware(d.Revoker))`) — flag any route registered with a per-route JWT middleware argument, and any `/api` route registered outside `authed` that is not a deliberate, allowlisted public route.
+- A new public `/api` route must also appear in `publicAPIRoutes` in `api/router_test.go`. Flag a change that adds one without it, or that moves the allowlist into the router package — the test owns it so the router cannot exempt itself.
+- A new flag-gated route must be added to `TestFlagGatedRoutesEnforceTheirOwnFlag`. `RequireFlag` fails open on an unresolvable key, so a wrong or mistyped key gates nothing and produces no error. See [ADR 0011](../../docs/adr/0011-route-table-as-a-testable-composition-root.md).
 
 **Roles and admin authorization**
 

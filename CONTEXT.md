@@ -1,0 +1,174 @@
+# CONTEXT
+
+The project's shared vocabulary. When code, a test name, an issue title, a
+commit message, or an agent's output names one of these concepts, it uses the
+term as defined here rather than a synonym.
+
+This is a glossary, not an architecture document — it says what a word means and
+which module owns it. For how the pieces fit together see
+[docs/architecture.md](./docs/architecture.md); for why a shape was chosen see
+[docs/adr/](./docs/adr/).
+
+**Adding a term.** A name earns a place here once it is used in more than one
+module, or once two names for it have appeared in the codebase. Record the
+canonical owner alongside the definition so there is somewhere to look when the
+definition is not enough.
+
+---
+
+## Destiny concepts
+
+Bungie's vocabulary. These words mean what they mean in the game and in the
+Bungie API; we do not redefine them.
+
+**Manifest** — Bungie's content database: every item, activity, vendor, and
+collectible definition, published as a versioned SQLite file. Downloaded and
+served by `services/manifest`, refreshed by the swap described in
+[ADR 0010](./docs/adr/0010-manifest-swap-participants-and-observers.md).
+
+**Collectible** — a manifest entry recording that a specific item is obtainable
+and trackable. The unit Guardian Tracker counts; a player either has it or is
+missing it.
+
+**Presentation node** — the manifest's tree structure that organises
+collectibles into categories and subcategories. The Collections page renders it.
+Our own name for the assembled result is the _collection tree_.
+
+**Source string** — the manifest's human-readable text saying where an item
+comes from ("Vault of Glass raid", "Complete Nightfall strikes"). It is prose,
+not a structured field, which is why classifying it needs a keyword vocabulary.
+Owned by `services/sources`.
+
+**Milestone** — a Bungie-defined weekly or repeatable objective (a featured
+raid, a Nightfall). Surfaced on This Week.
+
+**Vendor** — an in-game merchant with a rotating inventory. **Xûr** is the
+weekend-only exotic vendor and is the one vendor with bespoke handling, because
+his location and stock change weekly and are only fully readable through an
+authenticated character-scoped call.
+
+**Record** — a manifest-tracked achievement. A **Triumph** is a record shown to
+the player; a **Seal** is a named collection of triumphs awarding a title.
+Served by `services/records`, rendered by `Triumphs.tsx`.
+
+**Catalyst** — an upgrade for an exotic weapon, tracked like a collectible.
+**Craft pattern** — the progress required to unlock crafting a weapon. Both
+served by `services/records`, rendered by `Catalysts.tsx`.
+
+**Guardian / character** — a player's in-game character. An account has up to
+three. Collections are **account-wide**; vendor inventory, daily actions, and
+Xûr's location are **character-scoped**, which is the distinction the character
+switcher exists to serve.
+
+---
+
+## Guardian Tracker concepts
+
+Our vocabulary — words that describe what this app does with Bungie's data.
+
+**Missing item** — a collectible the player does not have. The app's central
+noun: the whole product is "what are you missing, and what should you do about
+it".
+
+**Difficulty tier** — how hard a missing item is to acquire, derived from its
+source string: `Challenging`, `Moderate`, `Easy`, or `Unrated`. `Unrated` means
+no keyword matched, and is deliberately honest rather than a default guess.
+Owned by `services/sources`; do not call this a "rating" or a "score".
+
+**Raid/dungeon loot** — a source facet, not a tier. It marks loot dropping from
+a named raid or dungeon, and gates the per-milestone missing count. Kept
+separate from the tier because "Grandmaster Nightfall" run inside a dungeon is
+`Challenging` on its own keyword yet still dungeon loot. `sources.IsRaidOrDungeon`.
+
+**Availability / available now** — an item is _available now_ when a live vendor
+is currently selling it. Distinct from difficulty: an item can be `Challenging`
+and available this weekend. Carried as `availableNow` (item hash → vendor name)
+on the collections payload.
+
+**Efficiency ranking** — scoring which activity buckets would close the most
+missing items, so recommendations are ordered by payoff rather than by
+Bungie's ordering. `services/efficiency`: `Rank` and `MissingForMilestone`.
+
+**Wish list** — the player's own saved set of wanted items. User-scoped and
+persisted; it is the one collection the player authors rather than earns.
+Two words, lowercase, in prose; `wishlist` as one word in code and routes.
+
+**This Week / Do This Today** — the two weekly surfaces. _This Week_ is the
+page; _Do This Today_ is the ranked short list of daily actions on it. Served
+by `services/weekly`.
+
+**Cosmetics** — shaders, ornaments, emblems and the like, browsed as a gallery
+rather than as a tree. Same collectibles, different presentation.
+
+---
+
+## Architectural names
+
+Names for seams, introduced deliberately and each with exactly one owner. These
+are the ones most likely to drift, because a second name for a seam looks
+harmless until the two halves disagree.
+
+**Swap participant** (`bungie.SwapParticipant`) — a module holding an OS handle
+on the manifest file, which must close it before the rename. **Manifest
+observer** (`bungie.ManifestObserver`) — a module holding manifest-derived state,
+which is notified only when a version genuinely changed. Two interfaces, not
+one; observers do not fire on the rollback path. See
+[ADR 0010](./docs/adr/0010-manifest-swap-participants-and-observers.md).
+
+**Provider** (`manifest.Provider`) — the lazily-opened, swap-aware handle on the
+manifest database. Returns `manifest.ErrNotReady` while the file is downloading
+or mid-swap; that is a 503, not an error.
+
+**CollectionsView / CollectionsSummaryView** (`lib/collectionsView.ts`) — the
+adapted collections payload the frontend reads. Two types because the endpoint
+has two shapes: `CollectionsSummaryView` carries tree counts and the summary,
+`CollectionsView` extends it with items. Asking the summary view for items is a
+compile error, deliberately. No feature module handles the raw wire shape.
+
+**AppProviders / AuthedProviders** (`contexts/AppProviders.tsx`) — the context
+tower, split at the auth gate. `AppProviders` is what every page sits inside;
+`AuthedProviders` adds Flags and Character below the gate. The split is
+load-bearing, which is why it is two components rather than one with a flag.
+
+**Composition root** — `main.go`, and only `main.go`: it loads configuration,
+constructs services and handlers, declares swap participation, and serves. It
+holds no logic of its own. The route table it hands to `api.NewRouter` lives in
+`api/router.go`. **Authenticated group** (`authed`) — the one place the JWT gate
+is applied; every authenticated route registers on it rather than naming the
+middleware itself. See
+[ADR 0011](./docs/adr/0011-route-table-as-a-testable-composition-root.md).
+
+**Degraded mode** — running without a database. Not a `nil`: `db.NewStores(nil)`
+returns real implementations whose every method reports `db.ErrUnavailable`, and
+`handlers.HandleStoreError` maps that to one 503. Ask `Stores.Available()` when
+you genuinely need to know whether persistence exists. A degraded read never
+returns empty success.
+
+**Role tier** — `standard < beta < alpha < admin`, ordered integers persisted on
+the user row. Say _tier_, not "level" or "permission". **Feature flag** — a
+rollout control, gated per role, and explicitly _not_ a security boundary; an
+absent database must not hide pages. See
+[ADR 0006](./docs/adr/0006-roles-feature-flags-and-admin-authorization.md).
+
+**Access token / refresh token / session** — the access JWT is short-lived and
+lives in localStorage; the refresh JWT rotates per device and lives only in a
+host-only HttpOnly cookie; the _session_ is the server-side row those rotate
+against, with revocation and reuse detection. Bungie's own OAuth tokens are
+separate again and are called _Bungie tokens_, never just "tokens". See
+[ADR 0002](./docs/adr/0002-bungie-oauth-and-token-storage.md) and
+[ADR 0008](./docs/adr/0008-browser-refresh-cookie.md).
+
+---
+
+## Naming rules
+
+- **One name per seam.** If an interface exists for a concept, every consumer
+  declaring its own version uses the same name. Two names for one method set is
+  how the halves drift apart.
+- **Silent-empty is this codebase's recurring failure mode.** "There is
+  genuinely nothing" and "you asked the wrong thing, or something broke" must be
+  distinguishable. Prefer a shape that fails loudly or fails to compile over one
+  that returns an empty value; it is worth a type or an error sentinel to get it.
+- **Don't default a classification.** `Unrated`, `ErrNotReady` and
+  `ErrUnavailable` all exist so an unknown stays visibly unknown instead of
+  being rounded to a plausible-looking answer.
