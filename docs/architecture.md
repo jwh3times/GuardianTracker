@@ -33,13 +33,19 @@ React/Vite frontend (:5273)
 
 Bungie OAuth login uses a stateless HMAC-signed CSRF state. On callback, the API
 stores Bungie OAuth tokens AES-256-GCM encrypted in Postgres and issues Guardian
-Tracker JWTs.
+Tracker JWTs. One module, `auth.SessionIssuer`, owns the whole session
+lifecycle — starting the OAuth flow, turning a callback or refresh into a
+session, and ending one session or all of them; the Gin handlers only map the
+result to HTTP (status code, cookie, audit event, response body).
 
 Access tokens are short-lived bearer tokens stored with the non-secret user
 snapshot in browser localStorage. Refresh tokens are rotating, per-device
 sessions backed by Postgres and delivered only through a host-only HttpOnly
 cookie scoped to `/api/auth`. Reused refresh tokens revoke the affected session.
 Sign-out-everywhere bumps the user's token version and removes sessions.
+Without a configured database, login still succeeds without a session row; a
+session write failure with a database configured still fails the login, since
+the access token is checked against that row on every request.
 
 The callback and refresh endpoints require an exact allowlisted browser origin.
 This cookie policy assumes the frontend and API are same-site; a cross-site
