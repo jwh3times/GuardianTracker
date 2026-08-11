@@ -13,6 +13,26 @@ request.
 
 No unreleased changes.
 
+## [0.3.72] - 2026-08-11
+
+### Changed
+
+- Cached values are now read through one helper instead of a dozen hand-written
+  copies of the same lookup. Three rules that had been comments at some call
+  sites and nothing at all at others are now guaranteed for every caller: a
+  failed load is never cached, so the next request retries instead of being
+  served the failure until the cache entry expires; a cache entry left over from
+  an older build with a different value type is now reported and replaced rather
+  than silently ignored, which previously meant that cache never hit again; and
+  the rule that an empty result must not be cached — a transient empty vendor
+  response would otherwise have shown every player an empty day until the next
+  daily reset — is now a required argument rather than a comment. Cached data,
+  keys, and lifetimes are unchanged.
+- Item detail, weapon perks, and catalyst pools now share one bounded cache
+  implementation rather than three copies of it. Behavior is unchanged, including
+  the deliberate difference that an unrecognized item hash is not cached while a
+  weapon with no perks or no catalyst is.
+
 ## [0.3.71] - 2026-08-11
 
 ### Fixed

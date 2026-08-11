@@ -156,17 +156,12 @@ func recordHashKey(hash uint32) string {
 // weaponTypesByName returns the cached lowercased-weapon-name → weapon-type map
 // used to enrich catalyst and crafting entries (B10). Failures return an empty
 // map (entries fall back to a generic type) and are not cached.
-func (s *Service) weaponTypesByName() map[string]string {
-	if cached, ok := s.cache.Get(weaponTypesCacheKey); ok {
-		if m, ok := cached.(map[string]string); ok {
-			return m
-		}
-	}
-	m, err := s.manifest.GetWeaponTypesByName()
+func (s *Service) weaponTypesByName(ctx context.Context) map[string]string {
+	m, err := cache.LoadIf(ctx, s.cache, weaponTypesCacheKey, time.Hour,
+		func() (map[string]string, error) { return s.manifest.GetWeaponTypesByName() }, cache.NonEmptyMap)
 	if err != nil || len(m) == 0 {
 		return map[string]string{}
 	}
-	s.cache.Set(weaponTypesCacheKey, m, time.Hour)
 	return m
 }
 
@@ -174,17 +169,12 @@ func (s *Service) weaponTypesByName() map[string]string {
 // {type, icon} map used to resolve a catalyst's weapon picture and type.
 // Failures return an empty map (entries fall back to a type glyph) and are not
 // cached.
-func (s *Service) exoticWeaponsByName() map[string]manifestrepo.ExoticWeapon {
-	if cached, ok := s.cache.Get(exoticWeaponsCacheKey); ok {
-		if m, ok := cached.(map[string]manifestrepo.ExoticWeapon); ok {
-			return m
-		}
-	}
-	m, err := s.manifest.GetExoticWeaponsByName()
+func (s *Service) exoticWeaponsByName(ctx context.Context) map[string]manifestrepo.ExoticWeapon {
+	m, err := cache.LoadIf(ctx, s.cache, exoticWeaponsCacheKey, time.Hour,
+		func() (map[string]manifestrepo.ExoticWeapon, error) { return s.manifest.GetExoticWeaponsByName() }, cache.NonEmptyMap)
 	if err != nil || len(m) == 0 {
 		return map[string]manifestrepo.ExoticWeapon{}
 	}
-	s.cache.Set(exoticWeaponsCacheKey, m, time.Hour)
 	return m
 }
 
@@ -234,17 +224,12 @@ const catalystLinksCacheKey = "manifest:catalystLinks"
 // catalystLinks returns the cached per-weapon catalyst linkage data. Failures
 // return nil (every record then falls back to its own description) and are not
 // cached.
-func (s *Service) catalystLinks() []manifestrepo.CatalystLink {
-	if cached, ok := s.cache.Get(catalystLinksCacheKey); ok {
-		if l, ok := cached.([]manifestrepo.CatalystLink); ok {
-			return l
-		}
-	}
-	links, err := s.manifest.GetCatalystLinks()
-	if err != nil || len(links) == 0 {
+func (s *Service) catalystLinks(ctx context.Context) []manifestrepo.CatalystLink {
+	links, err := cache.LoadIf(ctx, s.cache, catalystLinksCacheKey, time.Hour,
+		func() ([]manifestrepo.CatalystLink, error) { return s.manifest.GetCatalystLinks() }, cache.NonEmptySlice)
+	if err != nil {
 		return nil
 	}
-	s.cache.Set(catalystLinksCacheKey, links, time.Hour)
 	return links
 }
 
@@ -397,36 +382,30 @@ func (s *Service) OnVersionChanged(version string) error {
 // getProfileRecords fetches and caches the profile records component (900) for a user.
 // The returned time is when the data was actually fetched from Bungie.
 func (s *Service) getProfileRecords(ctx context.Context, membershipType int, membershipID, bungieToken string) (*bungie.RecordsProfileResponse, time.Time, error) {
-	cacheKey := recordsCacheKey(membershipType, membershipID)
-	if cached, ok := s.cache.Get(cacheKey); ok {
-		if r, ok := cached.(*cachedRecords); ok {
-			return r.resp, r.fetchedAt, nil
-		}
-	}
-	resp, err := s.bungie.GetRecords(ctx, membershipType, membershipID, bungieToken)
+	r, err := cache.Load(ctx, s.cache, recordsCacheKey(membershipType, membershipID), s.ttl,
+		func() (*cachedRecords, error) {
+			resp, err := s.bungie.GetRecords(ctx, membershipType, membershipID, bungieToken)
+			if err != nil {
+				return nil, err
+			}
+			return &cachedRecords{resp: resp, fetchedAt: time.Now().UTC()}, nil
+		})
 	if err != nil {
 		return nil, time.Time{}, err
 	}
-	now := time.Now().UTC()
-	s.cache.Set(cacheKey, &cachedRecords{resp: resp, fetchedAt: now}, s.ttl)
-	return resp, now, nil
+	return r.resp, r.fetchedAt, nil
 }
+
+// coreSettingsCacheKey holds Bungie's Destiny 2 core settings. Not
+// manifest-derived — the settings come from the live API, so a manifest swap
+// leaves them valid.
+const coreSettingsCacheKey = "settings:core"
 
 // getCoreSettings fetches and caches Bungie's Destiny 2 core settings (root node hashes).
 // Cached for 24 hours since these rarely change.
 func (s *Service) getCoreSettings(ctx context.Context) (*bungie.CoreSettings, error) {
-	const cacheKey = "settings:core"
-	if cached, ok := s.cache.Get(cacheKey); ok {
-		if cs, ok := cached.(*bungie.CoreSettings); ok {
-			return cs, nil
-		}
-	}
-	settings, err := s.bungie.GetCommonSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	s.cache.Set(cacheKey, settings, 24*time.Hour)
-	return settings, nil
+	return cache.Load(ctx, s.cache, coreSettingsCacheKey, 24*time.Hour,
+		func() (*bungie.CoreSettings, error) { return s.bungie.GetCommonSettings(ctx) })
 }
 
 // walkNodeForRecords does a BFS traversal of presentation nodes starting from rootHash,
@@ -514,7 +493,7 @@ func (s *Service) GetCatalysts(ctx context.Context, membershipType int, membersh
 	// Resolve each catalyst's weapon picture/type from the exotic-weapon map; the
 	// catalyst record's own icon is just a generic glyph. namesByLen lets the
 	// resolver fall back to scanning the description for a weapon name.
-	exotics := s.exoticWeaponsByName()
+	exotics := s.exoticWeaponsByName(ctx)
 	namesByLen := make([]string, 0, len(exotics))
 	for name := range exotics {
 		namesByLen = append(namesByLen, name)
@@ -526,7 +505,7 @@ func (s *Service) GetCatalysts(ctx context.Context, membershipType int, membersh
 	// manifest.GetWeaponCatalysts), then linked to this record by objective-hash
 	// overlap first (unambiguous on both the weapon and record side), falling
 	// back to name-based matching.
-	links := s.catalystLinks()
+	links := s.catalystLinks(ctx)
 	byObjHash := catalystObjectiveIndex(links)
 	byName := catalystNameIndex(links)
 	byPlugName := catalystPlugNameIndex(links)
@@ -633,7 +612,7 @@ func (s *Service) GetCrafting(ctx context.Context, membershipType int, membershi
 		return nil, time.Time{}, err
 	}
 
-	weaponTypes := s.weaponTypesByName()
+	weaponTypes := s.weaponTypesByName(ctx)
 
 	patterns := make([]CraftPattern, 0, len(recordHashes))
 	for _, hash := range recordHashes {

@@ -47,23 +47,17 @@ func (r *FlagResolver) List(ctx context.Context) ([]db.FeatureFlag, error) {
 	if r.flags == nil {
 		return nil, nil
 	}
-	if r.cache != nil {
-		if v, ok := r.cache.Get(flagsCacheKey); ok {
-			if flags, ok := v.([]db.FeatureFlag); ok {
-				return flags, nil
-			}
-			// Wrong-typed value in the slot: treat as a miss and re-read below.
-		}
-	}
-	flags, err := r.flags.List(ctx)
+	flags, err := cache.Load(ctx, r.cache, flagsCacheKey, flagsCacheTTL, func() ([]db.FeatureFlag, error) {
+		return r.flags.List(ctx)
+	})
+	// Translated outside the loader on purpose: Load never caches an error, so
+	// an absent database stays a per-request answer rather than pinning an empty
+	// catalog in the cache for the whole TTL after the database comes back.
 	if errors.Is(err, db.ErrUnavailable) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
-	}
-	if r.cache != nil {
-		r.cache.Set(flagsCacheKey, flags, flagsCacheTTL)
 	}
 	return flags, nil
 }

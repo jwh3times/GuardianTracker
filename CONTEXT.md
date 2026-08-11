@@ -145,6 +145,14 @@ is applied; every authenticated route registers on it rather than naming the
 middleware itself. See
 [ADR 0011](./docs/adr/0011-route-table-as-a-testable-composition-root.md).
 
+**Load-through** (`cache.Load` / `cache.LoadIf`) — the way a cached value is
+read: hand it a key, a TTL and a loader, and get the value. An error is never
+cached, a wrong-typed entry is a logged miss rather than a silent one, and
+`LoadIf`'s predicate is where "do not cache an empty result" lives. Reach for
+`cache.Cache` directly only to evict, or when the TTL depends on the value you
+just loaded. `services/items` has its own bounded-map equivalent because it is
+keyed by item hash with a size cap and no TTL.
+
 **Degraded mode** — running without a database. Not a `nil`: `db.NewStores(nil)`
 returns real implementations whose every method reports `db.ErrUnavailable`, and
 `handlers.HandleStoreError` maps that to one 503. Ask `Stores.Available()` when
