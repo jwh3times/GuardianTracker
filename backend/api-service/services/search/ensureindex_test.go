@@ -24,6 +24,11 @@ func writeVersionFile(t *testing.T, dir, version string) {
 // versionOnlyService returns a service whose manifest version is known but whose
 // database file does not exist. That is enough for the build-scheduling
 // decisions, which never open SQLite.
+//
+// Deliberately no drainBuild cleanup, unlike newTestService: nothing here ever
+// starts a build, so there is no snapshot write to race the directory removal —
+// and one of these tests sets `building` by hand and never clears it, which a
+// cond-based drain would wait on forever.
 func versionOnlyService(t *testing.T) *Service {
 	t.Helper()
 	dir := t.TempDir()

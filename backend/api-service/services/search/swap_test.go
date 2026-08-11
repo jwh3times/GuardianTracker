@@ -60,7 +60,34 @@ func writeLargeManifestDB(t *testing.T, rowCount int) string {
 func newTestService(t *testing.T, dbPath string) *Service {
 	t.Helper()
 	ms := bungie.NewManifestService(bungie.NewClient("k", "http://unused", 100, 100), dbPath, time.Hour)
-	return NewService(ms, dbPath)
+	svc := NewService(ms, dbPath)
+	t.Cleanup(svc.drainBuild)
+	return svc
+}
+
+// drainBuild blocks until no index build is in flight.
+//
+// Every test service writes its snapshot beside the manifest — that is, inside
+// the t.TempDir() it was built over — and BuildIndex publishes the index before
+// saving that snapshot, so IsReady goes true while the goroutine is still about
+// to create files. A test that returns at that moment leaves the write racing
+// t.TempDir()'s RemoveAll, which fails the test with
+//
+//	TempDir RemoveAll cleanup: unlinkat ...: directory not empty
+//
+// even though every assertion passed. Registering this as a cleanup in the
+// constructors is what makes it structural: cleanups run last-registered-first,
+// and the directory registered its own removal before the service existed, so
+// the drain is guaranteed to run first.
+//
+// It waits on the same condition CloseForSwap does rather than polling, so it
+// cannot itself become a source of flakiness.
+func (s *Service) drainBuild() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for s.building {
+		s.idle.Wait()
+	}
 }
 
 // waitFor polls cond until it holds or the deadline passes.
