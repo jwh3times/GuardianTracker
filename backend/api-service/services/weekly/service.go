@@ -947,25 +947,20 @@ func (s *Service) dailyVendorsCacheKey(membershipType int, membershipID, charact
 // getDailyVendorItems fetches Ada-1 and Banshee-44 inventory via the character vendor endpoint.
 // Component 402 can vary by class, so the result is cached per validated character.
 func (s *Service) getDailyVendorItems(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, now time.Time) []dailyVendorItem {
-	cacheKey := s.dailyVendorsCacheKey(membershipType, membershipID, characterID)
-	if cached, ok := s.cache.Get(cacheKey); ok {
-		if items, ok := cached.([]dailyVendorItem); ok {
-			return items
-		}
-	}
-
-	resp := s.getCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
-	if resp == nil {
+	// Only a non-empty result is cached — a transient empty response would poison
+	// the cache for all users until the next daily reset.
+	items, err := cache.LoadIf(ctx, s.cache, s.dailyVendorsCacheKey(membershipType, membershipID, characterID),
+		max(NextDailyReset(now).Sub(now), 5*time.Minute),
+		func() ([]dailyVendorItem, error) {
+			resp := s.getCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
+			if resp == nil {
+				return nil, errUpstreamUnavailable
+			}
+			return s.enrichDailyVendorItems(resp), nil
+		},
+		cache.NonEmptySlice)
+	if err != nil {
 		return nil
-	}
-
-	items := s.enrichDailyVendorItems(resp)
-
-	// Only cache non-empty results — a transient empty response would poison the cache
-	// for all users until the next daily reset.
-	if len(items) > 0 {
-		ttl := max(NextDailyReset(now).Sub(now), 5*time.Minute)
-		s.cache.Set(cacheKey, items, ttl)
 	}
 	return items
 }
@@ -1021,42 +1016,42 @@ func rosterCacheKey(membershipType int, membershipID string) string {
 // resolveCharacter validates a requested character against the authenticated
 // roster and fails soft to the most recently played character on mismatch.
 func (s *Service) resolveCharacter(ctx context.Context, membershipType int, membershipID, bungieToken, requestedCharacterID string) (string, int) {
-	cacheKey := rosterCacheKey(membershipType, membershipID)
-	if cached, ok := s.cache.Get(cacheKey); ok {
-		if roster, ok := cached.(characterRoster); ok {
-			return roster.resolve(requestedCharacterID)
-		}
-	}
-	if s.bungie == nil {
-		return "", -1
-	}
+	// An empty roster is not cached: it means the fetch found nothing to
+	// resolve against, and caching it would pin every request to the fallback
+	// character for the whole TTL.
+	roster, err := cache.LoadIf(ctx, s.cache, rosterCacheKey(membershipType, membershipID), 5*time.Minute,
+		func() (characterRoster, error) {
+			if s.bungie == nil {
+				return characterRoster{}, errUpstreamUnavailable
+			}
+			chars, err := s.bungie.GetCharacters(ctx, membershipType, membershipID, bungieToken)
+			if err != nil {
+				observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly character roster fetch failed",
+					slog.Int("membership_type", membershipType),
+					observability.ID("membership", membershipID),
+					observability.Err(err),
+				)
+				return characterRoster{}, err
+			}
 
-	chars, err := s.bungie.GetCharacters(ctx, membershipType, membershipID, bungieToken)
+			roster := characterRoster{Characters: make(map[string]bungie.CharacterComponent)}
+			var mostRecentTime time.Time
+			for id, c := range chars.Response.Characters.Data {
+				if c.CharacterID == "" {
+					c.CharacterID = id
+				}
+				roster.Characters[id] = c
+				t, err := time.Parse(time.RFC3339, c.DateLastPlayed)
+				if roster.PrimaryID == "" || (err == nil && t.After(mostRecentTime)) {
+					mostRecentTime = t
+					roster.PrimaryID = id
+				}
+			}
+			return roster, nil
+		},
+		func(r characterRoster) bool { return len(r.Characters) > 0 })
 	if err != nil {
-		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly character roster fetch failed",
-			slog.Int("membership_type", membershipType),
-			observability.ID("membership", membershipID),
-			observability.Err(err),
-		)
 		return "", -1
-	}
-
-	roster := characterRoster{Characters: make(map[string]bungie.CharacterComponent)}
-	var mostRecentTime time.Time
-	for id, c := range chars.Response.Characters.Data {
-		if c.CharacterID == "" {
-			c.CharacterID = id
-		}
-		roster.Characters[id] = c
-		t, err := time.Parse(time.RFC3339, c.DateLastPlayed)
-		if roster.PrimaryID == "" || (err == nil && t.After(mostRecentTime)) {
-			mostRecentTime = t
-			roster.PrimaryID = id
-		}
-	}
-
-	if len(roster.Characters) > 0 {
-		s.cache.Set(cacheKey, roster, 5*time.Minute)
 	}
 	return roster.resolve(requestedCharacterID)
 }

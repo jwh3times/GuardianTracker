@@ -2,11 +2,13 @@ package weekly
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strconv"
 	"time"
 
+	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 )
@@ -95,20 +97,19 @@ func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, m
 	if bungieToken == "" || characterID == "" {
 		return nil
 	}
-	cacheKey := characterVendorsCacheKey(membershipType, membershipID, characterID)
-	if s.cache != nil {
-		if cached, ok := s.cache.Get(cacheKey); ok {
-			if resp, ok := cached.(*bungie.CharacterVendorsResponse); ok {
-				return resp
+	resp, err := cache.Load(ctx, s.cache, characterVendorsCacheKey(membershipType, membershipID, characterID), characterVendorsCacheTTL,
+		func() (*bungie.CharacterVendorsResponse, error) {
+			if s.bungie == nil {
+				return nil, errUpstreamUnavailable
 			}
-		}
-	}
-	if s.bungie == nil {
+			return s.bungie.GetCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
+		})
+	switch {
+	case errors.Is(err, errUpstreamUnavailable):
+		// Not a failure worth reporting: a service built without a client can
+		// still serve everything a seeded cache answers.
 		return nil
-	}
-
-	resp, err := s.bungie.GetCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
-	if err != nil {
+	case err != nil:
 		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly character vendors fetch failed",
 			slog.Int("membership_type", membershipType),
 			observability.ID("membership", membershipID),
@@ -117,11 +118,13 @@ func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, m
 		)
 		return nil
 	}
-	if s.cache != nil {
-		s.cache.Set(cacheKey, resp, characterVendorsCacheTTL)
-	}
 	return resp
 }
+
+// errUpstreamUnavailable marks a load that produced nothing worth caching:
+// there is no Bungie client, or an upstream call already logged its own
+// failure. It is a miss, not a new failure, and must never be logged again.
+var errUpstreamUnavailable = errors.New("weekly: upstream unavailable")
 
 // liveVendorItemsCacheKey holds allowlisted vendor sale items. Not scoped by
 // manifest version: the vendor names come from a static in-code allowlist, not
@@ -134,22 +137,20 @@ func liveVendorItemsCacheKey(membershipType int, membershipID, characterID strin
 // cached daily per character because component 402 can be class-specific.
 // Returns nil when the fetch is impossible (no client/token/character) or fails.
 func (s *Service) getLiveVendorItems(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, now time.Time) map[uint32]string {
-	cacheKey := liveVendorItemsCacheKey(membershipType, membershipID, characterID)
-	if cached, ok := s.cache.Get(cacheKey); ok {
-		if m, ok := cached.(map[uint32]string); ok {
-			return m
-		}
-	}
-	resp := s.getCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
-	if resp == nil {
+	// Only a non-empty result is cached — a transient empty response must not
+	// poison the cache for all users until the next daily reset.
+	items, err := cache.LoadIf(ctx, s.cache, liveVendorItemsCacheKey(membershipType, membershipID, characterID),
+		max(NextDailyReset(now).Sub(now), 5*time.Minute),
+		func() (map[uint32]string, error) {
+			resp := s.getCharacterVendors(ctx, membershipType, membershipID, characterID, bungieToken)
+			if resp == nil {
+				return nil, errUpstreamUnavailable
+			}
+			return extractVendorItems(resp, liveVendorAllowlist), nil
+		},
+		cache.NonEmptyMap)
+	if err != nil {
 		return nil
-	}
-	items := extractVendorItems(resp, liveVendorAllowlist)
-	// Only cache non-empty results — a transient empty response must not poison
-	// the cache for all users until the next daily reset.
-	if len(items) > 0 {
-		ttl := max(NextDailyReset(now).Sub(now), 5*time.Minute)
-		s.cache.Set(cacheKey, items, ttl)
 	}
 	return items
 }

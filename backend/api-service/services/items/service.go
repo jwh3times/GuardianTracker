@@ -4,8 +4,6 @@
 package items
 
 import (
-	"sync"
-
 	"guardian-tracker/api-service/services/manifest"
 )
 
@@ -23,110 +21,42 @@ type itemRepo interface {
 // item hash. Data is static for a given manifest version, so entries live until
 // the next manifest swap calls InvalidateCache.
 type Service struct {
-	repo          itemRepo
-	mu            sync.RWMutex
-	cache         map[uint32][]manifest.PerkColumn
-	viewCache     map[uint32]*manifest.ItemView
-	catalystCache map[uint32][]manifest.WeaponCatalyst
+	repo      itemRepo
+	perks     *boundedCache[uint32, []manifest.PerkColumn]
+	views     *boundedCache[uint32, *manifest.ItemView]
+	catalysts *boundedCache[uint32, []manifest.WeaponCatalyst]
 }
 
 func NewService(repo itemRepo) *Service {
 	return &Service{
-		repo:          repo,
-		cache:         map[uint32][]manifest.PerkColumn{},
-		viewCache:     map[uint32]*manifest.ItemView{},
-		catalystCache: map[uint32][]manifest.WeaponCatalyst{},
+		repo:      repo,
+		perks:     newBoundedCache[uint32, []manifest.PerkColumn](maxCacheEntries),
+		views:     newBoundedCache[uint32, *manifest.ItemView](maxCacheEntries),
+		catalysts: newBoundedCache[uint32, []manifest.WeaponCatalyst](maxCacheEntries),
 	}
 }
 
-// GetWeaponPerks returns cached columns or computes and caches them. Errors
-// (including manifest-not-ready) are never cached.
+// GetWeaponPerks returns cached columns or computes and caches them. A weapon
+// with no perk columns caches as such — the answer is "none", not "unknown".
+// Errors (including manifest-not-ready) are never cached.
 func (s *Service) GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error) {
-	s.mu.RLock()
-	cols, ok := s.cache[itemHash]
-	s.mu.RUnlock()
-	if ok {
-		return cols, nil
-	}
-
-	cols, err := s.repo.GetWeaponPerks(itemHash)
-	if err != nil {
-		return nil, err
-	}
-
-	s.mu.Lock()
-	if _, exists := s.cache[itemHash]; !exists && len(s.cache) >= maxCacheEntries {
-		// Bound memory: the cache is keyed by the client-supplied item hash, so an
-		// authenticated caller hitting many distinct hashes could otherwise grow it
-		// without limit between manifest swaps. Evict an arbitrary entry at capacity;
-		// legitimate traffic (a few thousand real weapons) never reaches the cap.
-		for k := range s.cache {
-			delete(s.cache, k)
-			break
-		}
-	}
-	s.cache[itemHash] = cols
-	s.mu.Unlock()
-	return cols, nil
+	return s.perks.load(itemHash, s.repo.GetWeaponPerks, nil)
 }
 
-// GetItem returns a cached minimal item view or computes and caches it. (nil,nil) for
-// an unknown hash (not cached). Errors (incl. manifest-not-ready) are never cached.
+// GetItem returns a cached minimal item view or computes and caches it. An
+// unknown hash returns (nil, nil) and is deliberately NOT cached: unlike a
+// weapon with no perks, "no such item" is an answer about the request rather
+// than about the manifest, and caching it would hold a bogus hash in a bounded
+// cache that real items are competing for.
 func (s *Service) GetItem(itemHash uint32) (*manifest.ItemView, error) {
-	s.mu.RLock()
-	v, ok := s.viewCache[itemHash]
-	s.mu.RUnlock()
-	if ok {
-		return v, nil
-	}
-
-	v, err := s.repo.GetItemView(itemHash)
-	if err != nil {
-		return nil, err
-	}
-	if v == nil {
-		return nil, nil
-	}
-
-	s.mu.Lock()
-	if _, exists := s.viewCache[itemHash]; !exists && len(s.viewCache) >= maxCacheEntries {
-		for k := range s.viewCache {
-			delete(s.viewCache, k)
-			break
-		}
-	}
-	s.viewCache[itemHash] = v
-	s.mu.Unlock()
-	return v, nil
+	return s.views.load(itemHash, s.repo.GetItemView, func(v *manifest.ItemView) bool { return v != nil })
 }
 
 // GetCatalysts returns a cached catalyst pool or computes and caches it.
-// (nil, nil) for non-exotics / weapons without a catalyst socket (cached, like
-// GetWeaponPerks's non-weapon case). Errors (incl. manifest-not-ready) are never
-// cached.
+// (nil, nil) for non-exotics and weapons without a catalyst socket, cached like
+// GetWeaponPerks's non-weapon case. Errors are never cached.
 func (s *Service) GetCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, error) {
-	s.mu.RLock()
-	cats, ok := s.catalystCache[itemHash]
-	s.mu.RUnlock()
-	if ok {
-		return cats, nil
-	}
-
-	cats, err := s.repo.GetWeaponCatalysts(itemHash)
-	if err != nil {
-		return nil, err
-	}
-
-	s.mu.Lock()
-	if _, exists := s.catalystCache[itemHash]; !exists && len(s.catalystCache) >= maxCacheEntries {
-		for k := range s.catalystCache {
-			delete(s.catalystCache, k)
-			break
-		}
-	}
-	s.catalystCache[itemHash] = cats
-	s.mu.Unlock()
-	return cats, nil
+	return s.catalysts.load(itemHash, s.repo.GetWeaponCatalysts, nil)
 }
 
 // OnVersionChanged drops every cached projection so it rebuilds from the new
@@ -138,9 +68,7 @@ func (s *Service) OnVersionChanged(version string) error {
 
 // InvalidateCache drops every cached entry in all three caches.
 func (s *Service) InvalidateCache() {
-	s.mu.Lock()
-	s.cache = map[uint32][]manifest.PerkColumn{}
-	s.viewCache = map[uint32]*manifest.ItemView{}
-	s.catalystCache = map[uint32][]manifest.WeaponCatalyst{}
-	s.mu.Unlock()
+	s.perks.clear()
+	s.views.clear()
+	s.catalysts.clear()
 }

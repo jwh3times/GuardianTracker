@@ -35,39 +35,39 @@ type Character struct {
 	DateLastPlayed       string `json:"dateLastPlayed"`
 }
 
+// charactersCacheKey holds a user's shaped character roster. Not scoped by
+// manifest version: character components carry no manifest-resolved labels.
+func charactersCacheKey(membershipType int, membershipID string) string {
+	return fmt.Sprintf("characters:%d:%s", membershipType, membershipID)
+}
+
 // GetCharacters returns the user's characters sorted most-recently-played first.
 func (s *Service) GetCharacters(ctx context.Context, membershipType int, membershipID, accessToken string) ([]Character, error) {
-	cacheKey := fmt.Sprintf("characters:%d:%s", membershipType, membershipID)
-	if cached, found := s.cache.Get(cacheKey); found {
-		if chars, ok := cached.([]Character); ok {
+	return cache.Load(ctx, s.cache, charactersCacheKey(membershipType, membershipID), s.cacheTTL,
+		func() ([]Character, error) {
+			resp, err := s.bungieClient.GetCharacters(ctx, membershipType, membershipID, accessToken)
+			if err != nil {
+				return nil, fmt.Errorf("failed to fetch characters: %w", err)
+			}
+
+			chars := make([]Character, 0, len(resp.Response.Characters.Data))
+			for _, c := range resp.Response.Characters.Data {
+				chars = append(chars, Character{
+					CharacterID:          c.CharacterID,
+					ClassType:            c.ClassType,
+					ClassName:            bungie.GetClassName(c.ClassType),
+					RaceName:             bungie.GetRaceName(c.RaceType),
+					Light:                c.Light,
+					EmblemPath:           absoluteURL(c.EmblemPath),
+					EmblemBackgroundPath: absoluteURL(c.EmblemBackgroundPath),
+					DateLastPlayed:       c.DateLastPlayed,
+				})
+			}
+
+			// Bungie returns ISO-8601 UTC timestamps; lexicographic sort is chronological.
+			sort.Slice(chars, func(i, j int) bool { return chars[i].DateLastPlayed > chars[j].DateLastPlayed })
 			return chars, nil
-		}
-	}
-
-	resp, err := s.bungieClient.GetCharacters(ctx, membershipType, membershipID, accessToken)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch characters: %w", err)
-	}
-
-	chars := make([]Character, 0, len(resp.Response.Characters.Data))
-	for _, c := range resp.Response.Characters.Data {
-		chars = append(chars, Character{
-			CharacterID:          c.CharacterID,
-			ClassType:            c.ClassType,
-			ClassName:            bungie.GetClassName(c.ClassType),
-			RaceName:             bungie.GetRaceName(c.RaceType),
-			Light:                c.Light,
-			EmblemPath:           absoluteURL(c.EmblemPath),
-			EmblemBackgroundPath: absoluteURL(c.EmblemBackgroundPath),
-			DateLastPlayed:       c.DateLastPlayed,
 		})
-	}
-
-	// Bungie returns ISO-8601 UTC timestamps; lexicographic sort is chronological.
-	sort.Slice(chars, func(i, j int) bool { return chars[i].DateLastPlayed > chars[j].DateLastPlayed })
-
-	s.cache.Set(cacheKey, chars, s.cacheTTL)
-	return chars, nil
 }
 
 func (s *Service) InvalidateCache(membershipType int, membershipID string) {

@@ -82,8 +82,8 @@ func TestService_BoundsCacheSize(t *testing.T) {
 			t.Fatalf("hash %d: %v", i, err)
 		}
 	}
-	if len(svc.cache) > maxCacheEntries {
-		t.Errorf("cache size = %d, want <= %d", len(svc.cache), maxCacheEntries)
+	if got := svc.perks.size(); got > maxCacheEntries {
+		t.Errorf("cache size = %d, want <= %d", got, maxCacheEntries)
 	}
 }
 
@@ -150,8 +150,8 @@ func TestService_BoundsCacheSize_ViewCache(t *testing.T) {
 			t.Fatalf("hash %d: %v", i, err)
 		}
 	}
-	if len(svc.viewCache) > maxCacheEntries {
-		t.Errorf("viewCache size = %d, want <= %d", len(svc.viewCache), maxCacheEntries)
+	if got := svc.views.size(); got > maxCacheEntries {
+		t.Errorf("viewCache size = %d, want <= %d", got, maxCacheEntries)
 	}
 }
 
