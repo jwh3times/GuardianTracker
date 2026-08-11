@@ -202,3 +202,21 @@ func TestLoad_CachesTypedNilResults(t *testing.T) {
 		t.Errorf("loader ran %d times, want 1 — a typed nil is a real cached answer", loader.calls)
 	}
 }
+
+// The two shipped predicates, checked here rather than only through their
+// callers: a NonEmpty that answered true for an empty value would silently
+// disable the don't-cache-empty rule at every site that passes it.
+func TestNonEmptyPredicates(t *testing.T) {
+	if NonEmptyMap(map[string]int{}) || NonEmptyMap[string, int](nil) {
+		t.Error("NonEmptyMap accepted an empty map")
+	}
+	if !NonEmptyMap(map[string]int{"a": 1}) {
+		t.Error("NonEmptyMap rejected a populated map")
+	}
+	if NonEmptySlice([]int{}) || NonEmptySlice[int](nil) {
+		t.Error("NonEmptySlice accepted an empty slice")
+	}
+	if !NonEmptySlice([]int{1}) {
+		t.Error("NonEmptySlice rejected a populated slice")
+	}
+}
