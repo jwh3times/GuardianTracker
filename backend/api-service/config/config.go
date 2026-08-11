@@ -149,12 +149,6 @@ func Load() *Config {
 	return cfg
 }
 
-// IsBootstrapAdmin reports whether a membership ID is pinned to admin via
-// ADMIN_MEMBERSHIP_IDS. Called on every login upsert.
-func (c *Config) IsBootstrapAdmin(membershipID string) bool {
-	return slices.Contains(c.AdminMembershipIDs, membershipID)
-}
-
 // parseCSV splits a comma-separated env value into trimmed, non-empty entries.
 func parseCSV(v string) []string {
 	if v == "" {

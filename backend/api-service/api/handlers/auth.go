@@ -2,371 +2,182 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"guardian-tracker/api-service/auth"
-	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
 	"guardian-tracker/api-service/db"
 	"guardian-tracker/api-service/observability"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
-// AuditLogger records audit events best-effort. Satisfied by *db.AuditStore;
-// nil in degraded mode (no DB).
+// AuditLogger records audit events best-effort. Satisfied by *db.AuditStore.
 type AuditLogger interface {
 	Log(ctx context.Context, ev db.AuditEvent) error
 }
-
-// UserStore is satisfied by db.UserStore (via main.go wiring).
-type UserStore interface {
-	Upsert(ctx context.Context, membershipID string, membershipType int16, displayName string, forceAdmin bool) (id int64, tokenVersion int, role int16, err error)
-	BumpTokenVersion(ctx context.Context, membershipID string) error
-	// CreateSession records a new per-device refresh session at login.
-	CreateSession(ctx context.Context, id, membershipID, jti, userAgent string, expiresAt time.Time) error
-	// RotateSession advances a session's refresh jti with reuse detection and slides
-	// expires_at to newExpiresAt; rotated=true on success, reused=true when a replayed
-	// token revoked the session.
-	RotateSession(ctx context.Context, id, membershipID, oldJTI, newJTI string, newExpiresAt time.Time) (rotated bool, reused bool, err error)
-	// DeleteSession ends one session (this-device logout); DeleteUserSessions ends all.
-	DeleteSession(ctx context.Context, id string) error
-	DeleteUserSessions(ctx context.Context, membershipID string) error
-}
-
-// oauthStateTTL is how long an issued OAuth state parameter stays valid.
-const oauthStateTTL = 10 * time.Minute
 
 const (
 	refreshCookieName = "guardian_refresh_token"
 	refreshCookiePath = "/api/auth"
 )
 
-// AuthHandler handles Bungie OAuth, token refresh, profile, and logout endpoints.
+// AuthHandler is the HTTP surface of the session lifecycle. It owns status
+// codes, the refresh cookie, audit events, and response bodies; what a session
+// is and how one is issued belongs to auth.SessionIssuer.
 type AuthHandler struct {
-	jwt         *auth.JWT
-	tokenStore  *auth.TokenStore
-	cfg         *config.Config
-	state       *auth.StateSigner
-	userStore   UserStore               // nil in degraded mode (no DB)
-	revokeCache cache.Cache             // for evicting tver: entries on logout
-	revoker     *auth.RevocationChecker // nil in degraded mode
-	audit       AuditLogger             // nil in degraded mode
+	issuer *auth.SessionIssuer
+	cfg    *config.Config
+	audit  AuditLogger
 }
 
-func NewAuthHandler(j *auth.JWT, ts *auth.TokenStore, cfg *config.Config, userStore UserStore, revokeCache cache.Cache, revoker *auth.RevocationChecker, audit AuditLogger) *AuthHandler {
-	return &AuthHandler{
-		jwt:         j,
-		tokenStore:  ts,
-		cfg:         cfg,
-		state:       auth.NewStateSigner(cfg.JWTSecret),
-		userStore:   userStore,
-		revokeCache: revokeCache,
-		revoker:     revoker,
-		audit:       audit,
-	}
+func NewAuthHandler(issuer *auth.SessionIssuer, cfg *config.Config, audit AuditLogger) *AuthHandler {
+	return &AuthHandler{issuer: issuer, cfg: cfg, audit: audit}
+}
+
+// authFailure is how one issuance failure is reported over HTTP: the status,
+// the message the browser shows, the audit event it records, and whether the
+// refresh cookie survives it.
+type authFailure struct {
+	status       int
+	message      string
+	event        string // audit event type; empty records nothing
+	expireCookie bool
+}
+
+// loginFailures and refreshFailures map every auth.Reason the two endpoints can
+// produce. They are separate tables because the two endpoints genuinely differ:
+// the same failed session write is "Failed to create session" on login and
+// "Failed to refresh session" on refresh, and only refresh clears the cookie.
+//
+// A reason missing from its table falls through to a 500 rather than an empty
+// success — an unmapped failure must not look like a working login.
+var loginFailures = map[auth.Reason]authFailure{
+	auth.ReasonInvalidCode:  {http.StatusBadRequest, "Invalid authorization code", "login.failure", false},
+	auth.ReasonInvalidState: {http.StatusBadRequest, "Invalid or expired state. Please try logging in again.", "login.failure", false},
+	auth.ReasonCodeExchange: {http.StatusInternalServerError, "Failed to complete authentication", "login.failure", false},
+	auth.ReasonProfileFetch: {http.StatusInternalServerError, "Failed to retrieve user profile", "login.failure", false},
+	auth.ReasonTokenMint:    {http.StatusInternalServerError, "Failed to create session", "", false},
+	auth.ReasonSessionWrite: {http.StatusInternalServerError, "Failed to create session", "", false},
+}
+
+var refreshFailures = map[auth.Reason]authFailure{
+	auth.ReasonMissingCookie: {http.StatusUnauthorized, "Invalid or expired refresh token", "refresh.failure", true},
+	auth.ReasonInvalidToken:  {http.StatusUnauthorized, "Invalid or expired refresh token", "refresh.failure", true},
+	auth.ReasonRevoked:       {http.StatusUnauthorized, "Session has been revoked. Please log in again.", "refresh.failure", true},
+	auth.ReasonReuse:         {http.StatusUnauthorized, "Session ended for security reasons. Please log in again.", "refresh.reuse", true},
+	auth.ReasonExpired:       {http.StatusUnauthorized, "Session has expired. Please log in again.", "refresh.failure", true},
+	auth.ReasonTokenMint:     {http.StatusInternalServerError, "Failed to refresh session", "", false},
+	auth.ReasonSessionWrite:  {http.StatusInternalServerError, "Failed to refresh session", "", false},
 }
 
 // GetBungieAuthURL handles GET /api/auth/bungie
 func (h *AuthHandler) GetBungieAuthURL(c *gin.Context) {
-	state, err := h.state.Generate()
+	authURL, state, err := h.issuer.AuthorizeURL()
 	if err != nil {
 		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "OAuth state generation failed", observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize authentication"})
 		return
 	}
-	authURL := fmt.Sprintf(
-		"%s?client_id=%s&response_type=code&redirect_uri=%s&state=%s",
-		h.cfg.BungieAuthorizeURL,
-		h.cfg.BungieClientID,
-		url.QueryEscape(h.cfg.AuthRedirectURI),
-		url.QueryEscape(state),
-	)
 	c.JSON(http.StatusOK, gin.H{"authUrl": authURL, "state": state})
 }
 
 // BungieCallback handles POST /api/auth/bungie/callback
 func (h *AuthHandler) BungieCallback(c *gin.Context) {
-	code := c.PostForm("code")
-	state := c.PostForm("state")
-
-	if code == "" || len(code) > 500 {
-		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
-			Details: map[string]any{"reason": "invalid_code"}})
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid authorization code"})
-		return
-	}
-	if state == "" || !h.state.Verify(state, time.Now(), oauthStateTTL) {
-		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
-			Details: map[string]any{"reason": "invalid_state"}})
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired state. Please try logging in again."})
-		return
-	}
-
-	tokenResp, err := h.exchangeCode(c.Request.Context(), code)
+	session, err := h.issuer.Login(c.Request.Context(), c.PostForm("code"), c.PostForm("state"), c.Request.UserAgent())
 	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "OAuth code exchange failed", observability.Err(err))
-		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
-			Details: map[string]any{"reason": "code_exchange"}})
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete authentication"})
+		h.failSession(c, err, loginFailures)
 		return
-	}
-
-	profile, err := h.getBungieProfile(c.Request.Context(), tokenResp.AccessToken)
-	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "Bungie profile lookup failed", observability.Err(err))
-		h.logAudit(c, db.AuditEvent{EventType: "login.failure", Outcome: "failure",
-			Details: map[string]any{"reason": "profile_fetch"}})
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user profile"})
-		return
-	}
-
-	// Upsert user to DB (best-effort — if DB is unavailable, use tokenVersion=1).
-	// Membership IDs in ADMIN_MEMBERSHIP_IDS are pinned to admin on every login.
-	tokenVersion := 1
-	role := auth.RoleStandard
-	var actorUserID *int64
-	if h.userStore != nil {
-		forceAdmin := h.cfg.IsBootstrapAdmin(profile.MembershipID)
-		id, tv, r, err := h.userStore.Upsert(c.Request.Context(), profile.MembershipID, int16(profile.MembershipType), profile.DisplayName, forceAdmin)
-		if err != nil {
-			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "login user persistence failed",
-				observability.ID("membership", profile.MembershipID), observability.Err(err))
-		} else {
-			tokenVersion = tv
-			role = int(r)
-			uid := id
-			actorUserID = &uid
-		}
-	}
-
-	now := time.Now()
-	refreshExpiry := time.Duration(tokenResp.RefreshExpiresIn) * time.Second
-	if refreshExpiry <= 0 {
-		refreshExpiry = 90 * 24 * time.Hour // Bungie default fallback
-	}
-	h.tokenStore.Store(profile.MembershipID, &auth.BungieTokens{
-		AccessToken:           tokenResp.AccessToken,
-		RefreshToken:          tokenResp.RefreshToken,
-		AccessTokenExpiresAt:  now.Add(time.Duration(tokenResp.ExpiresIn) * time.Second),
-		RefreshTokenExpiresAt: now.Add(refreshExpiry),
-		MembershipID:          profile.MembershipID,
-	})
-
-	// Each login opens a new per-device session. Both tokens carry its id (sid).
-	sessionID := uuid.NewString()
-	accessToken, err := h.jwt.GenerateAccessToken(profile, tokenVersion, sessionID)
-	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "access token generation failed",
-			observability.ID("membership", profile.MembershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
-		return
-	}
-	refreshToken, refreshJTI, err := h.jwt.GenerateRefreshToken(profile, tokenVersion, sessionID)
-	if err != nil {
-		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "refresh token generation failed",
-			observability.ID("membership", profile.MembershipID), observability.Err(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
-		return
-	}
-
-	// Persist the session before returning the tokens. The session is load-bearing —
-	// the access token is rejected on its next request if no live session row exists —
-	// so a failed write must fail the login (500) rather than hand back a session that
-	// is dead on arrival.
-	if h.userStore != nil {
-		expiresAt := now.Add(h.jwt.RefreshTokenTTL())
-		if err := h.userStore.CreateSession(c.Request.Context(), sessionID, profile.MembershipID, refreshJTI, c.Request.UserAgent(), expiresAt); err != nil {
-			observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "refresh session creation failed",
-				observability.ID("membership", profile.MembershipID), observability.ID("session", sessionID), observability.Err(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
-			return
-		}
 	}
 
 	h.logAudit(c, db.AuditEvent{
 		EventType:         "login.success",
-		ActorUserID:       actorUserID,
-		ActorMembershipID: profile.MembershipID,
-		SessionID:         sessionID,
-		Details:           map[string]any{"role": auth.RoleName(role)},
+		ActorUserID:       session.UserID,
+		ActorMembershipID: session.Profile.MembershipID,
+		SessionID:         session.SessionID,
+		Details:           map[string]any{"role": auth.RoleName(session.Role)},
 	})
-	h.setRefreshCookie(c, refreshToken)
-	c.JSON(http.StatusOK, gin.H{
-		"token": accessToken,
-		"user": gin.H{
-			"id":             profile.MembershipID,
-			"displayName":    profile.DisplayName,
-			"membershipId":   profile.MembershipID,
-			"membershipType": profile.MembershipType,
-			"platform":       auth.GetPlatformName(profile.MembershipType),
-			"role":           auth.RoleName(role),
-		},
-	})
+	h.setRefreshCookie(c, session)
+	c.JSON(http.StatusOK, sessionResponse(session))
 }
 
 // RefreshToken handles POST /api/auth/refresh
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	refreshCookie, err := c.Request.Cookie(refreshCookieName)
-	if err != nil || refreshCookie.Value == "" {
-		h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
-			Details: map[string]any{"reason": "missing_cookie"}})
-		h.expireRefreshCookie(c)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
-		return
+	var presented string
+	if cookie, err := c.Request.Cookie(refreshCookieName); err == nil {
+		presented = cookie.Value
 	}
 
-	claims, err := h.jwt.ValidateToken(refreshCookie.Value)
-	if err != nil || claims.TokenType != "refresh" {
-		h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
-			Details: map[string]any{"reason": "invalid_token"}})
-		h.expireRefreshCookie(c)
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired refresh token"})
-		return
-	}
-
-	// Reject refresh attempts after a sign-out-everywhere (token_version bump).
-	if h.revoker != nil {
-		if err := h.revoker.Check(c.Request.Context(), claims.MembershipID, claims.TokenVersion); err != nil {
-			h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
-				ActorMembershipID: claims.MembershipID, SessionID: claims.SessionID,
-				Details: map[string]any{"reason": "revoked"}})
-			h.expireRefreshCookie(c)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has been revoked. Please log in again."})
-			return
-		}
-	}
-
-	profile := &auth.BungieUserProfile{
-		MembershipID:   claims.MembershipID,
-		DisplayName:    claims.DisplayName,
-		MembershipType: claims.MembershipType,
-	}
-
-	// A token issued before sessions existed carries no sid; adopt it into a fresh
-	// session on its first refresh so subsequent refreshes are protected.
-	sessionID := claims.SessionID
-	legacy := sessionID == "" && h.userStore != nil
-	if legacy {
-		sessionID = uuid.NewString()
-	}
-
-	newRefresh, newJTI, err := h.jwt.GenerateRefreshToken(profile, claims.TokenVersion, sessionID)
+	session, err := h.issuer.Refresh(c.Request.Context(), presented, c.Request.UserAgent())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
-		return
-	}
-	newAccess, err := h.jwt.GenerateAccessToken(profile, claims.TokenVersion, sessionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
+		h.failSession(c, err, refreshFailures)
 		return
 	}
 
-	// Rotate the session's refresh jti with reuse detection. A replayed (already
-	// rotated) token revokes the session; an unknown/expired session forces re-login.
-	// expires_at slides forward to match the freshly issued refresh token.
-	if h.userStore != nil {
-		expiresAt := time.Now().Add(h.jwt.RefreshTokenTTL())
-		if legacy {
-			// The adopted session is load-bearing for the new access token, so a failed
-			// write must fail the refresh rather than hand back a dead-on-arrival session.
-			if cerr := h.userStore.CreateSession(c.Request.Context(), sessionID, claims.MembershipID, newJTI, c.Request.UserAgent(), expiresAt); cerr != nil {
-				observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "legacy refresh session adoption failed",
-					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID), observability.Err(cerr))
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
-				return
-			}
-		} else {
-			rotated, reused, rerr := h.userStore.RotateSession(c.Request.Context(), sessionID, claims.MembershipID, claims.ID, newJTI, expiresAt)
-			switch {
-			case reused:
-				h.logAudit(c, db.AuditEvent{EventType: "refresh.reuse", Outcome: "failure",
-					ActorMembershipID: claims.MembershipID, SessionID: sessionID})
-				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "refresh token reuse detected; session revoked",
-					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID))
-				h.expireRefreshCookie(c)
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session ended for security reasons. Please log in again."})
-				return
-			case rerr != nil:
-				// Genuine DB error (not reuse): fail open, consistent with the revocation
-				// check above — the new jti goes unrecorded, so the next refresh may re-login.
-				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "refresh session rotation failed open",
-					observability.ID("membership", claims.MembershipID), observability.ID("session", sessionID), observability.Err(rerr))
-			case !rotated:
-				h.logAudit(c, db.AuditEvent{EventType: "refresh.failure", Outcome: "failure",
-					ActorMembershipID: claims.MembershipID, SessionID: sessionID,
-					Details: map[string]any{"reason": "expired"}})
-				h.expireRefreshCookie(c)
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Session has expired. Please log in again."})
-				return
-			}
+	h.setRefreshCookie(c, session)
+	c.JSON(http.StatusOK, sessionResponse(session))
+}
+
+// failSession maps one issuance failure onto its HTTP response, audit event and
+// cookie treatment.
+func (h *AuthHandler) failSession(c *gin.Context, err error, table map[auth.Reason]authFailure) {
+	ctx := c.Request.Context()
+	sessErr, ok := auth.AsSessionError(err)
+	if !ok {
+		observability.Logger(ctx).ErrorContext(ctx, "session issuance failed with an unrecognised error", observability.Err(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+		return
+	}
+	failure, mapped := table[sessErr.Reason]
+	if !mapped {
+		observability.Logger(ctx).ErrorContext(ctx, "unmapped session failure reason",
+			"reason", string(sessErr.Reason), observability.Err(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create session"})
+		return
+	}
+
+	if failure.status >= http.StatusInternalServerError {
+		observability.Logger(ctx).ErrorContext(ctx, "session issuance failed",
+			"reason", string(sessErr.Reason), observability.Err(err))
+	}
+	if failure.event != "" {
+		ev := db.AuditEvent{
+			EventType:         failure.event,
+			Outcome:           "failure",
+			ActorMembershipID: sessErr.MembershipID,
+			SessionID:         sessErr.SessionID,
 		}
+		// refresh.reuse is identified by its event type, not by a reason field.
+		if failure.event != "refresh.reuse" {
+			ev.Details = map[string]any{"reason": string(sessErr.Reason)}
+		}
+		h.logAudit(c, ev)
 	}
-
-	h.setRefreshCookie(c, newRefresh)
-	c.JSON(http.StatusOK, gin.H{
-		"token": newAccess,
-		"user": gin.H{
-			"id":             claims.MembershipID,
-			"displayName":    claims.DisplayName,
-			"membershipId":   claims.MembershipID,
-			"membershipType": claims.MembershipType,
-			"platform":       claims.Platform,
-		},
-	})
+	if failure.expireCookie {
+		h.expireRefreshCookie(c)
+	}
+	c.JSON(failure.status, gin.H{"error": failure.message})
 }
 
 // ValidateToken handles GET /api/auth/validate (JWT-protected)
 func (h *AuthHandler) ValidateToken(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"valid": true,
-		"user": gin.H{
-			"id":             c.GetString("membership_id"),
-			"displayName":    c.GetString("display_name"),
-			"membershipId":   c.GetString("membership_id"),
-			"membershipType": c.GetInt("membership_type"),
-			"platform":       c.GetString("platform"),
-		},
-	})
+	c.JSON(http.StatusOK, gin.H{"valid": true, "user": contextUser(c)})
 }
 
 // GetProfile handles GET /api/auth/profile (JWT-protected)
 func (h *AuthHandler) GetProfile(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"user": gin.H{
-			"id":             c.GetString("membership_id"),
-			"displayName":    c.GetString("display_name"),
-			"membershipId":   c.GetString("membership_id"),
-			"membershipType": c.GetInt("membership_type"),
-			"platform":       c.GetString("platform"),
-			"role":           auth.RoleName(c.GetInt("role")),
-		},
-	})
+	c.JSON(http.StatusOK, gin.H{"user": contextUser(c)})
 }
 
 // Logout handles POST /api/auth/logout (JWT-protected) — ends only the current
-// device's session. Other devices stay signed in, and the account-wide Bungie OAuth
-// token (shared across sessions) is left intact.
+// device's session. Other devices stay signed in, and the account-wide Bungie
+// OAuth token (shared across sessions) is left intact.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	sessionID := c.GetString("session_id")
-
-	if h.userStore != nil && sessionID != "" {
-		if err := h.userStore.DeleteSession(c.Request.Context(), sessionID); err != nil {
-			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "logout session deletion failed",
-				observability.ID("session", sessionID), observability.Err(err))
-		}
-	}
-	// Evict the session cache entry so this device's access token is rejected on its
-	// next request (within the cache window) rather than lingering until expiry.
-	if h.revokeCache != nil && sessionID != "" {
-		h.revokeCache.Delete("sess:" + sessionID)
+	if err := h.issuer.EndSession(c.Request.Context(), sessionID); err != nil {
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "logout session deletion failed",
+			observability.ID("session", sessionID), observability.Err(err))
 	}
 
 	h.logAudit(c, db.AuditEvent{EventType: "logout.session", ActorMembershipID: c.GetString("membership_id"), SessionID: sessionID})
@@ -374,31 +185,13 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
-// LogoutAll handles POST /api/auth/logout/all (JWT-protected) — signs the user out
-// of every device: bumps token_version (invalidates all access tokens), deletes all
-// sessions, and evicts the account-wide Bungie OAuth token.
+// LogoutAll handles POST /api/auth/logout/all (JWT-protected) — signs the user
+// out of every device.
 func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
-
-	if h.userStore != nil {
-		if err := h.userStore.BumpTokenVersion(c.Request.Context(), membershipID); err != nil {
-			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account token revocation failed",
-				observability.ID("membership", membershipID), observability.Err(err))
-		}
-		if err := h.userStore.DeleteUserSessions(c.Request.Context(), membershipID); err != nil {
-			observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account session deletion failed",
-				observability.ID("membership", membershipID), observability.Err(err))
-		}
-	}
-
-	// Delete Bungie tokens from memory and DB (account-wide).
-	h.tokenStore.Delete(membershipID)
-
-	// Evict the per-user revocation entry so the token_version bump takes effect
-	// immediately. Other sessions' cache entries age out within the TTL, but their
-	// access tokens already fail the bumped token_version check.
-	if h.revokeCache != nil {
-		h.revokeCache.Delete("tver:" + membershipID)
+	if err := h.issuer.EndAllSessions(c.Request.Context(), membershipID); err != nil {
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account sign-out failed",
+			observability.ID("membership", membershipID), observability.Err(err))
 	}
 
 	h.logAudit(c, db.AuditEvent{EventType: "logout.all", ActorMembershipID: membershipID})
@@ -406,9 +199,36 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Signed out of all devices"})
 }
 
-func (h *AuthHandler) setRefreshCookie(c *gin.Context, token string) {
-	ttl := h.jwt.RefreshTokenTTL()
-	h.writeRefreshCookie(c, token, time.Now().Add(ttl), int(ttl/time.Second))
+// sessionResponse is the body both the callback and refresh return. One builder
+// because they had two, and the copies had already drifted: refresh omitted the
+// role the callback sent.
+func sessionResponse(s *auth.Session) gin.H {
+	return gin.H{
+		"token": s.AccessToken,
+		"user":  userPayload(s.Profile.MembershipID, s.Profile.DisplayName, s.Profile.MembershipType, s.Role),
+	}
+}
+
+// contextUser builds the same payload from what the JWT middleware resolved,
+// for the two endpoints that answer from the request context alone.
+func contextUser(c *gin.Context) gin.H {
+	return userPayload(c.GetString("membership_id"), c.GetString("display_name"), c.GetInt("membership_type"), c.GetInt("role"))
+}
+
+// userPayload is the only definition of the `user` object the API returns.
+func userPayload(membershipID, displayName string, membershipType, role int) gin.H {
+	return gin.H{
+		"id":             membershipID,
+		"displayName":    displayName,
+		"membershipId":   membershipID,
+		"membershipType": membershipType,
+		"platform":       auth.GetPlatformName(membershipType),
+		"role":           auth.RoleName(role),
+	}
+}
+
+func (h *AuthHandler) setRefreshCookie(c *gin.Context, s *auth.Session) {
+	h.writeRefreshCookie(c, s.RefreshToken, s.RefreshExpiresAt, int(time.Until(s.RefreshExpiresAt)/time.Second))
 }
 
 func (h *AuthHandler) expireRefreshCookie(c *gin.Context) {
@@ -441,110 +261,4 @@ func (h *AuthHandler) logAudit(c *gin.Context, ev db.AuditEvent) {
 		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "audit event persistence failed",
 			"event_type", ev.EventType, observability.Err(err))
 	}
-}
-
-// Bungie OAuth helpers
-
-type bungieTokenResponse struct {
-	AccessToken      string `json:"access_token"`
-	RefreshToken     string `json:"refresh_token"`
-	ExpiresIn        int    `json:"expires_in"`
-	RefreshExpiresIn int    `json:"refresh_expires_in"`
-	MembershipID     string `json:"membership_id"`
-}
-
-func (h *AuthHandler) exchangeCode(ctx context.Context, code string) (*bungieTokenResponse, error) {
-	data := url.Values{}
-	data.Set("grant_type", "authorization_code")
-	data.Set("code", code)
-	data.Set("client_id", h.cfg.BungieClientID)
-	if h.cfg.BungieClientSecret != "" {
-		data.Set("client_secret", h.cfg.BungieClientSecret)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", h.cfg.BungieTokenURL, strings.NewReader(data.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("token exchange failed with status %d", resp.StatusCode)
-	}
-
-	var tr bungieTokenResponse
-	if err := json.Unmarshal(body, &tr); err != nil {
-		return nil, fmt.Errorf("failed to parse token response: %w", err)
-	}
-	return &tr, nil
-}
-
-type bungieAPIResponse struct {
-	Response struct {
-		DestinyMemberships []struct {
-			MembershipType int    `json:"membershipType"`
-			MembershipID   string `json:"membershipId"`
-			DisplayName    string `json:"displayName"`
-		} `json:"destinyMemberships"`
-		PrimaryMembershipID string `json:"primaryMembershipId"`
-	} `json:"Response"`
-}
-
-func (h *AuthHandler) getBungieProfile(ctx context.Context, accessToken string) (*auth.BungieUserProfile, error) {
-	reqURL := strings.TrimSuffix(h.cfg.BungieAPIBaseURL, "/") + "/User/GetMembershipsForCurrentUser/"
-	req, err := http.NewRequestWithContext(ctx, "GET", reqURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-	req.Header.Set("X-API-Key", h.cfg.BungieAPIKey)
-
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("profile fetch failed with status %d", resp.StatusCode)
-	}
-
-	var apiResp bungieAPIResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse profile response: %w", err)
-	}
-	if len(apiResp.Response.DestinyMemberships) == 0 {
-		return nil, fmt.Errorf("no Destiny memberships found for user")
-	}
-
-	// Cross-save: prefer the primary membership when Bungie reports one;
-	// DestinyMemberships[0] is otherwise arbitrary platform order.
-	m := apiResp.Response.DestinyMemberships[0]
-	if pid := apiResp.Response.PrimaryMembershipID; pid != "" {
-		for _, dm := range apiResp.Response.DestinyMemberships {
-			if dm.MembershipID == pid {
-				m = dm
-				break
-			}
-		}
-	}
-	return &auth.BungieUserProfile{
-		MembershipID:   m.MembershipID,
-		DisplayName:    m.DisplayName,
-		MembershipType: m.MembershipType,
-	}, nil
 }

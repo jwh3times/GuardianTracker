@@ -18,6 +18,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 - Gin handlers must contain no business logic. Only allowed: bind inputs, call a service/function, return `c.JSON(...)`.
 - Flag multi-step business logic, direct Bungie API calls, or token store access inside handler files.
+- Flag session-issuance logic (state/code exchange, JWT minting, session-row writes, reuse detection) added directly to `api/handlers/auth.go` instead of `auth.SessionIssuer` (`auth/session.go`) — the handler may only map a `*auth.Session` or `*auth.SessionError` to HTTP.
 
 **Middleware usage**
 
@@ -60,6 +61,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 **Token store / DB sentinel errors**
 
 - The adapter in `db/adapters` must translate `db.ErrTokensNotFound` → `auth.ErrTokensNotFound` and `db.ErrNoUserRow` → `auth.ErrNoUserRow`, and must pass every _other_ error through untranslated — `auth.TokenStore`'s CAS reconciliation treats "definitively absent" and "the read failed" as opposite cases. Flag any adapter that swallows these sentinels, maps them to a generic error, or reports a transient failure as not-found.
+- `adapters.NewSessionStore` must translate `db.ErrUnavailable` → `auth.ErrUnavailable` on every method and pass every other error through unchanged. Flag any change here that reports a genuine write failure as `ErrUnavailable` (a login would succeed session-less when it should fail) or swallows the sentinel translation entirely (degraded-mode login would 500 again — see ADR 0012).
 
 **Store availability**
 
@@ -84,7 +86,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 **Per-device session (`sid` claim)**
 
 - Access tokens must carry a `sid` claim linking to a `refresh_sessions` row. Flag JWT generation code that omits `sid`.
-- `POST /api/auth/refresh` must CAS-swap the session's `jti` in `refresh_sessions`. Flag refresh implementations that issue a new token without atomically updating the session row.
+- `POST /api/auth/refresh` must CAS-swap the session's `jti` in `refresh_sessions` via `auth.SessionIssuer.Refresh` → `SessionStore.RotateSession`. Flag refresh implementations that issue a new token without atomically updating the session row.
 
 **Secret handling**
 

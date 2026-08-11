@@ -157,13 +157,23 @@ keyed by item hash with a size cap and no TTL.
 returns real implementations whose every method reports `db.ErrUnavailable`, and
 `handlers.HandleStoreError` maps that to one 503. Ask `Stores.Available()` when
 you genuinely need to know whether persistence exists. A degraded read never
-returns empty success.
+returns empty success. Consumers that must not import `db` see the same
+condition as their own sentinel — `auth.ErrUnavailable` — translated at
+`db/adapters`. "There is no database" is not "the write failed": conflating them
+is what made login 500 without Postgres.
 
 **Role tier** — `standard < beta < alpha < admin`, ordered integers persisted on
 the user row. Say _tier_, not "level" or "permission". **Feature flag** — a
 rollout control, gated per role, and explicitly _not_ a security boundary; an
 absent database must not hide pages. See
 [ADR 0006](./docs/adr/0006-roles-feature-flags-and-admin-authorization.md).
+
+**Session issuer** (`auth.SessionIssuer`) — the owner of the browser session
+lifecycle: `AuthorizeURL`, `Login`, `Refresh`, `EndSession`, `EndAllSessions`.
+It decides what a session is; the Gin handlers decide only what that looks like
+over HTTP. Failures cross the seam as `auth.SessionError`, whose `Reason` is
+also the audit reason string, so the two cannot drift. See
+[ADR 0012](./docs/adr/0012-session-issuance-owns-the-session-lifecycle.md).
 
 **Access token / refresh token / session** — the access JWT is short-lived and
 lives in localStorage; the refresh JWT rotates per device and lives only in a

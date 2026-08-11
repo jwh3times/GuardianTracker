@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,11 +11,19 @@ import (
 	"time"
 
 	"guardian-tracker/api-service/auth"
+	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
 	"guardian-tracker/api-service/db"
 
 	"github.com/gin-gonic/gin"
 )
+
+// These tests cover the HTTP surface of the session lifecycle: status codes,
+// the refresh cookie, audit events and response bodies. What a session *is* —
+// issuance, rotation, reuse detection, the degraded path — is tested against
+// auth.SessionIssuer directly in auth/session_test.go, without gin.
+
+const testJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
 
 // fakeAudit captures emitted audit events so tests can assert on event type and
 // details. Satisfies the AuditLogger interface.
@@ -27,16 +34,20 @@ func (f *fakeAudit) Log(_ context.Context, ev db.AuditEvent) error {
 	return nil
 }
 
-// fakeUserStore is an in-memory UserStore for session-rotation handler tests. It
-// mirrors RotateSession's lock-CAS-with-reuse-delete: a presented jti must match the
-// session's current jti, otherwise the session is revoked (deleted).
+// fakeUserStore is an in-memory store satisfying both auth.SessionStore and
+// auth.UserAuthStore. It mirrors RotateSession's lock-CAS-with-reuse-delete: a
+// presented jti must match the session's current jti, otherwise the session is
+// revoked (deleted).
 type fakeUserStore struct {
 	sessions map[string]string          // sid -> current refresh jti
 	rotateFn func() (bool, bool, error) // optional override for RotateSession
+	version  int                        // token_version reported to the revoker
+	role     int16
+	notFound bool
 }
 
 func newFakeUserStore() *fakeUserStore {
-	return &fakeUserStore{sessions: map[string]string{}}
+	return &fakeUserStore{sessions: map[string]string{}, version: 1}
 }
 
 func (f *fakeUserStore) Upsert(_ context.Context, _ string, _ int16, _ string, _ bool) (int64, int, int16, error) {
@@ -70,42 +81,39 @@ func (f *fakeUserStore) DeleteUserSessions(_ context.Context, _ string) error {
 	f.sessions = map[string]string{}
 	return nil
 }
-
-func newAuthHandlerWithStore(t *testing.T, store UserStore) (*AuthHandler, *auth.JWT) {
-	t.Helper()
-	cfg := &config.Config{
-		JWTSecret:       testJWTSecret,
-		BungieClientID:  "client-123",
-		AuthRedirectURI: "http://localhost:3000/auth/callback",
-	}
-	jwt := auth.NewJWT(cfg.JWTSecret, 24, 30)
-	h := NewAuthHandler(jwt, newTokenStore(t), cfg, store, nil, nil, nil)
-	return h, jwt
+func (f *fakeUserStore) GetAuthInfo(_ context.Context, _ string) (int, int16, bool, error) {
+	return f.version, f.role, !f.notFound, nil
+}
+func (f *fakeUserStore) SessionExists(_ context.Context, id string) (bool, error) {
+	_, ok := f.sessions[id]
+	return ok, nil
 }
 
-func newAuthHandlerWithStoreAndAudit(t *testing.T, store UserStore, audit AuditLogger) (*AuthHandler, *auth.JWT) {
+// newAuthHandlerWith builds the handler over a real SessionIssuer, so the
+// mapping under test is the one production uses.
+func newAuthHandlerWith(t *testing.T, store *fakeUserStore, audit AuditLogger) (*AuthHandler, *auth.JWT) {
 	t.Helper()
-	cfg := &config.Config{
-		JWTSecret:       testJWTSecret,
-		BungieClientID:  "client-123",
-		AuthRedirectURI: "http://localhost:3000/auth/callback",
-	}
+	cfg := &config.Config{JWTSecret: testJWTSecret}
 	jwt := auth.NewJWT(cfg.JWTSecret, 24, 30)
-	h := NewAuthHandler(jwt, newTokenStore(t), cfg, store, nil, nil, audit)
-	return h, jwt
+	issuer := auth.NewSessionIssuer(auth.SessionDeps{
+		JWT:     jwt,
+		Tokens:  newTokenStore(t),
+		Users:   store,
+		Revoker: auth.NewRevocationChecker(store, cache.NewNoOpCache()),
+		Cache:   cache.NewNoOpCache(),
+		State:   auth.NewStateSigner(cfg.JWTSecret),
+		OAuth: auth.OAuthConfig{
+			ClientID:     "client-123",
+			AuthorizeURL: "https://www.bungie.net/en/OAuth/Authorize",
+			RedirectURI:  "http://localhost:3000/auth/callback",
+		},
+	})
+	return NewAuthHandler(issuer, cfg, audit), jwt
 }
-
-const testJWTSecret = "test-jwt-secret-at-least-32-chars-long!!"
 
 func newAuthHandler(t *testing.T) (*AuthHandler, *auth.JWT) {
 	t.Helper()
-	cfg := &config.Config{
-		JWTSecret:       testJWTSecret,
-		BungieClientID:  "client-123",
-		AuthRedirectURI: "http://localhost:3000/auth/callback",
-	}
-	jwt := auth.NewJWT(cfg.JWTSecret, 24, 30)
-	h := NewAuthHandler(jwt, newTokenStore(t), cfg, nil, nil, nil, nil)
+	h, jwt := newAuthHandlerWith(t, newFakeUserStore(), nil)
 	return h, jwt
 }
 
@@ -134,7 +142,10 @@ func TestRefreshCookie_ProductionAttributes(t *testing.T) {
 	h.cfg.GoEnv = "production"
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	h.setRefreshCookie(c, "refresh-jwt")
+	h.setRefreshCookie(c, &auth.Session{
+		RefreshToken:     "refresh-jwt",
+		RefreshExpiresAt: time.Now().Add(30 * 24 * time.Hour),
+	})
 
 	cookie := findRefreshCookie(t, w)
 	if cookie.Value != "refresh-jwt" || cookie.Domain != "" || cookie.Path != refreshCookiePath {
@@ -174,20 +185,25 @@ func TestValidateAndProfileHandlers(t *testing.T) {
 			c.Set("membership_id", testUserID)
 			c.Set("display_name", "TestGuardian")
 			c.Set("membership_type", 3)
-			c.Set("platform", "Steam")
+			c.Set("role", auth.RoleBeta)
 			next(c)
 		}
 	}
 	r.GET("/validate", withCtx(h.ValidateToken))
 	r.GET("/profile", withCtx(h.GetProfile))
 
+	// Both answer from the same builder, so both carry the same fields —
+	// including the role that /validate used to drop.
 	for _, path := range []string{"/validate", "/profile"} {
 		w := do(r, http.MethodGet, path)
 		if w.Code != http.StatusOK {
 			t.Errorf("%s status = %d", path, w.Code)
 		}
-		if !strings.Contains(w.Body.String(), "TestGuardian") {
-			t.Errorf("%s body missing user: %s", path, w.Body.String())
+		body := w.Body.String()
+		for _, want := range []string{"TestGuardian", `"platform":"steam"`, `"role":"beta"`} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s body missing %s: %s", path, want, body)
+			}
 		}
 	}
 }
@@ -209,12 +225,15 @@ func TestLogout(t *testing.T) {
 }
 
 func TestRefreshToken_Success(t *testing.T) {
-	h, jwt := newAuthHandler(t)
+	store := newFakeUserStore()
+	h, jwt := newAuthHandlerWith(t, store, nil)
 	profile := &auth.BungieUserProfile{MembershipID: testUserID, DisplayName: "TestGuardian", MembershipType: 3}
-	refresh, _, err := jwt.GenerateRefreshToken(profile, 1, "")
+	const sid = "sess-1"
+	refresh, jti, err := jwt.GenerateRefreshToken(profile, 1, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
+	store.sessions[sid] = jti
 
 	r := gin.New()
 	r.POST("/refresh", h.RefreshToken)
@@ -226,6 +245,11 @@ func TestRefreshToken_Success(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "token") || strings.Contains(w.Body.String(), "refreshToken") {
 		t.Errorf("unexpected token response: %s", w.Body.String())
+	}
+	// The refresh body carries the same user object the callback returns; it
+	// used to silently omit role, which the shared builder makes impossible.
+	if !strings.Contains(w.Body.String(), `"role":`) {
+		t.Errorf("refresh response omitted role: %s", w.Body.String())
 	}
 	cookie := findRefreshCookie(t, w)
 	if cookie.Value == "" || cookie.Value == refresh {
@@ -274,22 +298,19 @@ func TestRefreshToken_RejectsAccessTokenAndGarbage(t *testing.T) {
 	}
 }
 
-// TestRefreshToken_ReuseRejected verifies per-session rotation: the first use of a
-// refresh token rotates successfully, and replaying that now-superseded token is
-// rejected with 401 — the session is revoked (limitation #3 fix).
+// TestRefreshToken_ReuseRejected verifies per-session rotation over HTTP: the
+// first use rotates, and replaying that now-superseded token is rejected with
+// 401 and the session revoked.
 func TestRefreshToken_ReuseRejected(t *testing.T) {
 	store := newFakeUserStore()
-	h, jwt := newAuthHandlerWithStore(t, store)
+	h, jwt := newAuthHandlerWith(t, store, nil)
 	profile := &auth.BungieUserProfile{MembershipID: testUserID, DisplayName: "TestGuardian", MembershipType: 3}
 	const sid = "sess-1"
 	refresh, jti, err := jwt.GenerateRefreshToken(profile, 1, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Simulate login having created this session.
-	if err := store.CreateSession(context.Background(), sid, testUserID, jti, "", time.Now().Add(time.Hour)); err != nil {
-		t.Fatal(err)
-	}
+	store.sessions[sid] = jti // simulate login having created this session
 
 	r := gin.New()
 	r.POST("/refresh", h.RefreshToken)
@@ -299,11 +320,9 @@ func TestRefreshToken_ReuseRejected(t *testing.T) {
 		return w
 	}
 
-	// First use rotates the session successfully.
 	if w := post(); w.Code != http.StatusOK {
 		t.Fatalf("first refresh = %d, want 200: %s", w.Code, w.Body.String())
 	}
-	// The original token is now superseded — replaying it revokes the session (401).
 	if w := post(); w.Code != http.StatusUnauthorized {
 		t.Fatalf("reused refresh = %d, want 401", w.Code)
 	} else if findRefreshCookie(t, w).MaxAge >= 0 {
@@ -314,60 +333,13 @@ func TestRefreshToken_ReuseRejected(t *testing.T) {
 	}
 }
 
-// TestRefreshToken_ReuseRejectedOnCommitError verifies reuse wins over a DB error:
-// when RotateSession reports reused=true alongside an error (e.g. the revoking commit
-// failed), the refresh is still rejected rather than fail-open.
-func TestRefreshToken_ReuseRejectedOnCommitError(t *testing.T) {
-	store := newFakeUserStore()
-	store.rotateFn = func() (bool, bool, error) { return false, true, errors.New("commit failed") }
-	h, jwt := newAuthHandlerWithStore(t, store)
-	profile := &auth.BungieUserProfile{MembershipID: testUserID, MembershipType: 3}
-	refresh, _, err := jwt.GenerateRefreshToken(profile, 1, "sess-x")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	r := gin.New()
-	r.POST("/refresh", h.RefreshToken)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("reuse+commit-error refresh = %d, want 401", w.Code)
-	}
-}
-
-// TestRefreshToken_LegacyTokenAdopted verifies a refresh cookie carrying a
-// pre-session token (no sid) is adopted into a fresh session.
-func TestRefreshToken_LegacyTokenAdopted(t *testing.T) {
-	store := newFakeUserStore()
-	h, jwt := newAuthHandlerWithStore(t, store)
-	profile := &auth.BungieUserProfile{MembershipID: testUserID, MembershipType: 3}
-	refresh, _, err := jwt.GenerateRefreshToken(profile, 1, "") // no sid
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	r := gin.New()
-	r.POST("/refresh", h.RefreshToken)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("legacy refresh = %d, want 200: %s", w.Code, w.Body.String())
-	}
-	if len(store.sessions) != 1 {
-		t.Errorf("expected one adopted session, got %d", len(store.sessions))
-	}
-}
-
 // TestLogout_DeletesCurrentSessionOnly pins the multi-device contract: this-device
 // logout ends the caller's session and leaves other devices' sessions intact.
 func TestLogout_DeletesCurrentSessionOnly(t *testing.T) {
 	store := newFakeUserStore()
 	store.sessions["this-device"] = "jti-a"
 	store.sessions["other-device"] = "jti-b"
-	h, _ := newAuthHandlerWithStore(t, store)
+	h, _ := newAuthHandlerWith(t, store, nil)
 
 	r := gin.New()
 	r.POST("/logout", func(c *gin.Context) {
@@ -391,7 +363,7 @@ func TestLogoutAll(t *testing.T) {
 	store := newFakeUserStore()
 	store.sessions["s1"] = "j1"
 	store.sessions["s2"] = "j2"
-	h, _ := newAuthHandlerWithStore(t, store)
+	h, _ := newAuthHandlerWith(t, store, nil)
 
 	r := gin.New()
 	r.POST("/logout/all", func(c *gin.Context) {
@@ -417,7 +389,7 @@ func TestLogout_EmitsLogoutSessionEvent(t *testing.T) {
 	store := newFakeUserStore()
 	store.sessions["this-device"] = "jti-a"
 	audit := &fakeAudit{}
-	h, _ := newAuthHandlerWithStoreAndAudit(t, store, audit)
+	h, _ := newAuthHandlerWith(t, store, audit)
 
 	r := gin.New()
 	r.POST("/logout", func(c *gin.Context) {
@@ -433,91 +405,122 @@ func TestLogout_EmitsLogoutSessionEvent(t *testing.T) {
 	}
 }
 
-// TestRefreshToken_ExpiredSessionAuditReason pins the refresh.failure reason for an
-// unknown/expired session as "expired" (per spec), not "expired_session".
-func TestRefreshToken_ExpiredSessionAuditReason(t *testing.T) {
-	store := newFakeUserStore() // no sessions → RotateSession reports rotated=false
+// TestSessionFailureMapping drives every auth.Reason through failSession and
+// pins the whole table: status, message, audit event, audit reason, and whether
+// the refresh cookie is cleared. This is the mapping the two endpoints share,
+// and the reason the response copy stopped being hand-written per branch.
+func TestSessionFailureMapping(t *testing.T) {
+	cases := []struct {
+		name       string
+		table      map[auth.Reason]authFailure
+		err        error
+		wantStatus int
+		wantBody   string
+		wantEvent  string // "" = no audit event
+		wantReason string // "" = no reason detail
+		wantExpire bool
+	}{
+		{"login invalid code", loginFailures, &auth.SessionError{Reason: auth.ReasonInvalidCode},
+			http.StatusBadRequest, "Invalid authorization code", "login.failure", "invalid_code", false},
+		{"login invalid state", loginFailures, &auth.SessionError{Reason: auth.ReasonInvalidState},
+			http.StatusBadRequest, "Invalid or expired state", "login.failure", "invalid_state", false},
+		{"login code exchange", loginFailures, &auth.SessionError{Reason: auth.ReasonCodeExchange},
+			http.StatusInternalServerError, "Failed to complete authentication", "login.failure", "code_exchange", false},
+		{"login profile fetch", loginFailures, &auth.SessionError{Reason: auth.ReasonProfileFetch},
+			http.StatusInternalServerError, "Failed to retrieve user profile", "login.failure", "profile_fetch", false},
+		{"login session write", loginFailures, &auth.SessionError{Reason: auth.ReasonSessionWrite},
+			http.StatusInternalServerError, "Failed to create session", "", "", false},
+		{"login token mint", loginFailures, &auth.SessionError{Reason: auth.ReasonTokenMint},
+			http.StatusInternalServerError, "Failed to create session", "", "", false},
+		{"refresh missing cookie", refreshFailures, &auth.SessionError{Reason: auth.ReasonMissingCookie},
+			http.StatusUnauthorized, "Invalid or expired refresh token", "refresh.failure", "missing_cookie", true},
+		{"refresh invalid token", refreshFailures, &auth.SessionError{Reason: auth.ReasonInvalidToken},
+			http.StatusUnauthorized, "Invalid or expired refresh token", "refresh.failure", "invalid_token", true},
+		{"refresh revoked", refreshFailures, &auth.SessionError{Reason: auth.ReasonRevoked},
+			http.StatusUnauthorized, "revoked", "refresh.failure", "revoked", true},
+		{"refresh reuse", refreshFailures, &auth.SessionError{Reason: auth.ReasonReuse},
+			http.StatusUnauthorized, "security reasons", "refresh.reuse", "", true},
+		{"refresh expired", refreshFailures, &auth.SessionError{Reason: auth.ReasonExpired},
+			http.StatusUnauthorized, "Session has expired", "refresh.failure", "expired", true},
+		{"refresh token mint", refreshFailures, &auth.SessionError{Reason: auth.ReasonTokenMint},
+			http.StatusInternalServerError, "Failed to refresh session", "", "", false},
+		// A reason with no table entry, and an error that is not a session
+		// failure at all, must both surface as 500 rather than as success.
+		{"unmapped reason", loginFailures, &auth.SessionError{Reason: auth.Reason("something_new")},
+			http.StatusInternalServerError, "Failed to create session", "", "", false},
+		{"foreign error", loginFailures, errors.New("boom"),
+			http.StatusInternalServerError, "Failed to create session", "", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			audit := &fakeAudit{}
+			h, _ := newAuthHandlerWith(t, newFakeUserStore(), audit)
+			r := gin.New()
+			r.POST("/x", func(c *gin.Context) { h.failSession(c, tc.err, tc.table) })
+
+			w := do(r, http.MethodPost, "/x")
+			if w.Code != tc.wantStatus {
+				t.Errorf("status = %d, want %d", w.Code, tc.wantStatus)
+			}
+			if !strings.Contains(w.Body.String(), tc.wantBody) {
+				t.Errorf("body = %s, want it to contain %q", w.Body.String(), tc.wantBody)
+			}
+			if tc.wantEvent == "" {
+				if len(audit.events) != 0 {
+					t.Errorf("audit events = %+v, want none", audit.events)
+				}
+			} else {
+				if len(audit.events) != 1 || audit.events[0].EventType != tc.wantEvent {
+					t.Fatalf("audit events = %+v, want one %s", audit.events, tc.wantEvent)
+				}
+				if audit.events[0].Outcome != "failure" {
+					t.Errorf("outcome = %q, want failure", audit.events[0].Outcome)
+				}
+				got, _ := audit.events[0].Details["reason"].(string)
+				if got != tc.wantReason {
+					t.Errorf("audit reason = %q, want %q", got, tc.wantReason)
+				}
+			}
+			// A failure either clears the cookie or leaves it entirely alone;
+			// it must never write a live one.
+			expired := false
+			for _, cookie := range w.Result().Cookies() {
+				if cookie.Name != refreshCookieName {
+					continue
+				}
+				if cookie.MaxAge >= 0 || cookie.Value != "" {
+					t.Fatalf("failure wrote a live refresh cookie: %+v", cookie)
+				}
+				expired = true
+			}
+			if expired != tc.wantExpire {
+				t.Errorf("cookie expired = %v, want %v", expired, tc.wantExpire)
+			}
+		})
+	}
+}
+
+// TestSessionFailureAudit_CarriesIdentity pins why SessionError carries the
+// membership and session ids: once the issuer owns refresh-token validation,
+// the handler has no claims to read them from, and the audit trail would
+// quietly lose the actor on exactly the security-relevant events.
+func TestSessionFailureAudit_CarriesIdentity(t *testing.T) {
 	audit := &fakeAudit{}
-	h, jwt := newAuthHandlerWithStoreAndAudit(t, store, audit)
-	profile := &auth.BungieUserProfile{MembershipID: testUserID, MembershipType: 3}
-	refresh, _, err := jwt.GenerateRefreshToken(profile, 1, "sess-unknown")
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	h, _ := newAuthHandlerWith(t, newFakeUserStore(), audit)
 	r := gin.New()
-	r.POST("/refresh", h.RefreshToken)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, newRefreshRequest("/refresh", refresh))
+	r.POST("/x", func(c *gin.Context) {
+		h.failSession(c, &auth.SessionError{
+			Reason: auth.ReasonReuse, MembershipID: testUserID, SessionID: "sess-9",
+		}, refreshFailures)
+	})
 
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expired-session refresh = %d, want 401: %s", w.Code, w.Body.String())
-	}
+	do(r, http.MethodPost, "/x")
 	if len(audit.events) != 1 {
-		t.Fatalf("audit events = %+v, want one refresh.failure", audit.events)
+		t.Fatalf("audit events = %+v, want one", audit.events)
 	}
-	ev := audit.events[0]
-	if ev.EventType != "refresh.failure" {
-		t.Errorf("event type = %q, want refresh.failure", ev.EventType)
-	}
-	if got := ev.Details["reason"]; got != "expired" {
-		t.Errorf("reason = %v, want \"expired\"", got)
-	}
-}
-
-func TestGetBungieProfile_PrefersPrimaryMembership(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/User/GetMembershipsForCurrentUser/" {
-			t.Errorf("unexpected path %s", r.URL.Path)
-		}
-		fmt.Fprint(w, `{"Response":{"destinyMemberships":[
-			{"membershipType":1,"membershipId":"111","displayName":"XboxCopy"},
-			{"membershipType":3,"membershipId":"333","displayName":"SteamMain"}
-		],"primaryMembershipId":"333"},"ErrorCode":1}`)
-	}))
-	defer srv.Close()
-
-	cfg := &config.Config{BungieAPIBaseURL: srv.URL}
-	h := &AuthHandler{cfg: cfg}
-	p, err := h.getBungieProfile(context.Background(), "tok")
-	if err != nil {
-		t.Fatalf("getBungieProfile: %v", err)
-	}
-	if p.MembershipID != "333" || p.MembershipType != 3 {
-		t.Fatalf("picked %s/%d, want primary 333/3", p.MembershipID, p.MembershipType)
-	}
-}
-
-func TestGetBungieProfile_FallsBackToFirstWithoutPrimary(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, `{"Response":{"destinyMemberships":[
-			{"membershipType":2,"membershipId":"222","displayName":"PSN"}
-		]},"ErrorCode":1}`)
-	}))
-	defer srv.Close()
-	h := &AuthHandler{cfg: &config.Config{BungieAPIBaseURL: srv.URL}}
-	p, err := h.getBungieProfile(context.Background(), "tok")
-	if err != nil {
-		t.Fatalf("getBungieProfile: %v", err)
-	}
-	if p.MembershipID != "222" {
-		t.Fatalf("picked %s, want 222", p.MembershipID)
-	}
-}
-
-func TestExchangeCode_UsesConfiguredTokenURL(t *testing.T) {
-	var hit bool
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hit = true
-		fmt.Fprint(w, `{"access_token":"a","refresh_token":"r","expires_in":3600,"refresh_expires_in":7776000,"membership_id":"m"}`)
-	}))
-	defer srv.Close()
-	h := &AuthHandler{cfg: &config.Config{BungieTokenURL: srv.URL, BungieClientID: "cid"}}
-	if _, err := h.exchangeCode(context.Background(), "code"); err != nil {
-		t.Fatalf("exchangeCode: %v", err)
-	}
-	if !hit {
-		t.Fatal("configured token URL was not called")
+	if ev := audit.events[0]; ev.ActorMembershipID != testUserID || ev.SessionID != "sess-9" {
+		t.Errorf("audit identity = %q/%q, want %q/sess-9", ev.ActorMembershipID, ev.SessionID, testUserID)
 	}
 }
 

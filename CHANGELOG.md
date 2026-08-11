@@ -13,6 +13,36 @@ request.
 
 No unreleased changes.
 
+## [0.3.71] - 2026-08-11
+
+### Fixed
+
+- Signing in on a deployment with no database configured returned "Failed to
+  create session" (HTTP 500) instead of logging the user in. Those deployments
+  never had a session row to write and nothing that reads one, so login now
+  succeeds without one. Where a database _is_ configured, a failed session write
+  still fails the login, because the access token is checked against that row on
+  every request.
+- `POST /api/auth/refresh` and `GET /api/auth/validate` omitted the `role` field
+  that the login callback and profile endpoints returned. All four now return the
+  same user object, and refresh reports the account's current role rather than
+  the one recorded when the token was issued. Role remains a display hint;
+  `GET /api/flags` stays authoritative for what a tier unlocks.
+
+### Changed
+
+- The browser session lifecycle — starting the Bungie OAuth flow, turning a
+  callback or a refresh into a session, and ending one session or all of them —
+  moved out of the HTTP handlers into a single `auth.SessionIssuer` module. The
+  endpoints, their status codes, their audit events, and the refresh cookie are
+  unchanged; the login and refresh flows behave as before. Recorded in
+  [ADR 0012](docs/adr/0012-session-issuance-owns-the-session-lifecycle.md) and
+  `CONTEXT.md`.
+- The two calls to Bungie's OAuth token endpoint — exchanging an authorization
+  code at login and exchanging a refresh token later — now share one
+  implementation, so the 90-day fallback used when Bungie omits a refresh-token
+  lifetime is defined once instead of twice.
+
 ## [0.3.70] - 2026-08-10
 
 ### Changed

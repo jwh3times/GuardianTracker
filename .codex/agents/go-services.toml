@@ -30,7 +30,16 @@ backend/api-service/
                                            cache; also resolves role from DB for RequireAdmin/RequireTier
   auth/roles.go                        ← Role tiers (standard/beta/alpha/admin) + RequireAdmin/RequireTier
                                            tier-gating middleware
-  api/handlers/auth.go                 ← OAuth flow, HttpOnly refresh cookie, logout (single-device + all), profile
+  auth/session.go                      ← SessionIssuer: owns the browser session lifecycle
+                                           (AuthorizeURL/Login/Refresh/EndSession/EndAllSessions);
+                                           failures cross as SessionError{Reason,...} — see
+                                           "Session issuer" below
+  auth/bungieoauth.go                  ← bungieOAuth: one Bungie OAuth token-endpoint client for both
+                                           grants (authorization_code, refresh_token), shared by
+                                           SessionIssuer (login) and TokenStore (Bungie-token refresh)
+  api/handlers/auth.go                 ← Maps SessionIssuer results to HTTP via loginFailures/
+                                           refreshFailures tables (status, cookie, audit, body); holds
+                                           no session logic of its own
   api/handlers/characters.go           ← HTTP handler for characters
   api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
                                            collections + characters + records caches via service methods
@@ -148,9 +157,35 @@ Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_R
 
 ## Bungie OAuth flow
 
-1. `GET /api/auth/bungie` — generates HMAC-signed state token via `auth.StateSigner` (derived from `JWT_SECRET`), returns `{ authUrl, state }`
+1. `GET /api/auth/bungie` — `SessionIssuer.AuthorizeURL()` generates the HMAC-signed state token via `auth.StateSigner` (derived from `JWT_SECRET`); handler returns `{ authUrl, state }`
 2. User visits Bungie.net, authorizes, Bungie redirects to frontend `/auth/callback?code=...&state=...`
-3. Frontend credentialed-POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — exact Origin required; state verified with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code); stores Bungie tokens, returns the access JWT/user, sets the HttpOnly refresh cookie, and creates a `refresh_sessions` row
+3. Frontend credentialed-POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — exact Origin required; `SessionIssuer.Login()` verifies state with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code), exchanges the code via `bungieOAuth`, stores Bungie tokens, mints the JWT pair, and creates a `refresh_sessions` row (skipped, not failed, when no database is configured); the handler sets the HttpOnly refresh cookie and returns `{token,user}`
+
+## Session issuer (`auth/session.go`)
+
+`SessionIssuer` owns the whole browser session lifecycle behind one seam:
+`AuthorizeURL`, `Login`, `Refresh`, `EndSession`, `EndAllSessions`.
+`api/handlers/auth.go` calls it and translates the result to HTTP; it holds no
+session logic itself.
+
+- Failures return `*auth.SessionError{Reason, MembershipID, SessionID, Err}`.
+  `Reason` is also the audit reason string — a new failure mode needs a
+  `Reason` constant before a handler can report it. `auth.AsSessionError(err)`
+  unwraps one.
+- The handler maps `Reason` through `loginFailures` or `refreshFailures`
+  (`api/handlers/auth.go`) to a status, message, audit event, and whether the
+  refresh cookie is cleared. An unmapped `Reason` falls through to 500 rather
+  than a silent success.
+- `auth.ErrUnavailable`, translated from `db.ErrUnavailable` by
+  `adapters.NewSessionStore` (`db/adapters/adapters.go`), separates "there is
+  no database" from "the write failed": a login whose session write hits
+  `ErrUnavailable` still succeeds, session-less; any other write error fails
+  the login. See
+  [ADR 0012](../../docs/adr/0012-session-issuance-owns-the-session-lifecycle.md).
+- The `user` response body has one builder (`userPayload` in
+  `api/handlers/auth.go`), used by all four endpoints that return it
+  (`bungie/callback`, `refresh`, `validate`, `profile`) — all four now
+  include `role`.
 
 ## JWT format
 
@@ -163,7 +198,7 @@ Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_R
 
 ## Token store (`auth/tokenstore.go`)
 
-DB-backed encrypted Bungie OAuth token store. Tokens are stored AES-256-GCM encrypted in the `bungie_tokens` table with exact positive current/previous key versions; unknown versions are rejected. Auto-refreshes via Bungie's OAuth refresh endpoint when within 5 minutes of expiry. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the race reads and adopts the winner's tokens.
+DB-backed encrypted Bungie OAuth token store. Tokens are stored AES-256-GCM encrypted in the `bungie_tokens` table with exact positive current/previous key versions; unknown versions are rejected. Auto-refreshes via Bungie's OAuth refresh endpoint when within 5 minutes of expiry. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the race reads and adopts the winner's tokens. The refresh-grant HTTP call goes through `bungieOAuth` (`auth/bungieoauth.go`), the same client `SessionIssuer` uses for the login grant, so the 90-day `refresh_expires_in` fallback is written once.
 
 Sentinel errors:
 
@@ -206,7 +241,9 @@ surfacing it: `FlagResolver.List` treats it as "no flags configured" (flags
 are rollout controls, not a security boundary, so an absent DB must not hide
 pages), and `GET /api/preferences` returns default preferences with `200`
 instead of a 503 (the UI needs preferences to render). `auth.RevocationChecker`
-already failed open on any store error before this existed.
+already failed open on any store error before this existed. `SessionIssuer`
+follows the same pattern one level removed, through its own `auth.ErrUnavailable`
+sentinel rather than `db.ErrUnavailable` directly — see "Session issuer" above.
 
 ## Middleware
 
@@ -227,14 +264,15 @@ Tiers: `standard(0) < beta(1) < alpha(2) < admin(3)` stored in `users.role`.
 
 ## Per-device refresh sessions
 
-Each login (and callback) creates a `refresh_sessions` row; the `sid` JWT claim holds the session ID:
+`SessionIssuer.Login` creates a `refresh_sessions` row (skipped, not failed,
+with no database configured); the `sid` JWT claim holds the session ID:
 
-- `POST /api/auth/refresh` reads the refresh JWT only from its cookie and compare-and-swaps the session's refresh `jti` (`UserStore.RotateSession`). A replayed (already-rotated) token is detected as reuse → **revokes the whole session** (401, even if the revoking commit errors). Successful refresh rotates the cookie; definitive failures expire it.
+- `POST /api/auth/refresh` reads the refresh JWT only from its cookie; `SessionIssuer.Refresh` compare-and-swaps the session's refresh `jti` (`SessionStore.RotateSession`). A replayed (already-rotated) token is detected as reuse → **revokes the whole session** (401, even if the revoking commit errors). Successful refresh rotates the cookie; definitive failures expire it.
 - Sessions are independent → fully multi-device. `expires_at` slides forward on each rotation.
 - Sessions are capped per user (`maxSessionsPerUser`); an hourly `startSessionPruner` deletes expired rows.
-- `POST /api/auth/logout` — ends only the current session (`DeleteSession`); other devices stay signed in; Bungie token preserved.
-- `POST /api/auth/logout/all` — bumps `token_version` + deletes all sessions (`DeleteAllSessions`) + evicts Bungie token.
-- Pre-`0003` tokens (no `sid`) are adopted into a fresh session on first refresh.
+- `POST /api/auth/logout` — `SessionIssuer.EndSession` ends only the current session (`DeleteSession`); other devices stay signed in; Bungie token preserved.
+- `POST /api/auth/logout/all` — `SessionIssuer.EndAllSessions` bumps `token_version` + deletes all sessions (`DeleteUserSessions`) + evicts the Bungie token.
+- Pre-`0003` tokens (no `sid`) are adopted into a fresh session on their first `SessionIssuer.Refresh` call.
 
 ## Audit logging (`db/audit.go`)
 
