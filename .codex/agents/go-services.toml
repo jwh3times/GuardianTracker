@@ -67,8 +67,12 @@ backend/api-service/
                                            uses ManifestRepo interface (satisfied by *manifest.Provider)
   services/characters/service.go       ← Character fetching; InvalidateCache method
   services/items/service.go            ← Cached weapon-perks lookup (GetWeaponPerks), item-view lookup
-                                           (GetItem), and catalyst-pool lookup (GetCatalysts); all three caches
-                                           cleared by InvalidateCache, called from OnVersionChanged (ManifestObserver)
+                                           (GetItem), and catalyst-pool lookup (GetCatalysts), each backed by its
+                                           own boundedCache; all three cleared by InvalidateCache, called from
+                                           OnVersionChanged (ManifestObserver)
+  services/items/boundedcache.go       ← Unexported generic boundedCache[K,V]: size-capped, no TTL, keyed by
+                                           item hash; not cache.Cache — cleared wholesale on manifest swap instead
+                                           of expiring
   services/manifest/repository.go      ← SQLite read-only queries against manifest DB
   services/manifest/provider.go        ← Shared lazy-opening repository; implements bungie.SwapParticipant
                                            (CloseForSwap/Reopen) for the hourly manifest swap; satisfies all
@@ -91,6 +95,10 @@ backend/api-service/
                                            ActionKind, MilestoneCategory — one faceted keyword table,
                                            not four parallel ones; collections/efficiency/weekly delegate
   cache/cache.go                       ← In-memory cache (and no-op cache interface)
+  cache/load.go                        ← cache.Load[T]/cache.LoadIf[T]: typed load-through above Cache —
+                                           an error is never cached, a wrong-typed entry is a logged miss,
+                                           a nil Cache loads every time; LoadIf's predicate (NonEmptyMap/
+                                           NonEmptySlice) is where "don't cache an empty result" lives
   db/db.go, db/migrate.go              ← Postgres pool; migration runner (each migration runs in a tx)
   db/stores.go                         ← Stores struct — interface fields, never nil; NewStores(nil)
                                            returns the degraded set; Available() reports whether a real DB backs it
@@ -399,6 +407,7 @@ made a milestone's missing-count badge silently not appear.
 - Use constants and helpers from `services/bungie/types.go` for Bungie API types.
 - CGO is **enabled** (`CGO_ENABLED=1`) for SQLite.
 - Migrations run in a transaction — a failed multi-statement migration cannot leave a half-applied schema.
+- A get-or-compute-and-cache call site against `cache.Cache` goes through `cache.Load`/`cache.LoadIf` (`cache/load.go`), not a hand-written get + type-assert + conditional `Set`. Use `LoadIf` with `cache.NonEmptyMap`/`cache.NonEmptySlice` (or a custom predicate) when an empty result must not be cached. Skip it only when the TTL depends on the loaded value or the cache-hit path itself transforms and re-stores (`weekly.getPublicWeekly`, `collections.getAnalysis`).
 
 ## Structured logging
 
