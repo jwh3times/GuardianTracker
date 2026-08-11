@@ -203,6 +203,27 @@ func main() {
 	// Handlers
 	auditLogger := handlers.AuditLogger(stores.Audit)
 
+	// Session issuance — the whole browser-session lifecycle behind one module,
+	// so the Gin handlers keep only what is HTTP-shaped.
+	sessionIssuer := auth.NewSessionIssuer(auth.SessionDeps{
+		JWT:     jwtHelper,
+		Tokens:  tokenStore,
+		Users:   adapters.NewSessionStore(stores.Users),
+		Revoker: revoker,
+		Cache:   appCache,
+		State:   auth.NewStateSigner(cfg.JWTSecret),
+		OAuth: auth.OAuthConfig{
+			ClientID:        cfg.BungieClientID,
+			ClientSecret:    cfg.BungieClientSecret,
+			TokenURL:        cfg.BungieTokenURL,
+			APIBaseURL:      cfg.BungieAPIBaseURL,
+			APIKey:          cfg.BungieAPIKey,
+			AuthorizeURL:    cfg.BungieAuthorizeURL,
+			RedirectURI:     cfg.AuthRedirectURI,
+			BootstrapAdmins: cfg.AdminMembershipIDs,
+		},
+	})
+
 	// Shared flag resolver for server-side enforcement. Uses the same appCache and
 	// flags:all key as AccountHandler's resolver, so both read one cache entry
 	// (evicted together by AdminHandler.UpdateFlag).
@@ -217,7 +238,7 @@ func main() {
 		Flags:   enforceFlags,
 		Handlers: api.Handlers{
 			Health:      handlers.NewHealthHandler(manifestService, stores.Pinger),
-			Auth:        handlers.NewAuthHandler(jwtHelper, tokenStore, cfg, stores.Users, appCache, revoker, auditLogger),
+			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
 			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore),
 			Account:     handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger),
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),

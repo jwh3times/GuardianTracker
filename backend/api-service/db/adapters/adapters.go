@@ -72,6 +72,54 @@ func (a *tokenRepo) Delete(ctx context.Context, membershipID string) error {
 	return a.s.Delete(ctx, membershipID)
 }
 
+// sessionStore adapts a db.UserRepo to auth.SessionStore.
+//
+// Its whole job is one translation, applied uniformly: db.ErrUnavailable
+// becomes auth.ErrUnavailable on every method, so auth can tell "there is no
+// database" from "the write failed" without importing db. That distinction
+// decides whether a failed session write fails the login — see
+// auth.SessionIssuer.recordSession.
+type sessionStore struct{ s db.UserRepo }
+
+// NewSessionStore wraps a db user store for auth.SessionIssuer.
+func NewSessionStore(s db.UserRepo) auth.SessionStore { return &sessionStore{s: s} }
+
+// unavailable translates the one sentinel this seam carries. Everything else
+// passes through: reporting a real failure as "no database" would let a login
+// succeed with a session row that was supposed to exist and does not.
+func unavailable(err error) error {
+	if errors.Is(err, db.ErrUnavailable) {
+		return auth.ErrUnavailable
+	}
+	return err
+}
+
+func (a *sessionStore) Upsert(ctx context.Context, membershipID string, membershipType int16, displayName string, forceAdmin bool) (int64, int, int16, error) {
+	id, tv, role, err := a.s.Upsert(ctx, membershipID, membershipType, displayName, forceAdmin)
+	return id, tv, role, unavailable(err)
+}
+
+func (a *sessionStore) CreateSession(ctx context.Context, id, membershipID, jti, userAgent string, expiresAt time.Time) error {
+	return unavailable(a.s.CreateSession(ctx, id, membershipID, jti, userAgent, expiresAt))
+}
+
+func (a *sessionStore) RotateSession(ctx context.Context, id, membershipID, oldJTI, newJTI string, newExpiresAt time.Time) (bool, bool, error) {
+	rotated, reused, err := a.s.RotateSession(ctx, id, membershipID, oldJTI, newJTI, newExpiresAt)
+	return rotated, reused, unavailable(err)
+}
+
+func (a *sessionStore) DeleteSession(ctx context.Context, id string) error {
+	return unavailable(a.s.DeleteSession(ctx, id))
+}
+
+func (a *sessionStore) DeleteUserSessions(ctx context.Context, membershipID string) error {
+	return unavailable(a.s.DeleteUserSessions(ctx, membershipID))
+}
+
+func (a *sessionStore) BumpTokenVersion(ctx context.Context, membershipID string) error {
+	return unavailable(a.s.BumpTokenVersion(ctx, membershipID))
+}
+
 // WishlistLister is the two-method slice of db.WishlistRepo this adapter reads.
 // Narrow on purpose: weekly only lists, and depending on the full seven-method
 // repo would make every stand-in implement five methods it never calls.

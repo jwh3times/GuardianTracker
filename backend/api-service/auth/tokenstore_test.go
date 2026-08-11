@@ -103,7 +103,7 @@ func newTestStore(t *testing.T, repo TokenRepo, tokenURL string) (*TokenStore, *
 	t.Cleanup(cancel)
 	s := NewTokenStore(ctx, "client-id", "client-secret", "", repo, cipher)
 	if tokenURL != "" {
-		s.tokenURL = tokenURL
+		s.oauth.tokenURL = tokenURL
 	}
 	return s, cipher
 }

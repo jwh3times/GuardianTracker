@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -151,6 +152,74 @@ func TestTokenRepo_UpsertCarriesTheCASResult(t *testing.T) {
 	if !ok || !gotAt.Equal(at) {
 		t.Fatalf("Upsert = (%v, %v), want (%v, true)", gotAt, ok, at)
 	}
+}
+
+// TestSessionStore_TranslatesUnavailableOnEveryMethod drives every method of
+// the session adapter by reflection against the real degraded store.
+//
+// Reflection rather than a hand-written list because the translation is only
+// useful if it is total: a method added later that forgets it would report "the
+// database is absent" as a write failure, and the login it belongs to would
+// 500 on a deployment that never had a database — which is exactly the defect
+// this seam was built to fix.
+func TestSessionStore_TranslatesUnavailableOnEveryMethod(t *testing.T) {
+	store := NewSessionStore(db.NewStores(nil).Users)
+	v := reflect.ValueOf(store)
+	typ := v.Type()
+
+	if declared := reflect.TypeFor[auth.SessionStore]().NumMethod(); typ.NumMethod() != declared {
+		t.Fatalf("adapter has %d methods, auth.SessionStore declares %d", typ.NumMethod(), declared)
+	}
+
+	for method := range typ.Methods() {
+		t.Run(method.Name, func(t *testing.T) {
+			args := make([]reflect.Value, method.Type.NumIn()-1)
+			for j := range args {
+				argType := method.Type.In(j + 1)
+				if argType == reflect.TypeFor[context.Context]() {
+					args[j] = reflect.ValueOf(context.Background())
+					continue
+				}
+				args[j] = reflect.Zero(argType)
+			}
+
+			results := method.Func.Call(append([]reflect.Value{v}, args...))
+			last := results[len(results)-1]
+			err, _ := last.Interface().(error)
+			if !errors.Is(err, auth.ErrUnavailable) {
+				t.Fatalf("%s returned %v, want auth.ErrUnavailable", method.Name, err)
+			}
+			if errors.Is(err, db.ErrUnavailable) {
+				t.Fatalf("%s leaked the db sentinel across the seam", method.Name)
+			}
+		})
+	}
+}
+
+// A real failure must never be reported as an absent database: the session
+// write that fails for a real reason has to fail the login.
+func TestSessionStore_PassesRealFailuresThrough(t *testing.T) {
+	boom := errors.New("connection reset")
+	store := NewSessionStore(&failingUserRepo{err: boom})
+
+	err := store.CreateSession(context.Background(), "sid", "member-1", "jti", "ua", time.Now())
+	if !errors.Is(err, boom) {
+		t.Fatalf("CreateSession error = %v, want the original failure", err)
+	}
+	if errors.Is(err, auth.ErrUnavailable) {
+		t.Fatal("a real failure was reported as an absent database; the login would silently issue a dead session")
+	}
+}
+
+// failingUserRepo fails every call with one error. It embeds db.UserRepo so the
+// methods this test does not exercise panic rather than quietly succeed.
+type failingUserRepo struct {
+	db.UserRepo
+	err error
+}
+
+func (f *failingUserRepo) CreateSession(context.Context, string, string, string, string, time.Time) error {
+	return f.err
 }
 
 type fakeWishlistStore struct {
