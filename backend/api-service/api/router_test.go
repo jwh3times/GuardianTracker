@@ -69,7 +69,7 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 		Flags:   stubFlags{disabled: disabled},
 		Handlers: Handlers{
 			Health:      handlers.NewHealthHandler(nil, nil),
-			Auth:        handlers.NewAuthHandler(nil, nil, cfg, nil, nil, nil, nil),
+			Auth:        handlers.NewAuthHandler(nil, cfg, nil),
 			Wishlist:    handlers.NewWishlistHandler(nil, nil, nil, nil, nil),
 			Account:     handlers.NewAccountHandler(nil, nil, nil, nil),
 			Admin:       handlers.NewAdminHandler(nil, nil, nil),

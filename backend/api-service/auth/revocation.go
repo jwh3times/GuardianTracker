@@ -30,6 +30,14 @@ type authInfo struct {
 	role    int
 }
 
+// Cache keys for the two answers this package caches. They are constructors
+// rather than inline concatenations because the writer and the evicter are
+// different modules: SessionIssuer deletes on logout what RevocationChecker
+// wrote on the previous request, and a key spelled twice is a key that can
+// disagree with itself.
+func authInfoCacheKey(membershipID string) string { return "tver:" + membershipID }
+func sessionCacheKey(sessionID string) string     { return "sess:" + sessionID }
+
 // RevocationChecker validates JWT token_version against the DB and resolves the
 // user's current role, using a short-lived cache so role changes propagate within
 // the cache window with no token churn (TODO 13.2).
@@ -56,7 +64,7 @@ func (r *RevocationChecker) Resolve(ctx context.Context, membershipID string, cl
 	}
 
 	// Account-wide token_version + role, cached per user.
-	cacheKey := "tver:" + membershipID
+	cacheKey := authInfoCacheKey(membershipID)
 	ai := authInfo{}
 	haveAuthInfo := false
 	if v, ok := r.cache.Get(cacheKey); ok {
@@ -92,7 +100,7 @@ func (r *RevocationChecker) Resolve(ctx context.Context, membershipID string, cl
 // checkSession returns an error when a session has been revoked (logged out or
 // reuse-revoked). It fails open on DB errors, consistent with the version check.
 func (r *RevocationChecker) checkSession(ctx context.Context, sessionID string) error {
-	cacheKey := "sess:" + sessionID
+	cacheKey := sessionCacheKey(sessionID)
 	if v, ok := r.cache.Get(cacheKey); ok {
 		if valid, ok := v.(bool); ok {
 			if !valid {

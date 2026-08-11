@@ -2,14 +2,9 @@ package auth
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
-	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -76,35 +71,25 @@ type TokenRepo interface {
 	Delete(ctx context.Context, membershipID string) error
 }
 
-// bungieTokenURL is Bungie's OAuth token endpoint (overridable in tests).
-const bungieTokenURL = "https://www.bungie.net/platform/app/oauth/token/"
-
 // TokenStore manages Bungie OAuth tokens with optional DB write-through.
 type TokenStore struct {
 	mu           sync.RWMutex
 	tokens       map[string]*BungieTokens
-	refreshLocks sync.Map // map[membershipID]*sync.Mutex — serializes per-user refresh
-	clientID     string
-	clientSecret string
+	refreshLocks sync.Map     // map[membershipID]*sync.Mutex — serializes per-user refresh
 	repo         TokenRepo    // nil = memory-only (degraded mode)
 	cipher       *TokenCipher // nil = no encryption
-	tokenURL     string       // Bungie OAuth token endpoint
+	oauth        *bungieOAuth // Bungie's OAuth token endpoint, shared with SessionIssuer
 }
 
 // NewTokenStore creates a token store and starts the background cleanup goroutine.
 // repo and cipher may both be nil for degraded/dev mode. tokenURL overrides the
 // Bungie OAuth token endpoint (E2E/fake-Bungie); empty uses the real one.
 func NewTokenStore(ctx context.Context, clientID, clientSecret, tokenURL string, repo TokenRepo, cipher *TokenCipher) *TokenStore {
-	if tokenURL == "" {
-		tokenURL = bungieTokenURL
-	}
 	s := &TokenStore{
-		tokens:       make(map[string]*BungieTokens),
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		repo:         repo,
-		cipher:       cipher,
-		tokenURL:     tokenURL,
+		tokens: make(map[string]*BungieTokens),
+		repo:   repo,
+		cipher: cipher,
+		oauth:  newBungieOAuth(clientID, clientSecret, tokenURL),
 	}
 	go s.cleanupLoop(ctx)
 	return s
@@ -310,57 +295,18 @@ func (s *TokenStore) Delete(membershipID string) {
 	}
 }
 
+// refreshBungieToken trades the stored Bungie refresh token for a fresh pair.
+// The request itself is the same one login makes with a different grant, so it
+// lives in bungieOAuth; only carrying the membership across is local.
 func (s *TokenStore) refreshBungieToken(tokens *BungieTokens) (*BungieTokens, error) {
-	data := url.Values{}
-	data.Set("grant_type", "refresh_token")
-	data.Set("refresh_token", tokens.RefreshToken)
-	data.Set("client_id", s.clientID)
-	if s.clientSecret != "" {
-		data.Set("client_secret", s.clientSecret)
-	}
-
-	req, err := http.NewRequest("POST", s.tokenURL, strings.NewReader(data.Encode()))
+	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
+	defer cancel()
+	refreshed, err := s.oauth.refreshTokens(ctx, tokens.RefreshToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("token refresh failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	var tr struct {
-		AccessToken      string `json:"access_token"`
-		RefreshToken     string `json:"refresh_token"`
-		ExpiresIn        int    `json:"expires_in"`
-		RefreshExpiresIn int    `json:"refresh_expires_in"`
-	}
-	if err := json.Unmarshal(body, &tr); err != nil {
-		return nil, fmt.Errorf("failed to parse token response: %w", err)
-	}
-
-	now := time.Now()
-	refreshExpiry := time.Duration(tr.RefreshExpiresIn) * time.Second
-	if refreshExpiry <= 0 {
-		refreshExpiry = 90 * 24 * time.Hour // Bungie default fallback
-	}
-	return &BungieTokens{
-		AccessToken:           tr.AccessToken,
-		RefreshToken:          tr.RefreshToken,
-		AccessTokenExpiresAt:  now.Add(time.Duration(tr.ExpiresIn) * time.Second),
-		RefreshTokenExpiresAt: now.Add(refreshExpiry),
-		MembershipID:          tokens.MembershipID,
-	}, nil
+	refreshed.MembershipID = tokens.MembershipID
+	return refreshed, nil
 }
 
 func (s *TokenStore) cleanupLoop(ctx context.Context) {

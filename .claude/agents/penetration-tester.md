@@ -68,6 +68,12 @@ Each login creates a `refresh_sessions` row. `POST /api/auth/refresh` compare-an
 - Test: confirm that after reuse detection, any subsequent request using the access token issued in that session also returns 401 (session row deleted, middleware check fails)
 - Test: reuse detection on one device must not affect active sessions on other devices (only the replayed session is terminated, not all sessions)
 
+### Degraded-mode login (no database)
+
+Session issuance is centralized in `auth.SessionIssuer`; a login whose session row genuinely fails to write still fails (500), but a deployment with no database configured at all succeeds session-less rather than 500ing — the two conditions are distinguished by `auth.ErrUnavailable` vs. any other write error.
+
+- Test: with `DATABASE_URL` unset (Minikube dev-validation path), `POST /api/auth/bungie/callback` returns 200 with `{token,user}`, not 500
+
 ## Admin endpoints
 
 `GET /api/admin/users`, `PUT /api/admin/users/:id/role`, `GET /api/admin/flags`, `PUT /api/admin/flags/:key`, `GET /api/admin/audit` — all require the `admin` role via `RequireAdmin` middleware.
@@ -189,5 +195,6 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 - If revocation cannot be observed immediately after logout, access tokens remain valid up to the configured lifetime (30m by default) plus the 60s revocation cache window
 - Per-device session reuse detection revokes only the replayed session — a stolen refresh token that is used _before_ the legitimate client rotates it would not be detected until a subsequent rotation attempt
 - Auth/session audit events are best-effort — a DB outage during login/logout can drop an audit record (role/flag changes are atomic and cannot be dropped)
+- Login with no database configured succeeds without a `refresh_sessions` row (no reuse detection, no per-device logout to revoke) — intentional for the Minikube dev-validation path (ADR 0004), not a production topology
 - `style-src 'unsafe-inline'` remains in the frontend CSP while components depend on inline styles; `script-src` must not include it
 - The refresh cookie assumes a same-site frontend/API topology; any future cross-site deployment requires a new cookie and CSRF review
