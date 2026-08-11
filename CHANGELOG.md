@@ -13,6 +13,33 @@ request.
 
 No unreleased changes.
 
+## [0.3.70] - 2026-08-10
+
+### Changed
+
+- The weekly recommendations service now depends on a one-method
+  `MissingItemReader` interface rather than the concrete collections service, and
+  no longer imports the collections package at all — difficulty classification
+  goes to `services/sources` directly. The assembled weekly payload is unchanged;
+  the seam exists so the assembly logic can be tested, which it previously could
+  not be. `CONTEXT.md` records the new seam name.
+- The weekly service's remaining cache keys are built by named constructors
+  instead of being formatted at each use site. The keys themselves are unchanged,
+  so no cached data is invalidated.
+
+### Fixed
+
+- Corrected a stale claim in the `go-services` agent notes that the collections
+  service's difficulty classifier is called from the weekly service.
+
+## [0.3.69] - 2026-08-10
+
+### Changed
+
+- Bumped the frontend `npm-minor-and-patch` dependency group: `lucide-react`
+  1.29.0 to 1.30.0 and `@types/node` 26.1.2 to 26.2.0. No product behavior or API
+  surface changes.
+
 ## [0.3.68] - 2026-08-10
 
 ### Removed

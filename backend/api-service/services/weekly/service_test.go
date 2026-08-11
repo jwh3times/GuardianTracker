@@ -141,7 +141,7 @@ func TestGetXurLocation_OmitsUnknownLocation(t *testing.T) {
 	resp.Response.Vendors.Data = map[string]bungie.VendorComponent{
 		"2190858386": {VendorHash: bungie.XurVendorHash, VendorLocationIndex: -1, Enabled: true},
 	}
-	c.Set("vendors:character:3:member-1:char-1", resp, time.Minute)
+	c.Set(characterVendorsCacheKey(3, "member-1", "char-1"), resp, time.Minute)
 	s := &Service{cache: c, manifest: &fakeManifest{destinationHash: xurTowerDestinationHash}}
 
 	if got := s.getXurLocation(context.Background(), 3, "member-1", "char-1", "token"); got != "" {
@@ -309,7 +309,7 @@ func TestXurItemHashesAt(t *testing.T) {
 	wednesday := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC) // Xûr absent
 
 	c := cache.NewMemoryCache(time.Minute, time.Minute)
-	c.Set("weekly:public", &publicWeeklyCache{
+	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 111}, {Hash: 222}},
 	}, time.Minute)

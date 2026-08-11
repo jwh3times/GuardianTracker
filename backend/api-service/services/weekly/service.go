@@ -12,7 +12,6 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
-	"guardian-tracker/api-service/services/collections"
 	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/sources"
 )
@@ -151,12 +150,25 @@ type dailyVendorItem struct {
 type Service struct {
 	bungie      *bungie.Client
 	manifest    ManifestRepo
-	collections *collections.Service
+	collections MissingItemReader
 	wishlist    WishlistReader
 	cache       cache.Cache
 	efficiency  *efficiency.Engine
 	version     versioner
 	now         func() time.Time
+}
+
+// MissingItemReader is the entire surface weekly uses from collections,
+// satisfied by *collections.Service. Consumer-side by design: weekly does not
+// import collections at all, so difficulty classification goes to
+// services/sources directly rather than through collections.ClassifyDifficulty.
+//
+// Required, not optional. GetWeekly dereferences it on every authenticated
+// request, and a nil-guard degrading to an empty set would be worse than the
+// panic: "missing nothing" renders as a complete collection and silently drops
+// every Missing badge, which is indistinguishable from real data.
+type MissingItemReader interface {
+	GetMissingItemHashes(ctx context.Context, membershipType int, membershipID, accessToken string) (map[uint32]struct{}, error)
 }
 
 // versioner reports the current manifest version. Satisfied by
@@ -202,7 +214,7 @@ type WishlistItem struct {
 }
 
 // NewService creates a new weekly recommendations service.
-func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner) *Service {
+func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner) *Service {
 	return NewServiceWithClock(b, m, c, w, appCache, eng, v, time.Now)
 }
 
@@ -210,7 +222,7 @@ func NewService(b *bungie.Client, m ManifestRepo, c *collections.Service, w Wish
 // production constructor above always uses time.Now; the alternate constructor
 // exists so hermetic browser tests can keep Xur in a deterministic weekend
 // window without changing production behavior.
-func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c *collections.Service, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner, now func() time.Time) *Service {
+func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner, now func() time.Time) *Service {
 	if now == nil {
 		now = time.Now
 	}
@@ -591,7 +603,7 @@ func (s *Service) mapEngineActions(actions []efficiency.ScoredAction) []Recommen
 			Detail: a.Why,
 			Badge:  badge,
 			Done:   false,
-			Diff:   collections.ClassifyDifficulty(a.SourceString, false),
+			Diff:   sources.Difficulty(a.SourceString),
 			Time:   "",
 		})
 	}
@@ -1000,10 +1012,16 @@ type characterRoster struct {
 	PrimaryID  string
 }
 
+// rosterCacheKey holds the user's character roster. Not scoped by manifest
+// version: character components carry no manifest-resolved labels.
+func rosterCacheKey(membershipType int, membershipID string) string {
+	return fmt.Sprintf("weekly:roster:%d:%s", membershipType, membershipID)
+}
+
 // resolveCharacter validates a requested character against the authenticated
 // roster and fails soft to the most recently played character on mismatch.
 func (s *Service) resolveCharacter(ctx context.Context, membershipType int, membershipID, bungieToken, requestedCharacterID string) (string, int) {
-	cacheKey := fmt.Sprintf("weekly:roster:%d:%s", membershipType, membershipID)
+	cacheKey := rosterCacheKey(membershipType, membershipID)
 	if cached, ok := s.cache.Get(cacheKey); ok {
 		if roster, ok := cached.(characterRoster); ok {
 			return roster.resolve(requestedCharacterID)
