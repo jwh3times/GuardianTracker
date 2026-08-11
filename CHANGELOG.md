@@ -13,6 +13,16 @@ request.
 
 No unreleased changes.
 
+## [0.3.73] - 2026-08-11
+
+### Fixed
+
+- A search-index test could fail during its own cleanup, turning the Go test job
+  red on unrelated pull requests. The index is published before its snapshot is
+  saved to disk, so the test finished while a background build was still writing
+  into the temporary directory it was about to delete. Tests now wait for any
+  in-flight build before that directory is removed. No application code changed.
+
 ## [0.3.72] - 2026-08-11
 
 ### Changed
