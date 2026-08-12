@@ -11,6 +11,10 @@ request.
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.3.77] - 2026-08-12
+
 ### Security
 
 - Updated the backend's indirect `golang.org/x/net` dependency past the version
