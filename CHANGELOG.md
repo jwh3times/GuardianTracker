@@ -13,6 +13,21 @@ request.
 
 No unreleased changes.
 
+## [0.3.75] - 2026-08-12
+
+### Changed
+
+- Removed 21 unused frontend runtime dependencies, including the Radix UI,
+  React Hook Form, Lucide, and Zod packages. Guardian Tracker already uses its
+  own components and icon system, so application behavior is unchanged while
+  the install and supply-chain surface is smaller.
+
+## [0.3.74] - 2026-08-11
+
+### Changed
+
+- Bumped the frontend `react-hook-form` dependency from 7.84.0 to 7.85.0.
+
 ## [0.3.73] - 2026-08-11
 
 ### Fixed
