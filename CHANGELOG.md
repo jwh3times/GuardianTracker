@@ -11,7 +11,12 @@ request.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- Removed 21 unused frontend runtime dependencies, including the Radix UI,
+  React Hook Form, Lucide, and Zod packages. Guardian Tracker already uses its
+  own components and icon system, so application behavior is unchanged while
+  the install and supply-chain surface is smaller.
 
 ## [0.3.73] - 2026-08-11
 

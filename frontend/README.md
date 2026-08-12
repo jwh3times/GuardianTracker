@@ -10,7 +10,6 @@ React + TypeScript SPA for Guardian Tracker, a Destiny 2 collection tracking app
 - **Routing**: React Router v8 — import from `react-router`; the `react-router-dom` package no longer exists
 - **Styling**: Custom "Guardian Tracker" design system — oklch design tokens + `gt-*` CSS classes (`src/styles/`). Tailwind is still installed for a few legacy primitives but new UI uses the design system.
 - **Icons**: in-house single-path line set (`components/Icon.tsx`)
-- **Forms/Validation**: React Hook Form + Zod (available)
 - **Tests**: Vitest + React Testing Library; Playwright + axe for hermetic full-browser checks
 
 The design source (a self-contained prototype) lives in `frontend/design/`.

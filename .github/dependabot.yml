@@ -56,14 +56,6 @@ updates:
         update-types:
           - "major"
 
-      # All @radix-ui/* primitives share a peer-requirement on the same React major
-      # and are developed in the same monorepo — major bumps typically ship together.
-      radix-ui:
-        patterns:
-          - "@radix-ui/*"
-        update-types:
-          - "major"
-
       # @vitejs/plugin-react requires a matching Vite major; vitest and @vitest/*
       # track the Vite majors they support.
       vite-ecosystem:
