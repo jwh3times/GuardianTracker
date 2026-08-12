@@ -17,7 +17,7 @@ The design source (a self-contained prototype) lives in `frontend/design/`.
 ## Quick Start
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local   # fill in your values
 npm start                    # Vite dev server on http://localhost:5273
 ```
@@ -187,20 +187,22 @@ different font rasterization and will fail CI on every run, so `npm run
 e2e:visual` locally is only useful for eyeballing the report — never commit
 snapshots it writes.
 
-Regenerate them in the same image CI uses. The image tag must match the
-installed `@playwright/test` exactly — its browsers sit at a version-stamped
-path, so a mismatched tag fails every test with `Executable doesn't exist at
-/ms-playwright/...`. The first line below derives the tag the same way the
-workflow does, so do not substitute a hardcoded version.
+Regenerate them in the same image CI uses. `Dockerfile.playwright` layers the
+project’s pinned Node 26 runtime onto the official Playwright image. The
+Playwright image tag must match the installed `@playwright/test` exactly — its
+browsers sit at a version-stamped path, so a mismatched tag fails every test
+with `Executable doesn't exist at /ms-playwright/...`. The Dockerfile pins that
+tag and its multi-platform index digest; the repository policy test keeps it
+aligned with the lockfile.
 
 Build the Go servers for Linux, then run Playwright with them inside the
 container (everything stays on loopback, which the fake Bungie service
 requires):
 
 ```powershell
-$pwVersion = node -p "require('./frontend/package-lock.json').packages['node_modules/@playwright/test'].version"
-$pwImage = "mcr.microsoft.com/playwright:v$pwVersion-noble"
 $repo = (Get-Location).Path -replace '\\','/'
+docker build --pull -t guardian-tracker/playwright-node26:local `
+  -f frontend/Dockerfile.playwright frontend
 docker compose --profile e2e up -d --wait e2e-postgres
 docker run --rm -v "${repo}:/src" -v guardian-e2e-bin:/out -w /src/backend/api-service `
   -e CGO_ENABLED=1 golang:1.26.5 `
@@ -210,8 +212,8 @@ docker run --rm --init --ipc=host --network guardiantracker_default `
   -e E2E_FAKE_COMMAND=/out/fake-bungie -e E2E_API_COMMAND=/out/api-service `
   -e E2E_DATABASE_URL="postgres://guardian_app:guardian_dev_password@e2e-postgres:5432/guardian_tracker?sslmode=disable" `
   -v "${repo}:/repo" -v "/repo/frontend/node_modules" -v guardian-e2e-bin:/out -w /repo/frontend `
-  $pwImage `
-  bash -lc "npm ci && npm run e2e:update-snapshots"
+  guardian-tracker/playwright-node26:local `
+  bash -c "node --version && npm ci && npm run e2e:update-snapshots"
 ```
 
 Run it from the repo root so the lockfile path resolves. The anonymous

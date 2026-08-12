@@ -115,7 +115,7 @@ updates:
           - "patch"
 
   # ── Docker base images (frontend/Dockerfile, frontend/Dockerfile.dev,
-  #    backend/api-service/Dockerfile) ──
+  #    frontend/Dockerfile.playwright, backend/api-service/Dockerfile) ──
   # Dependabot advances a pinned tag and digest together for tagged releases.
   # Same-tag upstream digest republishes still require the SETUP.md drift check.
   - package-ecosystem: "docker"

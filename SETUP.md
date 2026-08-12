@@ -11,9 +11,16 @@ secrets, and incident notes belong under `private/`, which is gitignored.
 
 - Docker Desktop for the recommended full-stack local environment.
 - Go 1.26+ for backend development.
-- Node.js 26+ for frontend development.
+- The exact Node.js 26 patch in the root `.nvmrc` for frontend development.
+  `frontend/package.json` accepts the Node 26 line only; CI and both frontend
+  Dockerfiles use the exact `.nvmrc` patch, and npm rejects other Node lines.
 - A Bungie application for API and OAuth credentials.
 - Minikube only if you need to validate the Kubernetes manifests.
+
+Node 26 remains the Current release line until its scheduled LTS transition on
+October 28, 2026. Guardian Tracker intentionally accepts that short-term Current
+line churn because Node is frontend development and build tooling; the deployed
+frontend runtime is nginx.
 
 ## 1. Get Bungie Credentials
 
@@ -128,15 +135,17 @@ docker compose down -v
 
 ### Refreshing pinned container images
 
-The nginx, PostgreSQL, and API runtime images use patch-qualified tags pinned to
-multi-platform OCI index digests. This makes amd64 and arm64 builds reproducible.
-Dependabot advances the tag and digest together when a newer tagged release is
-available, but it may not report an upstream republish of the same tag. During an
-image refresh, compare the registry's reported `Digest` with the committed
-`@sha256` value before updating it:
+The frontend Node builder/development image and the nginx, PostgreSQL, and API
+runtime images use patch-qualified tags pinned to multi-platform OCI index
+digests. This makes amd64 and arm64 builds reproducible. Dependabot advances the
+tag and digest together when a newer tagged release is available, but it may not
+report an upstream republish of the same tag. During an image refresh, compare
+the registry's reported `Digest` with the committed `@sha256` value before
+updating it:
 
 ```powershell
 docker buildx imagetools inspect nginxinc/nginx-unprivileged:1.31.3-alpine3.24
+docker buildx imagetools inspect node:26.7.0-alpine3.24
 docker buildx imagetools inspect postgres:18.4-alpine3.24
 docker buildx imagetools inspect postgres:18.4
 docker buildx imagetools inspect alpine:3.24.1

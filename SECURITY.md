@@ -178,6 +178,12 @@ cross-site production topology must revisit the cookie policy and would require
 - **Immutable workflow dependencies**: every third-party GitHub Action is pinned to a reviewed 40-character release commit with a readable release-version comment. A repository policy test rejects moving tags or missing comments.
 - **Automated pin maintenance**: the `github-actions` Dependabot ecosystem advances action SHAs and release comments together.
 - **Reproducible Go vulnerability scan**: `govulncheck` is declared in the backend Go module at v1.6.0 and CI invokes it with `go tool`, allowing Go-module Dependabot updates without an unbounded `@latest` install.
+- **Reproducible frontend tooling**: `.nvmrc` selects one exact Node 26 patch for
+  local and CI tooling. The production builder and development image pin that
+  patch on Alpine 3.24 to a multi-platform OCI index digest, and clean container
+  installs use `npm ci`. npm enforces the Node 26 engine range, and a repository
+  policy test rejects drift between these pins, the workflows, package engine
+  metadata, and Node ambient types.
 
 ---
 
