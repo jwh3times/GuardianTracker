@@ -193,13 +193,18 @@ npm run e2e:visual
 
 Every PR must pass these GitHub Actions jobs before it can merge:
 
-| Check                   | What it does                                                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Format Check**        | Prettier (frontend) + Prettier (repo markdown) + `gofmt` (Go) — fails if anything is unformatted                                                  |
-| **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                                               |
-| **Test Go Services**    | `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` with the coverage gate; DB integration tests against Postgres                        |
-| **Build Docker Images** | builds both production Docker images (build validation; no push)                                                                                  |
-| **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.sh`); exempt for bot-authored PRs |
+| Check                   | What it does                                                                                                                                             |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Format Check**        | Prettier (frontend) + Prettier (repo markdown) + `gofmt` (Go) — fails if anything is unformatted                                                         |
+| **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                                                      |
+| **Test Go Services**    | `go vet`, Staticcheck 2026.1, declared `govulncheck` v1.6.0 via `go tool`, `go test -race` with the coverage gate; DB integration tests against Postgres |
+| **Build Docker Images** | builds both production Docker images (build validation; no push)                                                                                         |
+| **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.sh`); exempt for bot-authored PRs        |
+
+Third-party actions in `.github/workflows/` must use a reviewed 40-character
+commit SHA followed by a `# vX.Y.Z` release comment. The format job tests this
+policy, and the `github-actions` Dependabot configuration updates the SHA and
+comment together when a newer allowed release is available.
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it
 is enforced through a code-scanning merge rule rather than as a required status

@@ -170,15 +170,16 @@ successful health probes at debug.
 GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs`, which exercises
-   the generator's own logic, and `npm run sync:agents -- --check`, which fails if
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs`,
+   which exercises the generator's own logic and enforces the repository's workflow-action and
+   Go security-tool pinning policy, and `npm run sync:agents -- --check`, which fails if
    `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
    (generated from `.agents/skills/`) is out of sync with its source. Fix:
    `npm run sync:agents`. Run `./frontend/node_modules/.bin/prettier --write "**/*.md"`
    first if you edited a skill's markdown — regenerating before formatting mirrors
    unformatted content and drifts again on the next format pass.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
-3. **test-go-services** — `go vet`, Staticcheck 2026.1, `govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
+3. **test-go-services** — `go vet`, Staticcheck 2026.1, declared `govulncheck` tool v1.6.0 via `go tool govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — build validation only (no push configured)
 5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
    merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
@@ -188,6 +189,12 @@ GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
 and **Browser Visual Regression**. They report failures normally (no
 `continue-on-error`) and retain reports/evidence for 14 days. Promote E2E + axe
 to required after ten consecutive clean runs; visual stays optional.
+
+Every third-party workflow `uses:` entry is pinned to a reviewed 40-character
+release commit with a readable `# vX.Y.Z` comment. The `github-actions`
+Dependabot ecosystem advances both the SHA and comment. `actions/setup-node`
+remains at v7.0.0 until the fix tracked by upstream issue 1596 reaches a v7
+release; take the first patched v7 update proposed by Dependabot.
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
@@ -207,6 +214,7 @@ Use the narrowest relevant test first, then run broader checks when the change c
 # Go (from backend/api-service/)
 go test ./...
 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+go tool govulncheck ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
 # Frontend (from frontend/)

@@ -114,8 +114,8 @@ names, or exploit details.
 
 **CI workflow or branch-protection changed**
 
-- `AGENTS.md`: its `## CI/CD` section — job names, coverage gates, Staticcheck
-  version, required status checks, versioning/changelog behavior
+- `AGENTS.md`: its `## CI/CD` section — job names, coverage gates, action and Go
+  tool pinning, Staticcheck version, required status checks, versioning/changelog behavior
 - `CONTRIBUTING.md`: contributor-facing CI expectations if they changed
 
 **Feature completed from the public roadmap**

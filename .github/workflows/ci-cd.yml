@@ -43,10 +43,10 @@ jobs:
     #   npm run sync:agents                                   (from the repo root)
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
@@ -59,8 +59,8 @@ jobs:
       # Runs before the Prettier steps so a contributor who edited a source file
       # sees the actionable "run the sync script" failure rather than a confusing
       # Prettier diff on a generated file.
-      - name: Test the agent config sync script
-        run: node --test scripts/sync-agent-configs.test.mjs
+      - name: Test repository policy scripts
+        run: node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs
 
       - name: Check agent config sync (Codex agents + Claude skills)
         run: npm run sync:agents -- --check
@@ -75,7 +75,7 @@ jobs:
         run: ./frontend/node_modules/.bin/prettier --check "**/*.md"
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -97,10 +97,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
@@ -125,7 +125,7 @@ jobs:
         run: npm test -- --coverage
 
       - name: Upload frontend coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-coverage
           path: frontend/coverage/
@@ -158,10 +158,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -176,7 +176,7 @@ jobs:
           go mod tidy
           go vet ./...
           go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
-          go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+          go tool govulncheck ./...
           go test -race -coverprofile=coverage.out ./...
 
       # Floor for the current suite. CI runs with cgo (race) + Postgres, so the
@@ -192,7 +192,7 @@ jobs:
           awk -v t="$total" 'BEGIN { if (t+0 < 60.0) { print "FAIL: coverage " t "% is below the 60% gate"; exit 1 } }'
 
       - name: Upload Go coverage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: go-coverage
           path: backend/api-service/coverage.out
@@ -210,13 +210,13 @@ jobs:
     # `github.ref == 'refs/heads/main'`), then re-add the deploy jobs.
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Build Frontend image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
@@ -226,7 +226,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build API Service image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: ./backend/api-service
           file: ./backend/api-service/Dockerfile
@@ -249,7 +249,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # tags are required to compute the next version
 

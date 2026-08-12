@@ -142,6 +142,8 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - Flag application logs containing query strings, bodies, authorization headers, User-Agent values, routine client IPs, or exact membership/session/user/character identifiers. Those identifiers must use the deterministic 24-hex pseudonym helper; exact values are allowed only in the PostgreSQL audit trail.
 - Panic recovery must emit an error record with the request ID and return 500 without exposing the panic. Successful health probes are debug, other successes info, 4xx warn, and 5xx error.
 - CI must keep `go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...` in the required Go job. Suppressions require an inline explanation of a verified false positive.
+- CI must run the `go.mod`-declared `golang.org/x/vuln/cmd/govulncheck` tool with `go tool govulncheck ./...`; flag `@latest`, an undeclared install, or a workflow version that diverges from `go.mod`.
+- Every third-party workflow `uses:` entry must use a 40-character release commit followed by a `# vX.Y.Z` comment. Flag moving tags, shortened SHAs, or pins without the readable release comment; local actions (`./...`) and `docker://` references are exempt.
 
 ## Browser-test checks
 
