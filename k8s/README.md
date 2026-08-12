@@ -24,11 +24,15 @@ This directory contains scripts to start and stop the Guardian Tracker applicati
 ## What the Startup Script Does
 
 1. **Starts Minikube** (if not already running)
-2. **Builds Docker Images** for both services:
+2. **Builds Docker Images** for both services with fresh pinned base images
+   (`--pull --no-cache`):
    - `guardian-tracker/api-service:latest`
    - `guardian-tracker/frontend:v2`
 3. **Deploys Kubernetes manifests**
-4. **Waits for deployments** to be ready
+4. **Activates rebuilt images** by restarting a Deployment whose pod template
+   stayed unchanged; newly created Deployments and pod-template changes already
+   have a rollout in progress and are not restarted again. Then it waits for
+   readiness.
 5. **Sets up port forwarding** (localhost:5273 → frontend)
 6. **Shows status** and provides next steps
 
@@ -87,15 +91,22 @@ After startup completes:
 # Start Minikube
 minikube start
 
-# Build images (from each service directory)
-docker build -t guardian-tracker/api-service:latest backend/api-service/
-docker build -t guardian-tracker/frontend:v2 frontend/
+# Point Docker at Minikube, then build fresh images (from the repository root)
+& minikube docker-env --shell powershell | Invoke-Expression
+docker build --pull --no-cache -t guardian-tracker/api-service:latest backend/api-service/
+docker build --pull --no-cache -t guardian-tracker/frontend:v2 frontend/
 
 # Deploy services
 kubectl apply -f k8s/api-service-configmap.yaml
 kubectl apply -f k8s/api-service-secret.yaml
 kubectl apply -f k8s/api-service.yaml
 kubectl apply -f k8s/frontend.yaml
+
+# If applying these manifests did not change the pod template, consume the
+# rebuilt local tags. Skip restarts for new Deployments or pod-template changes.
+kubectl rollout restart deployment/api-service deployment/frontend
+kubectl rollout status deployment/api-service --timeout=300s
+kubectl rollout status deployment/frontend --timeout=300s
 
 # Port forward
 kubectl port-forward service/frontend 5273:80

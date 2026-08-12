@@ -36,7 +36,7 @@ By participating in this project you agree to abide by our
 ### Prerequisites
 
 - Docker Desktop (for Docker Compose or Minikube)
-- Go 1.25+ and Node.js 26+ (for running services individually — CI pins Go 1.25.x and Node 26)
+- Go 1.26+ and Node.js 26+ (for running services individually — CI pins Go 1.26.x and Node 26)
 - A [Bungie API application](https://www.bungie.net/en/Application) for OAuth
   credentials (API key, client ID, client secret)
 

@@ -13,7 +13,7 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags='-w -s -extldflags "-static"' -o main .
 
 # Runtime stage
-FROM alpine:3.24
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
 
 RUN apk --no-cache add ca-certificates sqlite-libs && \
     addgroup -g 1000 -S appgroup && \

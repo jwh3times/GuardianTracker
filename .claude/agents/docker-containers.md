@@ -13,13 +13,13 @@ You are working with the Guardian Tracker container setup. There are **two** Doc
 
 Two-stage build:
 
-1. **`builder`** (`golang:1.25-alpine`):
+1. **`builder`** (`golang:1.26.5-alpine`):
    - `RUN apk add --no-cache gcc musl-dev sqlite-dev` (required for CGO + SQLite)
    - `COPY go.mod go.sum ./` → `RUN go mod download`
    - `COPY . .`
    - `RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags='-w -s -extldflags "-static"' -o main .`
 
-2. **Runtime** (`alpine:3.19`):
+2. **Runtime** (`alpine:3.24.1`, pinned to its multi-platform index digest):
    - `RUN apk --no-cache add ca-certificates sqlite-libs`
    - Create non-root user `appuser` (uid/gid 1000) in group `appgroup`
    - `RUN mkdir -p /app/data && chown -R appuser:appgroup /app`
@@ -37,7 +37,7 @@ Two-stage build:
    - `COPY . .`
    - `RUN npm run build` (Vite production build → `dist/`)
 
-2. **Runtime** (`nginxinc/nginx-unprivileged:1.25-alpine`):
+2. **Runtime** (`nginxinc/nginx-unprivileged:1.31.3-alpine3.24`, pinned to its multi-platform index digest):
    - `COPY --from=builder /app/dist /usr/share/nginx/html`
    - `COPY nginx.conf /etc/nginx/conf.d/default.conf`
    - `EXPOSE 8080`
@@ -54,7 +54,8 @@ frontend/API bindings remain unchanged because local browsers and approved
 development tunnels use them. Compose requires an explicit `GO_ENV` value from
 the root environment file.
 
-`e2e-postgres` uses `postgres:18-alpine`, host port 5534, the `e2e` profile, and
+`e2e-postgres` uses `postgres:18.4-alpine3.24`, pinned to its multi-platform
+index digest, with host port 5534, the `e2e` profile, and
 a read-only `database/init` bind mount. It intentionally has no database data
 volume and `restart: "no"`; Playwright owns the other browser-test processes.
 
@@ -67,8 +68,8 @@ Images must be built inside Minikube's Docker daemon:
 & minikube docker-env --shell powershell | Invoke-Expression
 
 # Build each service (run from repo root)
-docker build -t guardian-tracker/api-service:latest backend/api-service/
-docker build -t guardian-tracker/frontend:v2 frontend/
+docker build --pull --no-cache -t guardian-tracker/api-service:latest backend/api-service/
+docker build --pull --no-cache -t guardian-tracker/frontend:v2 frontend/
 
 # Restart affected deployment
 kubectl rollout restart deployment/<service-name>
@@ -89,7 +90,12 @@ docker pull <image:tag>
 | api-service | `guardian-tracker/api-service:latest` |
 | frontend    | `guardian-tracker/frontend:v2`        |
 
-All deployments use `imagePullPolicy: IfNotPresent`.
+Both deployments use `imagePullPolicy: Never` because their application images
+are built directly into Minikube. After rebuilding a reused local tag, restart
+an existing deployment whose pod template stayed unchanged so Kubernetes creates
+pods from the new image. A newly created deployment or pod-template change already
+has a rollout consuming the rebuilt image and should not be restarted a second
+time while the api-service initializes or opens its manifest volume.
 
 ## Layer caching — key ordering rules
 
@@ -103,12 +109,16 @@ Never move `COPY . .` before the install step.
 
 ## Base image versions
 
-| Role                     | Image                                     |
-| ------------------------ | ----------------------------------------- |
-| Go builder               | `golang:1.25-alpine`                      |
-| Go runtime               | `alpine:3.19`                             |
-| Node builder (frontend)  | `node:26-alpine`                          |
-| nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.25-alpine` |
+| Role                     | Image                                           |
+| ------------------------ | ----------------------------------------------- |
+| Go builder               | `golang:1.26.5-alpine`                          |
+| Go runtime               | `alpine:3.24.1`                                 |
+| Node builder (frontend)  | `node:26-alpine`                                |
+| nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.31.3-alpine3.24` |
+
+The runtime tags are also pinned to their multi-platform OCI index digests in
+the Dockerfiles. Dependabot advances tag and digest together for newer tagged
+releases; follow the digest-drift check in `SETUP.md` for same-tag republishes.
 
 When updating Go: the version must match the `go` directive in `go.mod`.
 When updating Node for the frontend: update both the builder stage tag and confirm the built artifact is compatible.

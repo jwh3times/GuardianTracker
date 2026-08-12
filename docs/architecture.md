@@ -104,7 +104,8 @@ Primary route groups:
 - records: catalysts, crafting, seals
 - characters: account characters
 - admin: users, roles, flags, audit log
-- health: `/health` liveness and `/ready` readiness
+- health: `/health` liveness and `/ready` readiness; readiness requires the
+  manifest and, when a database pool is configured, a successful database ping
 
 See `backend/api-service/api/router.go` for the authoritative route
 registration. Authentication is applied once to the authenticated group rather
