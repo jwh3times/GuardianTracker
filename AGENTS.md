@@ -94,6 +94,10 @@ cd k8s
 ```
 
 Dev-validation only — runs `GO_ENV: development` with no Postgres (in-memory token store, no wishlist/preferences persistence).
+The startup script rebuilds both application images in Minikube with
+`--pull --no-cache`; because the Deployments use local images with
+`imagePullPolicy: Never`, it restarts only an existing Deployment whose applied
+pod template did not already trigger a rollout.
 
 ### Option C: Individual services
 
