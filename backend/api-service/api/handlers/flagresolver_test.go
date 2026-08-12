@@ -31,7 +31,7 @@ func sampleFlags() []db.FeatureFlag {
 }
 
 func TestFlagResolver_ResolveKnownKeys(t *testing.T) {
-	r := NewFlagResolver(&fakeFlagLister{flags: sampleFlags()}, cache.NewMemoryCache(time.Minute, time.Minute))
+	r := NewFlagResolver(&fakeFlagLister{flags: sampleFlags()}, cache.NewMemoryCache(time.Minute, 0))
 	cases := []struct {
 		key         string
 		wantEnabled bool
@@ -56,7 +56,7 @@ func TestFlagResolver_ResolveKnownKeys(t *testing.T) {
 }
 
 func TestFlagResolver_DegradedNilStore(t *testing.T) {
-	r := NewFlagResolver(db.NewStores(nil).Flags, cache.NewMemoryCache(time.Minute, time.Minute))
+	r := NewFlagResolver(db.NewStores(nil).Flags, cache.NewMemoryCache(time.Minute, 0))
 	list, err := r.List(context.Background())
 	if err != nil || list != nil {
 		t.Fatalf("degraded List = (%v, %v), want (nil, nil)", list, err)
@@ -69,7 +69,7 @@ func TestFlagResolver_DegradedNilStore(t *testing.T) {
 
 func TestFlagResolver_CachesAcrossCalls(t *testing.T) {
 	lister := &fakeFlagLister{flags: sampleFlags()}
-	r := NewFlagResolver(lister, cache.NewMemoryCache(time.Minute, time.Minute))
+	r := NewFlagResolver(lister, cache.NewMemoryCache(time.Minute, 0))
 	for i := 0; i < 3; i++ {
 		if _, err := r.List(context.Background()); err != nil {
 			t.Fatalf("List: %v", err)
@@ -81,7 +81,7 @@ func TestFlagResolver_CachesAcrossCalls(t *testing.T) {
 }
 
 func TestFlagResolver_WrongTypedCacheFallsBackToStore(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	c.Set(flagsCacheKey, "not a flag slice", time.Minute) // poison the cache slot
 	lister := &fakeFlagLister{flags: sampleFlags()}
 	r := NewFlagResolver(lister, c)
@@ -95,7 +95,7 @@ func TestFlagResolver_WrongTypedCacheFallsBackToStore(t *testing.T) {
 }
 
 func TestFlagResolver_StoreErrorPropagates(t *testing.T) {
-	r := NewFlagResolver(&fakeFlagLister{err: errors.New("db down")}, cache.NewMemoryCache(time.Minute, time.Minute))
+	r := NewFlagResolver(&fakeFlagLister{err: errors.New("db down")}, cache.NewMemoryCache(time.Minute, 0))
 	if _, _, _, err := r.Resolve(context.Background(), "global-search"); err == nil {
 		t.Error("Resolve: want error from store, got nil")
 	}

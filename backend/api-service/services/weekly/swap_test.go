@@ -11,7 +11,7 @@ import (
 // OnVersionChanged must drop the manifest-resolved global payload and nothing
 // else — the per-user Bungie data in the same cache is still valid.
 func TestOnVersionChanged_DropsPublicWeeklyOnly(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	s := &Service{cache: c, version: fakeVersioner{"v1"}}
 
 	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{}, time.Minute)

@@ -52,7 +52,7 @@ func serviceAtVersion(t *testing.T, version string, repo ManifestRepo) *Service 
 	return &Service{
 		manifestService: ms,
 		manifest:        repo,
-		cache:           cache.NewMemoryCache(time.Minute, time.Minute),
+		cache:           cache.NewMemoryCache(time.Minute, 0),
 		cacheTTL:        time.Minute,
 	}
 }
@@ -164,7 +164,7 @@ func TestRefreshManifestParts_ManifestNotReadyServesStale(t *testing.T) {
 // must disable itself rather than rebuild on every single read.
 func TestRefreshManifestParts_NoVersionSourceIsANoOp(t *testing.T) {
 	repo := fixtureRepo()
-	s := &Service{manifest: repo, cache: cache.NewMemoryCache(time.Minute, time.Minute)}
+	s := &Service{manifest: repo, cache: cache.NewMemoryCache(time.Minute, 0)}
 
 	a := &analysis{collected: map[uint32]bool{}, manifestVersion: "v1"}
 	got, err := s.refreshManifestParts(a)

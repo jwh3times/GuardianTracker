@@ -76,7 +76,7 @@ func roleTestRouter(membershipID string, role int, register func(*gin.Engine)) *
 	return r
 }
 
-func newCache() cache.Cache { return cache.NewMemoryCache(time.Minute, time.Minute) }
+func newCache() cache.Cache { return cache.NewMemoryCache(time.Minute, 0) }
 
 // --- account: self opt-in ---
 

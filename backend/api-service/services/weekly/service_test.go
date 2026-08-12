@@ -114,7 +114,7 @@ func TestGetXurLocation_UsesCharacterVendorCache(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	s := NewService(
 		bungie.NewClient("k", srv.URL, 100, 100),
 		&fakeManifest{destinationHash: xurTowerDestinationHash, destinationName: "The Last City"},
@@ -136,7 +136,7 @@ func TestGetXurLocation_UsesCharacterVendorCache(t *testing.T) {
 }
 
 func TestGetXurLocation_OmitsUnknownLocation(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	resp := &bungie.CharacterVendorsResponse{}
 	resp.Response.Vendors.Data = map[string]bungie.VendorComponent{
 		"2190858386": {VendorHash: bungie.XurVendorHash, VendorLocationIndex: -1, Enabled: true},
@@ -308,7 +308,7 @@ func TestXurItemHashesAt(t *testing.T) {
 	friday := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC)    // Xûr present
 	wednesday := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC) // Xûr absent
 
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 111}, {Hash: 222}},

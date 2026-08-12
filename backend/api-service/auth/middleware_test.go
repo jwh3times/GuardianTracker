@@ -106,7 +106,7 @@ func TestMiddleware_ValidAccess_SetsContext(t *testing.T) {
 func TestMiddleware_TverMismatch_401(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	// DB says version 2; the JWT carries version 1 (issued before a logout).
-	revoker := NewRevocationChecker(&fakeVersionStore{version: 2}, cache.NewMemoryCache(time.Minute, time.Minute))
+	revoker := NewRevocationChecker(&fakeVersionStore{version: 2}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
 	tok, _ := j.GenerateAccessToken(testProfile(), 1, "")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusUnauthorized {
@@ -116,7 +116,7 @@ func TestMiddleware_TverMismatch_401(t *testing.T) {
 
 func TestMiddleware_TverMatch_200(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
-	revoker := NewRevocationChecker(&fakeVersionStore{version: 3}, cache.NewMemoryCache(time.Minute, time.Minute))
+	revoker := NewRevocationChecker(&fakeVersionStore{version: 3}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
 	tok, _ := j.GenerateAccessToken(testProfile(), 3, "")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusOK {
@@ -129,7 +129,7 @@ func TestMiddleware_TverMatch_200(t *testing.T) {
 func TestMiddleware_SessionRevoked_401(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	// token_version matches (3), but the session is gone (sessionOK=false).
-	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: false}, cache.NewMemoryCache(time.Minute, time.Minute))
+	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: false}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
 	tok, _ := j.GenerateAccessToken(testProfile(), 3, "sess-gone")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusUnauthorized {
@@ -140,7 +140,7 @@ func TestMiddleware_SessionRevoked_401(t *testing.T) {
 // TestMiddleware_SessionValid_200 confirms a live session passes the session check.
 func TestMiddleware_SessionValid_200(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
-	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: true}, cache.NewMemoryCache(time.Minute, time.Minute))
+	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: true}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
 	tok, _ := j.GenerateAccessToken(testProfile(), 3, "sess-live")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusOK {
@@ -149,7 +149,7 @@ func TestMiddleware_SessionValid_200(t *testing.T) {
 }
 
 func TestRevocation_FailOpenOnDBError(t *testing.T) {
-	revoker := NewRevocationChecker(&fakeVersionStore{err: fmt.Errorf("db down")}, cache.NewMemoryCache(time.Minute, time.Minute))
+	revoker := NewRevocationChecker(&fakeVersionStore{err: fmt.Errorf("db down")}, cache.NewMemoryCache(time.Minute, 0))
 	if err := revoker.Check(context.Background(), "user-1", 1); err != nil {
 		t.Fatalf("expected fail-open on DB error, got %v", err)
 	}
@@ -157,14 +157,14 @@ func TestRevocation_FailOpenOnDBError(t *testing.T) {
 
 func TestRevocation_MissingUserFailsClosed(t *testing.T) {
 	store := &fakeVersionStore{missing: true}
-	revoker := NewRevocationChecker(store, cache.NewMemoryCache(time.Minute, time.Minute))
+	revoker := NewRevocationChecker(store, cache.NewMemoryCache(time.Minute, 0))
 	if err := revoker.Check(context.Background(), "deleted-user", 1); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("Check() = %v, want ErrUserNotFound", err)
 	}
 }
 
 func TestRevocation_WrongTypedUserCacheValueIsRepaired(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	c.Set("tver:user-1", "corrupt", time.Minute)
 	store := &fakeVersionStore{version: 4, role: RoleAlpha}
 	revoker := NewRevocationChecker(store, c)
@@ -186,7 +186,7 @@ func TestRevocation_WrongTypedUserCacheValueIsRepaired(t *testing.T) {
 }
 
 func TestRevocation_WrongTypedSessionCacheValueIsRepaired(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	c.Set("sess:session-1", "corrupt", time.Minute)
 	store := &fakeVersionStore{version: 1, sessionOK: true}
 	revoker := NewRevocationChecker(store, c)
@@ -203,7 +203,7 @@ func TestRevocation_WrongTypedSessionCacheValueIsRepaired(t *testing.T) {
 }
 
 func TestRevocation_CacheHitPath(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	store := &fakeVersionStore{version: 2}
 	revoker := NewRevocationChecker(store, c)
 
@@ -223,7 +223,7 @@ func TestRevocation_CacheHitPath(t *testing.T) {
 }
 
 func TestRevocation_NilStoreDegradedMode(t *testing.T) {
-	revoker := NewRevocationChecker(nil, cache.NewMemoryCache(time.Minute, time.Minute))
+	revoker := NewRevocationChecker(nil, cache.NewMemoryCache(time.Minute, 0))
 	if err := revoker.Check(context.Background(), "anyone", 42); err != nil {
 		t.Fatalf("degraded mode must skip the check, got %v", err)
 	}

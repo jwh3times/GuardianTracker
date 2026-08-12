@@ -108,7 +108,7 @@ func newBungieServer(t *testing.T, profileJSON string) *httptest.Server {
 func newRecordsService(t *testing.T, srv *httptest.Server, m ManifestRepo) *Service {
 	t.Helper()
 	client := bungie.NewClient("test-key", srv.URL, 100, 100)
-	return NewService(client, m, cache.NewMemoryCache(time.Minute, time.Minute), time.Minute)
+	return NewService(client, m, cache.NewMemoryCache(time.Minute, 0), time.Minute)
 }
 
 // catalystFixture: root node 9000 → records 1001-1004 named like real catalysts.
@@ -399,7 +399,7 @@ func TestGetCatalysts_SourceByStatus(t *testing.T) {
 }
 
 func TestRecords_NilManifestReturnsNotReady(t *testing.T) {
-	s := NewService(nil, nil, cache.NewMemoryCache(time.Minute, time.Minute), time.Minute)
+	s := NewService(nil, nil, cache.NewMemoryCache(time.Minute, 0), time.Minute)
 
 	// Without a manifest the endpoints must report manifest-not-ready (→ 503), not
 	// a 200 with an empty list — otherwise the UI can't tell "still downloading"

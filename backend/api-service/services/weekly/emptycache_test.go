@@ -39,7 +39,7 @@ const bansheeVendorKey = "672118013"
 func TestGetLiveVendorItems_DoesNotCacheAnEmptyResult(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	s := &Service{cache: c}
 
 	// A real response in which no allowlisted vendor is selling anything.
@@ -59,7 +59,7 @@ func TestGetLiveVendorItems_DoesNotCacheAnEmptyResult(t *testing.T) {
 func TestGetDailyVendorItems_DoesNotCacheAnEmptyResult(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	// enrichDailyVendorItems resolves item names through the manifest, so the
 	// service needs one to produce a non-empty result at all.
 	mod := &bungie.InventoryItemDefinition{Hash: 4242, ItemType: bungie.ItemTypeMod}
@@ -94,7 +94,7 @@ func TestResolveCharacter_DoesNotCacheAnEmptyRoster(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	s := &Service{cache: cache.NewMemoryCache(time.Minute, time.Minute), bungie: bungie.NewClient("k", srv.URL, 100, 100)}
+	s := &Service{cache: cache.NewMemoryCache(time.Minute, 0), bungie: bungie.NewClient("k", srv.URL, 100, 100)}
 
 	if id, class := s.resolveCharacter(ctx, 3, "member-1", "token", ""); id != "" || class != -1 {
 		t.Fatalf("first call = (%q, %d), want the unresolved fallback", id, class)

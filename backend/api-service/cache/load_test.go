@@ -21,7 +21,7 @@ func (l *countingLoader[T]) load() (T, error) {
 }
 
 func TestLoad_CachesAcrossCalls(t *testing.T) {
-	c := NewMemoryCache(time.Minute, time.Minute)
+	c := NewMemoryCache(time.Minute, 0)
 	loader := &countingLoader[[]string]{value: []string{"a", "b"}}
 
 	for i := range 3 {
@@ -39,7 +39,7 @@ func TestLoad_CachesAcrossCalls(t *testing.T) {
 }
 
 func TestLoad_NeverCachesAnError(t *testing.T) {
-	c := NewMemoryCache(time.Minute, time.Minute)
+	c := NewMemoryCache(time.Minute, 0)
 	boom := errors.New("manifest not ready")
 	loader := &countingLoader[[]string]{err: boom}
 
@@ -67,7 +67,7 @@ func TestLoad_NeverCachesAnError(t *testing.T) {
 }
 
 func TestLoad_ErrorReturnsTheZeroValue(t *testing.T) {
-	c := NewMemoryCache(time.Minute, time.Minute)
+	c := NewMemoryCache(time.Minute, 0)
 	loader := &countingLoader[map[string]string]{value: map[string]string{"leaked": "yes"}, err: errors.New("boom")}
 
 	got, err := Load(context.Background(), c, "k", time.Minute, loader.load)
@@ -80,7 +80,7 @@ func TestLoad_ErrorReturnsTheZeroValue(t *testing.T) {
 }
 
 func TestLoadIf_RejectedValueIsReturnedButNotCached(t *testing.T) {
-	c := NewMemoryCache(time.Minute, time.Minute)
+	c := NewMemoryCache(time.Minute, 0)
 	loader := &countingLoader[[]int]{value: nil} // a transient empty response
 	nonEmpty := func(v []int) bool { return len(v) > 0 }
 
@@ -115,7 +115,7 @@ func TestLoadIf_RejectedValueIsReturnedButNotCached(t *testing.T) {
 }
 
 func TestLoad_WrongTypedEntryIsAMissAndIsReplaced(t *testing.T) {
-	c := NewMemoryCache(time.Minute, time.Minute)
+	c := NewMemoryCache(time.Minute, 0)
 	c.Set("k", "a string from an older build", time.Minute)
 	loader := &countingLoader[[]int]{value: []int{7}}
 
@@ -167,7 +167,7 @@ func TestLoad_NoOpCacheAlwaysLoads(t *testing.T) {
 }
 
 func TestLoad_HonoursTheTTL(t *testing.T) {
-	c := NewMemoryCache(time.Minute, 10*time.Millisecond)
+	c := NewMemoryCache(time.Minute, 0)
 	loader := &countingLoader[int]{value: 1}
 
 	if _, err := Load(context.Background(), c, "k", 20*time.Millisecond, loader.load); err != nil {
@@ -186,7 +186,7 @@ func TestLoad_HonoursTheTTL(t *testing.T) {
 // coming back as a wrong-typed miss, which is what lets a caller cache a
 // legitimately empty answer when it wants to.
 func TestLoad_CachesTypedNilResults(t *testing.T) {
-	c := NewMemoryCache(time.Minute, time.Minute)
+	c := NewMemoryCache(time.Minute, 0)
 	loader := &countingLoader[[]string]{value: nil}
 
 	for range 2 {

@@ -22,3 +22,4 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0010: Manifest Swap Participants and Observers](./0010-manifest-swap-participants-and-observers.md)
 - [ADR 0011: Route Table as a Testable Composition Root](./0011-route-table-as-a-testable-composition-root.md)
 - [ADR 0012: Session Issuance Owns the Session Lifecycle](./0012-session-issuance-owns-the-session-lifecycle.md)
+- [ADR 0013: Own the Application Cache Contract](./0013-own-the-application-cache-contract.md)
