@@ -123,6 +123,13 @@ Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`
 
 **Never commit real secrets. Use `.env` locally and keep generated/private files out of git.**
 
+Frontend tooling uses the exact Node.js 26 patch in the root `.nvmrc`.
+`frontend/package.json` accepts the Node 26 line only; CI and both frontend
+Dockerfiles use the exact `.nvmrc` patch. Node 26 remains Current until its
+scheduled LTS transition on October 28, 2026; this project intentionally accepts
+that short-term churn because Node is frontend development/build tooling and the
+deployed frontend runtime is nginx.
+
 ### Required secrets
 
 | Variable                                | Purpose                                                                                               |
@@ -167,12 +174,17 @@ successful health probes at debug.
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs:
+GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs. Both this
+workflow and `.github/workflows/browser.yml` provision Node from the root
+`.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs`,
-   which exercises the generator's own logic and enforces the repository's workflow-action and
-   Go security-tool pinning policy, and `npm run sync:agents -- --check`, which fails if
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs`,
+   which exercises the generator's own logic and enforces the repository's workflow-action,
+   Go security-tool, and Node-version alignment policies. The Node policy keeps `.nvmrc`, both
+   workflows, both frontend Dockerfiles, package engine metadata, and Node ambient types on the
+   Node 26 line, with one exact patch for local, CI, and container tooling. The job also runs
+   `npm run sync:agents -- --check`, which fails if
    `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
    (generated from `.agents/skills/`) is out of sync with its source. Fix:
    `npm run sync:agents`. Run `./frontend/node_modules/.bin/prettier --write "**/*.md"`

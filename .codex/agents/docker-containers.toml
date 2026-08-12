@@ -17,6 +17,7 @@ You are working with the Guardian Tracker container setup. There are **two** Doc
 Two-stage build:
 
 1. **`builder`** (`golang:1.26.5-alpine`):
+
    - `RUN apk add --no-cache gcc musl-dev sqlite-dev` (required for CGO + SQLite)
    - `COPY go.mod go.sum ./` → `RUN go mod download`
    - `COPY . .`
@@ -35,7 +36,8 @@ Two-stage build:
 
 Two-stage build:
 
-1. **`builder`** (`node:26-alpine`):
+1. **`builder`** (`node:26.7.0-alpine3.24`, pinned to its multi-platform index digest):
+
    - `COPY package*.json ./` → `RUN npm ci`
    - `COPY . .`
    - `RUN npm run build` (Vite production build → `dist/`)
@@ -46,6 +48,9 @@ Two-stage build:
    - `EXPOSE 8080`
    - Runs as non-root automatically (nginx-unprivileged handles this)
    - `CMD ["nginx", "-g", "daemon off;"]`
+
+`frontend/Dockerfile.dev` uses the same pinned Node image and installs from the
+lockfile with `npm ci` before copying the source tree.
 
 The `nginx.conf` must serve `index.html` for all unknown paths so React Router works correctly.
 
@@ -116,13 +121,17 @@ Never move `COPY . .` before the install step.
 | ------------------------ | ----------------------------------------------- |
 | Go builder               | `golang:1.26.5-alpine`                          |
 | Go runtime               | `alpine:3.24.1`                                 |
-| Node builder (frontend)  | `node:26-alpine`                                |
+| Node builder/dev         | `node:26.7.0-alpine3.24`                        |
 | nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.31.3-alpine3.24` |
 
-The runtime tags are also pinned to their multi-platform OCI index digests in
-the Dockerfiles. Dependabot advances tag and digest together for newer tagged
-releases; follow the digest-drift check in `SETUP.md` for same-tag republishes.
+The Go runtime, Node builder/development, and nginx runtime tags are also pinned
+to their multi-platform OCI index digests in the Dockerfiles. Dependabot
+advances tag and digest together for newer tagged releases; follow the
+digest-drift check in `SETUP.md` for same-tag republishes.
 
 When updating Go: the version must match the `go` directive in `go.mod`.
-When updating Node for the frontend: update both the builder stage tag and confirm the built artifact is compatible.
+When updating Node within the supported 26 line: change `.nvmrc`, both frontend
+Dockerfiles, and the shared OCI digest together. Keep `package.json`/lockfile
+engine metadata and `@types/node` on Node 26, then run
+`node --test scripts/node-version-policy.test.mjs` from the repository root.
 '''

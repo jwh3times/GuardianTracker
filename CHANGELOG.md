@@ -13,6 +13,21 @@ request.
 
 No unreleased changes.
 
+## [0.3.81] - 2026-08-12
+
+### Security
+
+- Pinned the frontend production-builder and development Node images to Node
+  26.7.0 on Alpine 3.24 at a portable multi-platform OCI index digest. The
+  development image now installs the locked dependency graph with `npm ci`.
+
+### Changed
+
+- Added a root `.nvmrc` as the exact Node patch source for local tooling and both
+  GitHub Actions workflows. Frontend package metadata accepts only Node 26, and
+  a repository policy test rejects drift across local, CI, container, engine,
+  and Node type declarations.
+
 ## [0.3.80] - 2026-08-12
 
 ### Security

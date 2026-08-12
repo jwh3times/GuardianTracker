@@ -17,7 +17,7 @@ The design source (a self-contained prototype) lives in `frontend/design/`.
 ## Quick Start
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local   # fill in your values
 npm start                    # Vite dev server on http://localhost:5273
 ```
