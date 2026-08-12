@@ -13,6 +13,18 @@ request.
 
 No unreleased changes.
 
+## [0.3.80] - 2026-08-12
+
+### Security
+
+- Pinned every third-party GitHub Action to a reviewed release commit while
+  retaining readable version comments. A repository policy test now rejects
+  moving action tags or incomplete pins, and Dependabot continues to advance
+  both the commit and comment for new releases.
+- Declared `govulncheck` v1.6.0 as a Go tool and changed CI to invoke that exact,
+  Go-module-managed version instead of installing `@latest`. Staticcheck remains
+  pinned at 2026.1.
+
 ## [0.3.79] - 2026-08-12
 
 ### Security

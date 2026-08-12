@@ -7,7 +7,7 @@
 # Docs: https://docs.github.com/code-security/dependabot
 version: 2
 updates:
-  # ── Go modules (backend/api-service — Go 1.26.x) ──
+  # ── Go modules + declared Go tools (backend/api-service — Go 1.26.x) ──
   - package-ecosystem: "gomod"
     directory: "/backend/api-service"
     schedule:
@@ -92,6 +92,8 @@ updates:
           - "patch"
 
   # ── GitHub Actions (.github/workflows/) ──
+  # Actions are committed as full SHAs with release comments; Dependabot advances
+  # both when a newer allowed release is available.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

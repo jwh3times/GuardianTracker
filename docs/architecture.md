@@ -160,9 +160,14 @@ See [SECURITY.md](../SECURITY.md) for the security guide and checklist.
 - Browser: Playwright against the real API/Vite plus a test-only fake Bungie
   service and runtime-generated SQLite manifest; functional, WCAG 2.2 axe, and
   deterministic visual projects share one worker and isolated Postgres state.
-- Backend: Go unit and integration tests, `go vet`, Staticcheck 2026.1,
-  `govulncheck`, race detector in CI, Postgres-backed integration tests.
+- Backend: Go unit and integration tests, `go vet`, Staticcheck 2026.1, the
+  declared `govulncheck` v1.6.0 tool, race detector in CI, Postgres-backed
+  integration tests.
 - Docker: CI builds production images for validation.
+
+CI pins every third-party GitHub Action to a reviewed release commit and checks
+the full-SHA plus release-comment policy in the format job. Dependabot manages
+both those action pins and the declared Go vulnerability-scanner tool.
 
 The browser workflow keeps functional/axe and visual jobs advisory during
 stabilization. E2E/axe becomes required only after ten consecutive clean runs;
