@@ -11,6 +11,10 @@ request.
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.3.76] - 2026-08-12
+
 ### Changed
 
 - Frontend compiler and React type packages are now classified as development
