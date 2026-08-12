@@ -1,0 +1,13 @@
+ARG NODE_IMAGE=node:26.7.0-bookworm-slim@sha256:cd565714d4da3e84bfd341e31448f81d47c6362198f152345297c9c1154e6341
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+
+FROM ${NODE_IMAGE} AS node-runtime
+FROM ${PLAYWRIGHT_IMAGE}
+
+# Playwright pins the browsers and system libraries, while the project pins the
+# Node runtime. Keep Node under /opt so the Playwright image remains otherwise
+# unchanged and npm's relative symlinks continue to resolve.
+COPY --from=node-runtime /usr/local/ /opt/node/
+ENV PATH="/opt/node/bin:${PATH}"
+
+RUN node --version && npm --version

@@ -185,19 +185,14 @@ jobs:
       # literal in a workflow step is invisible to every ecosystem. Deriving the
       # tag from the lockfile makes the two impossible to drift apart.
       #
-      # Read the lockfile, not package.json: it records the resolved version and
-      # so stays correct if the dependency is ever loosened to a range.
-      # Microsoft publishes a -noble image for every stable Playwright release.
-      - name: Resolve Playwright image tag from the lockfile
-        id: playwright-image
+      # Dockerfile.playwright pins both image digests. The Node policy test keeps
+      # its Playwright tag aligned with the version resolved in the lockfile.
+      - name: Build the matching Playwright image with Node 26
         run: |
-          version=$(node -p "require('./frontend/package-lock.json').packages['node_modules/@playwright/test'].version")
-          if [ -z "$version" ] || [ "$version" = "undefined" ]; then
-            echo "Could not resolve @playwright/test from frontend/package-lock.json" >&2
-            exit 1
-          fi
-          echo "tag=mcr.microsoft.com/playwright:v${version}-noble" >> "$GITHUB_OUTPUT"
-          echo "Resolved Playwright image: mcr.microsoft.com/playwright:v${version}-noble"
+          docker build --pull \
+            --tag guardian-tracker/playwright-node26:ci \
+            --file frontend/Dockerfile.playwright \
+            frontend
 
       - name: Run visual suite in the matching Playwright image
         run: |
@@ -211,8 +206,8 @@ jobs:
             -e E2E_FIXED_TIME="$E2E_FIXED_TIME" \
             -v "$GITHUB_WORKSPACE/frontend:/work" \
             -w /work \
-            ${{ steps.playwright-image.outputs.tag }} \
-            bash -lc "npm ci && npm run e2e:visual" \
+            guardian-tracker/playwright-node26:ci \
+            bash -c "node --version && npm ci && npm run e2e:visual" \
             2>&1 | tee browser-logs/playwright-visual.log
 
       - name: Capture Postgres logs

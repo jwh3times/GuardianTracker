@@ -27,6 +27,9 @@ No unreleased changes.
   GitHub Actions workflows. Frontend package metadata accepts only Node 26, and
   a repository policy test rejects drift across local, CI, container, engine,
   and Node type declarations.
+- The visual-regression image now layers that pinned Node 26 runtime onto the
+  lockfile-matched Playwright image, keeping its browsers reproducible without
+  falling back to Playwright's older bundled Node runtime.
 
 ## [0.3.80] - 2026-08-12
 

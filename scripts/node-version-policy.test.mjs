@@ -33,6 +33,31 @@ test("local, CI, and Docker tooling use one exact Node 26 patch", () => {
   );
   assert.match(read("frontend", "Dockerfile"), imagePattern);
   assert.match(read("frontend", "Dockerfile.dev"), imagePattern);
+
+  const playwrightDockerfile = read("frontend", "Dockerfile.playwright");
+  const playwrightNodePattern = new RegExp(
+    `^ARG NODE_IMAGE=node:${version.replaceAll(".", "\\.")}-bookworm-slim@sha256:[0-9a-f]{64}$`,
+    "m",
+  );
+  assert.match(playwrightDockerfile, playwrightNodePattern);
+  const lockfile = JSON.parse(read("frontend", "package-lock.json"));
+  const playwrightVersion =
+    lockfile.packages["node_modules/@playwright/test"].version;
+  assert.match(
+    playwrightDockerfile,
+    new RegExp(
+      `^ARG PLAYWRIGHT_IMAGE=mcr\\.microsoft\\.com/playwright:v${playwrightVersion.replaceAll(".", "\\.")}-noble@sha256:[0-9a-f]{64}$`,
+      "m",
+    ),
+  );
+  assert.match(
+    playwrightDockerfile,
+    /^ENV PATH="\/opt\/node\/bin:\$\{PATH\}"$/m,
+  );
+
+  const browserWorkflow = read(".github", "workflows", "browser.yml");
+  assert.match(browserWorkflow, /--file frontend\/Dockerfile\.playwright/);
+  assert.match(browserWorkflow, /guardian-tracker\/playwright-node26:ci/);
 });
 
 test("frontend package metadata supports only the Node 26 line", () => {
