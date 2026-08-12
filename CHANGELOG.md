@@ -11,7 +11,11 @@ request.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Security
+
+- Updated the backend's indirect `golang.org/x/net` dependency past the version
+  range affected by GO-2026-5942. Guardian Tracker does not call the affected
+  DNS message API; this is preventative dependency hygiene.
 
 ## [0.3.76] - 2026-08-12
 
