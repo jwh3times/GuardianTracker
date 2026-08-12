@@ -11,7 +11,11 @@ request.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- Frontend compiler and React type packages are now classified as development
+  dependencies, the test DOM matchers were updated, and clean npm installs now
+  explicitly skip MSW's unused browser-worker setup script.
 
 ## [0.3.75] - 2026-08-12
 
