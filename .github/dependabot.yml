@@ -7,7 +7,7 @@
 # Docs: https://docs.github.com/code-security/dependabot
 version: 2
 updates:
-  # ── Go modules (backend/api-service — Go 1.25.x) ──
+  # ── Go modules (backend/api-service — Go 1.26.x) ──
   - package-ecosystem: "gomod"
     directory: "/backend/api-service"
     schedule:
@@ -114,6 +114,8 @@ updates:
 
   # ── Docker base images (frontend/Dockerfile, frontend/Dockerfile.dev,
   #    backend/api-service/Dockerfile) ──
+  # Dependabot advances a pinned tag and digest together for tagged releases.
+  # Same-tag upstream digest republishes still require the SETUP.md drift check.
   - package-ecosystem: "docker"
     directories:
       - "/frontend"
@@ -138,6 +140,7 @@ updates:
 
   # ── Docker Compose images (docker-compose.yml — postgres, pgadmin) ──
   # Separate ecosystem from `docker`; the docker scanner only reads Dockerfiles.
+  # Workflow service images are not covered; keep CI Postgres aligned manually.
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:

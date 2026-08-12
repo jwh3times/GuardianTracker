@@ -10,7 +10,7 @@ secrets, and incident notes belong under `private/`, which is gitignored.
 ## What You'll Need
 
 - Docker Desktop for the recommended full-stack local environment.
-- Go 1.25+ for backend development.
+- Go 1.26+ for backend development.
 - Node.js 26+ for frontend development.
 - A Bungie application for API and OAuth credentials.
 - Minikube only if you need to validate the Kubernetes manifests.
@@ -126,6 +126,31 @@ Stop and remove local volumes:
 docker compose down -v
 ```
 
+### Refreshing pinned container images
+
+The nginx, PostgreSQL, and API runtime images use patch-qualified tags pinned to
+multi-platform OCI index digests. This makes amd64 and arm64 builds reproducible.
+Dependabot advances the tag and digest together when a newer tagged release is
+available, but it may not report an upstream republish of the same tag. During an
+image refresh, compare the registry's reported `Digest` with the committed
+`@sha256` value before updating it:
+
+```powershell
+docker buildx imagetools inspect nginxinc/nginx-unprivileged:1.31.3-alpine3.24
+docker buildx imagetools inspect postgres:18.4-alpine3.24
+docker buildx imagetools inspect postgres:18.4
+docker buildx imagetools inspect alpine:3.24.1
+```
+
+After pulling an image update, rebuild and recreate existing local containers so
+Docker does not keep serving an older cached layer or container:
+
+```powershell
+docker compose --profile test --profile e2e pull postgres test-postgres e2e-postgres
+docker compose build --pull --no-cache api-service frontend
+docker compose --profile test --profile e2e up -d --force-recreate --wait postgres test-postgres e2e-postgres api-service frontend
+```
+
 ## 4. Run Individual Services
 
 Use this path when you are actively editing one service and want faster feedback.
@@ -151,6 +176,12 @@ development mode without production Postgres parity.
 cd k8s
 ./startup.ps1
 ```
+
+The startup script rebuilds both application images with `--pull --no-cache` in
+Minikube's Docker daemon. If applying a Deployment did not change its pod
+template, the script restarts it so a reused local tag cannot leave old pods
+running. Newly created deployments and pod-template changes already consume the
+rebuilt images and are not restarted a second time.
 
 See [k8s/README.md](./k8s/README.md) for script details and troubleshooting.
 

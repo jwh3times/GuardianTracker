@@ -28,7 +28,12 @@ cd k8s
 .\shutdown.ps1    # tears everything down
 ```
 
-`startup.ps1` calls `minikube docker-env --shell powershell | Invoke-Expression` before building — always build in Minikube's Docker context or the images won't be visible to the cluster.
+`startup.ps1` calls `minikube docker-env --shell powershell | Invoke-Expression`
+before building, rebuilds with `--pull --no-cache`, and explicitly restarts both
+deployments when applying their manifests did not change the pod template. Newly
+created deployments and pod-template changes already consume the rebuilt images
+and are not restarted again. Always build in Minikube's Docker context or the
+images will not be visible to the cluster.
 
 ## Manifests (k8s/)
 
@@ -113,14 +118,19 @@ Images must be built inside Minikube's Docker daemon:
 ```powershell
 & minikube docker-env --shell powershell | Invoke-Expression
 
-docker build -t guardian-tracker/api-service:latest backend/api-service/
-docker build -t guardian-tracker/frontend:v2 frontend/
+docker build --pull --no-cache -t guardian-tracker/api-service:latest backend/api-service/
+docker build --pull --no-cache -t guardian-tracker/frontend:v2 frontend/
 
 kubectl rollout restart deployment/<name>
 kubectl rollout status deployment/<name> --timeout=120s
 ```
 
-All deployments use `imagePullPolicy: IfNotPresent` — images must exist in Minikube's daemon before applying manifests.
+Both deployments use `imagePullPolicy: Never` because images are built into
+Minikube's daemon rather than pulled from a registry. Images must exist there
+before applying manifests, and existing deployments must restart after reused
+tags are rebuilt unless the apply already changed the pod template. Do not start
+a second rollout while api-service initializes or opens the shared manifest
+volume.
 
 ## Useful kubectl commands
 
@@ -155,9 +165,13 @@ Bungie OAuth requires a public HTTPS redirect URI. For local development:
 
 ## Base image versions
 
-| Role                     | Image                                     |
-| ------------------------ | ----------------------------------------- |
-| Go builder               | `golang:1.25-alpine`                      |
-| Go runtime               | `alpine:3.19`                             |
-| Node builder (frontend)  | `node:26-alpine`                          |
-| nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.25-alpine` |
+| Role                     | Image                                           |
+| ------------------------ | ----------------------------------------------- |
+| Go builder               | `golang:1.26.5-alpine`                          |
+| Go runtime               | `alpine:3.24.1`                                 |
+| Node builder (frontend)  | `node:26-alpine`                                |
+| nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.31.3-alpine3.24` |
+
+The two runtime images are also pinned to multi-platform OCI index digests in
+their Dockerfiles. Use the drift-verification procedure in `SETUP.md` when
+refreshing those pins.

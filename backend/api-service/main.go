@@ -230,6 +230,12 @@ func main() {
 	// flags:all key as AccountHandler's resolver, so both read one cache entry
 	// (evicted together by AdminHandler.UpdateFlag).
 	enforceFlags := handlers.NewFlagResolver(stores.Flags, appCache)
+	var readinessPinger db.Pinger
+	if pool != nil {
+		// Keep degraded stores non-nil while omitting the database readiness
+		// probe when the composition root did not establish a pool.
+		readinessPinger = pool
+	}
 
 	router := api.NewRouter(api.Deps{
 		Config:  cfg,
@@ -239,7 +245,7 @@ func main() {
 		Authz:   authz,
 		Flags:   enforceFlags,
 		Handlers: api.Handlers{
-			Health:      handlers.NewHealthHandler(manifestService, stores.Pinger),
+			Health:      handlers.NewHealthHandler(manifestService, readinessPinger),
 			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
 			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore),
 			Account:     handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger),

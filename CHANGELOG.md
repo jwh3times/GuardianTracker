@@ -13,6 +13,23 @@ request.
 
 No unreleased changes.
 
+## [0.3.79] - 2026-08-12
+
+### Security
+
+- Refreshed the nginx runtime to 1.31.3 on Alpine 3.24, PostgreSQL to 18.4,
+  and the API runtime to Alpine 3.24.1. Security-targeted images now use
+  patch-qualified tags pinned to portable OCI index digests.
+
+### Changed
+
+- Minikube validation now pulls base-image metadata, builds both application
+  images with the build cache disabled, and ensures exactly one rollout consumes
+  each rebuilt local tag. Container refresh and digest-drift steps are documented
+  for Docker Compose and Minikube. The documented no-Postgres development mode
+  now skips the database readiness probe while continuing to require the
+  manifest.
+
 ## [0.3.78] - 2026-08-12
 
 ### Changed

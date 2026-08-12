@@ -40,7 +40,7 @@ foreach ($service in $services) {
     Write-Host "   Building $($service.Name)..." -ForegroundColor Yellow
     Push-Location $service.Path
     try {
-        docker build -t $service.Tag .
+        docker build --pull --no-cache -t $service.Tag .
         if ($LASTEXITCODE -ne 0) {
             Write-Host "   ERROR: Failed to build $($service.Name)" -ForegroundColor Red
             Pop-Location
@@ -57,6 +57,23 @@ foreach ($service in $services) {
 
 # Step 3: Deploy Kubernetes Services
 Write-Host "`n3. Deploying Kubernetes services..." -ForegroundColor Cyan
+
+$deployments = @("api-service", "frontend")
+$existingDeployments = @{}
+$existingPodTemplates = @{}
+
+foreach ($deployment in $deployments) {
+    $existing = kubectl get deployment/$deployment --ignore-not-found -o json
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "   ERROR: Failed to inspect existing $deployment deployment" -ForegroundColor Red
+        exit 1
+    }
+    $exists = -not [string]::IsNullOrWhiteSpace(($existing | Out-String))
+    $existingDeployments[$deployment] = $exists
+    if ($exists) {
+        $existingPodTemplates[$deployment] = (($existing | ConvertFrom-Json).spec.template | ConvertTo-Json -Depth 100 -Compress)
+    }
+}
 
 $manifests = @(
     "api-service-configmap.yaml",
@@ -76,12 +93,33 @@ foreach ($manifest in $manifests) {
 
 Write-Host "   All manifests applied successfully" -ForegroundColor Green
 
-# Step 4: Wait for deployments to be ready
-Write-Host "`n4. Waiting for deployments to be ready..." -ForegroundColor Cyan
-
-$deployments = @("api-service", "frontend")
+# Step 4: Existing deployments need a restart to consume rebuilt local tags only
+# when applying the manifest did not already trigger a rollout. Newly created
+# deployments already start from the rebuilt images. This keeps api-service to
+# one rollout while it initializes or opens the manifest PVC.
+Write-Host "`n4. Activating rebuilt images..." -ForegroundColor Cyan
 
 foreach ($deployment in $deployments) {
+    if ($existingDeployments[$deployment]) {
+        $applied = kubectl get deployment/$deployment -o json
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "   ERROR: Failed to inspect applied $deployment deployment" -ForegroundColor Red
+            exit 1
+        }
+        $appliedPodTemplate = (($applied | ConvertFrom-Json).spec.template | ConvertTo-Json -Depth 100 -Compress)
+        if ($appliedPodTemplate -eq $existingPodTemplates[$deployment]) {
+            Write-Host "   Restarting unchanged $deployment to consume its rebuilt image..." -ForegroundColor Yellow
+            kubectl rollout restart deployment/$deployment
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "   ERROR: Failed to restart $deployment" -ForegroundColor Red
+                exit 1
+            }
+        } else {
+            Write-Host "   $deployment pod template changed; its rollout already consumes the rebuilt image" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "   $deployment was newly created; no restart needed" -ForegroundColor Green
+    }
     Write-Host "   Waiting for $deployment..." -ForegroundColor Yellow
     kubectl rollout status deployment/$deployment --timeout=300s
     if ($LASTEXITCODE -ne 0) {
