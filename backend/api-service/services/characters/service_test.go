@@ -16,7 +16,7 @@ func newTestService(t *testing.T, handler http.HandlerFunc) (*Service, func()) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	client := bungie.NewClient("k", srv.URL, 100, 100)
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	return NewService(client, c, time.Minute), srv.Close
 }
 

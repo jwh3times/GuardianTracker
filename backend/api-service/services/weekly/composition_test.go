@@ -79,7 +79,7 @@ type weeklyFixture struct {
 func (f weeklyFixture) service(t *testing.T) *Service {
 	t.Helper()
 
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	missing := f.missing
 	if missing == nil {
 		missing = &fakeMissingItems{hashes: map[uint32]struct{}{}}

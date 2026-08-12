@@ -123,7 +123,9 @@ func main() {
 	// manifest-derived cache entries.
 	var appCache cache.Cache
 	if cfg.CacheEnabled {
-		appCache = cache.NewMemoryCache(cfg.CacheTTLCollections, 10*time.Minute)
+		memoryCache := cache.NewMemoryCache(cfg.CacheTTLCollections, 10*time.Minute)
+		defer memoryCache.Close()
+		appCache = memoryCache
 	} else {
 		appCache = cache.NewNoOpCache()
 	}

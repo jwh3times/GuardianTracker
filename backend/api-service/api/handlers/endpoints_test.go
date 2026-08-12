@@ -183,7 +183,7 @@ func TestSearchHandler_NotReadyKicksIndexBuild(t *testing.T) {
 
 func charactersHandler(t *testing.T, bungieURL string, ts *auth.TokenStore) *CharactersHandler {
 	t.Helper()
-	svc := characters.NewService(bungie.NewClient("k", bungieURL, 100, 100), cache.NewMemoryCache(time.Minute, time.Minute), time.Minute)
+	svc := characters.NewService(bungie.NewClient("k", bungieURL, 100, 100), cache.NewMemoryCache(time.Minute, 0), time.Minute)
 	return NewCharactersHandler(svc, ts)
 }
 
@@ -266,7 +266,7 @@ func TestCharacters_BungieError(t *testing.T) {
 
 func recordsHandler(t *testing.T, ts *auth.TokenStore) *RecordsHandler {
 	t.Helper()
-	svc := records.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, cache.NewMemoryCache(time.Minute, time.Minute), time.Minute)
+	svc := records.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, cache.NewMemoryCache(time.Minute, 0), time.Minute)
 	return NewRecordsHandler(svc, ts)
 }
 
@@ -309,7 +309,7 @@ func TestRecords_BadParams(t *testing.T) {
 
 func collectionsHandler(t *testing.T, ts *auth.TokenStore) *CollectionsHandler {
 	t.Helper()
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	collSvc := collections.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, nil, c, time.Minute)
 	charSvc := characters.NewService(bungie.NewClient("k", "http://x", 100, 100), c, time.Minute)
 	recSvc := records.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, c, time.Minute)

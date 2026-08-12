@@ -13,6 +13,16 @@ request.
 
 No unreleased changes.
 
+## [0.3.78] - 2026-08-12
+
+### Changed
+
+- Replaced the legacy `patrickmn/go-cache` dependency with Guardian Tracker's
+  own in-memory cache behind the existing interface. Cache keys, synchronous
+  visibility, absolute TTL behavior, invalidation, and service configuration
+  are unchanged; the cleanup worker now has an explicit application-owned
+  shutdown lifecycle.
+
 ## [0.3.77] - 2026-08-12
 
 ### Security

@@ -82,7 +82,7 @@ func TestManifestProjections_DoNotCacheAnEmptyRead(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			m := &countingManifest{}
-			s := NewService(nil, m, cache.NewMemoryCache(time.Minute, time.Minute), time.Minute)
+			s := NewService(nil, m, cache.NewMemoryCache(time.Minute, 0), time.Minute)
 
 			// The manifest is not ready yet: the read comes back empty.
 			if tc.read(s) {
@@ -149,7 +149,7 @@ func TestGetProfileRecords_UsesTheServiceTTL(t *testing.T) {
 
 	const ttl = 40 * time.Millisecond
 	s := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeRecordsManifest{},
-		cache.NewMemoryCache(time.Minute, 10*time.Millisecond), ttl)
+		cache.NewMemoryCache(time.Minute, 0), ttl)
 
 	if _, _, err := s.getProfileRecords(context.Background(), 3, "member-1", "token"); err != nil {
 		t.Fatal(err)

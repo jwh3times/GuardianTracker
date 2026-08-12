@@ -59,7 +59,7 @@ func TestExtractVendorItems_NilSafe(t *testing.T) {
 func TestLiveVendorItemHashes_MergesXurAndVendors(t *testing.T) {
 	friday := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC) // Xûr present
 
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{
 		XurPresent: true,
 		XurItems:   []xurItemEnriched{{Hash: 111}, {Hash: 222}},
@@ -83,7 +83,7 @@ func TestLiveVendorItemHashes_MergesXurAndVendors(t *testing.T) {
 func TestLiveVendorItemHashes_XurWinsTie(t *testing.T) {
 	friday := time.Date(2026, 6, 12, 18, 0, 0, 0, time.UTC) // Xûr present
 
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	// Hash 555 is sold by both a vendor and Xûr — Xûr must win the label.
 	c.Set(publicWeeklyCacheKey, &publicWeeklyCache{
 		XurPresent: true,
@@ -102,7 +102,7 @@ func TestLiveVendorItemHashes_XurWinsTie(t *testing.T) {
 func TestLiveVendorItemHashes_Degraded(t *testing.T) {
 	wednesday := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC) // Xûr absent
 
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	s := &Service{cache: c} // nil bungie client, empty caches
 
 	// Empty token → vendor fetch skipped; Xûr absent on a Wednesday → empty.
@@ -115,7 +115,7 @@ func TestLiveVendorItemHashes_Degraded(t *testing.T) {
 
 func TestLiveVendorItemsCacheIsolatedByCharacter(t *testing.T) {
 	now := time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	hunterResponse := &bungie.CharacterVendorsResponse{}
 	warlockResponse := &bungie.CharacterVendorsResponse{}
 	c.Set(characterVendorsCacheKey(3, "member-1", "char-hunter"), hunterResponse, time.Minute)

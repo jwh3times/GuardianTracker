@@ -156,7 +156,7 @@ func TestGetUserCollections_Projects(t *testing.T) {
 		tree:         tree,
 		fetchedAt:    time.Now(),
 	}
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	c.Set("collections:3:proj-member", a, time.Minute)
 	s := &Service{cache: c}
 
@@ -271,7 +271,7 @@ func TestToDestinyItem_ItemType(t *testing.T) {
 }
 
 func TestGetMissingItemHashes_ExcludesCosmetics(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	s := &Service{cache: c}
 
 	weapon := fabricate(1, 100, "Gun", "World drops", bungie.TierTypeLegendary) // item 100
@@ -313,7 +313,7 @@ func TestGetMissingItemHashes_DedupesDuplicateItemHash(t *testing.T) {
 	weaponB := fabricate(2, 100, "Choir of One", "Found in the raid", bungie.TierTypeExotic)
 
 	t.Run("one acquired", func(t *testing.T) {
-		c := cache.NewMemoryCache(time.Minute, time.Minute)
+		c := cache.NewMemoryCache(time.Minute, 0)
 		s := &Service{cache: c}
 		a := &analysis{
 			collectibles: []manifest.CollectibleWithItem{weaponA, weaponB},
@@ -333,7 +333,7 @@ func TestGetMissingItemHashes_DedupesDuplicateItemHash(t *testing.T) {
 	})
 
 	t.Run("neither acquired", func(t *testing.T) {
-		c := cache.NewMemoryCache(time.Minute, time.Minute)
+		c := cache.NewMemoryCache(time.Minute, 0)
 		s := &Service{cache: c}
 		a := &analysis{
 			collectibles: []manifest.CollectibleWithItem{weaponA, weaponB},

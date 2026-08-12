@@ -17,7 +17,7 @@ import (
 // store) after injecting a fixed role, then a 200 terminal handler.
 func enforceRouter(role int, flags []db.FeatureFlag, key string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	resolver := NewFlagResolver(&fakeFlagLister{flags: flags}, cache.NewMemoryCache(time.Minute, time.Minute))
+	resolver := NewFlagResolver(&fakeFlagLister{flags: flags}, cache.NewMemoryCache(time.Minute, 0))
 	authz := auth.NewAuthz(true)
 	r := gin.New()
 	r.GET("/x",

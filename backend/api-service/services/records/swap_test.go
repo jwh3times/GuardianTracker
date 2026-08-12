@@ -11,7 +11,7 @@ import (
 // records in the same cache must not — a manifest swap does not invalidate them,
 // and dropping them would force a refetch for every active user.
 func TestOnVersionChanged_DropsManifestTablesOnly(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	s := &Service{cache: c}
 
 	c.Set(weaponTypesCacheKey, map[string]string{"a": "Hand Cannon"}, time.Minute)

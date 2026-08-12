@@ -44,7 +44,7 @@ func weeklyService(t *testing.T, body string, m ManifestRepo) *Service {
 	}))
 	t.Cleanup(srv.Close)
 	return NewService(bungie.NewClient("k", srv.URL, 100, 100), m, nil, nil,
-		cache.NewMemoryCache(time.Minute, time.Minute), nil, fakeVersioner{"v-test"})
+		cache.NewMemoryCache(time.Minute, 0), nil, fakeVersioner{"v-test"})
 }
 
 func TestFetchXurInventory_EnrichesFromManifest(t *testing.T) {
@@ -91,7 +91,7 @@ func TestFetchXurInventory_CarriesVerifiedArmorClass(t *testing.T) {
 }
 
 func TestResolveCharacterValidatesAndFallsBack(t *testing.T) {
-	c := cache.NewMemoryCache(time.Minute, time.Minute)
+	c := cache.NewMemoryCache(time.Minute, 0)
 	roster := characterRoster{
 		Characters: map[string]bungie.CharacterComponent{
 			"char-hunter":  {CharacterID: "char-hunter", ClassType: 1},
@@ -211,7 +211,7 @@ func TestGetWeekly_PublicPath(t *testing.T) {
 		&fakeManifest{items: map[uint32]*bungie.InventoryItemDefinition{}},
 		nil, // collections — unused when bungieToken is empty
 		nil, // wishlist — nil-checked
-		cache.NewMemoryCache(time.Minute, time.Minute),
+		cache.NewMemoryCache(time.Minute, 0),
 		nil, // efficiency engine — nil triggers fallback
 		fakeVersioner{"v-test"},
 	)
