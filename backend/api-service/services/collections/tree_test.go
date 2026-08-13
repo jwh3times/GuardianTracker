@@ -5,6 +5,7 @@ import (
 
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/sources"
 )
 
 // node builds a PresentationNodeDef with child nodes and collectibles.
@@ -267,6 +268,33 @@ func TestOverlay_DedupesDuplicateItemHashWithinNode(t *testing.T) {
 	}
 	if len(armor.Items) != 1 || armor.Items[0] != "200" {
 		t.Fatalf("Armor items = %+v, want [200]", armor.Items)
+	}
+}
+
+func TestBuildTreeStructure_UnionsLinkedCollectibleAcquisitionSources(t *testing.T) {
+	nodes := map[uint32]*manifest.PresentationNodeDef{
+		1:  node(1, "Items", []uint32{20}, nil),
+		20: node(20, "Weapons", nil, []uint32{2000, 2001, 2002}),
+	}
+	raid := col(2000, 200, "Fatebringer")
+	raid.Collectible.SourceString = "Vault of Glass raid"
+	kiosk := col(2001, 200, "Fatebringer")
+	kiosk.Collectible.SourceString = "Monument to Lost Lights"
+	duplicate := col(2002, 200, "Fatebringer")
+	duplicate.Collectible.SourceString = "Vault of Glass raid"
+
+	item := buildTreeStructure(nodes, []manifest.CollectibleWithItem{raid, kiosk, duplicate}).Items["200"]
+	want := []sources.AcquisitionSource{
+		{Text: "Monument to Lost Lights", Difficulty: sources.Easy},
+		{Text: "Vault of Glass raid", Difficulty: sources.Challenging, RaidDungeon: true},
+	}
+	if len(item.AcquisitionSources) != len(want) {
+		t.Fatalf("acquisitionSources = %+v, want %+v", item.AcquisitionSources, want)
+	}
+	for i := range want {
+		if item.AcquisitionSources[i] != want[i] {
+			t.Errorf("acquisitionSources[%d] = %+v, want %+v", i, item.AcquisitionSources[i], want[i])
+		}
 	}
 }
 

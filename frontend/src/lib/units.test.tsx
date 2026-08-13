@@ -62,9 +62,13 @@ const baseItem: GTItem = {
   type: "Hand Cannon",
   slot: "Kinetic",
   rarity: "legendary",
-  diff: "moderate",
-  source: "Vault of Glass",
-  sourceDetail: "Raid drop",
+  acquisitionSources: [
+    {
+      text: "Vault of Glass",
+      difficulty: "moderate",
+      raidDungeon: true,
+    },
+  ],
   availableNow: true,
   collected: false,
   desc: "A legendary hand cannon.",

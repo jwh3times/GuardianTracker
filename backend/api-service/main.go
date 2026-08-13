@@ -116,7 +116,7 @@ func main() {
 	// available, then builds asynchronously after the manifest is available.
 	searchService := search.NewService(manifestService, cfg.ManifestDBPath)
 
-	// Efficiency engine — scores items by acquisition difficulty; index built async
+	// Efficiency engine — ranks acquisition-source buckets by missing-item payoff; index built async
 	efficiencyEngine := efficiency.NewEngine(manifestProvider, manifestService)
 
 	// Cache — created before the swap registrations below so observers can evict

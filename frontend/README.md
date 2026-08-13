@@ -118,8 +118,8 @@ Triumphs & Seals, Wishlist, Settings.
 | Page                 | Data                                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------- |
 | Dashboard            | Real collection totals (weapons/armor/exotics/cosmetics); real weekly recommendations |
-| Collections          | Real data via `GET /api/collections?include=all`; supports ?item=<hash> deep-link     |
-| Wishlist             | Real `GET/POST/PUT/DELETE /api/wishlist`; icon + Xûr availability cross-check         |
+| Collections          | Full item/source data via `GET /api/collections?include=all`; ?item=<hash> deep-link  |
+| Wishlist             | Real CRUD; acquisition sources plus live-vendor availability                          |
 | This Week            | Real weekly data via `GET /api/weekly/recommendations` (Xûr, milestones, actions)     |
 | Catalysts / Triumphs | Real data via `GET /api/catalysts`, `/api/crafting`, `/api/seals`                     |
 | Settings             | Destiny membership info from `useAuth`; appearance prefs via `PreferencesContext`     |
@@ -222,7 +222,7 @@ host `node_modules`.
 
 ## Destiny 2 Theme
 
-Rarity and difficulty drive the visual language via design tokens in `styles/tokens.css`:
+Rarity and source-specific difficulty use design tokens in `styles/tokens.css`:
 
 | Rarity    | Token                    |
 | --------- | ------------------------ |
@@ -232,8 +232,10 @@ Rarity and difficulty drive the visual language via design tokens in `styles/tok
 | Uncommon  | `--c-uncommon` (green)   |
 | Common    | `--c-common` (gray)      |
 
-Set `data-rarity` / `data-diff` on a wrapper element and children read the resolved
-`--rarity` / `--diff` custom properties. Badges, item tiles, and the detail drawer all use this.
+Set `data-rarity` on item surfaces and `data-diff` on source-specific surfaces;
+children read the resolved `--rarity` / `--diff` custom properties. Collection
+cards do not display an aggregate difficulty badge. The detail drawer lists each
+acquisition source with its own tier.
 
 ## Production Build
 

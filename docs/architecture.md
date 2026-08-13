@@ -89,6 +89,27 @@ the next search request rather than waiting for the next manifest swap, throttle
 to one attempt per 30 seconds. Other affected endpoints can return warming
 responses during cold start or manifest swap.
 
+## Collection and Acquisition Model
+
+An inventory item can be linked from several manifest collectibles. Collection
+and wishlist responses preserve that multiplicity as a deterministic, deduplicated
+`acquisitionSources` union. Each entry carries its source text, the difficulty tier
+classified from that text, and a raid/dungeon facet. Difficulty is source-scoped;
+items do not carry a single aggregate difficulty.
+
+Live `availableNow` vendor data is joined separately because acquisition sources
+describe provenance rather than current availability. The Collections difficulty
+filter matches an item when any source has the selected tier; item cards summarize
+source text or count without presenting an item-level tier, while the detail drawer
+shows every source with its own tier. Wishlist items use the same acquisition-source
+shape.
+
+The efficiency index counts an item hash once within each source bucket, and a
+milestone missing count counts the union of item hashes across all matching buckets.
+Weekly recommendation difficulty remains attached to the recommended source/action,
+not promoted to the item. Farm-only classification retains its existing behavior and
+is not inferred across an item's full source union.
+
 ## API Surface
 
 Primary route groups:

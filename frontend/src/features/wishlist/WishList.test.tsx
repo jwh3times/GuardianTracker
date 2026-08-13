@@ -15,7 +15,7 @@ function renderPage(ui: React.ReactNode, route = "/") {
 }
 
 describe("WishList page", () => {
-  it("renders items with available-now and source-only states", async () => {
+  it("renders live vendor availability separately from source provenance", async () => {
     server.use(
       http.get(`${API}/api/wishlist`, () =>
         HttpResponse.json([
@@ -29,7 +29,13 @@ describe("WishList page", () => {
             icon: "",
             priority: "LOW",
             notes: "from VoG",
-            sources: ["Vault of Glass"],
+            acquisitionSources: [
+              {
+                text: "Vault of Glass",
+                difficulty: "Challenging",
+                raidDungeon: true,
+              },
+            ],
             availableNow: false,
             dateAdded: new Date().toISOString(),
           },
@@ -38,9 +44,12 @@ describe("WishList page", () => {
     );
     renderPage(<WishList />);
     expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
-    // available-now item shows the where label; source-only item shows "Source:"
+    // The available item keeps both its live vendor and its historical source.
+    expect(screen.getByText("Xûr")).toBeInTheDocument();
+    expect(screen.getByText("Grasp of Avarice dungeon")).toBeInTheDocument();
+    // The unavailable item still shows provenance without inventing availability.
     expect(screen.getByText("Vex Mythoclast")).toBeInTheDocument();
-    expect(screen.getByText(/Source:/)).toBeInTheDocument();
+    expect(screen.getByText("Vault of Glass")).toBeInTheDocument();
     expect(screen.getByText("2 items · 1 available now")).toBeInTheDocument();
     // notes render in quotes
     expect(screen.getByText('"from VoG"')).toBeInTheDocument();
@@ -174,7 +183,7 @@ describe("WishList bulk actions", () => {
         icon: "",
         priority: "HIGH",
         notes: "",
-        sources: [],
+        acquisitionSources: [],
         availableNow: false,
         dateAdded: new Date().toISOString(),
       },
@@ -187,7 +196,13 @@ describe("WishList bulk actions", () => {
         icon: "",
         priority: "LOW",
         notes: "",
-        sources: ["Vault of Glass"],
+        acquisitionSources: [
+          {
+            text: "Vault of Glass",
+            difficulty: "Challenging",
+            raidDungeon: true,
+          },
+        ],
         availableNow: false,
         dateAdded: new Date().toISOString(),
       },
@@ -240,7 +255,7 @@ describe("WishList bulk actions", () => {
         icon: "",
         priority: "LOW",
         notes: "",
-        sources: [],
+        acquisitionSources: [],
         availableNow: false,
         dateAdded: new Date().toISOString(),
       },
@@ -358,7 +373,7 @@ describe("WishList bulk actions", () => {
             icon: "",
             priority: "HIGH",
             notes: "",
-            sources: [],
+            acquisitionSources: [],
             availableNow: false,
             dateAdded: new Date().toISOString(),
           },
@@ -393,7 +408,7 @@ describe("WishList bulk actions", () => {
             icon: "",
             priority: "HIGH",
             notes: "",
-            sources: [],
+            acquisitionSources: [],
             availableNow: true,
             availableFrom: "Banshee-44",
             dateAdded: new Date().toISOString(),

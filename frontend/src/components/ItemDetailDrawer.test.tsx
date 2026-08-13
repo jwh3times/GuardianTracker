@@ -11,9 +11,13 @@ const baseItem: GTItem = {
   type: "Auto Rifle",
   slot: "",
   rarity: "legendary",
-  diff: "moderate",
-  source: "Vanguard",
-  sourceDetail: "",
+  acquisitionSources: [
+    {
+      text: "Vanguard Ops",
+      difficulty: "moderate",
+      raidDungeon: false,
+    },
+  ],
   availableNow: false,
   collected: false,
   desc: "A test weapon.",
@@ -132,19 +136,41 @@ describe("ItemDetailDrawer catalysts", () => {
   });
 });
 
-describe("ItemDetailDrawer difficulty copy", () => {
-  it("shows the unrated 'why' copy", async () => {
-    renderDrawer({ item: { ...baseItem, diff: "unrated" } });
+describe("ItemDetailDrawer acquisition sources", () => {
+  it("lists every source with its own difficulty and explanation", async () => {
+    renderDrawer({
+      item: {
+        ...baseItem,
+        acquisitionSources: [
+          {
+            text: "Vault of Glass raid",
+            difficulty: "challenging",
+            raidDungeon: true,
+          },
+          {
+            text: "Monument to Lost Lights",
+            difficulty: "easy",
+            raidDungeon: false,
+          },
+        ],
+      },
+    });
+
+    expect(screen.getByText("Vault of Glass raid")).toBeInTheDocument();
+    expect(screen.getByText("Challenging")).toBeInTheDocument();
+    expect(screen.getByText("Monument to Lost Lights")).toBeInTheDocument();
+    expect(screen.getByText("Easy")).toBeInTheDocument();
+
     await userEvent.click(screen.getByRole("button", { name: /why\?/i }));
-    expect(
-      screen.getByText(/couldn't determine difficulty/i),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText(/estimated from this source/i)).toHaveLength(2);
   });
 
-  it("shows the estimated 'why' copy for rated difficulties", async () => {
-    renderDrawer({ item: { ...baseItem, diff: "moderate" } });
-    await userEvent.click(screen.getByRole("button", { name: /why\?/i }));
-    expect(screen.getByText(/estimated/i)).toBeInTheDocument();
+  it("reports an honest empty source list", () => {
+    renderDrawer({ item: { ...baseItem, acquisitionSources: [] } });
+    expect(
+      screen.getByText("No acquisition sources reported."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/unknown source/i)).not.toBeInTheDocument();
   });
 
   it("shows farm-only note when farmOnly is set", () => {

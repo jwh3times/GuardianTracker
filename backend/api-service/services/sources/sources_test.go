@@ -1,6 +1,52 @@
 package sources
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestDescribeBuildsCanonicalAcquisitionSource(t *testing.T) {
+	got := Describe(`  Source: "Vault of Glass" Raid  `)
+	want := AcquisitionSource{
+		Text:        `Source: "Vault of Glass" Raid`,
+		Difficulty:  Challenging,
+		RaidDungeon: true,
+	}
+	if got != want {
+		t.Fatalf("Describe() = %+v, want %+v", got, want)
+	}
+
+	blob, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if string(blob) != `{"text":"Source: \"Vault of Glass\" Raid","difficulty":"Challenging","raidDungeon":true}` {
+		t.Fatalf("JSON = %s", blob)
+	}
+}
+
+func TestDescribeAllReturnsDeterministicDistinctUnion(t *testing.T) {
+	got := DescribeAll([]string{
+		"World drops",
+		`Source: "Vault of Glass" Raid`,
+		"  Exotic quest  ",
+		"World drops",
+		"",
+	})
+	want := []AcquisitionSource{
+		{Text: "Exotic quest", Difficulty: Moderate},
+		{Text: `Source: "Vault of Glass" Raid`, Difficulty: Challenging, RaidDungeon: true},
+		{Text: "World drops", Difficulty: Easy},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("DescribeAll() = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("DescribeAll()[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
 
 // The test that could not exist while the vocabulary lived in four separate
 // tables: every keyword tiered as a raid or a dungeon must also answer true to

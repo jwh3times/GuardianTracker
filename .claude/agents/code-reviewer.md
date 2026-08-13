@@ -121,6 +121,16 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 - Collections data must be fetched via `collectionsQuery()` from `lib/queries.ts` — not an ad hoc `queryKey`/`queryFn` pair — so multiple pages share one cache entry. Flag duplicate collections query definitions.
 
+**Acquisition sources**
+
+- Collection and wishlist items carry `acquisitionSources`; each source owns its
+  difficulty and raid/dungeon facet. Flag item-level aggregate difficulty fields,
+  card badges, or sorting reintroduced from those facets. Difficulty filtering may
+  match any source.
+- Flag manifest item-hash lookups that discard additional linked collectibles, or
+  efficiency/milestone counts that count the same item hash more than once in the
+  applicable source-bucket union. `availableNow` remains a separate live-vendor join.
+
 **Error handling**
 
 - Pages that call Bungie-backed endpoints must use `errorState(error)` from `lib/errorState.ts` to produce user-facing copy, not inline string literals per error code. Flag pages that branch on `error.code` or `error.status` inline to construct UI strings.

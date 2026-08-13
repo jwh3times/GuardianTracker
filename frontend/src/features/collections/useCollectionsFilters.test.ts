@@ -110,6 +110,12 @@ describe("collections filter (de)serialization", () => {
     const f = parseFilters(new URLSearchParams("rarity=exotic"));
     expect(f.rarity).toBe("exotic");
   });
+
+  it("treats the removed legacy difficulty sort as the default", () => {
+    const f = parseFilters(new URLSearchParams("sort=difficulty"));
+    expect(f.sort).toBe("rarity");
+    expect(serializeFilters(f).has("sort")).toBe(false);
+  });
 });
 
 describe("useCollectionsFilters — atomic setFilters", () => {
@@ -167,6 +173,25 @@ describe("useCollectionsFilters — atomic setFilters", () => {
     // the stored non-default sort must still apply.
     expect(result.current.q).toBe("foo");
     expect(result.current.sort).toBe("name");
+    localStorage.clear();
+  });
+
+  it("migrates the removed persisted difficulty sort to rarity", () => {
+    localStorage.clear();
+    localStorage.setItem(
+      "gt.collections.filters",
+      JSON.stringify({ sort: "difficulty", view: "list" }),
+    );
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(MemoryRouter, null, children);
+
+    const { result } = renderHook(() => useCollectionsFilters(), { wrapper });
+
+    expect(result.current.sort).toBe("rarity");
+    expect(result.current.view).toBe("list");
+    expect(
+      JSON.parse(localStorage.getItem("gt.collections.filters") ?? "{}"),
+    ).toMatchObject({ sort: "rarity", view: "list" });
     localStorage.clear();
   });
 

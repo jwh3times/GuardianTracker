@@ -681,17 +681,19 @@ func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32
 	return out, nil
 }
 
-// GetCollectiblesByItemHashes returns collectible definitions keyed by their
-// itemHash for a batch of inventory item hashes (e.g. to read sourceString for
-// wishlist items). Hashes are chunked at 500 to avoid SQLite IN-clause limits.
-func (r *Repository) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error) {
+// GetCollectiblesByItemHashes returns every collectible definition linked to
+// each requested itemHash. More than one collectible can attribute a different
+// acquisition source to the same item, so the multiplicity is part of this
+// interface rather than an implementation detail. Hashes are chunked at 500 to
+// avoid SQLite IN-clause limits.
+func (r *Repository) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
 	if len(hashes) == 0 {
-		return map[uint32]*bungie.CollectibleDefinition{}, nil
+		return map[uint32][]bungie.CollectibleDefinition{}, nil
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	out := make(map[uint32]*bungie.CollectibleDefinition, len(hashes))
+	out := make(map[uint32][]bungie.CollectibleDefinition, len(hashes))
 	const chunkSize = 500
 	for i := 0; i < len(hashes); i += chunkSize {
 		chunk := hashes[i:min(i+chunkSize, len(hashes))]
@@ -702,7 +704,7 @@ func (r *Repository) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*b
 			args[j] = int64(h) // itemHash is stored unsigned inside the JSON blob
 		}
 		q := "SELECT json FROM DestinyCollectibleDefinition WHERE json_extract(json, '$.itemHash') IN (" +
-			strings.Join(placeholders, ",") + ")"
+			strings.Join(placeholders, ",") + ") ORDER BY id"
 		rows, err := r.db.Query(q, args...)
 		if err != nil {
 			return nil, fmt.Errorf("GetCollectiblesByItemHashes: %w", err)
@@ -718,7 +720,7 @@ func (r *Repository) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*b
 				continue
 			}
 			if def.ItemHash != 0 {
-				out[def.ItemHash] = &def
+				out[def.ItemHash] = append(out[def.ItemHash], def)
 			}
 		}
 		rows.Close()

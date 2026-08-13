@@ -9,9 +9,7 @@ function item(over: Partial<GTItem>): GTItem {
     type: "Hand Cannon",
     slot: "",
     rarity: "legendary",
-    diff: "unrated",
-    source: "Unknown",
-    sourceDetail: "",
+    acquisitionSources: [],
     availableNow: false,
     collected: false,
     desc: "",
@@ -19,9 +17,46 @@ function item(over: Partial<GTItem>): GTItem {
   };
 }
 
-it("renders the Unrated difficulty badge", () => {
-  render(<ItemCard item={item({ diff: "unrated" })} />);
-  expect(screen.getByText("Unrated")).toBeInTheDocument();
+it("shows the source text when the item has exactly one acquisition source", () => {
+  render(
+    <ItemCard
+      item={item({
+        acquisitionSources: [
+          {
+            text: "Vault of Glass",
+            difficulty: "challenging",
+            raidDungeon: true,
+          },
+        ],
+      })}
+    />,
+  );
+  expect(screen.getByText("Vault of Glass")).toBeInTheDocument();
+  expect(screen.queryByText("Challenging")).not.toBeInTheDocument();
+});
+
+it("summarizes multiple sources without an aggregate difficulty badge", () => {
+  render(
+    <ItemCard
+      item={item({
+        acquisitionSources: [
+          {
+            text: "Vault of Glass",
+            difficulty: "challenging",
+            raidDungeon: true,
+          },
+          {
+            text: "Monument to Lost Lights",
+            difficulty: "easy",
+            raidDungeon: false,
+          },
+        ],
+      })}
+    />,
+  );
+  expect(screen.getByText("2 acquisition sources")).toBeInTheDocument();
+  expect(screen.queryByText("Challenging")).not.toBeInTheDocument();
+  expect(screen.queryByText("Easy")).not.toBeInTheDocument();
 });
 
 it("renders a Farm only chip when farmOnly is set", () => {

@@ -20,19 +20,24 @@ export interface ItemCatalyst {
   description: string;
 }
 
+/** One collectible-derived provenance attribution for an item. */
+export interface AcquisitionSource {
+  text: string;
+  difficulty: Difficulty;
+  raidDungeon: boolean;
+}
+
 export interface GTItem {
   id: string;
   name: string;
   type: string;
   slot: string;
   rarity: Rarity;
-  diff: Difficulty;
   /** Random-roll item that can't be pulled from Collections — must be farmed. */
   farmOnly?: boolean;
   /** Non-collectible item opened read-only via deep-link (no collection/wishlist state). */
   viewOnly?: boolean;
-  source: string;
-  sourceDetail: string;
+  acquisitionSources: AcquisitionSource[];
   availableNow: boolean;
   /** Vendor currently selling this item ("Banshee-44", "Xûr", …), when available now. */
   availFrom?: string;
@@ -159,6 +164,7 @@ export interface WishlistEntry {
   icon?: string;
   priority: Priority;
   avail: { now: boolean; where: string };
+  acquisitionSources: AcquisitionSource[];
   notes: string;
   added: string;
 }

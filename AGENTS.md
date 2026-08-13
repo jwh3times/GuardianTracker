@@ -9,7 +9,7 @@ mechanics. **Repo operating context belongs here, not there.**
 
 ## Project Overview
 
-Guardian Tracker is a Destiny 2 collection tracker web app. Players log in via Bungie OAuth; the app analyzes their collections to surface missing items with acquisition difficulty ratings, wish-list management, and weekly recommendations.
+Guardian Tracker is a Destiny 2 collection tracker web app. Players log in via Bungie OAuth; the app analyzes their collections to surface missing items with source-specific acquisition guidance, wish-list management, and weekly recommendations.
 
 Primary stack:
 
@@ -46,6 +46,23 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 - `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
 - `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
 - `backend/api-service/cmd/fake-bungie/` — Test-only Bungie/manifest fixture service.
+
+### Acquisition-source invariants
+
+Read [CONTEXT.md](./CONTEXT.md) for the canonical acquisition-source, difficulty,
+raid/dungeon, availability, and farm-only vocabulary. Preserve these implementation
+invariants:
+
+- Collection and wishlist item projections expose `acquisitionSources`, the
+  deterministic union contributed by every linked collectible. Manifest lookups by
+  item hash therefore return all matching collectibles, not one representative row.
+- Difficulty and raid/dungeon are source facets. Items have no aggregate difficulty;
+  live `availableNow` remains a separate vendor-derived join.
+- Efficiency counts each item hash once per source bucket and once across a matched
+  milestone's bucket union. Weekly recommendation difficulty remains scoped to its
+  source/action.
+- Farm-only classification retains the current representative-collectible behavior.
+  Its multi-collectible semantics are unresolved and require a separate decision.
 
 ### Auth & token flow
 

@@ -47,7 +47,8 @@ backend/api-service/
                                            exotic catalyst pool) and GetItem (minimal item view for deep-linked
                                            non-collectible items); no ownership check (public manifest data)
   api/handlers/wishlist.go             ← Wishlist CRUD + bulk delete/set_priority; enriches with manifest
-                                           defs, collectible source, and all-rotating-vendor availability
+                                           defs, every collectible-derived acquisition source, and
+                                           all-rotating-vendor availability
                                            (via liveVendorIface → weekly.Service.LiveVendorItemHashes)
   api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
                                            resolved feature-flag state (GET /api/flags)
@@ -63,7 +64,8 @@ backend/api-service/
                                            RegisterParticipant/RegisterObserver coordinate the file swap
                                            (see "Manifest repository, provider, and swap seam" below)
   services/bungie/types.go             ← All Bungie API types, constants, helpers
-  services/collections/service.go      ← Collection analysis + difficulty classification + cosmetics;
+  services/collections/service.go      ← Item-level collection analysis + cosmetics; emits the
+                                           collectible-derived acquisition-source union
                                            uses ManifestRepo interface (satisfied by *manifest.Provider)
   services/characters/service.go       ← Character fetching; InvalidateCache method
   services/items/service.go            ← Cached weapon-perks lookup (GetWeaponPerks), item-view lookup
@@ -91,9 +93,10 @@ backend/api-service/
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; OnVersionChanged (ManifestObserver)
                                            evicts its three manifest-derived cache keys
-  services/sources/sources.go          ← Destiny source-string vocabulary: Difficulty, IsRaidOrDungeon,
-                                           ActionKind, MilestoneCategory — one faceted keyword table,
-                                           not four parallel ones; collections/efficiency/weekly delegate
+  services/sources/sources.go          ← AcquisitionSource/DescribeAll plus the Destiny source-string
+                                           vocabulary: Difficulty, IsRaidOrDungeon, ActionKind,
+                                           MilestoneCategory — one faceted keyword table, not four
+                                           parallel ones; collections/efficiency/weekly delegate
   cache/cache.go                       ← In-memory cache (and no-op cache interface)
   cache/load.go                        ← cache.Load[T]/cache.LoadIf[T]: typed load-through above Cache —
                                            an error is never cached, a wrong-typed entry is a logged miss,
@@ -133,7 +136,7 @@ backend/api-service/
 | GET    | `/api/auth/profile`                                      | JWT                           | Guardian Tracker session user (legacy route name; not Bungie gameplay profile data)                                                                                                                                                                                                                               |
 | POST   | `/api/auth/logout`                                       | JWT                           | End current device's session only; other devices stay signed in                                                                                                                                                                                                                                                   |
 | POST   | `/api/auth/logout/all`                                   | JWT                           | Sign out everywhere: bump token_version + delete all sessions + Bungie token                                                                                                                                                                                                                                      |
-| GET    | `/api/wishlist`                                          | JWT                           | List wishlist items (name, icon, sources, availableNow/From)                                                                                                                                                                                                                                                      |
+| GET    | `/api/wishlist`                                          | JWT                           | List wishlist items (name, icon, acquisitionSources, availableNow/From)                                                                                                                                                                                                                                           |
 | POST   | `/api/wishlist`                                          | JWT                           | Add wishlist item                                                                                                                                                                                                                                                                                                 |
 | PUT    | `/api/wishlist/:id`                                      | JWT                           | Update wishlist item priority/notes                                                                                                                                                                                                                                                                               |
 | DELETE | `/api/wishlist/:id`                                      | JWT                           | Remove wishlist item                                                                                                                                                                                                                                                                                              |
@@ -326,7 +329,7 @@ serves; it registers no routes itself.
 
 | Method                                | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by itemHash (for wishlist source strings)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `GetCollectiblesByItemHashes(hashes)` | Every collectible def keyed by itemHash (`map[uint32][]CollectibleDefinition`); multiplicity is required for the wishlist acquisition-source union                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `GetWeaponTypesByName()`              | Lowercased weapon name → weapon type display name (table scan; callers cache)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `GetWeaponPerks(itemHash)`            | Socket-category → plug-set → plug-item traversal yielding ordered perk columns across every weapon socket category (Intrinsic/Barrel/Magazine/Trait N/Origin plus Scope/Launcher Barrel/Battery/Stock/Blade/Guard/Arrow/Bowstring/Haft/Grip/Rail/Bolt, and a generic "Perks" fallback for unrecognized plug-category-identifiers); weapon-only (itemType 3 + weapon socket categories); `isJunkPCI` blacklist-filters kill-tracker/empty/catalyst-socket plugs (catalysts render separately via `GetWeaponCatalysts`) instead of allowlisting known categories, so no perk-bearing column is silently dropped; dedupes by name; also exposed via `services/items/service.go` cached wrapper |
 | `GetItemView(itemHash)`               | Minimal item projection (`ItemView` — name, icon, itemType, tierType, rarity, description); returns `(nil, nil)` for unknown hash; no item-type restriction (all collectible/non-collectible items); also exposed via `services/items/service.go` cached wrapper                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -357,6 +360,11 @@ made a milestone's missing-count badge silently not appear.
 - `IsRaidOrDungeon(source)` — scans the whole table rather than stopping at the
   first hit, so the same "Grandmaster Nightfall"-in-a-dungeon string still
   counts as dungeon loot even though it tiers on "grandmaster".
+- `AcquisitionSource` — one source attribution with `Text`, `Difficulty`, and
+  `RaidDungeon`; those facets describe the source, never the item.
+- `DescribeAll(texts)` — trims source strings, drops blanks and exact duplicates,
+  sorts by visible text for deterministic output, and describes every remaining
+  source. Collections and wishlist use this instead of selecting one collectible.
 - `ActionKind(sourceHash, source)` — `KindExcluded`/`KindVendor`/`KindActivity` for
   the efficiency engine's "go do this" bucket classification.
 - `MilestoneCategory(name)` — buckets a weekly milestone by display name.
@@ -371,10 +379,12 @@ made a milestone's missing-count badge silently not appear.
 - `MembershipCollections` has `FetchedAt` field
 - `CollectionSummary` has `CollectedItems` field (stripped from response unless `?include=all`)
 - `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
-- `ClassifyDifficulty(source, isExotic)` — thin delegate to `services/sources.Difficulty`, which owns the
-  positive-match table; returns `"Unrated"` for unmatched sources (no catch-all "Easy"); called from
-  `collections` only — `weekly` calls `sources.Difficulty` directly (see `MissingItemReader` below)
-- `DestinyItem.FarmOnly` — set `true` when the collectible source string contains "cannot be reacquired"; surfaced as a "Farm only" chip in the UI
+- `DestinyItem.AcquisitionSources` is the deterministic union from all collectibles
+  linked to the item. `DestinyItem` has no item-level `Difficulty` or raw `Sources`.
+- `DestinyItem.FarmOnly` retains the representative collectible's existing
+  "cannot be reacquired" check. Multi-collectible farm-only semantics remain
+  unresolved; do not derive them from the acquisition-source union without a new
+  decision.
 - `DestinyItem.ItemType` — `toDestinyItem` names all verified cosmetic types via `bungie.ItemTypeName`, so cosmetics carry real strings (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`/`Ornament`/`Finisher`) instead of `"Unknown"`; the frontend gallery classifies by these strings
 - Shaders and ornaments both use `itemType=19` (mod), with verified subtypes 20 and 21 respectively. Gate both by subtype in `manifest.CollectibleCategory`; do NOT add all of item type 19 to `cosmeticItemTypes`. Finishers use verified item type 29.
 
@@ -388,6 +398,8 @@ made a milestone's missing-count badge silently not appear.
 - `Milestone.Missing` is `*int` (omitempty) — populated by `buildMilestones` for
   raid/dungeon milestones via `efficiency.MissingForMilestone`; verified current
   non-raid reward definitions contain no collectible-linked items, so others omit it.
+  The efficiency index deduplicates item hashes within each source bucket, and
+  `MissingForMilestone` counts the union across every matched bucket.
 - `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells
 - `LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)` (`services/weekly/availability.go`) returns item hash → vendor display name across all rotating vendors (Xûr, Banshee-44, Ada-1, ritual vendors); best-effort with the caller's Bungie token — used by the wishlist handler for availability instead of the Xûr-only `XurItemHashes`
 - `GetWeekly(..., requestedCharacterID)` validates the requested character against the authenticated roster and scopes component-402 vendor inventory, today actions, recommendation availability, and Xûr location to that character. Character-specific caches include membership and character IDs. Xûr armor carries an optional manifest `className`; absent class data remains unlabelled.
@@ -396,6 +408,8 @@ made a milestone's missing-count badge silently not appear.
   `*collections.Service`; `weekly` does not import `services/collections` at all.
   Required, never nil-guarded — a reader degrading to an empty set would silently
   render as a complete collection.
+- Ranked weekly recommendation `Diff` is classified from that action's source string;
+  it remains source/action-scoped and is not an aggregate item difficulty.
 
 ## Go patterns
 

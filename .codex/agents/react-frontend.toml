@@ -97,7 +97,7 @@ frontend/src/
                                    returning `[]` for items on the lighter payload would make "no items" and
                                    "wrong variant" indistinguishable, so the counts-only view has no item
                                    surface and the compiler enforces it. The item join (detail + collectedHashes
-                                   + availableNow) happens once here, in a private toItem() — this is where the
+                                   + acquisitionSources + availableNow) happens once here, in a private toItem() — this is where the
                                    types/api.ts → types/design.ts wire-to-domain split is actually enforced for
                                    this payload; no feature module sees APIMembershipCollections or builds a GTItem
                                    from it directly.
@@ -309,18 +309,23 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected) and opens the detail drawer; if no collectible entry exists, falls back to `itemByHashQuery` → `toGTItemView` for a read-only view drawer
 - Cosmetics is a full top-level category alongside Weapons, Armor, Exotics
 - Add-to-wishlist and remove-from-wishlist mutations with pending-state guard (prevents double-click races)
-- Filter/category state (rarity, difficulty, sort, view, missing-only, "available now", "hide farm-only", the in-page search term, and the selected category) is owned by `useCollectionsFilters` (`features/collections/useCollectionsFilters.ts`), which makes the URL the source of truth: `parseFilters`/`serializeFilters` read and write `?node=&q=&rarity=&diff=&sort=&view=&missing=&avail=&farm=`, keeping the URL shareable and reload-safe. Filter fields also mirror to a `gt.collections.filters` localStorage entry, which supplies defaults only when the URL carries no filter params (e.g. a fresh visit). `node` and `q` are the two keys in `URL_ONLY_KEYS`: never persisted to storage, never read back from it, and re-asserted from the URL everywhere stored/legacy state is merged in — a bare `?node=` or `?q=` deep link still applies the user's stored filter defaults, and a stray `q`/`node` key in a hand-edited or legacy localStorage payload can't leak into state. History behavior differs by field: `setNode` pushes a history entry so Back returns to the previous category; every other setter, including `setQ`, replaces (`{ replace: true }`), so typing a search term or toggling a filter doesn't spam history. Callers that must change multiple fields atomically (e.g. restoring node + missing together from a deep link) go through `setFilters`, not sequential single-field setters — `useSearchParams`'s functional updater snapshots `prev` per call, so two `write` calls in the same tick would clobber each other.
+- Filter/category state (rarity, source difficulty, sort, view, missing-only, "available now", "hide farm-only", the in-page search term, and the selected category) is owned by `useCollectionsFilters` (`features/collections/useCollectionsFilters.ts`), which makes the URL the source of truth: `parseFilters`/`serializeFilters` read and write `?node=&q=&rarity=&diff=&sort=&view=&missing=&avail=&farm=`, keeping the URL shareable and reload-safe. The difficulty predicate matches when any `acquisitionSources` entry has the selected tier. Sort supports rarity, name, and availability; removed legacy `sort=difficulty` values parse as the rarity default. Filter fields also mirror to a `gt.collections.filters` localStorage entry, which supplies defaults only when the URL carries no filter params (e.g. a fresh visit). `node` and `q` are the two keys in `URL_ONLY_KEYS`: never persisted to storage, never read back from it, and re-asserted from the URL everywhere stored/legacy state is merged in — a bare `?node=` or `?q=` deep link still applies the user's stored filter defaults, and a stray `q`/`node` key in a hand-edited or legacy localStorage payload can't leak into state. History behavior differs by field: `setNode` pushes a history entry so Back returns to the previous category; every other setter, including `setQ`, replaces (`{ replace: true }`), so typing a search term or toggling a filter doesn't spam history. Callers that must change multiple fields atomically (e.g. restoring node + missing together from a deep link) go through `setFilters`, not sequential single-field setters — `useSearchParams`'s functional updater snapshots `prev` per call, so two `write` calls in the same tick would clobber each other.
+- Collection cards have no item-level difficulty badge: one acquisition source shows
+  its text and multiple sources show a neutral count. `ItemDetailDrawer` lists every
+  source with its own difficulty tier. `availableNow` stays a separate live-vendor
+  join.
 - The Collections toolbar's "Search this category…" field (`type="search"`, `aria-label`, 100-char `maxLength`) filters the currently-loaded category's items by case-insensitive name substring match, purely client-side over the already-fetched `?include=all` payload — it does not call `/api/items/search`. It composes with every other filter/sort as another predicate, is cleared by "Clear filters," and drives a search-specific empty state that names the term (`No items match "<term>"`).
 
 ## Wishlist page features
 
-- `WishListItem` now includes `icon`, `availableNow` (Xûr cross-check), and `availableFrom`
+- `WishListItem` includes `icon`, `acquisitionSources`, `availableNow` (live-vendor cross-check), and `availableFrom`
 - `ItemTile` renders the Bungie CDN icon when present
 - Inline notes editor: click to edit, optimistic update with rollback on error, 500 char max
 
 ## API response type changes
 
-- `WishListItem`: `+ icon`, `+ availableNow: boolean`, `+ availableFrom?: string`
+- `APIAcquisitionSource`: `{ text, difficulty, raidDungeon }`; `APIDestinyItem`
+  and `WishListItem` expose `acquisitionSources` and no item-level difficulty.
 - `APIMembershipCollections`: `+ fetchedAt: string`
 - `APICollectionSummary`: `+ collectedItems?: APIDestinyItem[]`
 - `APIRecordsEnvelope<T>`: `{ items: T[]; fetchedAt: string }` — envelope for catalysts/crafting/seals
@@ -334,6 +339,8 @@ authenticated pages go inside this group — do not add inline auth checks or re
 - `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[]; catalysts: APIItemCatalyst[] }` — response envelope for `/api/items/:itemHash/perks`; `catalysts` is always present (empty array for non-exotics), up to 4 entries for multi-catalyst exotics
 - `GTItem.perks`: REMOVED — the old dead flat perks field no longer exists on the design type; use `PerkColumn[]` from `itemPerksQuery` instead
 - `GTItem.farmOnly?: boolean` — set when the collectible source indicates "cannot be reacquired"; renders a "Farm only" chip in the item card and drawer
+- `GTItem.acquisitionSources: AcquisitionSource[]`; no aggregate `GTItem.diff`.
+  Farm-only semantics are unchanged and must not be redefined from the source union.
 - `APIItemView`: `{ itemHash, name, icon, itemType, tierType, rarity, description }` — response type for `GET /api/items/:itemHash`; used by `itemByHashQuery` + `toGTItemView` for the view-only deep-link drawer
 - `PerkColumn` (design.ts): `{ role: string; label: string; perks: string[] }` — design-layer parallel to `APIPerkColumn`
 - `ItemCatalyst` (design.ts): `{ name: string; description: string }` — design-layer parallel to `APIItemCatalyst`; passed to `ItemDetailDrawer`'s `catalysts` prop

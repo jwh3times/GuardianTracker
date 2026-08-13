@@ -14,7 +14,10 @@
 // facets, so a fact stated once cannot disagree with itself.
 package sources
 
-import "strings"
+import (
+	"sort"
+	"strings"
+)
 
 // Difficulty tiers. Every non-Unrated result is a positive keyword match;
 // anything unmatched is honestly Unrated rather than a misleading default.
@@ -24,6 +27,51 @@ const (
 	Easy        = "Easy"
 	Unrated     = "Unrated"
 )
+
+// AcquisitionSource is one canonical provenance attribution contributed by a
+// collectible linked to an item. Difficulty and RaidDungeon describe this
+// source only; an item with several sources has no aggregate difficulty.
+type AcquisitionSource struct {
+	Text        string `json:"text"`
+	Difficulty  string `json:"difficulty"`
+	RaidDungeon bool   `json:"raidDungeon"`
+}
+
+// Describe canonicalizes and classifies one source attribution.
+func Describe(text string) AcquisitionSource {
+	text = strings.TrimSpace(text)
+	return AcquisitionSource{
+		Text:        text,
+		Difficulty:  Difficulty(text),
+		RaidDungeon: IsRaidOrDungeon(text),
+	}
+}
+
+// DescribeAll returns the deterministic union of non-empty source
+// attributions. Exact duplicate source strings collapse after surrounding
+// whitespace is removed; output is ordered by visible text so manifest row
+// order can never change a response.
+func DescribeAll(texts []string) []AcquisitionSource {
+	distinct := make(map[string]struct{}, len(texts))
+	for _, text := range texts {
+		text = strings.TrimSpace(text)
+		if text != "" {
+			distinct[text] = struct{}{}
+		}
+	}
+
+	ordered := make([]string, 0, len(distinct))
+	for text := range distinct {
+		ordered = append(ordered, text)
+	}
+	sort.Strings(ordered)
+
+	result := make([]AcquisitionSource, 0, len(ordered))
+	for _, text := range ordered {
+		result = append(result, Describe(text))
+	}
+	return result
+}
 
 // Kind classifies a source as an actionable thing to go and do.
 type Kind string

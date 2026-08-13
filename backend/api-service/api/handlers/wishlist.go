@@ -11,6 +11,7 @@ import (
 	"guardian-tracker/api-service/db"
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/sources"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -35,7 +36,7 @@ type wishlistStoreIface interface {
 
 type manifestLookupIface interface {
 	GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error)
-	GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error)
+	GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error)
 }
 
 // liveVendorIface returns itemHash → selling-vendor display name for items
@@ -73,18 +74,18 @@ func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, 
 
 // wishlistResponse is the JSON shape returned to clients.
 type wishlistResponse struct {
-	ID            string   `json:"id"`
-	ItemHash      uint32   `json:"itemHash"`
-	Name          string   `json:"name"`
-	ItemType      string   `json:"itemType"`
-	Rarity        string   `json:"rarity"`
-	Icon          string   `json:"icon"`
-	Priority      string   `json:"priority"`
-	Notes         string   `json:"notes"`
-	Sources       []string `json:"sources"`
-	AvailableNow  bool     `json:"availableNow"`
-	AvailableFrom string   `json:"availableFrom,omitempty"`
-	DateAdded     string   `json:"dateAdded"`
+	ID                 string                      `json:"id"`
+	ItemHash           uint32                      `json:"itemHash"`
+	Name               string                      `json:"name"`
+	ItemType           string                      `json:"itemType"`
+	Rarity             string                      `json:"rarity"`
+	Icon               string                      `json:"icon"`
+	Priority           string                      `json:"priority"`
+	Notes              string                      `json:"notes"`
+	AcquisitionSources []sources.AcquisitionSource `json:"acquisitionSources"`
+	AvailableNow       bool                        `json:"availableNow"`
+	AvailableFrom      string                      `json:"availableFrom,omitempty"`
+	DateAdded          string                      `json:"dateAdded"`
 }
 
 // GetWishlist handles GET /api/wishlist
@@ -407,7 +408,7 @@ func (h *WishlistHandler) enrichItems(items []db.WishlistItem, live map[uint32]s
 		hashes[i] = it.ItemHash
 	}
 	defs := map[uint32]*bungie.InventoryItemDefinition{}
-	cols := map[uint32]*bungie.CollectibleDefinition{}
+	cols := map[uint32][]bungie.CollectibleDefinition{}
 	if h.manifest != nil {
 		if m, err := h.manifest.GetItemsByHashes(hashes); err == nil {
 			defs = m
@@ -425,16 +426,16 @@ func (h *WishlistHandler) enrichItems(items []db.WishlistItem, live map[uint32]s
 
 func (h *WishlistHandler) enrichOne(it db.WishlistItem, live map[uint32]string) wishlistResponse {
 	var def *bungie.InventoryItemDefinition
-	var col *bungie.CollectibleDefinition
+	var cols []bungie.CollectibleDefinition
 	if h.manifest != nil {
 		if m, err := h.manifest.GetItemsByHashes([]uint32{it.ItemHash}); err == nil {
 			def = m[it.ItemHash]
 		}
 		if cs, err := h.manifest.GetCollectiblesByItemHashes([]uint32{it.ItemHash}); err == nil {
-			col = cs[it.ItemHash]
+			cols = cs[it.ItemHash]
 		}
 	}
-	return buildResponse(it, def, col, live[it.ItemHash])
+	return buildResponse(it, def, cols, live[it.ItemHash])
 }
 
 // liveVendorMap resolves item→vendor-name availability for the calling user.
@@ -454,30 +455,30 @@ func (h *WishlistHandler) liveVendorMap(c *gin.Context) map[uint32]string {
 	return h.liveVendors.LiveVendorItemHashes(c.Request.Context(), membershipType, membershipID, bungieToken)
 }
 
-func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, col *bungie.CollectibleDefinition, vendor string) wishlistResponse {
+func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, collectibles []bungie.CollectibleDefinition, vendor string) wishlistResponse {
 	name, itemTypeStr, rarity, icon := "Unknown Item", "Item", "Common", ""
-	sources := []string{}
+	sourceTexts := make([]string, 0, len(collectibles))
 	if def != nil {
 		name = def.DisplayProperties.Name
 		itemTypeStr = bungie.ItemTypeName(def.ItemType, def.ItemSubType)
 		rarity = bungie.GetTierName(def.Inventory.TierType)
 		icon = def.DisplayProperties.Icon
 	}
-	if col != nil && col.SourceString != "" {
-		sources = append(sources, col.SourceString)
+	for _, col := range collectibles {
+		sourceTexts = append(sourceTexts, col.SourceString)
 	}
 	resp := wishlistResponse{
-		ID:           strconv.FormatInt(it.ID, 10),
-		ItemHash:     it.ItemHash,
-		Name:         name,
-		ItemType:     itemTypeStr,
-		Rarity:       rarity,
-		Icon:         icon,
-		Priority:     priorityToStr[it.Priority],
-		Notes:        it.Notes,
-		Sources:      sources,
-		AvailableNow: vendor != "",
-		DateAdded:    it.CreatedAt.UTC().Format(time.RFC3339),
+		ID:                 strconv.FormatInt(it.ID, 10),
+		ItemHash:           it.ItemHash,
+		Name:               name,
+		ItemType:           itemTypeStr,
+		Rarity:             rarity,
+		Icon:               icon,
+		Priority:           priorityToStr[it.Priority],
+		Notes:              it.Notes,
+		AcquisitionSources: sources.DescribeAll(sourceTexts),
+		AvailableNow:       vendor != "",
+		DateAdded:          it.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if vendor != "" {
 		resp.AvailableFrom = vendor

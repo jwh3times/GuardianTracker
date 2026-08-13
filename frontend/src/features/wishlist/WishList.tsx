@@ -29,6 +29,14 @@ const PRIORITY_ORDER: Priority[] = ["urgent", "high", "medium", "low"];
 type SortKey = "availability" | "priority";
 type FilterKey = "all" | Priority;
 
+function acquisitionSourceSummary(item: WishlistEntry): string {
+  if (item.acquisitionSources.length === 1)
+    return item.acquisitionSources[0].text;
+  if (item.acquisitionSources.length > 1)
+    return `${item.acquisitionSources.length} acquisition sources`;
+  return "No acquisition sources reported.";
+}
+
 export function WishList() {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -424,16 +432,18 @@ export function WishList() {
                   {PRIORITY_LABEL[i.priority]}
                 </Badge>
               </div>
-              {i.avail.now ? (
+              {i.avail.now && (
                 <div className="gt-wl-avail">
                   <Badge kind="avail-now" dot icon="bolt" />
                   <span className="gt-wl-where">{i.avail.where}</span>
                 </div>
-              ) : (
-                <div className="gt-action-meta mono">
-                  Source: {i.avail.where}
-                </div>
               )}
+              <div className="gt-action-meta mono">
+                {i.acquisitionSources.length === 1 && (
+                  <span>Acquisition source: </span>
+                )}
+                <span>{acquisitionSourceSummary(i)}</span>
+              </div>
               {editingId === i.id ? (
                 <div className="gt-wl-notes-edit">
                   <Textarea

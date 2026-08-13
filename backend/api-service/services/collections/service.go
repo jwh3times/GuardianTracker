@@ -152,17 +152,16 @@ func buildCategorySummary(collectibles []manifest.CollectibleWithItem, owned map
 
 // DestinyItem is the frontend-facing item representation.
 type DestinyItem struct {
-	ItemHash    string   `json:"itemHash"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Icon        string   `json:"icon"`
-	ItemType    string   `json:"itemType"`
-	TierType    int      `json:"tierType"`
-	Rarity      string   `json:"rarity"`
-	Difficulty  string   `json:"difficulty"`
-	FarmOnly    bool     `json:"farmOnly"`
-	Sources     []string `json:"sources"`
-	IsExotic    bool     `json:"isExotic"`
+	ItemHash           string                      `json:"itemHash"`
+	Name               string                      `json:"name"`
+	Description        string                      `json:"description"`
+	Icon               string                      `json:"icon"`
+	ItemType           string                      `json:"itemType"`
+	TierType           int                         `json:"tierType"`
+	Rarity             string                      `json:"rarity"`
+	FarmOnly           bool                        `json:"farmOnly"`
+	AcquisitionSources []sources.AcquisitionSource `json:"acquisitionSources"`
+	IsExotic           bool                        `json:"isExotic"`
 }
 
 // analysis is the cached, per-user canonical dataset that both projections read.
@@ -338,17 +337,25 @@ func (s *Service) GetMembershipCollections(ctx context.Context, membershipType i
 
 // toDestinyItem maps a manifest collectible+item pair into the frontend item shape.
 func toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
+	return toDestinyItemWithSources(cwi, []string{cwi.Collectible.SourceString})
+}
+
+// toDestinyItemWithSources builds one item projection from a representative
+// collectible+item row and every source attribution contributed by linked
+// collectibles. FarmOnly deliberately retains the representative row's legacy
+// behavior until its multi-collectible semantics are resolved separately.
+func toDestinyItemWithSources(cwi *manifest.CollectibleWithItem, sourceTexts []string) DestinyItem {
 	item := cwi.Item
 	col := cwi.Collectible
 	di := DestinyItem{
-		ItemHash:    strconv.FormatUint(uint64(item.Hash), 10),
-		Name:        item.DisplayProperties.Name,
-		Description: item.DisplayProperties.Description,
-		Icon:        item.DisplayProperties.Icon,
-		TierType:    item.Inventory.TierType,
-		Rarity:      bungie.GetTierName(item.Inventory.TierType),
-		IsExotic:    item.Inventory.TierType == bungie.TierTypeExotic,
-		Sources:     []string{},
+		ItemHash:           strconv.FormatUint(uint64(item.Hash), 10),
+		Name:               item.DisplayProperties.Name,
+		Description:        item.DisplayProperties.Description,
+		Icon:               item.DisplayProperties.Icon,
+		TierType:           item.Inventory.TierType,
+		Rarity:             bungie.GetTierName(item.Inventory.TierType),
+		AcquisitionSources: sources.DescribeAll(sourceTexts),
+		IsExotic:           item.Inventory.TierType == bungie.TierTypeExotic,
 	}
 	switch item.ItemType {
 	case bungie.ItemTypeWeapon:
@@ -358,22 +365,8 @@ func toDestinyItem(cwi *manifest.CollectibleWithItem) DestinyItem {
 	default:
 		di.ItemType = bungie.ItemTypeName(item.ItemType, item.ItemSubType)
 	}
-	if col.SourceString != "" {
-		di.Sources = append(di.Sources, col.SourceString)
-	}
-	di.Difficulty = ClassifyDifficulty(col.SourceString, di.IsExotic)
 	di.FarmOnly = strings.Contains(strings.ToLower(col.SourceString), "cannot be reacquired")
 	return di
-}
-
-// ClassifyDifficulty infers an acquisition-difficulty estimate from a
-// collectible's source string. The vocabulary itself lives in services/sources,
-// which owns every classification derived from it; this stays as the name the
-// collections callers already use.
-//
-// isExotic is retained for a future exotic-aware tie-break; it is not used today.
-func ClassifyDifficulty(source string, isExotic bool) string {
-	return sources.Difficulty(source)
 }
 
 // GetMissingItemHashes returns not-collected weapon/armor/exotic item hashes

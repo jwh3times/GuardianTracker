@@ -44,12 +44,6 @@ const RARITY_RANK: Record<Rarity, number> = {
   uncommon: 3,
   common: 4,
 };
-const DIFF_RANK: Record<Difficulty, number> = {
-  challenging: 0,
-  moderate: 1,
-  easy: 2,
-  unrated: 3,
-};
 
 export function Collections() {
   const { showToast } = useToast();
@@ -275,7 +269,10 @@ export function Collections() {
   const items = useMemo(() => {
     let list = baseItems.slice();
     if (rarity) list = list.filter((i) => i.rarity === rarity);
-    if (diff) list = list.filter((i) => i.diff === diff);
+    if (diff)
+      list = list.filter((i) =>
+        i.acquisitionSources.some((source) => source.difficulty === diff),
+      );
     if (avail) list = list.filter((i) => i.availableNow);
     if (farm) list = list.filter((i) => !i.farmOnly);
     if (qTrimmed)
@@ -283,8 +280,6 @@ export function Collections() {
     if (sort === "rarity")
       list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
     else if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sort === "difficulty")
-      list.sort((a, b) => DIFF_RANK[a.diff] - DIFF_RANK[b.diff]);
     else if (sort === "avail")
       list.sort((a, b) => (b.availableNow ? 1 : 0) - (a.availableNow ? 1 : 0));
     return list;
@@ -411,14 +406,12 @@ export function Collections() {
                   {
                     rarity: "Rarity",
                     name: "Name",
-                    difficulty: "Difficulty",
                     avail: "Availability",
                   }[sort]
                 }
                 options={[
                   { v: "rarity", l: "Rarity" },
                   { v: "name", l: "Name" },
-                  { v: "difficulty", l: "Difficulty" },
                   { v: "avail", l: "Availability" },
                 ]}
                 onPick={(v) => v && setSort(v as SortKey)}

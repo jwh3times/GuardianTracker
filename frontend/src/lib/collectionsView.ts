@@ -5,12 +5,12 @@ import type {
   APIMembershipCollections,
 } from "../types/api";
 import type {
-  Difficulty,
   GTItem,
   Rarity,
   SummaryCategory,
   TreeNode,
 } from "../types/design";
+import { toAcquisitionSource } from "./acquisitionSources";
 
 /**
  * The adapter for the collections payload — the largest thing the API returns,
@@ -37,13 +37,6 @@ const RARITY_MAP: Record<string, Rarity> = {
   Rare: "rare",
   Uncommon: "uncommon",
   Common: "common",
-};
-
-const DIFF_MAP: Record<string, Difficulty> = {
-  Easy: "easy",
-  Moderate: "moderate",
-  Challenging: "challenging",
-  Unrated: "unrated",
 };
 
 /** A node's counts, flattened for the callers that only need the numbers. */
@@ -89,17 +82,14 @@ export interface CollectionsView extends CollectionsSummaryView {
  * reach it directly is what allowed the three joins to drift apart.
  */
 function toItem(d: APIDestinyItem): GTItem {
-  const sources = d.sources ?? [];
   return {
     id: d.itemHash,
     name: d.name,
     type: d.itemType,
     slot: "",
     rarity: RARITY_MAP[d.rarity] ?? "legendary",
-    diff: DIFF_MAP[d.difficulty] ?? "unrated",
     farmOnly: d.farmOnly ?? false,
-    source: sources[0] ?? "Unknown source",
-    sourceDetail: sources.slice(1).join(" · ") || sources[0] || "",
+    acquisitionSources: (d.acquisitionSources ?? []).map(toAcquisitionSource),
     availableNow: false,
     collected: false,
     desc: d.description ?? "",

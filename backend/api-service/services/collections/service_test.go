@@ -2,6 +2,7 @@ package collections
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"testing"
 	"time"
@@ -12,20 +13,28 @@ import (
 	"guardian-tracker/api-service/services/sources"
 )
 
-// The keyword vocabulary is owned and exhaustively tested by services/sources.
-// What matters here is that this package's seam delegates to it rather than
-// carrying a second copy that can drift.
-func TestClassifyDifficulty_DelegatesToSources(t *testing.T) {
-	for _, source := range []string{
-		`Source: "Vault of Glass" Raid`,
-		"Source: Complete strikes",
-		"Grandmaster Nightfall",
-		"Random Perks: This item cannot be reacquired from Collection",
-		"",
-	} {
-		if got, want := ClassifyDifficulty(source, false), sources.Difficulty(source); got != want {
-			t.Errorf("ClassifyDifficulty(%q) = %q, want sources.Difficulty = %q", source, got, want)
-		}
+func TestDestinyItemJSONHasSourceScopedDifficultyOnly(t *testing.T) {
+	blob, err := json.Marshal(DestinyItem{
+		ItemHash: "100",
+		AcquisitionSources: []sources.AcquisitionSource{
+			{Text: "Vault of Glass raid", Difficulty: sources.Challenging, RaidDungeon: true},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var wire map[string]any
+	if err := json.Unmarshal(blob, &wire); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if _, exists := wire["difficulty"]; exists {
+		t.Fatalf("item JSON must not invent aggregate difficulty: %s", blob)
+	}
+	if _, exists := wire["sources"]; exists {
+		t.Fatalf("legacy text-only sources must not shadow acquisitionSources: %s", blob)
+	}
+	if _, exists := wire["acquisitionSources"]; !exists {
+		t.Fatalf("item JSON is missing acquisitionSources: %s", blob)
 	}
 }
 
@@ -252,10 +261,6 @@ func TestToDestinyItem_FarmOnly(t *testing.T) {
 	if !di.FarmOnly {
 		t.Error("FarmOnly = false, want true for a 'cannot be reacquired' source")
 	}
-	if di.Difficulty != "Unrated" {
-		t.Errorf("Difficulty = %q, want Unrated", di.Difficulty)
-	}
-
 	cwi.Collectible.SourceString = "Source: World drops"
 	if toDestinyItem(cwi).FarmOnly {
 		t.Error("FarmOnly = true, want false for a normal source")

@@ -1,7 +1,6 @@
 import React from "react";
 import { Icon } from "../../components/Icon";
 import { Badge, Button, ItemTile } from "../../components/primitives";
-import { DIFF_LABEL } from "../../lib/constants";
 import type { GTItem } from "../../types/design";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
@@ -18,6 +17,14 @@ interface ItemCardProps {
   showCollected?: boolean;
 }
 
+function acquisitionSourceSummary(item: GTItem): string | null {
+  if (item.acquisitionSources.length === 1)
+    return item.acquisitionSources[0].text;
+  if (item.acquisitionSources.length > 1)
+    return `${item.acquisitionSources.length} acquisition sources`;
+  return null;
+}
+
 export function ItemCard({
   item,
   density = "grid",
@@ -31,6 +38,7 @@ export function ItemCard({
   const availBadge = item.availableNow && !item.collected;
   const showFor = personalize !== "off";
   const aggressive = personalize === "aggressive";
+  const sourceSummary = acquisitionSourceSummary(item);
 
   if (density === "list") {
     return (
@@ -45,12 +53,12 @@ export function ItemCard({
           <div className="gt-il-main">
             <div className="gt-item-name">{item.name}</div>
             <div className="gt-item-type">
-              {item.type} · {item.source}
+              {item.type}
+              {sourceSummary ? ` · ${sourceSummary}` : ""}
             </div>
           </div>
           <div className="gt-item-badges">
             <Badge kind={r} dot />
-            <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
             {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
             {showFor && availBadge && <Badge kind="avail-now" dot />}
           </div>
@@ -103,7 +111,10 @@ export function ItemCard({
         <ItemTile rarity={r} type={item.type} icon={item.icon} />
         <div className="gt-item-head" style={{ flex: 1 }}>
           <div className="gt-item-name">{item.name}</div>
-          <div className="gt-item-type">{item.type}</div>
+          <div className="gt-item-type">
+            {item.type}
+            {sourceSummary ? ` · ${sourceSummary}` : ""}
+          </div>
         </div>
         {showFor && availBadge && <Badge kind="avail-now" dot />}
         <button
@@ -155,15 +166,20 @@ export function ItemCard({
             style={{ marginTop: "var(--s-1)" } as CSS}
           >
             <Badge kind={r} dot />
-            <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
             {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
           </div>
         </div>
       </div>
-      <div className="gt-item-src">
-        <Icon name="bolt" size="0.8rem" style={{ color: "var(--c-text-4)" }} />
-        {item.source}
-      </div>
+      {sourceSummary && (
+        <div className="gt-item-src">
+          <Icon
+            name="bolt"
+            size="0.8rem"
+            style={{ color: "var(--c-text-4)" }}
+          />
+          {sourceSummary}
+        </div>
+      )}
       {showFor && (availBadge || item.collected) && (
         <div className="gt-item-badges">
           {availBadge && <Badge kind="avail-now" dot icon="bolt" />}
