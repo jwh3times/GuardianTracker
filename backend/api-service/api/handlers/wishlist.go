@@ -39,7 +39,7 @@ type manifestLookupIface interface {
 }
 
 // liveVendorIface returns itemHash → selling-vendor display name for items
-// obtainable right now from rotating vendors (Xûr + Banshee-44 + Ada-1 + ritual
+// available right now from rotating vendors (Xûr + Banshee-44 + Ada-1 + ritual
 // vendors). Satisfied by *weekly.Service — the same source Collections uses.
 type liveVendorIface interface {
 	LiveVendorItemHashes(ctx context.Context, membershipType int, membershipID, bungieToken string) map[uint32]string

@@ -54,12 +54,12 @@ type authFailure struct {
 // A reason missing from its table falls through to a 500 rather than an empty
 // success — an unmapped failure must not look like a working login.
 var loginFailures = map[auth.Reason]authFailure{
-	auth.ReasonInvalidCode:  {http.StatusBadRequest, "Invalid authorization code", "login.failure", false},
-	auth.ReasonInvalidState: {http.StatusBadRequest, "Invalid or expired state. Please try logging in again.", "login.failure", false},
-	auth.ReasonCodeExchange: {http.StatusInternalServerError, "Failed to complete authentication", "login.failure", false},
-	auth.ReasonProfileFetch: {http.StatusInternalServerError, "Failed to retrieve user profile", "login.failure", false},
-	auth.ReasonTokenMint:    {http.StatusInternalServerError, "Failed to create session", "", false},
-	auth.ReasonSessionWrite: {http.StatusInternalServerError, "Failed to create session", "", false},
+	auth.ReasonInvalidCode:     {http.StatusBadRequest, "Invalid authorization code", "login.failure", false},
+	auth.ReasonInvalidState:    {http.StatusBadRequest, "Invalid or expired state. Please try logging in again.", "login.failure", false},
+	auth.ReasonCodeExchange:    {http.StatusInternalServerError, "Failed to complete authentication", "login.failure", false},
+	auth.ReasonMembershipFetch: {http.StatusInternalServerError, "Failed to retrieve Destiny membership", "login.failure", false},
+	auth.ReasonTokenMint:       {http.StatusInternalServerError, "Failed to create session", "", false},
+	auth.ReasonSessionWrite:    {http.StatusInternalServerError, "Failed to create session", "", false},
 }
 
 var refreshFailures = map[auth.Reason]authFailure{
@@ -93,8 +93,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 
 	h.logAudit(c, db.AuditEvent{
 		EventType:         "login.success",
-		ActorUserID:       session.UserID,
-		ActorMembershipID: session.Profile.MembershipID,
+		ActorUserID:       session.AppUserID,
+		ActorMembershipID: session.Membership.MembershipID,
 		SessionID:         session.SessionID,
 		Details:           map[string]any{"role": auth.RoleName(session.Role)},
 	})
@@ -165,14 +165,15 @@ func (h *AuthHandler) ValidateToken(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"valid": true, "user": contextUser(c)})
 }
 
-// GetProfile handles GET /api/auth/profile (JWT-protected)
-func (h *AuthHandler) GetProfile(c *gin.Context) {
+// GetSessionUser handles the legacy-named GET /api/auth/profile route. The
+// response is the Guardian Tracker session user, not Bungie gameplay profile data.
+func (h *AuthHandler) GetSessionUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"user": contextUser(c)})
 }
 
 // Logout handles POST /api/auth/logout (JWT-protected) — ends only the current
-// device's session. Other devices stay signed in, and the account-wide Bungie
-// OAuth token (shared across sessions) is left intact.
+// device's session. Other devices stay signed in, and the Bungie OAuth token
+// shared by this user's sessions is left intact.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	sessionID := c.GetString("session_id")
 	if err := h.issuer.EndSession(c.Request.Context(), sessionID); err != nil {
@@ -190,7 +191,7 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 func (h *AuthHandler) LogoutAll(c *gin.Context) {
 	membershipID := c.GetString("membership_id")
 	if err := h.issuer.EndAllSessions(c.Request.Context(), membershipID); err != nil {
-		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "account sign-out failed",
+		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "all-session sign-out failed",
 			observability.ID("membership", membershipID), observability.Err(err))
 	}
 
@@ -205,7 +206,7 @@ func (h *AuthHandler) LogoutAll(c *gin.Context) {
 func sessionResponse(s *auth.Session) gin.H {
 	return gin.H{
 		"token": s.AccessToken,
-		"user":  userPayload(s.Profile.MembershipID, s.Profile.DisplayName, s.Profile.MembershipType, s.Role),
+		"user":  userPayload(s.Membership.MembershipID, s.Membership.DisplayName, s.Membership.MembershipType, s.Role),
 	}
 }
 

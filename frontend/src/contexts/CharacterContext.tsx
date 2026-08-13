@@ -14,8 +14,8 @@ import type { Character } from "../types/design";
 
 /**
  * Owns the characters query and the user's active-character pick.
- * The pick persists per account in localStorage and survives reloads.
- * Collections/catalysts/seals remain account-wide. Weekly authenticated vendor
+ * The pick persists per Destiny membership in localStorage and survives reloads.
+ * Collections/catalysts/seals remain membership-wide. Weekly authenticated vendor
  * inventory follows the active character because Bungie's component 402 is
  * character-scoped.
  */
@@ -54,7 +54,7 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
   const characters = useMemo(() => (data ?? []).map(toCharacter), [data]);
 
   // localStorage is the source of truth for the pick; `version` just forces a
-  // re-read after writes. Switching accounts re-derives automatically.
+  // re-read after writes. Switching memberships re-derives automatically.
   const [version, bump] = useReducer((x: number) => x + 1, 0);
   const pickedId = useMemo(
     () =>

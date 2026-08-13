@@ -637,13 +637,13 @@ export function ItemDetailDrawer({
           </p>
         )}
 
-        {!viewOnly && item.obtainable && !item.collected && (
+        {!viewOnly && item.availableNow && !item.collected && (
           <div className="gt-drawer-avail">
             <Badge kind="avail-now" dot icon="bolt" lg />
             <span>
               {item.availFrom
                 ? `Available now — ${item.availFrom}`
-                : "Obtainable right now — see source below."}
+                : "Available right now — see source below."}
             </span>
           </div>
         )}

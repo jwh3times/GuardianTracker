@@ -47,7 +47,7 @@ export function toGTItemView(v: APIItemView): GTItem {
     farmOnly: false,
     source: "",
     sourceDetail: "",
-    obtainable: false,
+    availableNow: false,
     collected: false,
     desc: v.description ?? "",
     icon: v.icon,

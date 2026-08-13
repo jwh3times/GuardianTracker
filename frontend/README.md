@@ -71,7 +71,7 @@ src/
 │   ├── wishlist/pages/WishList.tsx       # Wishlist mgmt; inline notes editor; Xûr availability
 │   ├── weekly/pages/ThisWeek.tsx         # Weekly recs / Xûr / milestones (real API)
 │   ├── dashboard/pages/Dashboard.tsx     # Completion hero + "do this today" (real totals, real weekly)
-│   ├── settings/pages/Settings.tsx       # Account + appearance preferences + sign out
+│   ├── settings/pages/Settings.tsx       # Destiny membership + appearance preferences + sign out
 │   └── admin/
 │       ├── pages/Admin.tsx               # Admin console (roster, role mgmt, flag config; admin-gated)
 │       └── components/kit/               # admin.tsx (RoleBadge, FlagCard, UserRow, LockedFeature…),
@@ -87,7 +87,7 @@ src/
 │   └── queries.ts               # collectionsQuery() — shared React Query definition
 ├── types/
 │   ├── api.ts                   # API response types (WishListItem + icon/availableNow,
-│   │                            #   APIUserCollections + fetchedAt, APIRecordsEnvelope<T>, etc.)
+│   │                            #   APIMembershipCollections + fetchedAt, APIRecordsEnvelope<T>, etc.)
 │   └── design.ts                # Design-system domain types (GTItem, Seal, Weekly + resetAt/fetchedAt…)
 └── test/                        # Shared test infra (referenced by vite.config setupFiles)
     ├── setup.ts                 # Vitest setup file
@@ -122,7 +122,7 @@ Triumphs & Seals, Wishlist, Settings.
 | Wishlist             | Real `GET/POST/PUT/DELETE /api/wishlist`; icon + Xûr availability cross-check         |
 | This Week            | Real weekly data via `GET /api/weekly/recommendations` (Xûr, milestones, actions)     |
 | Catalysts / Triumphs | Real data via `GET /api/catalysts`, `/api/crafting`, `/api/seals`                     |
-| Settings             | Real account info from `useAuth`; appearance prefs via `PreferencesContext`           |
+| Settings             | Destiny membership info from `useAuth`; appearance prefs via `PreferencesContext`     |
 
 ## User Preferences
 

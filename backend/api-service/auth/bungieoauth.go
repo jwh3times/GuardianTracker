@@ -116,9 +116,10 @@ func (o *bungieOAuth) exchange(ctx context.Context, grant url.Values) (*BungieTo
 	}, nil
 }
 
-// bungieProfile fetches the Destiny memberships for the freshly authorized user
+// primaryDestinyMembership fetches the Destiny memberships exposed by the
+// freshly authorized Bungie account
 // and picks the one the app should track.
-func (o *bungieOAuth) bungieProfile(ctx context.Context, apiBaseURL, apiKey, accessToken string) (*BungieUserProfile, error) {
+func (o *bungieOAuth) primaryDestinyMembership(ctx context.Context, apiBaseURL, apiKey, accessToken string) (*DestinyMembership, error) {
 	reqURL := strings.TrimSuffix(apiBaseURL, "/") + "/User/GetMembershipsForCurrentUser/"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -169,7 +170,7 @@ func (o *bungieOAuth) bungieProfile(ctx context.Context, apiBaseURL, apiKey, acc
 			}
 		}
 	}
-	return &BungieUserProfile{
+	return &DestinyMembership{
 		MembershipID:   m.MembershipID,
 		DisplayName:    m.DisplayName,
 		MembershipType: m.MembershipType,

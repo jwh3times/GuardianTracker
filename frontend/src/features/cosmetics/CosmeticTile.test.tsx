@@ -12,7 +12,7 @@ const item: GTItem = {
   diff: "unrated",
   source: "",
   sourceDetail: "",
-  obtainable: false,
+  availableNow: false,
   collected: true,
   desc: "",
 };
@@ -37,7 +37,7 @@ describe("CosmeticTile", () => {
   });
 
   it("flags an item a vendor is selling, but only when not already collected", () => {
-    const onSale = { ...item, obtainable: true, availFrom: "Xûr" };
+    const onSale = { ...item, availableNow: true, availFrom: "Xûr" };
 
     const { unmount } = render(
       <CosmeticTile item={{ ...onSale, collected: false }} onOpen={() => {}} />,

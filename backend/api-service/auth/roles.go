@@ -67,7 +67,7 @@ func (a *Authz) RequireTier(minTier int) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 				// Same wording as handlers.HandleStoreError: one DB_UNAVAILABLE
 				// shape whether the check fails in middleware or in a handler.
-				"error": "This feature needs the account database, which isn't configured on this server.",
+				"error": "This feature needs the user data database, which isn't configured on this server.",
 				"code":  "DB_UNAVAILABLE",
 			})
 			return

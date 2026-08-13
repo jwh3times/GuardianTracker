@@ -41,10 +41,12 @@ func newMiddlewareRouter(j *JWT, revoker *RevocationChecker) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/protected", j.Middleware(revoker), func(c *gin.Context) {
+		_, hasUserID := c.Get("user_id")
 		c.JSON(http.StatusOK, gin.H{
 			"membership_id": c.GetString("membership_id"),
 			"platform":      c.GetString("platform"),
 			"tver":          c.GetInt("token_version"),
+			"has_user_id":   hasUserID,
 		})
 	})
 	return r
@@ -81,7 +83,7 @@ func TestMiddleware_GarbageToken_401(t *testing.T) {
 func TestMiddleware_RefreshTokenAsAccess_401(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	r := newMiddlewareRouter(j, nil)
-	refresh, _, _ := j.GenerateRefreshToken(testProfile(), 1, "")
+	refresh, _, _ := j.GenerateRefreshToken(testDestinyMembership(), 1, "")
 	if w := doProtected(r, "Bearer "+refresh); w.Code != http.StatusUnauthorized {
 		t.Fatalf("refresh-as-access: expected 401, got %d", w.Code)
 	}
@@ -90,7 +92,7 @@ func TestMiddleware_RefreshTokenAsAccess_401(t *testing.T) {
 func TestMiddleware_ValidAccess_SetsContext(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	r := newMiddlewareRouter(j, nil)
-	tok, _ := j.GenerateAccessToken(testProfile(), 7, "")
+	tok, _ := j.GenerateAccessToken(testDestinyMembership(), 7, "")
 	w := doProtected(r, "Bearer "+tok)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
@@ -101,6 +103,9 @@ func TestMiddleware_ValidAccess_SetsContext(t *testing.T) {
 			t.Errorf("response %s missing %q", body, want)
 		}
 	}
+	if !strings.Contains(body, `"has_user_id":false`) {
+		t.Errorf("response %s exposed the legacy membership-valued user_id as an app-user context key", body)
+	}
 }
 
 func TestMiddleware_TverMismatch_401(t *testing.T) {
@@ -108,7 +113,7 @@ func TestMiddleware_TverMismatch_401(t *testing.T) {
 	// DB says version 2; the JWT carries version 1 (issued before a logout).
 	revoker := NewRevocationChecker(&fakeVersionStore{version: 2}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
-	tok, _ := j.GenerateAccessToken(testProfile(), 1, "")
+	tok, _ := j.GenerateAccessToken(testDestinyMembership(), 1, "")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusUnauthorized {
 		t.Fatalf("stale token_version: expected 401, got %d", w.Code)
 	}
@@ -118,7 +123,7 @@ func TestMiddleware_TverMatch_200(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	revoker := NewRevocationChecker(&fakeVersionStore{version: 3}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
-	tok, _ := j.GenerateAccessToken(testProfile(), 3, "")
+	tok, _ := j.GenerateAccessToken(testDestinyMembership(), 3, "")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
@@ -131,7 +136,7 @@ func TestMiddleware_SessionRevoked_401(t *testing.T) {
 	// token_version matches (3), but the session is gone (sessionOK=false).
 	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: false}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
-	tok, _ := j.GenerateAccessToken(testProfile(), 3, "sess-gone")
+	tok, _ := j.GenerateAccessToken(testDestinyMembership(), 3, "sess-gone")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusUnauthorized {
 		t.Fatalf("revoked session: expected 401, got %d", w.Code)
 	}
@@ -142,7 +147,7 @@ func TestMiddleware_SessionValid_200(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
 	revoker := NewRevocationChecker(&fakeVersionStore{version: 3, sessionOK: true}, cache.NewMemoryCache(time.Minute, 0))
 	r := newMiddlewareRouter(j, revoker)
-	tok, _ := j.GenerateAccessToken(testProfile(), 3, "sess-live")
+	tok, _ := j.GenerateAccessToken(testDestinyMembership(), 3, "sess-live")
 	if w := doProtected(r, "Bearer "+tok); w.Code != http.StatusOK {
 		t.Fatalf("live session: expected 200, got %d: %s", w.Code, w.Body.String())
 	}

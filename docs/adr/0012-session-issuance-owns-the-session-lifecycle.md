@@ -7,7 +7,7 @@
 
 Logging in, refreshing, and logging out were implemented as Gin handlers rather
 than as a module those handlers called. `BungieCallback` and `RefreshToken`
-together performed the OAuth code exchange, the Bungie profile lookup, the user
+together performed the OAuth code exchange, the primary Destiny membership lookup, the user
 upsert, the Bungie-token store write, the JWT mint, the session create or rotate
 with reuse detection, the audit event, the cookie write, and the JSON response —
 nine collaborators, all reached through `*gin.Context`.

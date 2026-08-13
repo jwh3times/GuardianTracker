@@ -128,7 +128,7 @@ reuse a version number for different key material.
 ### PostgreSQL schema overview
 
 ```sql
--- Users: one row per Bungie account; role is the resolved tier
+-- Users: one Guardian Tracker user row per tracked Destiny membership; role is the resolved tier
 users (id, membership_id, membership_type, display_name, platform,
        role, token_version, created_at, updated_at)
 
@@ -183,7 +183,7 @@ Get-Content database/init/01-init.sql | docker exec -i guardian-pg psql -U postg
 | ------------------------------------------------- | ------------------------------------------------ |
 | Looking up item names, icons, sources from Bungie | SQLite manifest (read-only)                      |
 | Storing user wishlists                            | PostgreSQL (`db/wishlist.go`)                    |
-| Storing user profile / token_version              | PostgreSQL (`db/users.go`)                       |
+| Storing Guardian Tracker user / token_version     | PostgreSQL (`db/users.go`)                       |
 | Storing encrypted Bungie OAuth tokens             | PostgreSQL (`db/tokens.go`)                      |
 | User preferences                                  | PostgreSQL (`db/prefs.go`)                       |
 | Collections analysis (missing items)              | SQLite manifest + Bungie API live data           |

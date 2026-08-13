@@ -2,7 +2,7 @@ import type {
   APICategoryCount,
   APICollectionNode,
   APIDestinyItem,
-  APIUserCollections,
+  APIMembershipCollections,
 } from "../types/api";
 import type {
   Difficulty,
@@ -100,7 +100,7 @@ function toItem(d: APIDestinyItem): GTItem {
     farmOnly: d.farmOnly ?? false,
     source: sources[0] ?? "Unknown source",
     sourceDetail: sources.slice(1).join(" · ") || sources[0] || "",
-    obtainable: false,
+    availableNow: false,
     collected: false,
     desc: d.description ?? "",
     icon: d.icon,
@@ -124,7 +124,7 @@ const CATEGORIES = [
   { id: "cosmetics", label: "Cosmetics" },
 ] as const;
 
-function toSummary(raw: APIUserCollections): SummaryCategory[] {
+function toSummary(raw: APIMembershipCollections): SummaryCategory[] {
   return CATEGORIES.map(({ id, label }) => {
     const c: APICategoryCount | undefined = raw.summary?.[id];
     // total === 0 is both "nothing to show" and the divide-by-zero guard.
@@ -190,7 +190,7 @@ function walk(tree: APICollectionNode[]): Walked {
 }
 
 function summaryView(
-  raw: APIUserCollections,
+  raw: APIMembershipCollections,
   walked: Walked,
 ): CollectionsSummaryView {
   const summary = toSummary(raw);
@@ -210,13 +210,13 @@ function summaryView(
 
 /** Adapt the default (counts-only) collections payload. */
 export function toCollectionsSummary(
-  raw: APIUserCollections,
+  raw: APIMembershipCollections,
 ): CollectionsSummaryView {
   return summaryView(raw, walk(raw.tree ?? []));
 }
 
 /** Adapt the `?include=all` collections payload, items and all. */
-export function toCollections(raw: APIUserCollections): CollectionsView {
+export function toCollections(raw: APIMembershipCollections): CollectionsView {
   const walked = walk(raw.tree ?? []);
   const base = summaryView(raw, walked);
 
@@ -225,14 +225,14 @@ export function toCollections(raw: APIUserCollections): CollectionsView {
   const availableNow = raw.availableNow ?? {};
 
   // The join, in the one place it happens. Every GTItem below leaves here
-  // complete — callers never patch `collected`, `obtainable` or `availFrom`.
+  // complete — callers never patch `collected`, `availableNow` or `availFrom`.
   const items = new Map<string, GTItem>();
   for (const [hash, detail] of Object.entries(details)) {
     const vendor = availableNow[hash];
     items.set(hash, {
       ...toItem(detail),
       collected: collected.has(hash),
-      obtainable: !!vendor,
+      availableNow: !!vendor,
       availFrom: vendor,
     });
   }

@@ -65,7 +65,7 @@ const baseItem: GTItem = {
   diff: "moderate",
   source: "Vault of Glass",
   sourceDetail: "Raid drop",
-  obtainable: true,
+  availableNow: true,
   collected: false,
   desc: "A legendary hand cannon.",
   icon: "/icons/fb.png",
@@ -95,7 +95,7 @@ describe("ItemCard", () => {
   it("renders the list density and shows the collected badge", () => {
     render(
       <ItemCard
-        item={{ ...baseItem, collected: true, obtainable: false }}
+        item={{ ...baseItem, collected: true, availableNow: false }}
         density="list"
         showCollected
         wished

@@ -2,7 +2,7 @@
 
 Guardian Tracker is a two-service Destiny 2 companion app. Players authenticate
 with Bungie OAuth, the API stores the tokens encrypted, and the frontend renders
-collection, wishlist, weekly, and account surfaces through same-origin REST calls
+collection, wishlist, weekly, and settings surfaces through same-origin REST calls
 to the API service.
 
 ## Runtime Shape
@@ -68,7 +68,7 @@ authorization remains the boundary for protected API surfaces.
 The API talks to Bungie for:
 
 - OAuth token exchange and refresh
-- player profile and membership data
+- Bungie account and Destiny membership data
 - collections, records, characters, and weekly public data
 - manifest version and manifest database download
 
@@ -94,7 +94,7 @@ responses during cold start or manifest swap.
 Primary route groups:
 
 - auth: Bungie login, callback, refresh, logout, logout-all
-- account: profile, role opt-in, feature flags
+- account: Guardian Tracker user snapshot, role opt-in, feature flags
 - collections: collection tree, refresh, item views, item perk pools
 - weekly: recommendations, Xur inventory and authenticated location, milestones,
   reset countdowns; authenticated vendor calls validate and follow the selected
@@ -102,7 +102,7 @@ Primary route groups:
 - wishlist: user-scoped CRUD
 - preferences: user preferences plus irreversible first-run onboarding completion
 - records: catalysts, crafting, seals
-- characters: account characters
+- characters: Destiny membership characters
 - admin: users, roles, flags, audit log
 - health: `/health` liveness and `/ready` readiness; readiness requires the
   manifest and, when a database pool is configured, a successful database ping

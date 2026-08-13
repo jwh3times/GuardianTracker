@@ -227,7 +227,7 @@ func main() {
 	})
 
 	// Shared flag resolver for server-side enforcement. Uses the same appCache and
-	// flags:all key as AccountHandler's resolver, so both read one cache entry
+	// flags:all key as UserHandler's resolver, so both read one cache entry
 	// (evicted together by AdminHandler.UpdateFlag).
 	enforceFlags := handlers.NewFlagResolver(stores.Flags, appCache)
 	var readinessPinger db.Pinger
@@ -248,7 +248,7 @@ func main() {
 			Health:      handlers.NewHealthHandler(manifestService, readinessPinger),
 			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
 			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore),
-			Account:     handlers.NewAccountHandler(stores.Users, stores.Flags, appCache, auditLogger),
+			User:        handlers.NewUserHandler(stores.Users, stores.Flags, appCache, auditLogger),
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),
 			Audit:       handlers.NewAuditHandler(stores.Audit),
 			Characters:  handlers.NewCharactersHandler(charactersService, tokenStore),

@@ -50,7 +50,7 @@ describe("OnboardingTour", () => {
     mocks.onboardedAt = null;
   });
 
-  it("frames the account snapshot and walks through three steps", async () => {
+  it("frames the collection snapshot and walks through three steps", async () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <OnboardingTour />
@@ -64,7 +64,7 @@ describe("OnboardingTour", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /show me around/i }));
     expect(screen.getByText(/step 1 of 3/i)).toBeInTheDocument();
-    expect(screen.getByText(/guardian at a glance/i)).toBeInTheDocument();
+    expect(screen.getByText(/collection at a glance/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText(/step 2 of 3/i)).toBeInTheDocument();

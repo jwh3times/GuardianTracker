@@ -49,8 +49,9 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 
 ### Auth & token flow
 
-Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the user's
-Bungie tokens **AES-256-GCM encrypted** in Postgres with explicit current/previous key versions.
+Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the Bungie
+account's OAuth tokens against the tracked Destiny membership, **AES-256-GCM encrypted** in Postgres
+with explicit current/previous key versions.
 It returns a short-lived access JWT for localStorage and sends the per-device rotating refresh JWT
 only in a host-only HttpOnly cookie scoped to `/api/auth`. Callback and refresh require an exact
 allowlisted browser origin; the cookie policy assumes the frontend and API are same-site. Refresh
@@ -358,9 +359,9 @@ Single-context layout: root `CONTEXT.md` (created lazily) + existing `docs/adr/`
 
 ## Known Limitations
 
-- Collections data remains account-wide. The character switcher scopes
-  authenticated weekly vendor inventory, daily actions, availability ranking,
-  and Xûr location to the selected Guardian; deeper character surfaces remain P2.
+- Collections data remains membership-wide. The character switcher scopes
+  authenticated weekly vendor inventory, today actions, availability ranking,
+  and Xûr location to the selected character; deeper character surfaces remain P2.
 - Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready). A build that fails is retried by the next search request (throttled to one attempt per 30s) instead of waiting for the next hourly manifest swap.
 - Xûr location is best-effort: the authenticated character-vendor component's
   location index resolves through the manifest to "The Tower"; failures omit the field.

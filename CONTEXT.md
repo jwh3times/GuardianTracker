@@ -26,9 +26,13 @@ collectible definition, published as a versioned SQLite file. Downloaded and
 served by `services/manifest`, refreshed by the swap described in
 [ADR 0010](./docs/adr/0010-manifest-swap-participants-and-observers.md).
 
-**Collectible** — a manifest entry recording that a specific item is obtainable
-and trackable. The unit Guardian Tracker counts; a player either has it or is
-missing it.
+**Collectible** — a manifest entry that links an inventory item to Bungie's
+acquisition state. More than one collectible can refer to the same item, so a
+collectible is a tracking record rather than the unit Guardian Tracker counts.
+
+**Item** — a player-facing acquisition target linked from one or more
+collectibles. The unit Guardian Tracker displays and counts; an item is owned
+when any of its linked collectibles is acquired.
 
 **Presentation node** — the manifest's tree structure that organises
 collectibles into categories and subcategories. The Collections page renders it.
@@ -55,10 +59,23 @@ Served by `services/records`, rendered by `Triumphs.tsx`.
 **Craft pattern** — the progress required to unlock crafting a weapon. Both
 served by `services/records`, rendered by `Catalysts.tsx`.
 
-**Guardian / character** — a player's in-game character. An account has up to
-three. Collections are **account-wide**; vendor inventory, daily actions, and
-Xûr's location are **character-scoped**, which is the distinction the character
-switcher exists to serve.
+**Bungie account** — the identity authorized through Bungie. It can expose more
+than one Destiny membership and is not itself a Guardian Tracker user or a
+character.
+
+**Destiny membership** — one platform-specific Destiny identity belonging to a
+Bungie account. Guardian Tracker tracks one membership for each user, preferring
+Bungie's cross-save primary when one exists, and uses its membership ID and
+membership type when requesting membership-wide game data.
+
+**Profile** — Bungie's gameplay-state data for a Destiny membership. A profile
+is data about a membership, not a synonym for the player or their identity.
+
+**Character** — one playable avatar belonging to a Destiny membership, up to
+three per membership. **Guardian** is the user-facing name for a character; do
+not use it for the Bungie account, Destiny membership, or Guardian Tracker user.
+Collections are **membership-wide**; vendor inventory, time-sensitive actions,
+and Xûr's location can be **character-scoped**.
 
 ---
 
@@ -66,9 +83,14 @@ switcher exists to serve.
 
 Our vocabulary — words that describe what this app does with Bungie's data.
 
-**Missing item** — a collectible the player does not have. The app's central
-noun: the whole product is "what are you missing, and what should you do about
-it".
+**Guardian Tracker user** — the app identity associated with one Destiny
+membership. Its user-data record owns app-authored state such as sessions,
+preferences, role tier, and wish list when persistence is available; do not use
+_account_, _profile_, _player_, or _Guardian_ as synonyms.
+
+**Missing item** — an item for which the player has acquired none of its linked
+collectibles. The app's central noun: the whole product is "what are you
+missing, and what should you do about it".
 
 **Difficulty tier** — how hard a missing item is to acquire, derived from its
 source string: `Challenging`, `Moderate`, `Easy`, or `Unrated`. `Unrated` means
@@ -85,17 +107,28 @@ is currently selling it. Distinct from difficulty: an item can be `Challenging`
 and available this weekend. Carried as `availableNow` (item hash → vendor name)
 on the collections payload.
 
+**Farm-only item** — a random-perk item that cannot be reacquired from the
+in-game Collections archive; another copy must be earned from its source. This
+is an acquisition facet, independent of whether the player already owns one.
+
 **Efficiency ranking** — scoring which activity buckets would close the most
 missing items, so recommendations are ordered by payoff rather than by
 Bungie's ordering. `services/efficiency`: `Rank` and `MissingForMilestone`.
+
+**Acquisition recommendation** — a personalized action on This Week, ranked by
+its payoff against missing items, the wish list, live availability, and featured
+sources. Distinct from a _today action_, whose defining property is urgency.
+
+**Today action** — a time-sensitive entry in Do This Today. It can expire at a
+daily reset, weekly reset, or Xûr's departure; do not call it a _daily action_.
 
 **Wish list** — the player's own saved set of wanted items. User-scoped and
 persisted; it is the one collection the player authors rather than earns.
 Two words, lowercase, in prose; `wishlist` as one word in code and routes.
 
-**This Week / Do This Today** — the two weekly surfaces. _This Week_ is the
-page; _Do This Today_ is the ranked short list of daily actions on it. Served
-by `services/weekly`.
+**This Week** — the page combining weekly milestones, Xûr, and personalized
+acquisition recommendations. **Do This Today** — the Dashboard's short list of
+today actions. Both are served by `services/weekly`.
 
 **Cosmetics** — shaders, ornaments, emblems and the like, browsed as a gallery
 rather than as a tree. Same collectibles, different presentation.
@@ -179,7 +212,9 @@ also the audit reason string, so the two cannot drift. See
 lives in localStorage; the refresh JWT rotates per device and lives only in a
 host-only HttpOnly cookie; the _session_ is the server-side row those rotate
 against, with revocation and reuse detection. Bungie's own OAuth tokens are
-separate again and are called _Bungie tokens_, never just "tokens". See
+authorized by the Bungie account and stored by Guardian Tracker against the
+tracked Destiny membership. They are called _Bungie tokens_, never just
+"tokens". See
 [ADR 0002](./docs/adr/0002-bungie-oauth-and-token-storage.md) and
 [ADR 0008](./docs/adr/0008-browser-refresh-cookie.md).
 

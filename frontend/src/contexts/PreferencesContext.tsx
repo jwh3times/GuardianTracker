@@ -20,7 +20,7 @@ interface Preferences {
 }
 
 interface PreferencesContextType extends Preferences {
-  /** Undefined when account preferences could not be resolved. */
+  /** Undefined when the user's preferences could not be resolved. */
   onboardedAt: string | null | undefined;
   preferencesReady: boolean;
   setCardStyle: (v: CardStyle) => void;

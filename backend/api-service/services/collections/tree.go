@@ -9,7 +9,7 @@ import (
 
 // CollectionNode is one presentation node with rolled-up counts, as serialized to
 // the frontend. Items holds the item hashes of this node's direct leaf collectibles
-// (stripped on the lightweight response — see UserCollections.Lightweight).
+// (stripped on the lightweight response — see MembershipCollections.Lightweight).
 type CollectionNode struct {
 	Hash      string           `json:"hash"`
 	Name      string           `json:"name"`

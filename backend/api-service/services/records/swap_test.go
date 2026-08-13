@@ -30,7 +30,7 @@ func TestOnVersionChanged_DropsManifestTablesOnly(t *testing.T) {
 		}
 	}
 	if _, ok := c.Get(recordsCacheKey(3, "member-1")); !ok {
-		t.Error("per-user profile records were evicted; they are Bungie data, not manifest data")
+		t.Error("per-membership profile records were evicted; they are Bungie data, not manifest data")
 	}
 	if _, ok := c.Get("settings:core"); !ok {
 		t.Error("Bungie common settings were evicted; they are not manifest-derived")

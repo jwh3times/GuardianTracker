@@ -29,15 +29,15 @@ runbooks, and environment-specific operations notes belong under `private/`.
 **Likely size:** Large
 
 The character switcher now drives authenticated weekly vendor context, including
-inventory that can vary by class. Collections remain account-wide. Future
+inventory that can vary by class. Collections remain membership-wide. Future
 character-scoped surfaces should use verified Bungie equipment, progression,
-and activity data rather than reinterpreting account-wide collection data.
+and activity data rather than reinterpreting membership-wide collection data.
 
 Expected shape:
 
 - character detail endpoints
 - character-scoped UI routes or panels
-- clear distinction between account-wide collection data and per-character data
+- clear distinction between membership-wide collection data and per-character data
 
 ### 3. God-Roll and Owned-Roll Insights
 
@@ -45,8 +45,8 @@ Expected shape:
 **Gate:** Bungie item-instance verification plus data-source decision
 **Likely size:** Large
 
-Show a player's owned weapon rolls and compare them to curated or user-defined
-target rolls.
+Show owned weapon rolls for the selected Destiny membership and compare them to
+curated or user-defined target rolls.
 
 Decisions to settle:
 

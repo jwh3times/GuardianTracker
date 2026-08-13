@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { toCollections, toCollectionsSummary } from "./collectionsView";
-import type { APIDestinyItem, APIUserCollections } from "../types/api";
+import type { APIDestinyItem, APIMembershipCollections } from "../types/api";
 
 function item(over: Partial<APIDestinyItem> & { itemHash: string }) {
   return {
@@ -71,7 +71,7 @@ const full = {
     cosmetics: { total: 10, collected: 5 },
   },
   fetchedAt: "2026-08-09T00:00:00Z",
-} as unknown as APIUserCollections;
+} as unknown as APIMembershipCollections;
 
 /** The counts-only variant the backend serves without ?include=all. */
 const lightweight = {
@@ -81,7 +81,7 @@ const lightweight = {
   ],
   summary: full.summary,
   fetchedAt: full.fetchedAt,
-} as unknown as APIUserCollections;
+} as unknown as APIMembershipCollections;
 
 // The reason this module exists. Three modules used to join item detail,
 // ownership and vendor availability independently, and the copies drifted.
@@ -91,17 +91,17 @@ describe("the join", () => {
 
     const owned = v.itemByHash("100")!;
     expect(owned.collected).toBe(true);
-    expect(owned.obtainable).toBe(false);
+    expect(owned.availableNow).toBe(false);
     expect(owned.availFrom).toBeUndefined();
 
     const onSale = v.itemByHash("200")!;
     expect(onSale.collected).toBe(false);
-    expect(onSale.obtainable).toBe(true);
+    expect(onSale.availableNow).toBe(true);
     expect(onSale.availFrom).toBe("Banshee-44");
 
     const neither = v.itemByHash("300")!;
     expect(neither.collected).toBe(false);
-    expect(neither.obtainable).toBe(false);
+    expect(neither.availableNow).toBe(false);
   });
 
   it("applies the same join however the item is reached", () => {
@@ -132,7 +132,7 @@ describe("wire → domain mapping", () => {
           icon: "/icons/fb.png",
         }),
       },
-    } as unknown as APIUserCollections);
+    } as unknown as APIMembershipCollections);
     const i = v.itemByHash("100")!;
     expect(i.rarity).toBe("exotic");
     expect(i.diff).toBe("moderate");
@@ -152,7 +152,7 @@ describe("wire → domain mapping", () => {
           sources: [],
         }),
       },
-    } as unknown as APIUserCollections);
+    } as unknown as APIMembershipCollections);
     const i = v.itemByHash("100")!;
     expect(i.rarity).toBe("legendary");
     expect(i.diff).toBe("unrated");
@@ -165,7 +165,7 @@ describe("wire → domain mapping", () => {
       items: {
         "100": item({ itemHash: "100", difficulty: "Unrated", farmOnly: true }),
       },
-    } as unknown as APIUserCollections);
+    } as unknown as APIMembershipCollections);
     expect(v.itemByHash("100")!.diff).toBe("unrated");
     expect(v.itemByHash("100")!.farmOnly).toBe(true);
   });
@@ -275,7 +275,7 @@ describe("the counts-only variant", () => {
     const empty = toCollectionsSummary({
       summary: full.summary,
       fetchedAt: full.fetchedAt,
-    } as unknown as APIUserCollections);
+    } as unknown as APIMembershipCollections);
     expect(empty.roots).toEqual([]);
     expect(empty.rootHashes).toEqual([]);
   });
@@ -286,8 +286,8 @@ describe("absent optional fields", () => {
     const v = toCollections({
       ...full,
       availableNow: undefined,
-    } as unknown as APIUserCollections);
-    expect(v.allItems().every((i) => !i.obtainable)).toBe(true);
+    } as unknown as APIMembershipCollections);
+    expect(v.allItems().every((i) => !i.availableNow)).toBe(true);
     expect(v.allItems().every((i) => i.availFrom === undefined)).toBe(true);
   });
 
@@ -295,7 +295,7 @@ describe("absent optional fields", () => {
     const v = toCollections({
       ...full,
       collectedHashes: undefined,
-    } as unknown as APIUserCollections);
+    } as unknown as APIMembershipCollections);
     expect(v.allItems().every((i) => !i.collected)).toBe(true);
   });
 
@@ -303,7 +303,7 @@ describe("absent optional fields", () => {
     const v = toCollections({
       ...full,
       items: { "100": full.items!["100"] },
-    } as unknown as APIUserCollections);
+    } as unknown as APIMembershipCollections);
     expect(v.itemsUnder("11").map((i) => i.id)).toEqual(["100"]);
     expect(v.itemByHash("200")).toBeNull();
   });

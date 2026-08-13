@@ -10,16 +10,16 @@ frontend.
 
 - **Bungie OAuth login** with HMAC-signed CSRF state and Guardian Tracker JWTs.
 - **Collection analysis** for weapons, armor, exotics, and cosmetics using the
-  Bungie manifest and player collection state.
+  Bungie manifest and Destiny membership collection state.
 - **Wishlist management** with priority, notes, and availability surfacing.
 - **This Week** with milestones, Xur inventory and best-effort Tower location,
-  active-Guardian vendor context, class-aware armor labels, daily actions, reset
+  active-Guardian vendor context, class-aware armor labels, today actions, reset
   timing, and recommendation ranking.
 - **Catalysts, crafting, triumphs, and seals** from Bungie records data.
 - **Cosmetics gallery** for emblems, shaders, ghosts, ships, sparrows, emotes,
   ornaments, and finishers.
-- **Account-backed onboarding tour** that introduces the Dashboard, This Week,
-  and Collections once per Bungie account.
+- **Persisted onboarding tour** that introduces the Dashboard, This Week, and
+  Collections once per Guardian Tracker user.
 - **Global item search** over a manifest-derived index.
 - **Roles, feature flags, admin console, and audit log** for controlled rollout
   and administration.

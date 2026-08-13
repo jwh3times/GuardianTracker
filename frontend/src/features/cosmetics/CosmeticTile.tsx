@@ -8,9 +8,9 @@ export function CosmeticTile({
   item: GTItem;
   onOpen: (item: GTItem) => void;
 }) {
-  // Same rule as ItemCard on Collections: flag only what the player can act on
-  // — obtainable right now and not already owned.
-  const availBadge = item.obtainable && !item.collected;
+  // Same rule as ItemCard on Collections: flag only actionable missing items
+  // — available right now and not already owned.
+  const availBadge = item.availableNow && !item.collected;
   return (
     <button
       type="button"

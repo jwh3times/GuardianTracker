@@ -11,7 +11,10 @@ import (
 
 // JWTClaims are the claims stored in every app-issued JWT.
 type JWTClaims struct {
-	UserID         string `json:"user_id"`
+	// LegacyUserID preserves the historical user_id claim for already-issued
+	// clients. Its value is a Destiny membership ID, never a users-row ID; new
+	// code must use MembershipID instead.
+	LegacyUserID   string `json:"user_id"`
 	DisplayName    string `json:"display_name"`
 	MembershipID   string `json:"membership_id"`
 	MembershipType int    `json:"membership_type"`
@@ -45,15 +48,15 @@ func NewJWTWithTTL(secret string, accessTTL time.Duration, refreshExpiryDays int
 	}
 }
 
-// GenerateAccessToken creates a signed JWT access token for the given user. sessionID
+// GenerateAccessToken creates a signed JWT access token for the Destiny membership. sessionID
 // binds the token to a per-device session so this-device logout can revoke it.
-func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int, sessionID string) (string, error) {
+func (j *JWT) GenerateAccessToken(membership *DestinyMembership, tokenVersion int, sessionID string) (string, error) {
 	claims := JWTClaims{
-		UserID:         user.MembershipID,
-		DisplayName:    user.DisplayName,
-		MembershipID:   user.MembershipID,
-		MembershipType: user.MembershipType,
-		Platform:       GetPlatformName(user.MembershipType),
+		LegacyUserID:   membership.MembershipID,
+		DisplayName:    membership.DisplayName,
+		MembershipID:   membership.MembershipID,
+		MembershipType: membership.MembershipType,
+		Platform:       GetPlatformName(membership.MembershipType),
 		TokenType:      "access",
 		TokenVersion:   tokenVersion,
 		SessionID:      sessionID,
@@ -63,24 +66,24 @@ func (j *JWT) GenerateAccessToken(user *BungieUserProfile, tokenVersion int, ses
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "guardian-tracker",
-			Subject:   user.MembershipID,
+			Subject:   membership.MembershipID,
 		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(j.secret))
 }
 
-// GenerateRefreshToken creates a signed JWT refresh token for the given user, bound
+// GenerateRefreshToken creates a signed JWT refresh token for the Destiny membership, bound
 // to sessionID. It also returns the token's jti so the caller can record it as the
 // session's current refresh jti for reuse detection (compare-and-swap on rotation;
 // see db.UserStore.RotateSession).
-func (j *JWT) GenerateRefreshToken(user *BungieUserProfile, tokenVersion int, sessionID string) (token string, jti string, err error) {
+func (j *JWT) GenerateRefreshToken(membership *DestinyMembership, tokenVersion int, sessionID string) (token string, jti string, err error) {
 	jti = uuid.NewString()
 	claims := JWTClaims{
-		UserID:         user.MembershipID,
-		DisplayName:    user.DisplayName,
-		MembershipID:   user.MembershipID,
-		MembershipType: user.MembershipType,
-		Platform:       GetPlatformName(user.MembershipType),
+		LegacyUserID:   membership.MembershipID,
+		DisplayName:    membership.DisplayName,
+		MembershipID:   membership.MembershipID,
+		MembershipType: membership.MembershipType,
+		Platform:       GetPlatformName(membership.MembershipType),
 		TokenType:      "refresh",
 		TokenVersion:   tokenVersion,
 		SessionID:      sessionID,
@@ -90,7 +93,7 @@ func (j *JWT) GenerateRefreshToken(user *BungieUserProfile, tokenVersion int, se
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "guardian-tracker",
-			Subject:   user.MembershipID,
+			Subject:   membership.MembershipID,
 		},
 	}
 	token, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(j.secret))

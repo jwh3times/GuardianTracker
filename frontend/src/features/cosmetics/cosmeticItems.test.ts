@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { cosmeticItems, groupByType } from "./cosmeticItems";
 import { toCollections } from "../../lib/collectionsView";
-import type { APIUserCollections } from "../../types/api";
+import type { APIMembershipCollections } from "../../types/api";
 
 const data = {
   tree: [
@@ -101,7 +101,7 @@ const data = {
     cosmetics: { total: 4, collected: 1 },
   },
   fetchedAt: "2026-06-30T00:00:00Z",
-} as unknown as APIUserCollections;
+} as unknown as APIMembershipCollections;
 
 describe("cosmeticItems", () => {
   it("keeps only cosmetic-typed items and tags collected state", () => {
@@ -125,31 +125,31 @@ describe("cosmeticItems", () => {
   });
 
   // Regression: this join previously set `collected` and nothing else, so a
-  // cosmetic a vendor was actively selling carried obtainable=false — the
+  // cosmetic a vendor was actively selling carried availableNow=false — the
   // "Available now" affordance never appeared on /cosmetics even though the
   // identical item showed it on /collections.
   it("resolves live availability from availableNow", () => {
     const withVendor = {
       ...data,
       availableNow: { "101": "Xûr", "102": "Ada-1" },
-    } as unknown as APIUserCollections;
+    } as unknown as APIMembershipCollections;
 
     const items = cosmeticItems(toCollections(withVendor));
     const byId = new Map(items.map((i) => [i.id, i]));
 
-    expect(byId.get("101")?.obtainable).toBe(true);
+    expect(byId.get("101")?.availableNow).toBe(true);
     expect(byId.get("101")?.availFrom).toBe("Xûr");
-    expect(byId.get("102")?.obtainable).toBe(true);
+    expect(byId.get("102")?.availableNow).toBe(true);
     expect(byId.get("102")?.availFrom).toBe("Ada-1");
 
-    // Not on sale → not obtainable, and no phantom vendor.
-    expect(byId.get("100")?.obtainable).toBe(false);
+    // Not on sale → not available now, and no phantom vendor.
+    expect(byId.get("100")?.availableNow).toBe(false);
     expect(byId.get("100")?.availFrom).toBeUndefined();
   });
 
   it("treats a missing availableNow map as nothing on sale", () => {
     const items = cosmeticItems(toCollections(data));
-    expect(items.every((i) => i.obtainable === false)).toBe(true);
+    expect(items.every((i) => i.availableNow === false)).toBe(true);
     expect(items.every((i) => i.availFrom === undefined)).toBe(true);
   });
 });

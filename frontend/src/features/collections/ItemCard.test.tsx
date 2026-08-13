@@ -12,7 +12,7 @@ function item(over: Partial<GTItem>): GTItem {
     diff: "unrated",
     source: "Unknown",
     sourceDetail: "",
-    obtainable: false,
+    availableNow: false,
     collected: false,
     desc: "",
     ...over,

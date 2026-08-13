@@ -12,7 +12,7 @@ import (
 func TestAccountSetRole_AuditsOptIn(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	spy := &spyAudit{}
-	h := NewAccountHandler(&fakeRoleStore{}, nil, nil, spy)
+	h := NewUserHandler(&fakeRoleStore{}, nil, nil, spy)
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) {

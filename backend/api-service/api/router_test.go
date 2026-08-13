@@ -71,7 +71,7 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 			Health:      handlers.NewHealthHandler(nil, nil),
 			Auth:        handlers.NewAuthHandler(nil, cfg, nil),
 			Wishlist:    handlers.NewWishlistHandler(nil, nil, nil, nil, nil),
-			Account:     handlers.NewAccountHandler(nil, nil, nil, nil),
+			User:        handlers.NewUserHandler(nil, nil, nil, nil),
 			Admin:       handlers.NewAdminHandler(nil, nil, nil),
 			Audit:       handlers.NewAuditHandler(nil),
 			Characters:  handlers.NewCharactersHandler(nil, nil),
@@ -88,7 +88,7 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 func accessToken(t *testing.T) string {
 	t.Helper()
 	j := auth.NewJWTWithTTL(testSecret, time.Hour, 90)
-	tok, err := j.GenerateAccessToken(&auth.BungieUserProfile{
+	tok, err := j.GenerateAccessToken(&auth.DestinyMembership{
 		MembershipID:   testMembershipID,
 		MembershipType: 3,
 		DisplayName:    "TestGuardian",
@@ -294,7 +294,7 @@ func TestInvalidTokenIsRejected(t *testing.T) {
 
 	// A refresh token must not authenticate an API call.
 	j := auth.NewJWTWithTTL(testSecret, time.Hour, 90)
-	refresh, _, err := j.GenerateRefreshToken(&auth.BungieUserProfile{
+	refresh, _, err := j.GenerateRefreshToken(&auth.DestinyMembership{
 		MembershipID: testMembershipID, MembershipType: 3,
 	}, 1, "session-1")
 	if err != nil {

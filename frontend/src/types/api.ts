@@ -3,7 +3,9 @@
 
 // --- Auth ---
 
-export interface APIUser {
+/** Guardian Tracker's application identity for the tracked Destiny membership. */
+export interface APIGuardianTrackerUser {
+  /** @deprecated Legacy alias for membershipId; retained in the API payload for compatibility. */
   id: string;
   displayName: string;
   membershipId: string;
@@ -22,12 +24,12 @@ export interface AuthURLResponse {
 /** POST /api/auth/bungie/callback  |  POST /api/auth/refresh */
 export interface AuthTokenResponse {
   token: string;
-  user: APIUser;
+  user: APIGuardianTrackerUser;
 }
 
-/** GET /api/auth/profile  |  GET /api/auth/validate */
-export interface ProfileResponse {
-  user: APIUser;
+/** GET /api/auth/profile | GET /api/auth/validate (legacy route names). */
+export interface CurrentUserResponse {
+  user: APIGuardianTrackerUser;
 }
 
 // --- Collections: mirrors services/collections/service.go ---
@@ -106,13 +108,13 @@ export interface APICategorySummary {
 }
 
 /** GET /api/collections/:membershipType/:membershipId */
-export interface APIUserCollections {
+export interface APIMembershipCollections {
   tree: APICollectionNode[];
   /** hash→detail map; present only on ?include=all */
   items?: Record<string, APIDestinyItem>;
-  /** item hashes the user owns; present only on ?include=all */
+  /** collected item hashes; present only on ?include=all */
   collectedHashes?: string[];
-  /** itemHash → vendor name for items obtainable right now; present only on ?include=all */
+  /** itemHash → vendor name for items available right now; present only on ?include=all */
   availableNow?: Record<string, string>;
   summary: APICategorySummary;
   /** When this data was fetched from Bungie (RFC3339, B8) */

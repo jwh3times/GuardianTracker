@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,11 +60,11 @@ func NewService(
 // client sees a genuine failure rather than an endless "still downloading".
 var ErrManifestNotReady = manifest.ErrNotReady
 
-// UserCollections is the canonical collections payload: the Bungie presentation-node
+// MembershipCollections is the canonical collections payload: the Bungie presentation-node
 // tree, a shared item-detail map (only on ?include=all), a flat set of owned item
 // hashes (the grid's per-item collected state; only on ?include=all), and a derived
 // four-category summary for the Dashboard hero and weekly recommender.
-type UserCollections struct {
+type MembershipCollections struct {
 	Tree            []CollectionNode       `json:"tree"`
 	Items           map[string]DestinyItem `json:"items,omitempty"`
 	CollectedHashes []string               `json:"collectedHashes,omitempty"`
@@ -90,7 +91,7 @@ type CategorySummary struct {
 // map, the CollectedHashes set, and every node's Items hash array. Tree counts,
 // summary, and fetchedAt remain. The cached source is never mutated (value receiver
 // + fresh node slices).
-func (u UserCollections) Lightweight() UserCollections {
+func (u MembershipCollections) Lightweight() MembershipCollections {
 	u.Items = nil
 	u.CollectedHashes = nil
 	u.AvailableNow = nil
@@ -308,23 +309,25 @@ func (s *Service) getTreeStructure(collectibles []manifest.CollectibleWithItem) 
 	return ts, nil
 }
 
-func (s *Service) GetUserCollections(ctx context.Context, membershipType int, membershipID, accessToken string) (*UserCollections, error) {
+func (s *Service) GetMembershipCollections(ctx context.Context, membershipType int, membershipID, accessToken string) (*MembershipCollections, error) {
 	a, err := s.getAnalysis(ctx, membershipType, membershipID, accessToken)
 	if err != nil {
 		return nil, err
 	}
 	// Per-item collected state for the grid's missing-only toggle: the item hashes
-	// the user owns. Stripped on the lightweight (default) response.
-	collectedHashes := make([]string, 0)
-	for _, cwi := range a.collectibles {
-		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
-			continue
-		}
-		if a.collected[cwi.Collectible.Hash] {
-			collectedHashes = append(collectedHashes, strconv.FormatUint(uint64(cwi.Item.Hash), 10))
+	// the membership owns. Stripped on the lightweight (default) response.
+	ownedHashes := make([]uint32, 0, len(a.owned))
+	for itemHash, owned := range a.owned {
+		if owned {
+			ownedHashes = append(ownedHashes, itemHash)
 		}
 	}
-	return &UserCollections{
+	slices.Sort(ownedHashes)
+	collectedHashes := make([]string, len(ownedHashes))
+	for i, itemHash := range ownedHashes {
+		collectedHashes[i] = strconv.FormatUint(uint64(itemHash), 10)
+	}
+	return &MembershipCollections{
 		Tree:            a.tree.overlay(a.owned),
 		Items:           a.tree.Items,
 		CollectedHashes: collectedHashes,

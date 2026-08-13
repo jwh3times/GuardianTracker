@@ -11,7 +11,7 @@ import (
 )
 
 // UserAuthStore is satisfied by db.UserStore. It returns the data the middleware
-// needs on every request: the current token_version (for account-wide revocation)
+// needs on every request: the current token_version (for user-wide revocation)
 // and role (for tier gating) in one query, plus per-session validity (for
 // this-device logout).
 type UserAuthStore interface {
@@ -52,7 +52,7 @@ func NewRevocationChecker(store UserAuthStore, c cache.Cache) *RevocationChecker
 	return &RevocationChecker{store: store, cache: c, ttl: 60 * time.Second}
 }
 
-// Resolve validates the JWT's token_version (account-wide revocation) and the
+// Resolve validates the JWT's token_version (user-wide revocation) and the
 // session's validity (this-device logout), and returns the user's current role.
 // It returns an error only when the token or session has been revoked; on a DB
 // error it fails open (request allowed) with the standard role. sessionID may be
@@ -63,7 +63,7 @@ func (r *RevocationChecker) Resolve(ctx context.Context, membershipID string, cl
 		return RoleStandard, nil // degraded mode — skip
 	}
 
-	// Account-wide token_version + role, cached per user.
+	// User-wide token_version + role, cached per Guardian Tracker user.
 	cacheKey := authInfoCacheKey(membershipID)
 	ai := authInfo{}
 	haveAuthInfo := false
@@ -123,7 +123,7 @@ func (r *RevocationChecker) checkSession(ctx context.Context, sessionID string) 
 }
 
 // Check returns an error if the JWT's token version is stale. It is a thin wrapper
-// over Resolve for callers (e.g. token refresh) that only need account-wide
+// over Resolve for callers (e.g. token refresh) that only need user-wide
 // revocation; session validity is enforced separately on rotation.
 func (r *RevocationChecker) Check(ctx context.Context, membershipID string, claimedVersion int) error {
 	_, err := r.Resolve(ctx, membershipID, claimedVersion, "")

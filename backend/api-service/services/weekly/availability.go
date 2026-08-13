@@ -90,9 +90,9 @@ func characterVendorsCacheKey(membershipType int, membershipID, characterID stri
 }
 
 // getCharacterVendors returns the authenticated 400+402 vendor response for a
-// user's validated selected character. The short character-scoped cache lets
-// Xûr location, daily actions, and availability enrichment share one response
-// without treating potentially account-specific vendor state as global.
+// the membership's validated selected character. The short character-scoped cache lets
+// Xûr location, Do This Today actions, and availability enrichment share one response
+// without treating potentially character-specific vendor state as global.
 func (s *Service) getCharacterVendors(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string) *bungie.CharacterVendorsResponse {
 	if bungieToken == "" || characterID == "" {
 		return nil

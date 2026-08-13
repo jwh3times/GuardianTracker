@@ -22,14 +22,16 @@ var (
 	errCASLost = errors.New("token cas lost")
 )
 
-// BungieUserProfile holds the Bungie account info we care about after OAuth.
-type BungieUserProfile struct {
+// DestinyMembership is the primary platform identity selected from the
+// memberships exposed by the authorized Bungie account.
+type DestinyMembership struct {
 	MembershipID   string `json:"membershipId"`
 	DisplayName    string `json:"displayName"`
 	MembershipType int    `json:"membershipType"`
 }
 
-// BungieTokens holds the OAuth tokens for one user.
+// BungieTokens holds Bungie-account OAuth credentials under the tracked
+// Destiny membership that Guardian Tracker uses as its storage key.
 type BungieTokens struct {
 	AccessToken           string    `json:"accessToken"`
 	RefreshToken          string    `json:"refreshToken"`
@@ -95,7 +97,7 @@ func NewTokenStore(ctx context.Context, clientID, clientSecret, tokenURL string,
 	return s
 }
 
-// Store saves (or replaces) tokens for a user, writing through to the DB when available.
+// Store saves (or replaces) tokens for a Destiny membership, writing through to the DB when available.
 func (s *TokenStore) Store(membershipID string, tokens *BungieTokens) {
 	tokens.MembershipID = membershipID
 
@@ -281,7 +283,7 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 	return newTokens.AccessToken, nil
 }
 
-// Delete removes tokens for a user (e.g., on logout) from both memory and DB.
+// Delete removes tokens for a Destiny membership (e.g., on logout) from both memory and DB.
 func (s *TokenStore) Delete(membershipID string) {
 	s.mu.Lock()
 	delete(s.tokens, membershipID)

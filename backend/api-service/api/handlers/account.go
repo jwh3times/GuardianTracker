@@ -23,22 +23,22 @@ type flagLister interface {
 	List(ctx context.Context) ([]db.FeatureFlag, error)
 }
 
-// AccountHandler serves the per-user role opt-in and resolved feature-flag state.
-type AccountHandler struct {
+// UserHandler serves Guardian Tracker user role opt-in and resolved feature-flag state.
+type UserHandler struct {
 	users    roleSelfStore
 	resolver *FlagResolver
 	cache    cache.Cache // for evicting tver: entries
 	audit    AuditLogger // nil = best-effort (no-op)
 }
 
-func NewAccountHandler(users roleSelfStore, flags flagLister, c cache.Cache, audit AuditLogger) *AccountHandler {
-	return &AccountHandler{users: users, resolver: NewFlagResolver(flags, c), cache: c, audit: audit}
+func NewUserHandler(users roleSelfStore, flags flagLister, c cache.Cache, audit AuditLogger) *UserHandler {
+	return &UserHandler{users: users, resolver: NewFlagResolver(flags, c), cache: c, audit: audit}
 }
 
 // SetRole handles PUT /api/account/role — self-service tier opt-in.
 // Allows standard/beta/alpha only; admin is never self-assignable, and an admin
 // caller is refused (so they can't accidentally demote themselves via opt-in).
-func (h *AccountHandler) SetRole(c *gin.Context) {
+func (h *UserHandler) SetRole(c *gin.Context) {
 	var body struct {
 		Role string `json:"role"`
 	}
@@ -98,7 +98,7 @@ type resolvedFlag struct {
 // Fail-open: a DB hiccup or degraded mode returns an empty list so the frontend
 // treats every shipped feature as accessible (nothing hidden). Actual access to
 // gated APIs is enforced server-side by auth.RequireFlag, not by this UI hint (TODO 13.4, done).
-func (h *AccountHandler) GetFlags(c *gin.Context) {
+func (h *UserHandler) GetFlags(c *gin.Context) {
 	role := c.GetInt("role")
 	resp := gin.H{"role": auth.RoleName(role), "flags": []resolvedFlag{}}
 	flags, err := h.resolver.List(c.Request.Context())
