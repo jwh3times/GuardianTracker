@@ -47,7 +47,7 @@ Single-device logout deletes that refresh session; logout-all also bumps `token_
 
 - Test: logout, then immediately use the old access token — should get 401 (revocation checked within the 60s cache window)
 - Test: DB is unavailable during the token_version check — revocation fails open (request allowed) — document as known limitation
-- Test: after single-device logout, confirm the account-wide Bungie OAuth token remains; after logout-all, confirm it is deleted from `bungie_tokens`
+- Test: after single-device logout, confirm the Bungie OAuth token stored for the tracked Destiny membership remains; after logout-all, confirm it is deleted from `bungie_tokens`
 
 ### Refresh token behavior
 

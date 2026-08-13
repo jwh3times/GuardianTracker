@@ -13,6 +13,21 @@ request.
 
 No unreleased changes.
 
+## [0.3.82] - 2026-08-12
+
+### Changed
+
+- Documentation and internal code now consistently distinguish Bungie accounts,
+  tracked Destiny memberships, Guardian Tracker users, selected characters,
+  items, collectibles, and currently available acquisition recommendations.
+  Existing REST routes, JSON fields, and JWT claims remain compatible.
+
+### Fixed
+
+- Membership collection payloads now return a deterministic set of unique owned
+  item hashes when multiple acquired collectible definitions reference the same
+  item.
+
 ## [0.3.81] - 2026-08-12
 
 ### Security
@@ -1177,7 +1192,8 @@ No unreleased changes.
 - Last-admin demotion is blocked transactionally.
 - Audit rows capture client IP and User-Agent with configurable retention.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.12...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.82...HEAD
+[0.3.82]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.81...v0.3.82
 [0.3.12]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.11...v0.3.12
 [0.3.11]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.10...v0.3.11
 [0.3.10]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.9...v0.3.10

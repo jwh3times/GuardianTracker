@@ -22,7 +22,7 @@ backend/api-service/
   auth/state.go                        ← Stateless HMAC-signed OAuth state (CSRF, multi-replica safe)
   auth/tokenstore.go                   ← DB-backed encrypted Bungie OAuth token store; CAS refresh writes
   auth/crypto.go                       ← AES-256-GCM cipher; exact current/previous key versions
-  auth/revocation.go                   ← JWT revocation: checks token_version (account-wide) + session
+  auth/revocation.go                   ← JWT revocation: checks token_version (Guardian Tracker user-wide) + session
                                            existence (per-device) via RevocationChecker; 60s in-memory
                                            cache; also resolves role from DB for RequireAdmin/RequireTier
   auth/roles.go                        ← Role tiers (standard/beta/alpha/admin) + RequireAdmin/RequireTier
@@ -127,7 +127,7 @@ backend/api-service/
 | POST   | `/api/auth/bungie/callback`                              | Exact Origin + OAuth state    | Exchange code; set refresh cookie; return `{token,user}`                                                                                                                                                                                                                                                          |
 | POST   | `/api/auth/refresh`                                      | Exact Origin + refresh cookie | Empty JSON request; rotate cookie + access token (per-session, reuse detection)                                                                                                                                                                                                                                   |
 | GET    | `/api/auth/validate`                                     | JWT                           | Validate JWT                                                                                                                                                                                                                                                                                                      |
-| GET    | `/api/auth/profile`                                      | JWT                           | Current user profile                                                                                                                                                                                                                                                                                              |
+| GET    | `/api/auth/profile`                                      | JWT                           | Guardian Tracker session user (legacy route name; not Bungie gameplay profile data)                                                                                                                                                                                                                               |
 | POST   | `/api/auth/logout`                                       | JWT                           | End current device's session only; other devices stay signed in                                                                                                                                                                                                                                                   |
 | POST   | `/api/auth/logout/all`                                   | JWT                           | Sign out everywhere: bump token_version + delete all sessions + Bungie token                                                                                                                                                                                                                                      |
 | GET    | `/api/wishlist`                                          | JWT                           | List wishlist items (name, icon, sources, availableNow/From)                                                                                                                                                                                                                                                      |
@@ -252,7 +252,7 @@ sentinel rather than `db.ErrUnavailable` directly — see "Session issuer" above
 
 ## Middleware
 
-`jwtHelper.Middleware(revoker)` — required auth, returns 401 if JWT is invalid, missing, wrong `token_type`, revoked (token_version mismatch), or session doesn't exist. Sets `user_id`, `membership_id`, `membership_type`, `display_name`, `platform`, `token_version` on Gin context.
+`jwtHelper.Middleware(revoker)` — required auth, returns 401 if JWT is invalid, missing, wrong `token_type`, revoked (token_version mismatch), or session doesn't exist. Sets `membership_id`, `membership_type`, `display_name`, `platform`, `token_version` on Gin context.
 
 `auth.RequireAdmin` / `auth.RequireTier(tier)` — role-gating middleware placed after `jwtHelper.Middleware`. **Role is always read from the DB-backed RevocationChecker cache, never from the JWT claim** — so role changes propagate within the 60s window without requiring a new token.
 
@@ -387,7 +387,7 @@ made a milestone's missing-count badge silently not appear.
   non-raid reward definitions contain no collectible-linked items, so others omit it.
 - `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells
 - `LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)` (`services/weekly/availability.go`) returns item hash → vendor display name across all rotating vendors (Xûr, Banshee-44, Ada-1, ritual vendors); best-effort with the caller's Bungie token — used by the wishlist handler for availability instead of the Xûr-only `XurItemHashes`
-- `GetWeekly(..., requestedCharacterID)` validates the requested character against the authenticated roster and scopes component-402 vendor inventory, daily actions, recommendation availability, and Xûr location to that character. Character-specific caches include membership and character IDs. Xûr armor carries an optional manifest `className`; absent class data remains unlabelled.
+- `GetWeekly(..., requestedCharacterID)` validates the requested character against the authenticated roster and scopes component-402 vendor inventory, today actions, recommendation availability, and Xûr location to that character. Character-specific caches include membership and character IDs. Xûr armor carries an optional manifest `className`; absent class data remains unlabelled.
 - `MissingItemReader` is the consumer-side interface `weekly` declares for the one
   `collections` method it needs (`GetMissingItemHashes`), satisfied structurally by
   `*collections.Service`; `weekly` does not import `services/collections` at all.
