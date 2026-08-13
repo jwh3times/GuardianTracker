@@ -182,7 +182,7 @@ func (p *Provider) GetAllPresentationNodes() (map[uint32]*PresentationNodeDef, e
 	return r.GetAllPresentationNodes()
 }
 
-func (p *Provider) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error) {
+func (p *Provider) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
 	r, err := p.get()
 	if err != nil {
 		return nil, err

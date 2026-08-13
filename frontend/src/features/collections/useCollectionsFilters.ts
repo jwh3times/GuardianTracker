@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router";
 import type { Difficulty, Rarity } from "../../types/design";
 import { DIFFS, RARITIES } from "../../lib/constants";
 
-export type SortKey = "rarity" | "name" | "difficulty" | "avail";
+export type SortKey = "rarity" | "name" | "avail";
 
 export interface CollectionsFilters {
   node: string;
@@ -84,10 +84,7 @@ export function parseFilters(p: URLSearchParams): CollectionsFilters {
       rarity && RARITIES.includes(rarity as Rarity) ? (rarity as Rarity) : null,
     diff:
       diff && DIFFS.includes(diff as Difficulty) ? (diff as Difficulty) : null,
-    sort:
-      sort === "name" || sort === "difficulty" || sort === "avail"
-        ? sort
-        : "rarity",
+    sort: sort === "name" || sort === "avail" ? sort : "rarity",
     view: p.get("view") === "list" ? "list" : "grid",
     missing: p.has("missing") ? p.get("missing") !== "0" : true,
     avail: p.get("avail") === "1",
@@ -114,12 +111,38 @@ function urlHasFilterParams(p: URLSearchParams): boolean {
   return FILTER_KEYS.some((k) => p.has(k));
 }
 
-// loadStoredFilters returns saved filter fields (never node/q — see
-// URL_ONLY_KEYS), or null.
+// loadStoredFilters validates the persisted boundary instead of trusting a
+// historical JSON shape. Removed values such as sort="difficulty" are omitted
+// and therefore fall back to the current defaults; URL-only keys never escape
+// this function.
 function loadStoredFilters(): Partial<CollectionsFilters> | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Partial<CollectionsFilters>) : null;
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return null;
+    const stored = parsed as Record<string, unknown>;
+    const normalized: Partial<CollectionsFilters> = {};
+
+    if (RARITIES.includes(stored.rarity as Rarity))
+      normalized.rarity = stored.rarity as Rarity;
+    else if (stored.rarity === null) normalized.rarity = null;
+    if (DIFFS.includes(stored.diff as Difficulty))
+      normalized.diff = stored.diff as Difficulty;
+    else if (stored.diff === null) normalized.diff = null;
+    if (
+      stored.sort === "rarity" ||
+      stored.sort === "name" ||
+      stored.sort === "avail"
+    )
+      normalized.sort = stored.sort;
+    if (stored.view === "grid" || stored.view === "list")
+      normalized.view = stored.view;
+    for (const key of ["missing", "avail", "farm"] as const) {
+      if (typeof stored[key] === "boolean") normalized[key] = stored[key];
+    }
+    return normalized;
   } catch {
     return null;
   }

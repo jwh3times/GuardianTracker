@@ -15,6 +15,7 @@ import (
 
 	"guardian-tracker/api-service/db"
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/sources"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -120,7 +121,7 @@ func (m *mockPrefsStore) Upsert(_ context.Context, userID int64, cardStyle strin
 
 type mockManifest struct {
 	defs map[uint32]*bungie.InventoryItemDefinition
-	cols map[uint32]*bungie.CollectibleDefinition
+	cols map[uint32][]bungie.CollectibleDefinition
 }
 
 func (m *mockManifest) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
@@ -136,11 +137,11 @@ func (m *mockManifest) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.Inv
 	return out, nil
 }
 
-func (m *mockManifest) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32]*bungie.CollectibleDefinition, error) {
+func (m *mockManifest) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
 	if m.cols == nil {
-		return map[uint32]*bungie.CollectibleDefinition{}, nil
+		return map[uint32][]bungie.CollectibleDefinition{}, nil
 	}
-	out := make(map[uint32]*bungie.CollectibleDefinition)
+	out := make(map[uint32][]bungie.CollectibleDefinition)
 	for _, h := range hashes {
 		if col, ok := m.cols[h]; ok {
 			out[h] = col
@@ -734,9 +735,9 @@ func TestEnrichItems_WithManifest(t *testing.T) {
 	}
 }
 
-// TestEnrichItems_AvailabilityAndSources: items sold by any rotating vendor are
-// flagged availableNow with that vendor's name; sources come from the collectible.
-func TestEnrichItems_AvailabilityAndSources(t *testing.T) {
+// TestEnrichItems_AvailabilityAndAcquisitionSources: live availability stays
+// separate from the deterministic union of collectible provenance.
+func TestEnrichItems_AvailabilityAndAcquisitionSources(t *testing.T) {
 	store := &mockWishlistStore{
 		userID: 42,
 		items: []db.WishlistItem{
@@ -751,8 +752,12 @@ func TestEnrichItems_AvailabilityAndSources(t *testing.T) {
 	other.DisplayProperties.Name = "Fatebringer"
 	manifest := &mockManifest{
 		defs: map[uint32]*bungie.InventoryItemDefinition{5555: gjally, 6666: other},
-		cols: map[uint32]*bungie.CollectibleDefinition{
-			6666: {ItemHash: 6666, SourceString: "Vault of Glass raid"},
+		cols: map[uint32][]bungie.CollectibleDefinition{
+			6666: {
+				{ItemHash: 6666, SourceString: "Vault of Glass raid"},
+				{ItemHash: 6666, SourceString: "Monument to Lost Lights"},
+				{ItemHash: 6666, SourceString: "Vault of Glass raid"},
+			},
 		},
 	}
 	// 5555 sold by Banshee-44 (a non-Xûr vendor); 6666 not currently sold.
@@ -783,8 +788,27 @@ func TestEnrichItems_AvailabilityAndSources(t *testing.T) {
 	if notSold.AvailableNow || notSold.AvailableFrom != "" {
 		t.Errorf("unsold item flagged available: %+v", notSold)
 	}
-	if len(notSold.Sources) != 1 || notSold.Sources[0] != "Vault of Glass raid" {
-		t.Errorf("sources = %v, want [Vault of Glass raid]", notSold.Sources)
+	wantSources := []sources.AcquisitionSource{
+		{Text: "Monument to Lost Lights", Difficulty: sources.Easy},
+		{Text: "Vault of Glass raid", Difficulty: sources.Challenging, RaidDungeon: true},
+	}
+	if len(notSold.AcquisitionSources) != len(wantSources) {
+		t.Fatalf("acquisitionSources = %+v, want %+v", notSold.AcquisitionSources, wantSources)
+	}
+	for i := range wantSources {
+		if notSold.AcquisitionSources[i] != wantSources[i] {
+			t.Errorf("acquisitionSources[%d] = %+v, want %+v", i, notSold.AcquisitionSources[i], wantSources[i])
+		}
+	}
+	var wire []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &wire); err != nil {
+		t.Fatalf("decode wire shape: %v", err)
+	}
+	if _, exists := wire[1]["difficulty"]; exists {
+		t.Errorf("wishlist item must not expose aggregate difficulty: %s", w.Body.Bytes())
+	}
+	if _, exists := wire[1]["sources"]; exists {
+		t.Errorf("wishlist item must not expose legacy text-only sources: %s", w.Body.Bytes())
 	}
 }
 

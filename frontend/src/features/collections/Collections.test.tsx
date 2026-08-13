@@ -78,8 +78,18 @@ const treeCollections = {
       itemType: "Hand Cannon",
       tierType: 5,
       rarity: "Legendary",
-      difficulty: "Challenging",
-      sources: ["Vault of Glass"],
+      acquisitionSources: [
+        {
+          text: "Vault of Glass",
+          difficulty: "Challenging",
+          raidDungeon: true,
+        },
+        {
+          text: "Monument to Lost Lights",
+          difficulty: "Easy",
+          raidDungeon: false,
+        },
+      ],
       isExotic: false,
     },
     "200": {
@@ -90,8 +100,9 @@ const treeCollections = {
       itemType: "Shotgun",
       tierType: 5,
       rarity: "Legendary",
-      difficulty: "Moderate",
-      sources: ["Menagerie"],
+      acquisitionSources: [
+        { text: "Menagerie", difficulty: "Moderate", raidDungeon: false },
+      ],
       isExotic: false,
     },
   },
@@ -145,7 +156,7 @@ describe("Collections", () => {
             icon: "",
             priority: "MEDIUM",
             notes: "",
-            sources: [],
+            acquisitionSources: [],
             availableNow: false,
             dateAdded: new Date().toISOString(),
           },
@@ -325,6 +336,14 @@ describe("Collections filters persistence + live availability", () => {
     );
   });
 
+  it("matches a difficulty filter when any acquisition source has that tier", async () => {
+    serveFilterFixture();
+    renderCollections("?node=11&diff=easy");
+
+    expect(await screen.findByText("Fatebringer")).toBeInTheDocument();
+    expect(screen.queryByText("Imperial Decree")).not.toBeInTheDocument();
+  });
+
   it("Hide farm-only excludes farm-only items when toggled", async () => {
     serveFilterFixture();
     renderCollections("?node=11");
@@ -501,8 +520,13 @@ const mixedRarityCollections = {
       itemType: "Hand Cannon",
       tierType: 5,
       rarity: "Legendary",
-      difficulty: "Challenging",
-      sources: ["Vault of Glass"],
+      acquisitionSources: [
+        {
+          text: "Vault of Glass",
+          difficulty: "Challenging",
+          raidDungeon: true,
+        },
+      ],
       isExotic: false,
     },
     "200": {
@@ -513,8 +537,9 @@ const mixedRarityCollections = {
       itemType: "Shotgun",
       tierType: 5,
       rarity: "Legendary",
-      difficulty: "Moderate",
-      sources: ["Menagerie"],
+      acquisitionSources: [
+        { text: "Menagerie", difficulty: "Moderate", raidDungeon: false },
+      ],
       isExotic: false,
     },
     "300": {
@@ -525,8 +550,9 @@ const mixedRarityCollections = {
       itemType: "Hand Cannon",
       tierType: 6,
       rarity: "Exotic",
-      difficulty: "Challenging",
-      sources: ["Trials"],
+      acquisitionSources: [
+        { text: "Trials", difficulty: "Challenging", raidDungeon: false },
+      ],
       isExotic: true,
     },
   },
@@ -575,8 +601,13 @@ const sortOrderCollections = {
       itemType: "Hand Cannon",
       tierType: 5,
       rarity: "Legendary",
-      difficulty: "Challenging",
-      sources: ["Vault of Glass"],
+      acquisitionSources: [
+        {
+          text: "Vault of Glass",
+          difficulty: "Challenging",
+          raidDungeon: true,
+        },
+      ],
       isExotic: false,
     },
     "200": {
@@ -587,8 +618,9 @@ const sortOrderCollections = {
       itemType: "Shotgun",
       tierType: 5,
       rarity: "Legendary",
-      difficulty: "Moderate",
-      sources: ["Menagerie"],
+      acquisitionSources: [
+        { text: "Menagerie", difficulty: "Moderate", raidDungeon: false },
+      ],
       isExotic: false,
     },
     "300": {
@@ -599,8 +631,9 @@ const sortOrderCollections = {
       itemType: "Hand Cannon",
       tierType: 5,
       rarity: "Legendary",
-      difficulty: "Challenging",
-      sources: ["Trials"],
+      acquisitionSources: [
+        { text: "Trials", difficulty: "Challenging", raidDungeon: false },
+      ],
       isExotic: false,
     },
   },

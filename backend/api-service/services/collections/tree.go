@@ -58,6 +58,12 @@ type TreeStructure struct {
 func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collectibles []manifest.CollectibleWithItem) *TreeStructure {
 	colByHash := make(map[uint32]manifest.CollectibleWithItem, len(collectibles))
 	items := make(map[string]DestinyItem)
+	sourceTextsByItem := make(map[uint32][]string)
+	for _, cwi := range collectibles {
+		if cwi.Item != nil && cwi.Item.DisplayProperties.Name != "" {
+			sourceTextsByItem[cwi.Item.Hash] = append(sourceTextsByItem[cwi.Item.Hash], cwi.Collectible.SourceString)
+		}
+	}
 	for _, cwi := range collectibles {
 		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
 			continue
@@ -65,7 +71,7 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 		colByHash[cwi.Collectible.Hash] = cwi
 		ih := strconv.FormatUint(uint64(cwi.Item.Hash), 10)
 		if _, ok := items[ih]; !ok {
-			items[ih] = toDestinyItem(&cwi)
+			items[ih] = toDestinyItemWithSources(&cwi, sourceTextsByItem[cwi.Item.Hash])
 		}
 	}
 

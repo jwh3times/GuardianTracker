@@ -29,6 +29,7 @@ func TestBuildIndexGroupsBySourceHash(t *testing.T) {
 	src := fakeSource{rows: []manifest.CollectibleWithItem{
 		{Collectible: bungie.CollectibleDefinition{Hash: 1, ItemHash: 101, SourceHash: 2065138144, SourceString: `Source: "Vault of Glass" Raid`}, Item: item(101, 5)},
 		{Collectible: bungie.CollectibleDefinition{Hash: 2, ItemHash: 102, SourceHash: 2065138144, SourceString: `Source: "Vault of Glass" Raid`}, Item: item(102, 6)},
+		{Collectible: bungie.CollectibleDefinition{Hash: 4, ItemHash: 101, SourceHash: 2065138144, SourceString: `Source: "Vault of Glass" Raid`}, Item: item(101, 5)},
 		{Collectible: bungie.CollectibleDefinition{Hash: 3, ItemHash: 103, SourceHash: 860688654, SourceString: "Source: Eververse"}, Item: item(103, 5)},
 	}}
 	e := NewEngine(src, fakeVersion{v: "v1"})
@@ -39,7 +40,7 @@ func TestBuildIndexGroupsBySourceHash(t *testing.T) {
 	}
 	vog := e.buckets[2065138144]
 	if vog == nil || len(vog.Items) != 2 {
-		t.Fatalf("VoG bucket = %+v, want 2 items", vog)
+		t.Fatalf("VoG bucket = %+v, want 2 distinct item hashes", vog)
 	}
 	if vog.Kind != "activity" || vog.Label != "Vault of Glass" {
 		t.Errorf("VoG bucket kind/label = %q/%q", vog.Kind, vog.Label)

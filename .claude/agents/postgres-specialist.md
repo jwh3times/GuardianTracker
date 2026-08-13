@@ -65,7 +65,7 @@ rows, err := db.Query(
 | `GetItemsByHashes(hashes)`            | Batch item definition lookup; chunked at 500 for SQLite IN-clause limits           |
 | `GetAllCollectibles()`                | All collectible definitions (full table scan)                                      |
 | `GetAllCollectiblesWithItems()`       | Collectibles joined to items; holds read lock across both queries                  |
-| `GetCollectiblesByItemHashes(hashes)` | Collectible defs keyed by `itemHash`; used for wishlist source strings             |
+| `GetCollectiblesByItemHashes(hashes)` | Every collectible def keyed by `itemHash`; preserves multiplicity for source union |
 | `GetFilteredCollectibles()`           | Collectibles split into weapon/armor/exotic/cosmetic buckets                       |
 | `GetWeaponTypesByName()`              | Lowercased weapon name → weapon type display name (full table scan; callers cache) |
 

@@ -72,6 +72,7 @@ func writeFixtureDB(t *testing.T, path string) {
 
 	collectibles := map[uint32]string{
 		1000: `{"hash":1000,"itemHash":100,"sourceString":"Vault of Glass raid","displayProperties":{"name":"Fatebringer"}}`,
+		1001: `{"hash":1001,"itemHash":100,"sourceString":"Monument to Lost Lights","displayProperties":{"name":"Fatebringer"}}`,
 		2000: `{"hash":2000,"itemHash":200,"sourceString":"Exotic quest","displayProperties":{"name":"Gjallarhorn"}}`,
 		3000: `{"hash":3000,"itemHash":300,"sourceString":"World drops","displayProperties":{"name":"Helm of Tests"}}`,
 		4000: `{"hash":4000,"itemHash":400,"sourceString":"Eververse","displayProperties":{"name":"Test Ship"}}`,
@@ -201,8 +202,15 @@ func TestRepository_GetCollectiblesByItemHashes(t *testing.T) {
 	if len(cols) != 2 {
 		t.Fatalf("len = %d, want 2", len(cols))
 	}
-	if cols[100].SourceString != "Vault of Glass raid" {
-		t.Errorf("source for 100 = %q", cols[100].SourceString)
+	if len(cols[100]) != 2 {
+		t.Fatalf("collectibles for item 100 = %+v, want both linked collectibles", cols[100])
+	}
+	sourceSet := map[string]bool{}
+	for _, col := range cols[100] {
+		sourceSet[col.SourceString] = true
+	}
+	if !sourceSet["Vault of Glass raid"] || !sourceSet["Monument to Lost Lights"] {
+		t.Errorf("sources for item 100 = %v, want both distinct attributions", sourceSet)
 	}
 }
 

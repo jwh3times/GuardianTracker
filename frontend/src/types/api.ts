@@ -34,6 +34,13 @@ export interface CurrentUserResponse {
 
 // --- Collections: mirrors services/collections/service.go ---
 
+/** One collectible-derived provenance attribution for an item. */
+export interface APIAcquisitionSource {
+  text: string;
+  difficulty: string;
+  raidDungeon: boolean;
+}
+
 /** DestinyItem as serialised by the collections service */
 export interface APIDestinyItem {
   itemHash: string;
@@ -43,9 +50,8 @@ export interface APIDestinyItem {
   itemType: string;
   tierType: number;
   rarity: string;
-  difficulty: string;
   farmOnly?: boolean;
-  sources: string[];
+  acquisitionSources: APIAcquisitionSource[];
   isExotic: boolean;
 }
 
@@ -155,7 +161,7 @@ export interface WishListItem {
   icon: string; // bungie.net icon path, may be ""
   priority: string; // "LOW", "MEDIUM", "HIGH", "URGENT"
   notes: string;
-  sources: string[];
+  acquisitionSources: APIAcquisitionSource[];
   availableNow: boolean; // item is currently sold by Xûr (B6)
   availableFrom?: string; // "Xûr" when availableNow
   dateAdded: string; // RFC3339

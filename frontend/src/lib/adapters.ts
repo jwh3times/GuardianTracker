@@ -1,4 +1,5 @@
 import { relTime } from "./format";
+import { toAcquisitionSource } from "./acquisitionSources";
 import type { APICharacter, APIItemView, WishListItem } from "../types/api";
 import type {
   Character,
@@ -21,7 +22,6 @@ const PRIORITY_MAP: Record<string, Priority> = {
   MEDIUM: "medium",
   LOW: "low",
 };
-
 /** Adapt a REST API character into the design system's Character shape. */
 export function toCharacter(c: APICharacter): Character {
   return {
@@ -43,10 +43,8 @@ export function toGTItemView(v: APIItemView): GTItem {
     type: v.itemType,
     slot: "",
     rarity: RARITY_MAP[v.rarity] ?? "legendary",
-    diff: "unrated",
     farmOnly: false,
-    source: "",
-    sourceDetail: "",
+    acquisitionSources: [],
     availableNow: false,
     collected: false,
     desc: v.description ?? "",
@@ -57,7 +55,6 @@ export function toGTItemView(v: APIItemView): GTItem {
 
 /** Adapt a REST API WishListItem into the design system's WishlistEntry shape. */
 export function toWishlistEntry(w: WishListItem): WishlistEntry {
-  const sources = w.sources ?? [];
   return {
     id: w.id,
     name: w.name,
@@ -67,10 +64,9 @@ export function toWishlistEntry(w: WishListItem): WishlistEntry {
     priority: PRIORITY_MAP[w.priority] ?? "medium",
     avail: {
       now: w.availableNow ?? false,
-      where: w.availableNow
-        ? (w.availableFrom ?? "Xûr")
-        : (sources[0] ?? "Unknown source"),
+      where: w.availableNow ? (w.availableFrom ?? "Xûr") : "",
     },
+    acquisitionSources: (w.acquisitionSources ?? []).map(toAcquisitionSource),
     notes: w.notes ?? "",
     added: relTime(w.dateAdded),
   };

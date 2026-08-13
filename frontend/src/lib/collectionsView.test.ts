@@ -10,8 +10,7 @@ function item(over: Partial<APIDestinyItem> & { itemHash: string }) {
     itemType: "Hand Cannon",
     tierType: 5,
     rarity: "Legendary",
-    difficulty: "Challenging",
-    sources: [],
+    acquisitionSources: [],
     isExotic: false,
     ...over,
   } as APIDestinyItem;
@@ -120,53 +119,69 @@ describe("the join", () => {
 });
 
 describe("wire → domain mapping", () => {
-  it("maps rarity, difficulty and sources", () => {
+  it("preserves distinct acquisition sources and their own classifications", () => {
     const v = toCollections({
       ...full,
       items: {
         "100": item({
           itemHash: "100",
           rarity: "Exotic",
-          difficulty: "Moderate",
-          sources: ["Vault of Glass raid", "Master VoG"],
+          acquisitionSources: [
+            {
+              text: "Vault of Glass raid",
+              difficulty: "Challenging",
+              raidDungeon: true,
+            },
+            {
+              text: "Monument to Lost Lights",
+              difficulty: "Easy",
+              raidDungeon: false,
+            },
+          ],
           icon: "/icons/fb.png",
         }),
       },
     } as unknown as APIMembershipCollections);
     const i = v.itemByHash("100")!;
     expect(i.rarity).toBe("exotic");
-    expect(i.diff).toBe("moderate");
-    expect(i.source).toBe("Vault of Glass raid");
-    expect(i.sourceDetail).toBe("Master VoG");
+    expect(i.acquisitionSources).toEqual([
+      {
+        text: "Vault of Glass raid",
+        difficulty: "challenging",
+        raidDungeon: true,
+      },
+      {
+        text: "Monument to Lost Lights",
+        difficulty: "easy",
+        raidDungeon: false,
+      },
+    ]);
     expect(i.icon).toBe("/icons/fb.png");
   });
 
-  it("falls back on unknown rarity/difficulty and empty sources", () => {
+  it("keeps empty acquisition sources honest", () => {
     const v = toCollections({
       ...full,
       items: {
         "100": item({
           itemHash: "100",
           rarity: "Mythic???",
-          difficulty: "Impossible",
-          sources: [],
+          acquisitionSources: [],
         }),
       },
     } as unknown as APIMembershipCollections);
     const i = v.itemByHash("100")!;
     expect(i.rarity).toBe("legendary");
-    expect(i.diff).toBe("unrated");
-    expect(i.source).toBe("Unknown source");
+    expect(i.acquisitionSources).toEqual([]);
   });
 
-  it("carries farmOnly and maps Unrated", () => {
+  it("carries farmOnly unchanged", () => {
     const v = toCollections({
       ...full,
       items: {
-        "100": item({ itemHash: "100", difficulty: "Unrated", farmOnly: true }),
+        "100": item({ itemHash: "100", farmOnly: true }),
       },
     } as unknown as APIMembershipCollections);
-    expect(v.itemByHash("100")!.diff).toBe("unrated");
     expect(v.itemByHash("100")!.farmOnly).toBe(true);
   });
 });

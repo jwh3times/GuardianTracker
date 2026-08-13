@@ -32,7 +32,13 @@ export const sampleWishlist = [
     icon: "/icons/gj.png",
     priority: "HIGH",
     notes: "the classic",
-    sources: [],
+    acquisitionSources: [
+      {
+        text: "Grasp of Avarice dungeon",
+        difficulty: "Challenging",
+        raidDungeon: true,
+      },
+    ],
     availableNow: true,
     availableFrom: "Xûr",
     dateAdded: new Date().toISOString(),

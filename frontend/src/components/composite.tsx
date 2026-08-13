@@ -653,48 +653,58 @@ export function ItemDetailDrawer({
         {!viewOnly && (
           <div className="gt-drawer-block">
             <div className="gt-section-title">
-              Acquisition{" "}
-              <Badge kind={item.diff}>{DIFF_LABEL[item.diff]}</Badge>
+              Acquisition sources
               {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
-              <button className="gt-why" onClick={() => setShowWhy((v) => !v)}>
-                why?{" "}
-                <Icon
-                  name="chevronDown"
-                  size="0.7rem"
-                  style={{ transform: showWhy ? "rotate(180deg)" : "none" }}
-                />
-              </button>
+              {item.acquisitionSources.length > 0 && (
+                <button
+                  className="gt-why"
+                  onClick={() => setShowWhy((v) => !v)}
+                >
+                  why?{" "}
+                  <Icon
+                    name="chevronDown"
+                    size="0.7rem"
+                    style={{ transform: showWhy ? "rotate(180deg)" : "none" }}
+                  />
+                </button>
+              )}
             </div>
-            <div className="gt-drawer-src">
-              <Icon
-                name="bolt"
-                size="0.9rem"
-                style={{ color: "var(--rarity)" }}
-              />
-              <div>
-                <div style={{ color: "var(--c-text)" }}>{item.source}</div>
-                <div className="gt-item-type">{item.sourceDetail}</div>
-              </div>
-            </div>
+            {item.acquisitionSources.length === 0 ? (
+              <p className="gt-why-text">No acquisition sources reported.</p>
+            ) : (
+              item.acquisitionSources.map((source, index) => (
+                <div
+                  className="gt-drawer-src"
+                  data-diff={source.difficulty}
+                  key={`${source.text}-${index}`}
+                >
+                  <Icon
+                    name="bolt"
+                    size="0.9rem"
+                    style={{ color: "var(--rarity)" }}
+                  />
+                  <div>
+                    <div style={{ color: "var(--c-text)" }}>{source.text}</div>
+                    <Badge kind={source.difficulty}>
+                      {DIFF_LABEL[source.difficulty]}
+                    </Badge>
+                    {showWhy && (
+                      <p className="gt-why-text">
+                        {source.difficulty === "unrated"
+                          ? "No difficulty tier was inferred from this source."
+                          : "Difficulty is estimated from this source; treat it as a guide, not a guarantee."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
             {item.farmOnly && (
               <p className="gt-why-text">
                 Random perks — earn a fresh drop from its source; this item
                 can't be pulled from Collections.
               </p>
             )}
-            {showWhy &&
-              (item.diff === "unrated" ? (
-                <p className="gt-why-text">
-                  We couldn't determine difficulty from this item's source.
-                </p>
-              ) : (
-                <p className="gt-why-text">
-                  Difficulty is <strong>estimated</strong> from this item's
-                  source — drop sources like raids and Grandmasters score higher
-                  than vendor or world drops. Treat it as a guide, not a
-                  guarantee.
-                </p>
-              ))}
           </div>
         )}
 

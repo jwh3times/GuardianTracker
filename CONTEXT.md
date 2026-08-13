@@ -38,10 +38,11 @@ when any of its linked collectibles is acquired.
 collectibles into categories and subcategories. The Collections page renders it.
 Our own name for the assembled result is the _collection tree_.
 
-**Source string** — the manifest's human-readable text saying where an item
-comes from ("Vault of Glass raid", "Complete Nightfall strikes"). It is prose,
-not a structured field, which is why classifying it needs a keyword vocabulary.
-Owned by `services/sources`.
+**Source string** — the manifest's human-readable text attributing where a
+collectible's linked item came from ("Vault of Glass raid", "Complete Nightfall
+strikes"). It is prose rather than a guarantee that the source is currently
+available; linked collectibles can preserve different historical attributions
+for the same item.
 
 **Milestone** — a Bungie-defined weekly or repeatable objective (a featured
 raid, a Nightfall). Surfaced on This Week.
@@ -92,10 +93,18 @@ _account_, _profile_, _player_, or _Guardian_ as synonyms.
 collectibles. The app's central noun: the whole product is "what are you
 missing, and what should you do about it".
 
-**Difficulty tier** — how hard a missing item is to acquire, derived from its
-source string: `Challenging`, `Moderate`, `Easy`, or `Unrated`. `Unrated` means
-no keyword matched, and is deliberately honest rather than a default guess.
-Owned by `services/sources`; do not call this a "rating" or a "score".
+**Acquisition source** — one distinct source attribution contributed by an
+item's linked collectibles. An item can have several acquisition sources; a
+source describes provenance, not current availability. Owned by
+`services/sources`.
+
+**Difficulty tier** — how hard an acquisition source appears to pursue, derived
+from its source string: `Challenging`, `Moderate`, `Easy`, or `Unrated`. An item
+with several sources has no intrinsic single tier; `Unrated` means no keyword
+matched and is deliberately honest rather than a default guess. Comparing an
+item with a tier means at least one of its acquisition sources has that tier;
+never collapse several source tiers into an item-level tier. Owned by
+`services/sources`.
 
 **Raid/dungeon loot** — a source facet, not a tier. It marks loot dropping from
 a named raid or dungeon, and gates the per-milestone missing count. Kept

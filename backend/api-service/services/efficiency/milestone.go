@@ -22,6 +22,7 @@ func (e *Engine) MissingForMilestone(milestoneName string, missing map[uint32]st
 	name := strings.ToLower(milestoneName)
 	count := 0
 	matched := false
+	countedItems := make(map[uint32]struct{})
 	for _, b := range e.buckets {
 		if b.Kind != "activity" || b.Label == "" || !sources.IsRaidOrDungeon(b.SourceString) {
 			continue
@@ -31,9 +32,14 @@ func (e *Engine) MissingForMilestone(milestoneName string, missing map[uint32]st
 		}
 		matched = true
 		for _, it := range b.Items {
-			if _, ok := missing[it.ItemHash]; ok {
-				count++
+			if _, ok := missing[it.ItemHash]; !ok {
+				continue
 			}
+			if _, duplicate := countedItems[it.ItemHash]; duplicate {
+				continue
+			}
+			countedItems[it.ItemHash] = struct{}{}
+			count++
 		}
 	}
 	return count, matched

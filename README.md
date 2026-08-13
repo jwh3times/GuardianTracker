@@ -9,9 +9,11 @@ frontend.
 ## Core Features
 
 - **Bungie OAuth login** with HMAC-signed CSRF state and Guardian Tracker JWTs.
-- **Collection analysis** for weapons, armor, exotics, and cosmetics using the
-  Bungie manifest and Destiny membership collection state.
-- **Wishlist management** with priority, notes, and availability surfacing.
+- **Collection analysis** for weapons, armor, exotics, and cosmetics, including
+  every collectible-attributed acquisition source and its source-specific
+  difficulty tier.
+- **Wishlist management** with priority, notes, acquisition sources, and live
+  availability surfacing.
 - **This Week** with milestones, Xur inventory and best-effort Tower location,
   active-Guardian vendor context, class-aware armor labels, today actions, reset
   timing, and recommendation ranking.

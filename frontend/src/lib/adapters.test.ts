@@ -15,7 +15,13 @@ const apiWish: WishListItem = {
   icon: "/icons/gj.png",
   priority: "URGENT",
   notes: "the classic",
-  sources: ["Exotic quest"],
+  acquisitionSources: [
+    {
+      text: "Exotic quest",
+      difficulty: "Moderate",
+      raidDungeon: false,
+    },
+  ],
   availableNow: true,
   availableFrom: "Xûr",
   dateAdded: new Date().toISOString(),
@@ -30,14 +36,21 @@ describe("toWishlistEntry", () => {
     expect(entry.icon).toBe("/icons/gj.png");
   });
 
-  it("shows the source when not available now", () => {
+  it("keeps live vendor availability separate from source provenance", () => {
     const entry = toWishlistEntry({
       ...apiWish,
       availableNow: false,
       availableFrom: undefined,
     });
     expect(entry.avail.now).toBe(false);
-    expect(entry.avail.where).toBe("Exotic quest");
+    expect(entry.avail.where).toBe("");
+    expect(entry.acquisitionSources).toEqual([
+      {
+        text: "Exotic quest",
+        difficulty: "moderate",
+        raidDungeon: false,
+      },
+    ]);
   });
 
   it("tolerates missing availability fields (older API)", () => {
@@ -62,6 +75,7 @@ it("maps an APIItemView to a view-only GTItem", () => {
   expect(g.viewOnly).toBe(true);
   expect(g.collected).toBe(false);
   expect(g.rarity).toBe("legendary");
+  expect(g.acquisitionSources).toEqual([]);
 });
 
 describe("toCharacter", () => {
