@@ -14,7 +14,7 @@ const baseItem: GTItem = {
   diff: "moderate",
   source: "Vanguard",
   sourceDetail: "",
-  obtainable: false,
+  availableNow: false,
   collected: false,
   desc: "A test weapon.",
   icon: undefined,

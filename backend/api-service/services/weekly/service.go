@@ -27,7 +27,7 @@ type Weekly struct {
 	Xur          *Xur                `json:"xur"`
 	Milestones   []Milestone         `json:"milestones"`
 	Recommended  []RecommendedAction `json:"recommended"`
-	DailyActions []DailyAction       `json:"dailyActions"`
+	TodayActions []TodayAction       `json:"dailyActions"` // legacy wire name
 }
 
 // Duration is a decomposed time-until value.
@@ -80,8 +80,9 @@ type RecommendedAction struct {
 	Time   string `json:"time"`
 }
 
-// DailyAction is one actionable item for the "Do This Today" dashboard panel.
-type DailyAction struct {
+// TodayAction is one actionable item for the "Do This Today" dashboard panel.
+// Its reset can be daily, weekly, or when Xûr leaves.
+type TodayAction struct {
 	ID       string   `json:"id"`
 	Category string   `json:"category"` // "milestone" | "xur" | "vendor" | "activity"
 	Icon     string   `json:"icon"`
@@ -361,7 +362,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		go func() {
 			defer wg.Done()
 			// Component 402 may contain class-specific inventory, so this path
-			// follows the validated active Guardian.
+			// follows the validated selected character.
 			dailyVendors = s.getDailyVendorItems(ctx, membershipType, membershipID, characterID, bungieToken, now)
 			if pub.XurPresent {
 				xurLocation = s.getXurLocation(ctx, membershipType, membershipID, characterID, bungieToken)
@@ -421,7 +422,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 	milestones := buildMilestones(pub, s.efficiency, missingHashes)
 
 	recommended := s.rankRecommended(ctx, membershipType, membershipID, characterID, bungieToken, pub, missingHashes, wishlistHashes)
-	dailyActions := s.buildDailyActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
+	todayActions := s.buildTodayActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
 
 	fetchedAt := pub.FetchedAt
 	if fetchedAt.IsZero() {
@@ -437,7 +438,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		Xur:          xurBlock,
 		Milestones:   milestones,
 		Recommended:  recommended,
-		DailyActions: dailyActions,
+		TodayActions: todayActions,
 	}, nil
 }
 
@@ -493,15 +494,15 @@ func buildMilestones(pub *publicWeeklyCache, eng *efficiency.Engine, missing map
 	return milestones
 }
 
-func (s *Service) buildDailyActions(pub *publicWeeklyCache, vendors []dailyVendorItem, missing, wishlist map[uint32]struct{}, now time.Time, dailyResetIn, weeklyResetIn Duration) []DailyAction {
-	var actions []DailyAction
+func (s *Service) buildTodayActions(pub *publicWeeklyCache, vendors []dailyVendorItem, missing, wishlist map[uint32]struct{}, now time.Time, dailyResetIn, weeklyResetIn Duration) []TodayAction {
+	var actions []TodayAction
 
 	// 1. Daily milestones — most time-sensitive, reset every day
 	for i, m := range pub.DailyMilestones {
 		if len(actions) >= 6 {
 			break
 		}
-		actions = append(actions, DailyAction{
+		actions = append(actions, TodayAction{
 			ID:       fmt.Sprintf("daily-m-%d", i),
 			Category: "milestone",
 			Icon:     "bolt",
@@ -530,7 +531,7 @@ func (s *Service) buildDailyActions(pub *publicWeeklyCache, vendors []dailyVendo
 				badge = "avail-now"
 				label = "on your wishlist"
 			}
-			actions = append(actions, DailyAction{
+			actions = append(actions, TodayAction{
 				ID:       fmt.Sprintf("daily-xur-%d", i),
 				Category: "xur",
 				Icon:     "bungie",
@@ -547,7 +548,7 @@ func (s *Service) buildDailyActions(pub *publicWeeklyCache, vendors []dailyVendo
 		if len(actions) >= 6 {
 			break
 		}
-		actions = append(actions, DailyAction{
+		actions = append(actions, TodayAction{
 			ID:       fmt.Sprintf("daily-vendor-%d", i),
 			Category: "vendor",
 			Icon:     "bolt",
@@ -567,7 +568,7 @@ func (s *Service) buildDailyActions(pub *publicWeeklyCache, vendors []dailyVendo
 		if len(a.Modifiers) > 0 {
 			detail += " · " + strings.Join(a.Modifiers, ", ")
 		}
-		actions = append(actions, DailyAction{
+		actions = append(actions, TodayAction{
 			ID:       fmt.Sprintf("daily-act-%d", i),
 			Category: "activity",
 			Icon:     "collections",

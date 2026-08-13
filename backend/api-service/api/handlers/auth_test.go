@@ -190,7 +190,7 @@ func TestValidateAndProfileHandlers(t *testing.T) {
 		}
 	}
 	r.GET("/validate", withCtx(h.ValidateToken))
-	r.GET("/profile", withCtx(h.GetProfile))
+	r.GET("/profile", withCtx(h.GetSessionUser))
 
 	// Both answer from the same builder, so both carry the same fields —
 	// including the role that /validate used to drop.
@@ -227,7 +227,7 @@ func TestLogout(t *testing.T) {
 func TestRefreshToken_Success(t *testing.T) {
 	store := newFakeUserStore()
 	h, jwt := newAuthHandlerWith(t, store, nil)
-	profile := &auth.BungieUserProfile{MembershipID: testUserID, DisplayName: "TestGuardian", MembershipType: 3}
+	profile := &auth.DestinyMembership{MembershipID: testUserID, DisplayName: "TestGuardian", MembershipType: 3}
 	const sid = "sess-1"
 	refresh, jti, err := jwt.GenerateRefreshToken(profile, 1, sid)
 	if err != nil {
@@ -262,7 +262,7 @@ func TestRefreshToken_Success(t *testing.T) {
 
 func TestRefreshToken_RejectsAccessTokenAndGarbage(t *testing.T) {
 	h, jwt := newAuthHandler(t)
-	profile := &auth.BungieUserProfile{MembershipID: testUserID, MembershipType: 3}
+	profile := &auth.DestinyMembership{MembershipID: testUserID, MembershipType: 3}
 	// An access token must be rejected by the refresh endpoint (token-type claim).
 	access, _ := jwt.GenerateAccessToken(profile, 1, "")
 
@@ -304,7 +304,7 @@ func TestRefreshToken_RejectsAccessTokenAndGarbage(t *testing.T) {
 func TestRefreshToken_ReuseRejected(t *testing.T) {
 	store := newFakeUserStore()
 	h, jwt := newAuthHandlerWith(t, store, nil)
-	profile := &auth.BungieUserProfile{MembershipID: testUserID, DisplayName: "TestGuardian", MembershipType: 3}
+	profile := &auth.DestinyMembership{MembershipID: testUserID, DisplayName: "TestGuardian", MembershipType: 3}
 	const sid = "sess-1"
 	refresh, jti, err := jwt.GenerateRefreshToken(profile, 1, sid)
 	if err != nil {
@@ -426,8 +426,8 @@ func TestSessionFailureMapping(t *testing.T) {
 			http.StatusBadRequest, "Invalid or expired state", "login.failure", "invalid_state", false},
 		{"login code exchange", loginFailures, &auth.SessionError{Reason: auth.ReasonCodeExchange},
 			http.StatusInternalServerError, "Failed to complete authentication", "login.failure", "code_exchange", false},
-		{"login profile fetch", loginFailures, &auth.SessionError{Reason: auth.ReasonProfileFetch},
-			http.StatusInternalServerError, "Failed to retrieve user profile", "login.failure", "profile_fetch", false},
+		{"login membership fetch", loginFailures, &auth.SessionError{Reason: auth.ReasonMembershipFetch},
+			http.StatusInternalServerError, "Failed to retrieve Destiny membership", "login.failure", "profile_fetch", false},
 		{"login session write", loginFailures, &auth.SessionError{Reason: auth.ReasonSessionWrite},
 			http.StatusInternalServerError, "Failed to create session", "", "", false},
 		{"login token mint", loginFailures, &auth.SessionError{Reason: auth.ReasonTokenMint},

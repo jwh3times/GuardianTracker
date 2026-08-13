@@ -163,7 +163,7 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
             </button>
           ))}
           <div className="gt-charsw-note mono">
-            Vendors shown for this Guardian · collections are account-wide
+            Vendors shown for this Guardian · collections are membership-wide
           </div>
         </div>
       )}

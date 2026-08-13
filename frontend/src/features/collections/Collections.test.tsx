@@ -186,7 +186,7 @@ describe("Collections", () => {
     expect(await screen.findByText("Hand Cannons")).toBeInTheDocument();
   });
 
-  it("shows the 'Available now' vendor on an obtainable item", async () => {
+  it("shows the 'Available now' vendor on an item available now", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
         HttpResponse.json({
@@ -297,8 +297,8 @@ describe("Collections", () => {
   });
 });
 
-describe("Collections filters persistence + obtainability", () => {
-  // Serve the Hand Cannons leaf with 100 obtainable-now and 200 farm-only, both missing.
+describe("Collections filters persistence + live availability", () => {
+  // Serve the Hand Cannons leaf with 100 available now and 200 farm-only, both missing.
   function serveFilterFixture() {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
@@ -309,7 +309,7 @@ describe("Collections filters persistence + obtainability", () => {
             "200": { ...treeCollections.items["200"], farmOnly: true },
           },
           collectedHashes: [], // both missing → both visible under missing-only
-          availableNow: { "100": "Banshee-44" }, // 100 obtainable now
+          availableNow: { "100": "Banshee-44" }, // 100 available now
         }),
       ),
     );
@@ -318,7 +318,7 @@ describe("Collections filters persistence + obtainability", () => {
   it("restores the Available-now filter from the URL on load", async () => {
     serveFilterFixture();
     renderCollections("?node=11&avail=1");
-    // avail=1 keeps only the obtainable item (Fatebringer); Imperial Decree drops.
+    // avail=1 keeps only the currently available item (Fatebringer); Imperial Decree drops.
     expect(await screen.findByText("Fatebringer")).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByText("Imperial Decree")).not.toBeInTheDocument(),

@@ -142,7 +142,7 @@ describe("AppShell interactions", () => {
     expect(await screen.findByText("Switch Guardian")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Vendors shown for this Guardian · collections are account-wide",
+        "Vendors shown for this Guardian · collections are membership-wide",
       ),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByText(/Warlock/));

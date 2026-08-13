@@ -32,7 +32,7 @@ import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
 import type {
-  ProfileResponse,
+  CurrentUserResponse,
   APICacheRefreshResponse,
   WishListItem,
 } from "../../types/api";
@@ -93,14 +93,14 @@ export function Collections() {
   const [searchParams] = useSearchParams();
   const itemParam = searchParams.get("item");
 
-  const { data: profileData } = useQuery({
+  const { data: currentUserData } = useQuery({
     queryKey: ["currentUser"],
-    queryFn: () => apiFetch<ProfileResponse>("/api/auth/profile"),
+    queryFn: () => apiFetch<CurrentUserResponse>("/api/auth/profile"),
   });
 
   const membershipType =
-    profileData?.user.membershipType ?? user?.membershipType;
-  const membershipId = profileData?.user.membershipId ?? user?.membershipId;
+    currentUserData?.user.membershipType ?? user?.membershipType;
+  const membershipId = currentUserData?.user.membershipId ?? user?.membershipId;
 
   // The collections browser always loads the full dataset (collected + missing)
   // and filters the display client-side via `missingOnly`. Using one stable
@@ -276,7 +276,7 @@ export function Collections() {
     let list = baseItems.slice();
     if (rarity) list = list.filter((i) => i.rarity === rarity);
     if (diff) list = list.filter((i) => i.diff === diff);
-    if (avail) list = list.filter((i) => i.obtainable);
+    if (avail) list = list.filter((i) => i.availableNow);
     if (farm) list = list.filter((i) => !i.farmOnly);
     if (qTrimmed)
       list = list.filter((i) => i.name.toLowerCase().includes(qTrimmed));
@@ -286,7 +286,7 @@ export function Collections() {
     else if (sort === "difficulty")
       list.sort((a, b) => DIFF_RANK[a.diff] - DIFF_RANK[b.diff]);
     else if (sort === "avail")
-      list.sort((a, b) => (b.obtainable ? 1 : 0) - (a.obtainable ? 1 : 0));
+      list.sort((a, b) => (b.availableNow ? 1 : 0) - (a.availableNow ? 1 : 0));
     return list;
   }, [baseItems, rarity, diff, avail, farm, qTrimmed, sort]);
 
@@ -493,7 +493,7 @@ export function Collections() {
                     ? "Try a different search term, or clear the search to see this category's full list."
                     : hasFilters
                       ? "Try loosening a filter to see more of this category."
-                      : "You've collected everything in this category. Nice work, Guardian."
+                      : "You've collected everything in this category. Nice work."
                 }
                 action={
                   hasFilters ? (

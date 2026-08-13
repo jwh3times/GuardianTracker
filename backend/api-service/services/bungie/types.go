@@ -22,7 +22,8 @@ type ManifestResponse struct {
 	Message     string `json:"Message"`
 }
 
-// ProfileResponse contains user profile data with collectibles (component 800).
+// ProfileResponse contains Bungie gameplay profile data for a Destiny membership,
+// including collectibles (component 800).
 type ProfileResponse struct {
 	Response struct {
 		ProfileCollectibles struct {

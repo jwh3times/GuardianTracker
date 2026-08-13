@@ -368,7 +368,7 @@ made a milestone's missing-count badge silently not appear.
 ## Collections service
 
 - `ErrManifestNotReady` exported (aliases `manifest.ErrNotReady`); handler maps it to 503
-- `UserCollections` has `FetchedAt` field
+- `MembershipCollections` has `FetchedAt` field
 - `CollectionSummary` has `CollectedItems` field (stripped from response unless `?include=all`)
 - `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
 - `ClassifyDifficulty(source, isExotic)` — thin delegate to `services/sources.Difficulty`, which owns the

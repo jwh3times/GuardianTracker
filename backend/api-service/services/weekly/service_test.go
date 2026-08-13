@@ -226,7 +226,7 @@ func TestBuildRecommended_FallbackWhenNothingActionable(t *testing.T) {
 	}
 }
 
-func TestBuildDailyActions_CapAtSixAndXurBadges(t *testing.T) {
+func TestBuildTodayActions_CapAtSixAndXurBadges(t *testing.T) {
 	s := &Service{}
 	now := time.Date(2026, 6, 13, 10, 0, 0, 0, time.UTC) // Saturday — Xûr present
 	pub := &publicWeeklyCache{
@@ -251,7 +251,7 @@ func TestBuildDailyActions_CapAtSixAndXurBadges(t *testing.T) {
 	missing := map[uint32]struct{}{10: {}}
 	wishlist := map[uint32]struct{}{11: {}}
 
-	actions := s.buildDailyActions(pub, vendors, missing, wishlist, now, Duration{H: 7}, Duration{D: 3})
+	actions := s.buildTodayActions(pub, vendors, missing, wishlist, now, Duration{H: 7}, Duration{D: 3})
 
 	if len(actions) != 6 {
 		t.Fatalf("len(actions) = %d, want cap of 6", len(actions))

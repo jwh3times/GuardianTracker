@@ -8,8 +8,8 @@ import (
 
 const jwtTestSecret = "test-jwt-secret-at-least-32-chars!!"
 
-func testProfile() *BungieUserProfile {
-	return &BungieUserProfile{
+func testDestinyMembership() *DestinyMembership {
+	return &DestinyMembership{
 		MembershipID:   "4611686018467260757",
 		DisplayName:    "TestGuardian",
 		MembershipType: 3,
@@ -18,7 +18,7 @@ func testProfile() *BungieUserProfile {
 
 func TestJWT_AccessTokenRoundTrip(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
-	tok, err := j.GenerateAccessToken(testProfile(), 5, "sess-abc")
+	tok, err := j.GenerateAccessToken(testDestinyMembership(), 5, "sess-abc")
 	if err != nil {
 		t.Fatalf("GenerateAccessToken: %v", err)
 	}
@@ -36,6 +36,9 @@ func TestJWT_AccessTokenRoundTrip(t *testing.T) {
 	if claims.MembershipID != "4611686018467260757" {
 		t.Errorf("MembershipID = %q", claims.MembershipID)
 	}
+	if claims.LegacyUserID != claims.MembershipID {
+		t.Errorf("legacy user_id = %q, want membership ID compatibility value", claims.LegacyUserID)
+	}
 	if claims.TokenVersion != 5 {
 		t.Errorf("TokenVersion = %d, want 5", claims.TokenVersion)
 	}
@@ -50,7 +53,7 @@ func TestJWT_AccessTokenRoundTrip(t *testing.T) {
 func TestJWT_AccessTokenUsesConfiguredTTL(t *testing.T) {
 	const accessTTL = 30 * time.Minute
 	j := NewJWTWithTTL(jwtTestSecret, accessTTL, 30)
-	tok, err := j.GenerateAccessToken(testProfile(), 1, "sess-ttl")
+	tok, err := j.GenerateAccessToken(testDestinyMembership(), 1, "sess-ttl")
 	if err != nil {
 		t.Fatalf("GenerateAccessToken: %v", err)
 	}
@@ -67,7 +70,7 @@ func TestJWT_AccessTokenUsesConfiguredTTL(t *testing.T) {
 
 func TestJWT_RefreshTokenType(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
-	tok, jti, err := j.GenerateRefreshToken(testProfile(), 1, "sess-xyz")
+	tok, jti, err := j.GenerateRefreshToken(testDestinyMembership(), 1, "sess-xyz")
 	if err != nil {
 		t.Fatalf("GenerateRefreshToken: %v", err)
 	}
@@ -89,7 +92,7 @@ func TestJWT_RefreshTokenType(t *testing.T) {
 func TestJWT_WrongSecretRejected(t *testing.T) {
 	a := NewJWT(jwtTestSecret, 24, 30)
 	b := NewJWT("a-completely-different-secret-32ch!", 24, 30)
-	tok, _ := a.GenerateAccessToken(testProfile(), 1, "")
+	tok, _ := a.GenerateAccessToken(testDestinyMembership(), 1, "")
 	if _, err := b.ValidateToken(tok); err == nil {
 		t.Fatal("token signed with a different secret validated successfully")
 	}
@@ -97,7 +100,7 @@ func TestJWT_WrongSecretRejected(t *testing.T) {
 
 func TestJWT_ExpiredTokenRejected(t *testing.T) {
 	j := NewJWT(jwtTestSecret, -1, 30) // expiry one hour in the past
-	tok, _ := j.GenerateAccessToken(testProfile(), 1, "")
+	tok, _ := j.GenerateAccessToken(testDestinyMembership(), 1, "")
 	if _, err := j.ValidateToken(tok); err == nil {
 		t.Fatal("expired token validated successfully")
 	}
@@ -105,7 +108,7 @@ func TestJWT_ExpiredTokenRejected(t *testing.T) {
 
 func TestJWT_TamperedTokenRejected(t *testing.T) {
 	j := NewJWT(jwtTestSecret, 24, 30)
-	tok, _ := j.GenerateAccessToken(testProfile(), 1, "")
+	tok, _ := j.GenerateAccessToken(testDestinyMembership(), 1, "")
 	// Flip a character in the payload segment.
 	parts := strings.Split(tok, ".")
 	payload := []byte(parts[1])

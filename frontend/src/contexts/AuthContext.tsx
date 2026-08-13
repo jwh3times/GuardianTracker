@@ -5,13 +5,13 @@ import React, {
   useEffect,
   ReactNode,
 } from "react";
-import type { APIUser } from "../types/api";
+import type { APIGuardianTrackerUser } from "../types/api";
 import { apiFetch } from "../lib/api";
 
 interface AuthContextType {
-  user: APIUser | null;
+  user: APIGuardianTrackerUser | null;
   token: string | null;
-  login: (token: string, user: APIUser) => void;
+  login: (token: string, user: APIGuardianTrackerUser) => void;
   logout: () => void;
   logoutAll: () => void;
   isAuthenticated: boolean;
@@ -25,7 +25,7 @@ interface AuthProviderProps {
 }
 
 interface AuthState {
-  user: APIUser | null;
+  user: APIGuardianTrackerUser | null;
   token: string | null;
 }
 
@@ -44,7 +44,7 @@ function readStoredAuth(): AuthState {
     try {
       return {
         token: storedToken,
-        user: JSON.parse(storedUser) as APIUser,
+        user: JSON.parse(storedUser) as APIGuardianTrackerUser,
       };
     } catch (error) {
       console.error("Error parsing stored user data:", error);
@@ -73,7 +73,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       window.removeEventListener("guardian_token_refreshed", syncFromStorage);
   }, []);
 
-  const login = (newToken: string, newUser: APIUser) => {
+  const login = (newToken: string, newUser: APIGuardianTrackerUser) => {
     setAuth({ token: newToken, user: newUser });
     localStorage.setItem("guardian_token", newToken);
     localStorage.removeItem("guardian_refresh_token");
@@ -97,7 +97,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     clearStoredAuth();
   };
 
-  // Signs out every device for the account (bumps token_version server-side).
+  // Signs out every device for this Guardian Tracker user (bumps token_version server-side).
   const logoutAll = () => {
     void apiFetch("/api/auth/logout/all", { method: "POST" })
       .catch(() => {})

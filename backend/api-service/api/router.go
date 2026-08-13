@@ -32,7 +32,7 @@ type Handlers struct {
 	Health      *handlers.HealthHandler
 	Auth        *handlers.AuthHandler
 	Wishlist    *handlers.WishlistHandler
-	Account     *handlers.AccountHandler
+	User        *handlers.UserHandler
 	Admin       *handlers.AdminHandler
 	Audit       *handlers.AuditHandler
 	Characters  *handlers.CharactersHandler
@@ -118,7 +118,8 @@ func NewRouter(d Deps) *gin.Engine {
 
 	authedAuthRoutes := authRoutes.Group("", jwtGate)
 	authedAuthRoutes.GET("/validate", d.Handlers.Auth.ValidateToken)
-	authedAuthRoutes.GET("/profile", d.Handlers.Auth.GetProfile)
+	// Compatibility path: this returns the session user, not Bungie profile data.
+	authedAuthRoutes.GET("/profile", d.Handlers.Auth.GetSessionUser)
 	authedAuthRoutes.POST("/logout", d.Handlers.Auth.Logout)
 	authedAuthRoutes.POST("/logout/all", d.Handlers.Auth.LogoutAll)
 
@@ -135,9 +136,9 @@ func NewRouter(d Deps) *gin.Engine {
 	authed.GET("/preferences", d.Handlers.Wishlist.GetPreferences)
 	authed.PUT("/preferences", d.Handlers.Wishlist.UpdatePreferences)
 
-	// Account self-service role opt-in + resolved feature-flag state
-	authed.PUT("/account/role", d.Handlers.Account.SetRole)
-	authed.GET("/flags", d.Handlers.Account.GetFlags)
+	// Compatibility path: /account/role changes the Guardian Tracker user's tier.
+	authed.PUT("/account/role", d.Handlers.User.SetRole)
+	authed.GET("/flags", d.Handlers.User.GetFlags)
 
 	// Admin console. RequireAdmin 403s a non-admin and 503s in degraded mode,
 	// where role claims are not authoritative.

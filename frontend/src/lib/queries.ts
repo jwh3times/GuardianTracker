@@ -3,7 +3,7 @@ import { toCollections, toCollectionsSummary } from "./collectionsView";
 import type {
   APIItemPerks,
   APIItemView,
-  APIUserCollections,
+  APIMembershipCollections,
 } from "../types/api";
 
 function collectionsBase(
@@ -19,7 +19,7 @@ function collectionsBase(
       includeAll ? "all" : "missing",
     ] as const,
     queryFn: () =>
-      apiFetch<APIUserCollections>(
+      apiFetch<APIMembershipCollections>(
         `/api/collections/${membershipType}/${membershipId}${includeAll ? "?include=all" : ""}`,
       ),
     enabled: membershipType != null && !!membershipId,

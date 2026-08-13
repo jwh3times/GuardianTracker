@@ -48,7 +48,7 @@ function makeItems(n: number): GTItem[] {
     diff: "unrated",
     source: "",
     sourceDetail: "",
-    obtainable: false,
+    availableNow: false,
     collected: i % 2 === 0,
     desc: "",
   }));

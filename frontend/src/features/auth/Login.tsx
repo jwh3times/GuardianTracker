@@ -90,7 +90,7 @@ export function Login() {
         )}
 
         <div className="gt-login-note mono">
-          Read-only · we never modify your account
+          Read-only · we never modify your Destiny data
         </div>
         <ul className="gt-login-feats">
           <li>

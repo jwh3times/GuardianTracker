@@ -17,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// liveAvailabilityProvider returns itemHash → vendor name for items obtainable
+// liveAvailabilityProvider returns itemHash → vendor name for items available
 // right now from rotating vendors. Satisfied by *weekly.Service.
 type liveAvailabilityProvider interface {
 	LiveVendorItemHashes(ctx context.Context, membershipType int, membershipID, bungieToken string) map[uint32]string
@@ -59,14 +59,14 @@ func (h *CollectionsHandler) GetCollections(c *gin.Context) {
 		return
 	}
 
-	result, err := h.collectionsService.GetUserCollections(c.Request.Context(), membershipType, membershipID, bungieToken)
+	result, err := h.collectionsService.GetMembershipCollections(c.Request.Context(), membershipType, membershipID, bungieToken)
 	if err != nil {
 		handleBungieError(c, err)
 		return
 	}
 
 	// The item-detail map and per-item collected hashes ride along only when asked
-	// for (?include=all). Lightweight copies by value, so the cached *UserCollections
+	// for (?include=all). Lightweight copies by value, so the cached *MembershipCollections
 	// is never mutated.
 	if c.Query("include") != "all" {
 		c.JSON(http.StatusOK, result.Lightweight())

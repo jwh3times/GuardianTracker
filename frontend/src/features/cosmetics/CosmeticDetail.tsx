@@ -53,13 +53,13 @@ export function CosmeticDetail({
             </div>
           </div>
         </div>
-        {item.obtainable && !item.collected && (
+        {item.availableNow && !item.collected && (
           <div className="gt-drawer-avail">
             <Badge kind="avail-now" dot icon="bolt" lg />
             <span>
               {item.availFrom
                 ? `Available now — ${item.availFrom}`
-                : "Obtainable right now."}
+                : "Available right now."}
             </span>
           </div>
         )}

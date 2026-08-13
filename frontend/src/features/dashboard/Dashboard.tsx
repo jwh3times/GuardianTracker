@@ -20,8 +20,8 @@ import { apiFetch } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
 import { collectionsQuery } from "../../lib/queries";
 import { toWishlistEntry } from "../../lib/adapters";
-import type { DailyAction, SummaryCategory, Weekly } from "../../types/design";
-import type { ProfileResponse, WishListItem } from "../../types/api";
+import type { SummaryCategory, TodayAction, Weekly } from "../../types/design";
+import type { CurrentUserResponse, WishListItem } from "../../types/api";
 
 function formatDuration(
   d: import("../../types/design").Duration | undefined,
@@ -56,14 +56,14 @@ export function Dashboard() {
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
 
-  const { data: profileData } = useQuery({
+  const { data: currentUserData } = useQuery({
     queryKey: ["currentUser"],
-    queryFn: () => apiFetch<ProfileResponse>("/api/auth/profile"),
+    queryFn: () => apiFetch<CurrentUserResponse>("/api/auth/profile"),
   });
 
   const membershipType =
-    profileData?.user.membershipType ?? user?.membershipType;
-  const membershipId = profileData?.user.membershipId ?? user?.membershipId;
+    currentUserData?.user.membershipType ?? user?.membershipType;
+  const membershipId = currentUserData?.user.membershipId ?? user?.membershipId;
 
   // Shares the "missing" collections cache entry with Settings and the
   // Collections page (one fetch across all three) via the shared query helper.
@@ -98,8 +98,7 @@ export function Dashboard() {
     enabled: !!user,
   });
 
-  const displayName =
-    profileData?.user.displayName || user?.displayName || "Guardian";
+  const displayName = currentUserData?.user.displayName || user?.displayName;
 
   // Normalize wishlist rows through the adapter so rarity/availability handling
   // stays in one place (lib/adapters) rather than reading raw API fields here.
@@ -114,7 +113,7 @@ export function Dashboard() {
   return (
     <div className="gt-page gt-dash" data-onboarding-target="dashboard">
       <PageHead
-        title={`Welcome, ${displayName}`}
+        title={displayName ? `Welcome, ${displayName}` : "Welcome"}
         sub="Your collection at a glance"
         right={
           <CountdownChip
@@ -335,7 +334,7 @@ export function Dashboard() {
               </div>
             </div>
           ) : (
-            (weeklyData?.dailyActions ?? []).map((action: DailyAction) => {
+            (weeklyData?.dailyActions ?? []).map((action: TodayAction) => {
               const iconColor =
                 action.category === "xur"
                   ? "var(--c-exotic)"

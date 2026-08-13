@@ -12,7 +12,7 @@ const item: GTItem = {
   diff: "unrated",
   source: "",
   sourceDetail: "",
-  obtainable: false,
+  availableNow: false,
   collected: true,
   desc: "A regal emblem.",
 };
@@ -53,17 +53,27 @@ describe("CosmeticDetail", () => {
   it("names the vendor selling an uncollected item", () => {
     render(
       <CosmeticDetail
-        item={{ ...item, collected: false, obtainable: true, availFrom: "Xûr" }}
+        item={{
+          ...item,
+          collected: false,
+          availableNow: true,
+          availFrom: "Xûr",
+        }}
         onClose={() => {}}
       />,
     );
     expect(screen.getByText("Available now — Xûr")).toBeInTheDocument();
   });
 
-  it("omits availability for an item the player already owns", () => {
+  it("omits availability for an item already collected", () => {
     render(
       <CosmeticDetail
-        item={{ ...item, collected: true, obtainable: true, availFrom: "Xûr" }}
+        item={{
+          ...item,
+          collected: true,
+          availableNow: true,
+          availFrom: "Xûr",
+        }}
         onClose={() => {}}
       />,
     );

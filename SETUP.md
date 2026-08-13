@@ -277,8 +277,8 @@ The Playwright configuration launches `go run ./cmd/fake-bungie` from
 `backend/api-service`, the real API, and Vite, then waits for fake health, API
 readiness, and the asynchronous search index. The fake generates its tiny
 SQLite manifest at runtime and provides loopback-only scenario controls; the
-suite never contacts the real Bungie API. Tests use one worker because account
-and scenario state are shared.
+suite never contacts the real Bungie API. Tests use one worker because Guardian
+Tracker user and scenario state are shared.
 
 `.github/workflows/browser.yml` publishes reports and failure evidence for 14
 days. Browser E2E + Axe and visual regression are advisory initially and do not

@@ -23,9 +23,11 @@ describe("Settings page", () => {
     );
   }
 
-  it("renders account info and the empty-characters state", async () => {
+  it("renders Destiny membership info and the empty-characters state", async () => {
     renderSettings();
     expect(await screen.findByText("Settings")).toBeInTheDocument();
+    expect(screen.getByText("Destiny membership")).toBeInTheDocument();
+    expect(screen.getByText("Display name")).toBeInTheDocument();
     expect(screen.getByText("TestGuardian")).toBeInTheDocument();
     // sampleUser.platform === "steam"
     expect(screen.getByText("steam")).toBeInTheDocument();

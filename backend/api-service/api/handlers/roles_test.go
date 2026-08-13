@@ -84,7 +84,7 @@ func TestSetRole_OptInAllowedEvictsCache(t *testing.T) {
 	store := &fakeRoleStore{}
 	c := newCache()
 	c.Set("tver:member-1", 1, time.Minute)
-	h := NewAccountHandler(store, nil, c, nil)
+	h := NewUserHandler(store, nil, c, nil)
 	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -105,7 +105,7 @@ func TestSetRole_OptInAllowedEvictsCache(t *testing.T) {
 
 func TestSetRole_RejectsAdminTarget(t *testing.T) {
 	store := &fakeRoleStore{}
-	h := NewAccountHandler(store, nil, newCache(), nil)
+	h := NewUserHandler(store, nil, newCache(), nil)
 	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -121,7 +121,7 @@ func TestSetRole_RejectsAdminTarget(t *testing.T) {
 
 func TestSetRole_AdminCallerRefused(t *testing.T) {
 	store := &fakeRoleStore{}
-	h := NewAccountHandler(store, nil, newCache(), nil)
+	h := NewUserHandler(store, nil, newCache(), nil)
 	r := roleTestRouter("member-1", auth.RoleAdmin, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -137,7 +137,7 @@ func TestSetRole_AdminCallerRefused(t *testing.T) {
 
 func TestSetRole_DegradedMode503(t *testing.T) {
 	degraded := db.NewStores(nil)
-	h := NewAccountHandler(degraded.Users, degraded.Flags, newCache(), nil)
+	h := NewUserHandler(degraded.Users, degraded.Flags, newCache(), nil)
 	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -173,7 +173,7 @@ func TestGetFlags_TruthTable(t *testing.T) {
 		}},
 	}
 	for _, tc := range cases {
-		h := NewAccountHandler(db.NewStores(nil).Users, &fakeFlagStore{list: flags}, newCache(), nil)
+		h := NewUserHandler(db.NewStores(nil).Users, &fakeFlagStore{list: flags}, newCache(), nil)
 		r := roleTestRouter("member-1", tc.role, func(e *gin.Engine) { e.GET("/api/flags", h.GetFlags) })
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/flags", nil))

@@ -87,7 +87,7 @@ src/
 │   └── queries.ts               # collectionsQuery() — shared React Query definition
 ├── types/
 │   ├── api.ts                   # API response types (WishListItem + icon/availableNow,
-│   │                            #   APIUserCollections + fetchedAt, APIRecordsEnvelope<T>, etc.)
+│   │                            #   APIMembershipCollections + fetchedAt, APIRecordsEnvelope<T>, etc.)
 │   └── design.ts                # Design-system domain types (GTItem, Seal, Weekly + resetAt/fetchedAt…)
 └── test/                        # Shared test infra (referenced by vite.config setupFiles)
     ├── setup.ts                 # Vitest setup file

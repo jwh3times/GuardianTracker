@@ -85,7 +85,7 @@ frontend/src/
   lib/
     api.ts                     ← apiFetch helper + ApiError (status/code/retryAfter) + QueryClient;
                                    API_URL exported; all REST calls go through apiFetch
-    collectionsView.ts         ← The sole adapter for the collections payload (APIUserCollections → design
+    collectionsView.ts         ← The sole adapter for the collections payload (APIMembershipCollections → design
                                    types). toCollectionsSummary(raw) returns CollectionsSummaryView (roots,
                                    rootHashes, summary, overallPct, fetchedAt, node(), pathToNode()) for the
                                    counts-only payload; toCollections(raw) returns CollectionsView, which adds
@@ -96,7 +96,7 @@ frontend/src/
                                    surface and the compiler enforces it. The item join (detail + collectedHashes
                                    + availableNow) happens once here, in a private toItem() — this is where the
                                    types/api.ts → types/design.ts wire-to-domain split is actually enforced for
-                                   this payload; no feature module sees APIUserCollections or builds a GTItem
+                                   this payload; no feature module sees APIMembershipCollections or builds a GTItem
                                    from it directly.
     adapters.ts                ← API response types → design Character/GTItem(view-only)/WishlistEntry:
                                    toCharacter, toGTItemView(APIItemView) — maps a manifest-only item view to a
@@ -160,7 +160,7 @@ frontend/src/
     cosmetics/                 ← browsable /cosmetics gallery (Road to v1 §1). Cosmetics.tsx (type tabs +
                                    owned/missing/all filter over ?include=all data), CosmeticTile.tsx
                                    (image-forward tile + owned/missing state + "Available now" Badge,
-                                   same obtainable-and-not-collected rule as Collections' ItemCard),
+                                   same available-now-and-not-collected rule as Collections' ItemCard),
                                    CosmeticsGrid.tsx (virtualized tile grid via @tanstack/react-virtual),
                                    CosmeticDetail.tsx (dedicated view-only drawer — shared ItemDetailDrawer
                                    left untouched — + the same "Available now — <vendor>" affordance),
@@ -179,8 +179,8 @@ frontend/src/
                                (Tests colocate per feature, e.g. features/dashboard/Dashboard.test.tsx,
                                 features/collections/Collections.test.tsx.)
   types/
-    api.ts                     ← API response types (APIUser, AuthTokenResponse, WishListItem with
-                                   icon/availableNow/availableFrom, APIUserCollections with fetchedAt,
+    api.ts                     ← API response types (APIGuardianTrackerUser, AuthTokenResponse, WishListItem with
+                                   icon/availableNow/availableFrom, APIMembershipCollections with fetchedAt,
                                    APICollectionSummary with collectedItems, APIRecordsEnvelope<T>,
                                    APIPerkColumn, APIItemCatalyst, APIItemPerks, APIItemView)
     design.ts                  ← Design-system domain types (GTItem — GTItem.perks field REMOVED, Seal,
@@ -318,7 +318,7 @@ authenticated pages go inside this group — do not add inline auth checks or re
 ## API response type changes
 
 - `WishListItem`: `+ icon`, `+ availableNow: boolean`, `+ availableFrom?: string`
-- `APIUserCollections`: `+ fetchedAt: string`
+- `APIMembershipCollections`: `+ fetchedAt: string`
 - `APICollectionSummary`: `+ collectedItems?: APIDestinyItem[]`
 - `APIRecordsEnvelope<T>`: `{ items: T[]; fetchedAt: string }` — envelope for catalysts/crafting/seals
 - `Weekly`: `+ resetAt`, `+ fetchedAt`, `+ degraded?`

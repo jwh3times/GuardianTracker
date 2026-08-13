@@ -141,7 +141,7 @@ export function Settings() {
 
   return (
     <div className="gt-page">
-      <PageHead title="Settings" sub="Account, access & data" />
+      <PageHead title="Settings" sub="Identity, access & data" />
 
       {/* MEMBERSHIP & ACCESS */}
       <Panel
@@ -241,9 +241,9 @@ export function Settings() {
       </Panel>
 
       <div className="gt-set-grid">
-        <Panel title="Account" icon="bungie">
+        <Panel title="Destiny membership" icon="bungie">
           <div className="gt-set-row">
-            <span className="gt-set-k">Guardian</span>
+            <span className="gt-set-k">Display name</span>
             <span className="gt-set-v">{user?.displayName || "—"}</span>
           </div>
           <div className="gt-set-row">
@@ -301,7 +301,7 @@ export function Settings() {
         <Panel title="Privacy" icon="lock">
           <p className="gt-set-note">
             Your collection must be set to public on Bungie.net for Guardian
-            Tracker to read it. We never modify your account.
+            Tracker to read it. We never modify your Destiny data.
           </p>
           <a
             href="https://www.bungie.net/7/en/User/Account/Privacy"

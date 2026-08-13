@@ -28,7 +28,7 @@ export function ItemCard({
   showCollected,
 }: ItemCardProps) {
   const r = item.rarity;
-  const availBadge = item.obtainable && !item.collected;
+  const availBadge = item.availableNow && !item.collected;
   const showFor = personalize !== "off";
   const aggressive = personalize === "aggressive";
 

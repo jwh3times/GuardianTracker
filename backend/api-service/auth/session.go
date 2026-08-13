@@ -36,17 +36,19 @@ const stateTTL = 10 * time.Minute
 type Reason string
 
 const (
-	ReasonInvalidCode   Reason = "invalid_code"
-	ReasonInvalidState  Reason = "invalid_state"
-	ReasonCodeExchange  Reason = "code_exchange"
-	ReasonProfileFetch  Reason = "profile_fetch"
-	ReasonTokenMint     Reason = "token_mint"
-	ReasonSessionWrite  Reason = "session_write"
-	ReasonMissingCookie Reason = "missing_cookie"
-	ReasonInvalidToken  Reason = "invalid_token"
-	ReasonRevoked       Reason = "revoked"
-	ReasonReuse         Reason = "reuse"
-	ReasonExpired       Reason = "expired"
+	ReasonInvalidCode  Reason = "invalid_code"
+	ReasonInvalidState Reason = "invalid_state"
+	ReasonCodeExchange Reason = "code_exchange"
+	// ReasonMembershipFetch retains the historical audit reason value while
+	// naming what the Bungie call actually resolves.
+	ReasonMembershipFetch Reason = "profile_fetch"
+	ReasonTokenMint       Reason = "token_mint"
+	ReasonSessionWrite    Reason = "session_write"
+	ReasonMissingCookie   Reason = "missing_cookie"
+	ReasonInvalidToken    Reason = "invalid_token"
+	ReasonRevoked         Reason = "revoked"
+	ReasonReuse           Reason = "reuse"
+	ReasonExpired         Reason = "expired"
 )
 
 // SessionError is every failure Login and Refresh report. It carries the
@@ -85,12 +87,12 @@ type Session struct {
 	AccessToken      string
 	RefreshToken     string
 	RefreshExpiresAt time.Time
-	Profile          BungieUserProfile
+	Membership       DestinyMembership
 	Role             int
 	SessionID        string
-	// UserID is the users-row id for the audit trail. Nil when the row could
+	// AppUserID is the Guardian Tracker users-row id for the audit trail. Nil when the row could
 	// not be read, which is not fatal to the login.
-	UserID *int64
+	AppUserID *int64
 }
 
 // SessionStore is the slice of the user store that session issuance needs.
@@ -186,8 +188,8 @@ func (s *SessionIssuer) AuthorizeURL() (authURL, state string, err error) {
 }
 
 // Login turns an OAuth callback into a session: verify state, exchange the
-// code, read the Bungie profile, upsert the user, store the Bungie tokens, mint
-// the JWT pair, and record the session row they rotate against.
+// code, resolve the primary Destiny membership, upsert the user, store the
+// Bungie tokens, mint the JWT pair, and record the session row they rotate against.
 func (s *SessionIssuer) Login(ctx context.Context, code, state, userAgent string) (*Session, error) {
 	if code == "" || len(code) > maxAuthCodeLen {
 		return nil, &SessionError{Reason: ReasonInvalidCode}
@@ -200,43 +202,43 @@ func (s *SessionIssuer) Login(ctx context.Context, code, state, userAgent string
 	if err != nil {
 		return nil, &SessionError{Reason: ReasonCodeExchange, Err: err}
 	}
-	profile, err := s.bungie.bungieProfile(ctx, s.oauth.APIBaseURL, s.oauth.APIKey, bungieTokens.AccessToken)
+	membership, err := s.bungie.primaryDestinyMembership(ctx, s.oauth.APIBaseURL, s.oauth.APIKey, bungieTokens.AccessToken)
 	if err != nil {
-		return nil, &SessionError{Reason: ReasonProfileFetch, Err: err}
+		return nil, &SessionError{Reason: ReasonMembershipFetch, Err: err}
 	}
 
-	// The user row is best-effort: a login that cannot be recorded still works,
+	// The Guardian Tracker user row is best-effort: a login that cannot be recorded still works,
 	// with the token version that revokes nothing and the tier that grants
 	// nothing. Membership IDs in ADMIN_MEMBERSHIP_IDS are pinned on every login.
 	tokenVersion, role := 1, RoleStandard
-	var userID *int64
-	forceAdmin := slices.Contains(s.oauth.BootstrapAdmins, profile.MembershipID)
-	id, tv, r, err := s.users.Upsert(ctx, profile.MembershipID, int16(profile.MembershipType), profile.DisplayName, forceAdmin)
+	var appUserID *int64
+	forceAdmin := slices.Contains(s.oauth.BootstrapAdmins, membership.MembershipID)
+	id, tv, r, err := s.users.Upsert(ctx, membership.MembershipID, int16(membership.MembershipType), membership.DisplayName, forceAdmin)
 	if err != nil {
 		observability.Logger(ctx).WarnContext(ctx, "login user persistence failed",
-			observability.ID("membership", profile.MembershipID), observability.Err(err))
+			observability.ID("membership", membership.MembershipID), observability.Err(err))
 	} else {
-		tokenVersion, role, userID = tv, int(r), &id
+		tokenVersion, role, appUserID = tv, int(r), &id
 	}
 
-	s.tokens.Store(profile.MembershipID, bungieTokens)
+	s.tokens.Store(membership.MembershipID, bungieTokens)
 
 	// Each login opens a new per-device session. Both JWTs carry its id (sid).
 	sessionID := uuid.NewString()
-	session, jti, err := s.mint(profile, tokenVersion, role, sessionID)
+	session, jti, err := s.mint(membership, tokenVersion, role, sessionID)
 	if err != nil {
-		return nil, &SessionError{Reason: ReasonTokenMint, MembershipID: profile.MembershipID, SessionID: sessionID, Err: err}
+		return nil, &SessionError{Reason: ReasonTokenMint, MembershipID: membership.MembershipID, SessionID: sessionID, Err: err}
 	}
-	session.UserID = userID
+	session.AppUserID = appUserID
 
-	if err := s.recordSession(ctx, sessionID, profile.MembershipID, jti, userAgent, session.RefreshExpiresAt); err != nil {
+	if err := s.recordSession(ctx, sessionID, membership.MembershipID, jti, userAgent, session.RefreshExpiresAt); err != nil {
 		return nil, err
 	}
 	return session, nil
 }
 
 // Refresh rotates a session: validate the presented refresh JWT, check it has
-// not been revoked account-wide, mint a new pair, and advance the session row
+// not been revoked user-wide, mint a new pair, and advance the session row
 // with reuse detection.
 func (s *SessionIssuer) Refresh(ctx context.Context, refreshJWT, userAgent string) (*Session, error) {
 	if refreshJWT == "" {
@@ -258,7 +260,7 @@ func (s *SessionIssuer) Refresh(ctx context.Context, refreshJWT, userAgent strin
 		return nil, &SessionError{Reason: ReasonRevoked, MembershipID: claims.MembershipID, SessionID: claims.SessionID, Err: err}
 	}
 
-	profile := &BungieUserProfile{
+	membership := &DestinyMembership{
 		MembershipID:   claims.MembershipID,
 		DisplayName:    claims.DisplayName,
 		MembershipType: claims.MembershipType,
@@ -272,7 +274,7 @@ func (s *SessionIssuer) Refresh(ctx context.Context, refreshJWT, userAgent strin
 		sessionID = uuid.NewString()
 	}
 
-	session, newJTI, err := s.mint(profile, claims.TokenVersion, role, sessionID)
+	session, newJTI, err := s.mint(membership, claims.TokenVersion, role, sessionID)
 	if err != nil {
 		return nil, &SessionError{Reason: ReasonTokenMint, MembershipID: claims.MembershipID, SessionID: sessionID, Err: err}
 	}
@@ -320,8 +322,9 @@ func (s *SessionIssuer) EndSession(ctx context.Context, sessionID string) error 
 }
 
 // EndAllSessions signs a user out everywhere: bump token_version (invalidating
-// every access token), delete every session row, and drop the account-wide
-// Bungie tokens. The cached auth info is evicted so the bump takes effect at
+// every access token), delete every session row, and drop the Bungie tokens
+// stored for the user's tracked membership. The cached auth info is evicted so
+// the bump takes effect at
 // once; other sessions' cache entries age out, but their access tokens already
 // fail the version check.
 func (s *SessionIssuer) EndAllSessions(ctx context.Context, membershipID string) error {
@@ -334,12 +337,12 @@ func (s *SessionIssuer) EndAllSessions(ctx context.Context, membershipID string)
 
 // mint issues the JWT pair for a session and returns the refresh token's jti,
 // which is what the session row stores for reuse detection.
-func (s *SessionIssuer) mint(profile *BungieUserProfile, tokenVersion, role int, sessionID string) (*Session, string, error) {
-	access, err := s.jwt.GenerateAccessToken(profile, tokenVersion, sessionID)
+func (s *SessionIssuer) mint(membership *DestinyMembership, tokenVersion, role int, sessionID string) (*Session, string, error) {
+	access, err := s.jwt.GenerateAccessToken(membership, tokenVersion, sessionID)
 	if err != nil {
 		return nil, "", fmt.Errorf("access token: %w", err)
 	}
-	refresh, jti, err := s.jwt.GenerateRefreshToken(profile, tokenVersion, sessionID)
+	refresh, jti, err := s.jwt.GenerateRefreshToken(membership, tokenVersion, sessionID)
 	if err != nil {
 		return nil, "", fmt.Errorf("refresh token: %w", err)
 	}
@@ -347,7 +350,7 @@ func (s *SessionIssuer) mint(profile *BungieUserProfile, tokenVersion, role int,
 		AccessToken:      access,
 		RefreshToken:     refresh,
 		RefreshExpiresAt: time.Now().Add(s.jwt.RefreshTokenTTL()),
-		Profile:          *profile,
+		Membership:       *membership,
 		Role:             role,
 		SessionID:        sessionID,
 	}, jti, nil

@@ -33,8 +33,8 @@ export interface GTItem {
   viewOnly?: boolean;
   source: string;
   sourceDetail: string;
-  obtainable: boolean;
-  /** Vendor currently selling this item ("Banshee-44", "Xûr", …), when obtainable now. */
+  availableNow: boolean;
+  /** Vendor currently selling this item ("Banshee-44", "Xûr", …), when available now. */
   availFrom?: string;
   collected: boolean;
   desc: string;
@@ -122,7 +122,7 @@ export interface RecommendedAction {
   time: string;
 }
 
-export interface DailyAction {
+export interface TodayAction {
   id: string;
   category: "milestone" | "xur" | "vendor" | "activity";
   icon: string;
@@ -146,7 +146,8 @@ export interface Weekly {
   xur: Xur | null; // null when Xûr is not in town
   milestones: Milestone[];
   recommended: RecommendedAction[];
-  dailyActions: DailyAction[];
+  /** Wire name retained for API compatibility; entries may expire on non-daily cadences. */
+  dailyActions: TodayAction[];
 }
 
 export interface WishlistEntry {

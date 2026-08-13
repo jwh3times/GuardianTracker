@@ -10,8 +10,8 @@ import { initialTourState, TOUR_ROUTES, tourReducer } from "./tourState";
 
 const STEPS = [
   {
-    title: "Your Guardian at a glance",
-    body: "Dashboard turns your account-wide collection into a practical starting point for today.",
+    title: "Your collection at a glance",
+    body: "Dashboard turns your membership-wide collection into a practical starting point for today.",
     target: "dashboard",
   },
   {
@@ -113,7 +113,7 @@ export function OnboardingTour() {
           <p className="gt-eyebrow mono">Welcome to Guardian Tracker</p>
           <h2 id="gt-tour-title">Your collection, with a plan</h2>
           <p>
-            Guardian Tracker reads your Bungie profile and manifest data. It
+            Guardian Tracker reads your Destiny profile and manifest data. It
             never changes your inventory or loadouts, and live data is always
             shown with its freshness or reset window.
           </p>

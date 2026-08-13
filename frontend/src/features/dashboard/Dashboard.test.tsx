@@ -41,7 +41,7 @@ describe("Dashboard page", () => {
     expect(screen.getByText(/Best thing to do today/i)).toBeInTheDocument();
   });
 
-  it("greets the current Guardian", async () => {
+  it("greets the current Guardian Tracker user", async () => {
     renderDashboard();
     expect(await screen.findByText(/^Welcome, /)).toBeInTheDocument();
   });

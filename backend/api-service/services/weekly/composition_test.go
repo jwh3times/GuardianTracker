@@ -190,11 +190,11 @@ func TestGetWeekly_XurLocationReachesPayload(t *testing.T) {
 	}
 }
 
-// In DailyActions the precedence is the opposite way round from
+// In TodayActions the precedence is the opposite way round from
 // buildRecommended: an item that is missing keeps the "missing" badge even when
 // it is also wishlisted, and only a wishlisted-but-owned item reads "avail-now".
 // Both rules are real; neither was asserted through GetWeekly.
-func TestGetWeekly_DailyActionBadgePrecedence(t *testing.T) {
+func TestGetWeekly_TodayActionBadgePrecedence(t *testing.T) {
 	res := weeklyFixture{
 		pub: xurPub(
 			xurItemEnriched{Hash: 100, Name: "Gjallarhorn", Type: "Rocket Launcher"},
@@ -205,8 +205,8 @@ func TestGetWeekly_DailyActionBadgePrecedence(t *testing.T) {
 		wishlist: fakeWishlist{userID: 7, items: []WishlistItem{{ItemHash: 100}, {ItemHash: 200}}},
 	}.get(t)
 
-	byID := map[string]DailyAction{}
-	for _, a := range res.DailyActions {
+	byID := map[string]TodayAction{}
+	for _, a := range res.TodayActions {
 		byID[a.ID] = a
 	}
 	if got := byID["daily-xur-0"].Badge; got != "missing" {

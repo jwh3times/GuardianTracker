@@ -85,7 +85,7 @@ func TestBuildCategorySummary_DedupesDuplicateItemHash(t *testing.T) {
 }
 
 func TestLightweight_StripsItems(t *testing.T) {
-	full := UserCollections{
+	full := MembershipCollections{
 		Tree: []CollectionNode{{
 			Hash: "10", Total: 1, Items: []string{"100"},
 			Children: []CollectionNode{{Hash: "11", Items: []string{"100"}}},
@@ -131,7 +131,7 @@ func armorCol(colHash, itemHash uint32, name string) manifest.CollectibleWithIte
 	}
 }
 
-func TestGetUserCollections_Projects(t *testing.T) {
+func TestGetMembershipCollections_Projects(t *testing.T) {
 	// Build a tree from a minimal two-category fixture: Weapons (node 10) ->
 	// Hand Cannons (node 11) holds collectible 1000/item 100 (collected) and
 	// 1001/item 101 (missing). Armor (node 20) holds 2000/item 200 (missing).
@@ -160,9 +160,9 @@ func TestGetUserCollections_Projects(t *testing.T) {
 	c.Set("collections:3:proj-member", a, time.Minute)
 	s := &Service{cache: c}
 
-	result, err := s.GetUserCollections(context.Background(), 3, "proj-member", "token")
+	result, err := s.GetMembershipCollections(context.Background(), 3, "proj-member", "token")
 	if err != nil {
-		t.Fatalf("GetUserCollections: %v", err)
+		t.Fatalf("GetMembershipCollections: %v", err)
 	}
 
 	// Tree must be non-empty and contain the expected top-level categories
@@ -207,6 +207,32 @@ func TestGetUserCollections_Projects(t *testing.T) {
 			}
 			return ks
 		}())
+	}
+}
+
+func TestGetMembershipCollections_CollectedHashesAreDeterministicOwnedItemSet(t *testing.T) {
+	// Two acquired collectible rows point to item 300. collectedHashes is an
+	// item set, so item 300 appears once and the result is numerically sorted.
+	duplicateA := fabricate(1, 300, "Reissued Weapon", "World drops", bungie.TierTypeLegendary)
+	duplicateB := fabricate(2, 300, "Reissued Weapon", "World drops", bungie.TierTypeLegendary)
+	other := fabricate(3, 100, "Other Weapon", "World drops", bungie.TierTypeLegendary)
+	a := &analysis{
+		collectibles: []manifest.CollectibleWithItem{duplicateA, duplicateB, other},
+		collected:    map[uint32]bool{1: true, 2: true, 3: true},
+		owned:        map[uint32]bool{300: true, 100: true},
+		tree:         &TreeStructure{},
+		fetchedAt:    time.Now(),
+	}
+	c := cache.NewMemoryCache(time.Minute, 0)
+	c.Set("collections:3:member-collected-set", a, time.Minute)
+	s := &Service{cache: c}
+
+	result, err := s.GetMembershipCollections(context.Background(), 3, "member-collected-set", "token")
+	if err != nil {
+		t.Fatalf("GetMembershipCollections: %v", err)
+	}
+	if want := []string{"100", "300"}; !slices.Equal(result.CollectedHashes, want) {
+		t.Errorf("CollectedHashes = %v, want deterministic owned-item set %v", result.CollectedHashes, want)
 	}
 }
 

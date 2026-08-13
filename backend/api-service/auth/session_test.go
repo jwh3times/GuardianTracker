@@ -207,14 +207,14 @@ func TestLogin_Success(t *testing.T) {
 		t.Fatalf("Login: %v", err)
 	}
 
-	if session.Profile.MembershipID != testMembership || session.Profile.DisplayName != "TestGuardian" {
-		t.Errorf("profile = %+v", session.Profile)
+	if session.Membership.MembershipID != testMembership || session.Membership.DisplayName != "TestGuardian" {
+		t.Errorf("membership = %+v", session.Membership)
 	}
 	if session.Role != RoleBeta {
 		t.Errorf("role = %d, want the role the upsert returned (%d)", session.Role, RoleBeta)
 	}
-	if session.UserID == nil || *session.UserID != 42 {
-		t.Errorf("UserID = %v, want the users-row id for the audit trail", session.UserID)
+	if session.AppUserID == nil || *session.AppUserID != 42 {
+		t.Errorf("AppUserID = %v, want the users-row id for the audit trail", session.AppUserID)
 	}
 
 	// Both JWTs carry the session id, and the access token carries the token
@@ -265,8 +265,8 @@ func TestLogin_UpsertFailureFallsBack(t *testing.T) {
 	if session.Role != RoleStandard {
 		t.Errorf("role = %d, want standard when the row could not be read", session.Role)
 	}
-	if session.UserID != nil {
-		t.Errorf("UserID = %v, want nil when the upsert failed", *session.UserID)
+	if session.AppUserID != nil {
+		t.Errorf("AppUserID = %v, want nil when the upsert failed", *session.AppUserID)
 	}
 	claims, err := issuer.jwt.ValidateToken(session.AccessToken)
 	if err != nil {
@@ -418,8 +418,8 @@ func TestLogin_BungieFailuresAreDistinguishable(t *testing.T) {
 		bungie := newFakeBungie(t)
 		bungie.profileBody = `{"Response":{"destinyMemberships":[]}}`
 		issuer := newIssuer(t, newStubStore(), bungie)
-		if _, err := login(t, issuer, "code"); reasonOf(t, err) != ReasonProfileFetch {
-			t.Errorf("reason = %q, want %q", reasonOf(t, err), ReasonProfileFetch)
+		if _, err := login(t, issuer, "code"); reasonOf(t, err) != ReasonMembershipFetch {
+			t.Errorf("reason = %q, want %q", reasonOf(t, err), ReasonMembershipFetch)
 		}
 	})
 }
@@ -452,8 +452,8 @@ func TestLogin_BungieRefreshExpiryFallback(t *testing.T) {
 
 func refreshToken(t *testing.T, issuer *SessionIssuer, version int, sid string) (string, string) {
 	t.Helper()
-	profile := &BungieUserProfile{MembershipID: testMembership, DisplayName: "TestGuardian", MembershipType: 3}
-	token, jti, err := issuer.jwt.GenerateRefreshToken(profile, version, sid)
+	membership := &DestinyMembership{MembershipID: testMembership, DisplayName: "TestGuardian", MembershipType: 3}
+	token, jti, err := issuer.jwt.GenerateRefreshToken(membership, version, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,7 +510,7 @@ func TestRefresh_FailureModes(t *testing.T) {
 		{
 			name: "access token presented as refresh",
 			token: func(t *testing.T, s *SessionIssuer) string {
-				tok, err := s.jwt.GenerateAccessToken(&BungieUserProfile{MembershipID: testMembership, MembershipType: 3}, 7, "sess-1")
+				tok, err := s.jwt.GenerateAccessToken(&DestinyMembership{MembershipID: testMembership, MembershipType: 3}, 7, "sess-1")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -519,7 +519,7 @@ func TestRefresh_FailureModes(t *testing.T) {
 			want: ReasonInvalidToken,
 		},
 		{
-			name:  "revoked account-wide",
+			name:  "revoked user-wide",
 			setup: func(s *stubSessionStore) { s.version = 9 }, // token carries 7
 			want:  ReasonRevoked,
 		},
@@ -670,8 +670,8 @@ func TestEndAllSessions(t *testing.T) {
 	if len(store.bumped) != 1 || len(store.deletedAll) != 1 {
 		t.Errorf("bumped = %v, deletedAll = %v, want one each", store.bumped, store.deletedAll)
 	}
-	// The account-wide Bungie tokens go too, so a signed-out account cannot
-	// keep making Bungie calls from a warm cache.
+	// The Bungie tokens stored for the user's tracked membership go too, so the
+	// user cannot keep making Bungie calls from a warm cache.
 	if _, err := issuer.tokens.GetValidToken(testMembership); err == nil {
 		t.Error("Bungie tokens survived a sign-out-everywhere")
 	}
