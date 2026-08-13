@@ -79,6 +79,7 @@ src/
 ├── lib/
 │   ├── api.ts                   # apiFetch helper + ApiError (status/code) + QueryClient;
 │   │                            #   API_URL exported; all REST calls go through apiFetch
+│   ├── acquisitionSources.ts    # Canonical API acquisition-source → design adapter
 │   ├── adapters.ts              # API response types → design GTItem/WishlistEntry; relTime
 │   ├── constants.ts             # RARITIES, glyphs, BUNGIE_CDN base URL
 │   ├── roles.ts                 # Role/tier constants, labels, colors
@@ -235,7 +236,9 @@ Rarity and source-specific difficulty use design tokens in `styles/tokens.css`:
 Set `data-rarity` on item surfaces and `data-diff` on source-specific surfaces;
 children read the resolved `--rarity` / `--diff` custom properties. Collection
 cards do not display an aggregate difficulty badge. The detail drawer lists each
-acquisition source with its own tier.
+acquisition source with its own tier. Difficulty remains a filter that matches any
+source, but it is no longer a sort option; legacy saved or URL `sort=difficulty`
+state migrates to rarity.
 
 ## Production Build
 

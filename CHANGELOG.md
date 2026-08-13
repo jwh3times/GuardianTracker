@@ -13,6 +13,28 @@ request.
 
 No unreleased changes.
 
+## [1.0.0] - 2026-08-13
+
+### Changed
+
+- Collection and wishlist items now expose every collectible-derived acquisition
+  source with its own difficulty and raid/dungeon facets. The item-level
+  `difficulty` and `sources` REST fields were replaced by `acquisitionSources`,
+  requiring API consumers to migrate to the new source-specific contract.
+- Collection cards summarize multiple acquisition paths without inventing a
+  primary source, item drawers list every source and its tier, and difficulty
+  filters match items having any source in the selected tier. The ambiguous
+  item-level difficulty sort was removed; saved legacy sort values fall back to
+  rarity.
+- Wishlist provenance is now shown independently from live vendor availability,
+  so an item's origin remains visible while it is currently being sold.
+
+### Fixed
+
+- Acquisition recommendations and milestone missing counts now count an item
+  only once within each applicable source union, even when multiple collectible
+  definitions reference it.
+
 ## [0.3.82] - 2026-08-12
 
 ### Changed
