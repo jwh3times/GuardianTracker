@@ -206,7 +206,7 @@ docker build --pull -t guardian-tracker/playwright-node26:local `
   -f frontend/Dockerfile.playwright frontend
 docker compose --profile e2e up -d --wait e2e-postgres
 docker run --rm -v "${repo}:/src" -v guardian-e2e-bin:/out -w /src/backend/api-service `
-  -e CGO_ENABLED=1 golang:1.26.5 `
+  -e CGO_ENABLED=1 golang:1.26.6 `
   bash -c "go build -o /out/api-service . && go build -o /out/fake-bungie ./cmd/fake-bungie"
 docker run --rm --init --ipc=host --network guardiantracker_default `
   -e CI=true -e E2E_FIXED_TIME=2026-07-18T18:00:00Z `

@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.26.5"
+  GO_VERSION: "1.26.6"
   GO_ENV: development
   E2E_FRONTEND_URL: http://127.0.0.1:5273
   E2E_API_URL: http://127.0.0.1:8081

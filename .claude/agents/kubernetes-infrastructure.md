@@ -167,7 +167,7 @@ Bungie OAuth requires a public HTTPS redirect URI. For local development:
 
 | Role                     | Image                                           |
 | ------------------------ | ----------------------------------------------- |
-| Go builder               | `golang:1.26.5-alpine`                          |
+| Go builder               | `golang:1.26.6-alpine`                          |
 | Go runtime               | `alpine:3.24.1`                                 |
 | Node builder (frontend)  | `node:26.7.0-alpine3.24`                        |
 | nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.31.3-alpine3.24` |
