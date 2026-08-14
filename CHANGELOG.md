@@ -13,6 +13,26 @@ request.
 
 No unreleased changes.
 
+## [1.0.1] - 2026-08-14
+
+### Security
+
+- The API service now builds and runs on Go 1.26.6, picking up standard-library
+  fixes for six advisories that were reachable from application code: quadratic
+  path resolution in `net/url` (GO-2026-6218), unbounded post-handshake messages
+  in `crypto/tls` (GO-2026-6090), a missing `ReadHeaderTimeout` on the
+  unencrypted HTTP/2 check in `net/http` (GO-2026-6089), missing recursion-depth
+  guards in `encoding/xml` (GO-2026-6088) and `encoding/asn1` (GO-2026-5972), and
+  acceptance of ASCII-only Punycode labels in `x/net/idna` (GO-2026-5026).
+
+### Changed
+
+- The Go toolchain pin moved from 1.26.5 to 1.26.6 everywhere it is declared —
+  the module toolchain directive, the api-service builder image, both GitHub
+  Actions workflows, and the browser-test build snippet — so local, CI, and
+  container builds stay on one patch release. The supported language version is
+  unchanged, so no consumer or operator action is required.
+
 ## [1.0.0] - 2026-08-13
 
 ### Changed
