@@ -20,7 +20,7 @@ auth-service, bungie-service, and graphql-service Dockerfiles no longer exist.
 
 Two-stage build:
 
-1. **`builder`** (`golang:1.26.5-alpine`):
+1. **`builder`** (`golang:1.26.6-alpine`):
 
    - `RUN apk add --no-cache gcc musl-dev sqlite-dev` (required for CGO + SQLite)
    - `COPY go.mod go.sum ./` → `RUN go mod download`
@@ -129,7 +129,7 @@ Never move `COPY . .` before the install step.
 
 | Role                     | Image                                           |
 | ------------------------ | ----------------------------------------------- |
-| Go builder               | `golang:1.26.5-alpine`                          |
+| Go builder               | `golang:1.26.6-alpine`                          |
 | Go runtime               | `alpine:3.24.1`                                 |
 | Node builder/dev         | `node:26.7.0-alpine3.24`                        |
 | Playwright Node donor    | `node:26.7.0-bookworm-slim`                     |
