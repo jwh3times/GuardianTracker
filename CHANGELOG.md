@@ -13,6 +13,14 @@ request.
 
 No unreleased changes.
 
+## [1.0.2] - 2026-08-16
+
+### Added
+
+- Documented the accepted Manifest-derived publication contract, including its
+  owner-local generation fence, module-specific invalidation boundaries, and
+  surviving verification requirements.
+
 ## [1.0.1] - 2026-08-14
 
 ### Security
