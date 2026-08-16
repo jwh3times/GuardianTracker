@@ -23,3 +23,4 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0011: Route Table as a Testable Composition Root](./0011-route-table-as-a-testable-composition-root.md)
 - [ADR 0012: Session Issuance Owns the Session Lifecycle](./0012-session-issuance-owns-the-session-lifecycle.md)
 - [ADR 0013: Own the Application Cache Contract](./0013-own-the-application-cache-contract.md)
+- [ADR 0014: Own Manifest-Derived Publication](./0014-own-manifest-derived-publication.md)

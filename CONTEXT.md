@@ -157,6 +157,12 @@ which is notified only when a version genuinely changed. Two interfaces, not
 one; observers do not fire on the rollback path. See
 [ADR 0010](./docs/adr/0010-manifest-swap-participants-and-observers.md).
 
+**Manifest publication** — reusable state derived from one installed Manifest
+generation. It belongs to one Manifest observer; work begun before that observer
+advances may finish for its initiating request, but cannot become reusable state
+after the generation is retired. See
+[ADR 0014](./docs/adr/0014-own-manifest-derived-publication.md).
+
 **Provider** (`manifest.Provider`) — the lazily-opened, swap-aware handle on the
 manifest database. Returns `manifest.ErrNotReady` while the file is downloading
 or mid-swap; that is a 503, not an error.
