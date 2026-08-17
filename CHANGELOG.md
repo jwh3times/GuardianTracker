@@ -13,6 +13,28 @@ request.
 
 No unreleased changes.
 
+## [1.0.4] - 2026-08-17
+
+### Added
+
+- Documented the accepted acquisition-recommendation ownership contract,
+  including its complete outcome interface, separation from Efficiency ranking,
+  preserved fallback policy, and canonical backend/frontend difficulty-tier
+  projection. Implementation remains deferred to the final Wayfinder handoff.
+- Documented the accepted browser-session projection contract, including its
+  atomic user snapshot, origin-wide refresh coordination, identity-boundary
+  cleanup, and preservation of server-side session ownership. Implementation
+  remains deferred to the final Wayfinder handoff.
+- Documented the accepted complete Collections contract, including its typed
+  summary/full outcomes, best-effort availability completion, membership-refresh
+  publication fences, and Item/Collections observer ordering. Implementation
+  remains deferred to the final Wayfinder handoff.
+- Documented the accepted Wish list and Preferences ownership contracts,
+  including the two-stage Wish list construction, complete entry outcomes,
+  explicit unknown-Item tombstones, atomic preference patches, and verified
+  Unicode note-length fix. Implementation remains deferred to the final
+  Wayfinder handoff.
+
 ## [1.0.3] - 2026-08-17
 
 ### Added

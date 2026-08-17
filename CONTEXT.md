@@ -128,11 +128,34 @@ is an acquisition facet, independent of whether the player already owns one.
 
 **Efficiency ranking** — scoring which activity buckets would close the most
 missing items, so recommendations are ordered by payoff rather than by
-Bungie's ordering. `services/efficiency`: `Rank` and `MissingForMilestone`.
+Bungie's ordering. `services/efficiency` owns the ordered, capped ranked facts
+and `MissingForMilestone`; recommendation wording and fallback policy are
+separate.
 
 **Acquisition recommendation** — a personalized action on This Week, ranked by
 its payoff against missing items, the wish list, live availability, and featured
-sources. Distinct from a _today action_, whose defining property is urgency.
+sources. Its difficulty remains attached to its source/action rather than to an
+Item; owned by `services/recommendations`. Distinct from a _today action_, whose
+defining property is urgency.
+
+**Membership collection** — the complete view of one Destiny membership's
+trackable Items: canonical Item acquisition facts joined to collected state,
+presentation-tree placement, counts, summaries, and, for the full view, live
+availability. Owned by `services/collections`; the summary view deliberately has
+no Item surface. See
+[ADR 0018](./docs/adr/0018-own-complete-membership-collections.md).
+
+**Membership data refresh** — the user-requested invalidation of cached
+Collections, Characters, and Records data for one Destiny membership. It does
+not eagerly fetch or reset weekly/vendor, Wish List, Preferences, Item, or shared
+Manifest state. Owned by the complete Collections service, with publication
+fencing retained by each participating owner. See
+[ADR 0018](./docs/adr/0018-own-complete-membership-collections.md).
+
+**Weekly fallback** — the Xûr or weekly-reset guidance shown when no ranked
+acquisition action is available. It preserves useful guidance without claiming
+that a source-less action came from the Manifest source index; owned by
+`services/recommendations`.
 
 **Today action** — a time-sensitive entry in Do This Today. It can expire at a
 daily reset, weekly reset, or Xûr's departure; do not call it a _daily action_.
@@ -140,6 +163,16 @@ daily reset, weekly reset, or Xûr's departure; do not call it a _daily action_.
 **Wish list** — the player's own saved set of wanted items. User-scoped and
 persisted; it is the one collection the player authors rather than earns.
 Two words, lowercase, in prose; `wishlist` as one word in code and routes.
+
+**Wish list entry** — one saved Item hash plus Guardian Tracker-authored
+priority, notes, and creation time. A known entry is completed with canonical
+Item acquisition facts and best-effort live availability; an entry whose Item
+is absent from a successful current Item lookup is an explicit unknown-Item
+tombstone, not a dropped row. Owned by `services/wishlist`.
+
+**Preference** — a persisted Guardian Tracker user setting. Preferences are
+updated as one atomic partial patch; onboarding completion is an irreversible,
+server-stamped preference transition. Owned by `services/preferences`.
 
 **This Week** — the page combining weekly milestones, Xûr, and personalized
 acquisition recommendations. **Do This Today** — the Dashboard's short list of
@@ -179,6 +212,44 @@ hashes. Consumer-side, so `weekly` does not import `collections` at all, and
 difficulty classification goes to `services/sources` directly rather than
 through `collections.ClassifyDifficulty`. Required, never nil — a reader that
 degraded to an empty set would report a complete collection.
+
+**Wish list Entries** (`wishlist.Entries`) — the early-constructed owner of
+Wish list persistence and Item-existence validation. Weekly consumes its
+membership-scoped Item hashes through a required one-method consumer-side
+interface; the complete Wish list service is constructed later around it.
+
+**Wish list service** (`wishlist.Service`) — the complete handler-facing owner
+of Wish list reads and mutations. It completes stored entries with canonical
+Item facts and best-effort availability while preserving explicit unknown-Item
+tombstones. See [ADR 0019](./docs/adr/0019-own-wish-list-and-preferences.md).
+
+**Preferences service** (`preferences.Service`) — the handler-facing owner of
+preference defaults, validation, atomic partial updates, and irreversible
+onboarding completion. See
+[ADR 0019](./docs/adr/0019-own-wish-list-and-preferences.md).
+
+**Collections service** (`collections.Service`) — the complete handler-facing
+owner of summary and full membership-collection reads plus membership data
+refresh. It is constructed after Weekly around the earlier
+`collections.MembershipAnalysis` core, so Weekly can read missing Items without
+a construction cycle while Gin receives complete outcomes.
+See [ADR 0018](./docs/adr/0018-own-complete-membership-collections.md).
+
+**Acquisition recommender** (`weekly.AcquisitionRecommender`) — the one-method,
+consumer-side interface through which Weekly turns resolved missing-item,
+wish-list, live-availability, featured-source, and Xûr facts into complete
+acquisition recommendations or weekly fallbacks. Weekly adapts those outcomes
+to the wire but does not reinterpret their action, explanation, source,
+difficulty, emphasis, ordering, or fallback policy.
+See [ADR 0016](./docs/adr/0016-own-acquisition-recommendation-outcomes.md).
+
+**Browser session client** (`BrowserSessionClient`) — the framework-neutral
+owner of the browser's access-token and Guardian Tracker user-snapshot
+projection. It hydrates and establishes that projection, makes authenticated
+requests, coordinates refresh across same-origin tabs, ends it locally, and
+notifies consumers. It does not own the HttpOnly refresh credential or the
+canonical server session. See
+[ADR 0017](./docs/adr/0017-own-the-browser-session-projection.md).
 
 **CollectionsView / CollectionsSummaryView** (`lib/collectionsView.ts`) — the
 adapted collections payload the frontend reads. Two types because the endpoint
