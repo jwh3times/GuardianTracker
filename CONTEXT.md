@@ -98,6 +98,12 @@ item's linked collectibles. An item can have several acquisition sources; a
 source describes provenance, not current availability. Owned by
 `services/sources`.
 
+**Item acquisition facts** — the Manifest-derived, user-independent description
+of an Item and the attributions contributed by all of its linked Collectibles.
+They exclude ownership, wish-list metadata, and live availability; owned by
+`services/items`. See
+[ADR 0015](./docs/adr/0015-own-item-acquisition-facts-in-items.md).
+
 **Difficulty tier** — how hard an acquisition source appears to pursue, derived
 from its source string: `Challenging`, `Moderate`, `Easy`, or `Unrated`. An item
 with several sources has no intrinsic single tier; `Unrated` means no keyword

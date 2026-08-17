@@ -13,6 +13,14 @@ request.
 
 No unreleased changes.
 
+## [1.0.3] - 2026-08-17
+
+### Added
+
+- Documented the accepted Item acquisition-facts ownership contract, including
+  its canonical Items interface, Manifest-generation coherence rules, module
+  boundaries, and verification gate before implementation.
+
 ## [1.0.2] - 2026-08-16
 
 ### Added

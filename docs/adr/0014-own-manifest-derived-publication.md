@@ -65,8 +65,9 @@ begin/load/conditional-publish sequence without changing `cache.Cache`,
 
 ### Owner scopes
 
-- **Items:** advance clears the three bounded Manifest lookup caches; their
-  stores are publication-guarded.
+- **Items:** advance clears its bounded Manifest lookup caches and canonical
+  acquisition-catalog publication; their stores are publication-guarded. ADR
+  0015 defines the acquisition-facts ownership seam.
 - **Records:** advance deletes only the three fixed Manifest lookup keys. Other
   cache entries remain untouched.
 - **Weekly:** advance deletes only the global public Manifest-derived payload.
