@@ -25,3 +25,7 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0013: Own the Application Cache Contract](./0013-own-the-application-cache-contract.md)
 - [ADR 0014: Own Manifest-Derived Publication](./0014-own-manifest-derived-publication.md)
 - [ADR 0015: Own Item Acquisition Facts in Items](./0015-own-item-acquisition-facts-in-items.md)
+- [ADR 0016: Own Acquisition Recommendation Outcomes](./0016-own-acquisition-recommendation-outcomes.md)
+- [ADR 0017: Own the Browser Session Projection](./0017-own-the-browser-session-projection.md)
+- [ADR 0018: Own Complete Membership Collections](./0018-own-complete-membership-collections.md)
+- [ADR 0019: Own Wish List and Preferences](./0019-own-wish-list-and-preferences.md)
