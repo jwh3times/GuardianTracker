@@ -146,8 +146,8 @@ updating it:
 ```powershell
 docker buildx imagetools inspect nginxinc/nginx-unprivileged:1.31.3-alpine3.24
 docker buildx imagetools inspect node:26.7.0-alpine3.24
-docker buildx imagetools inspect postgres:18.4-alpine3.24
-docker buildx imagetools inspect postgres:18.4
+docker buildx imagetools inspect postgres:18.6-alpine3.24
+docker buildx imagetools inspect postgres:18.6
 docker buildx imagetools inspect alpine:3.24.1
 ```
 

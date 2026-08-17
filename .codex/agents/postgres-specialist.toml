@@ -165,7 +165,7 @@ schema_migrations (version)
 ```powershell
 # Docker Compose starts loopback-only Postgres automatically — use that for most dev work.
 # For isolated DB testing, use test-local.ps1 in backend/api-service/:
-./test-local.ps1   # spins up pinned postgres:18.4-alpine3.24 on 127.0.0.1:5533 as gt-test-pg
+./test-local.ps1   # spins up pinned postgres:18.6-alpine3.24 on 127.0.0.1:5533 as gt-test-pg
 
 # Or manually:
 docker run --name guardian-pg `
@@ -173,7 +173,7 @@ docker run --name guardian-pg `
   -e POSTGRES_USER=guardian_app `
   -e POSTGRES_DB=guardian_tracker `
   -p 127.0.0.1:5432:5432 `
-  -d postgres:18.4-alpine3.24@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
+  -d postgres:18.6-alpine3.24@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
 
 # Bootstrap least-privilege role (one-time after server provisioning)
 Get-Content database/init/01-init.sql | docker exec -i guardian-pg psql -U postgres -d guardian_tracker
