@@ -1,6 +1,6 @@
 # ADR 0020: Own Frontend Data Access
 
-- Status: Accepted — implementation pending final Wayfinder handoff
+- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-20
 
 ## Context

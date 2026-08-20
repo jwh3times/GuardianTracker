@@ -13,6 +13,25 @@ request.
 
 No unreleased changes.
 
+## [1.0.12] - 2026-08-20
+
+### Added
+
+- Documented the architecture-decision status vocabulary in the ADR index.
+  A record now states plainly whether its decision describes how the code
+  works, is sequenced but not yet built, or has been implemented in a named
+  version — so a reader can tell a plan from a description without opening the
+  record. The index also records the narrow, named, bidirectional supersession
+  convention.
+
+### Changed
+
+- Marked the eight architecture decisions ADR 0014 through ADR 0021 as
+  sequenced for implementation rather than pending a handoff, now that their
+  dependency order, slice boundaries, and verification gates are settled. These
+  remain accepted plans; the code does not work this way yet, and each record
+  will name the version that implements it as its work lands.
+
 ## [1.0.11] - 2026-08-20
 
 ### Added

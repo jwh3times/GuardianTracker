@@ -1,6 +1,6 @@
 # ADR 0014: Own Manifest-Derived Publication
 
-- Status: Accepted — implementation pending final Wayfinder handoff
+- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-16
 
 ## Context
@@ -117,4 +117,7 @@ publications preserve the existing observer ownership boundary.
   initiating caller but was not reused. Existing ADR 0010 ordering/rollback and
   ADR 0013 cache contract tests remain part of the surviving test surface.
 - This ADR selects the contract only. Implementation sequencing and pull-request
-  slices belong to the final Wayfinder handoff.
+  slices are set by the
+  [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff, which
+  lands the seam and its helpers first with no owner adopting it, then has each
+  owner adopt the fence inside its own slice.

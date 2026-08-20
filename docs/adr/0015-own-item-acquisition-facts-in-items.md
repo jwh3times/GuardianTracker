@@ -1,6 +1,6 @@
 # ADR 0015: Own Item Acquisition Facts in Items
 
-- Status: Accepted — implementation pending final Wayfinder handoff
+- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-16
 
 ## Context
@@ -94,8 +94,10 @@ state. Errors and unknown hashes are not cached.
   `AcquisitionFactsReader`.
 
 Implementation removes duplicated source grouping, Item projection, handler-local
-raw Manifest interfaces, and obsolete implementation-shaped tests. It does not
-begin until the final Wayfinder handoff authorizes and sequences execution.
+raw Manifest interfaces, and obsolete implementation-shaped tests. The
+[#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff sequences
+it, and the real-Manifest verification below remains a gate the handoff runs
+before this ADR's slice opens.
 
 ## Alternatives considered
 
