@@ -13,6 +13,18 @@ request.
 
 No unreleased changes.
 
+## [1.0.13] - 2026-08-20
+
+### Fixed
+
+- Removed a race from the search-handler test suite that could fail any pull
+  request, including ones touching no Go code. The cold-start test asserted that
+  the first search against an unbuilt index returns 503, but the handler starts
+  the rebuild asynchronously before checking readiness, so a fast build could
+  legitimately return 200 instead. Application behavior is unchanged; the test
+  now accepts either response and still proves that a not-ready search triggers
+  the rebuild.
+
 ## [1.0.12] - 2026-08-20
 
 ### Added
