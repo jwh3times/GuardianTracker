@@ -244,6 +244,15 @@ const { data } = useQuery({
 - `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
 - `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
 
+[ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) accepts moving this
+per-feature pattern to one data-access module per resource under
+`src/data/<resource>.ts` — owning query identity, projection, and mutations,
+with React Query kept out of feature modules. Implementation is deferred to the
+final Wayfinder handoff, so `lib/queries.ts`, the per-feature `useQuery` /
+`useMutation` calls documented in this file, and the consumer-side `toCharacter`
+/ `toWishlistEntry` projections in `lib/adapters.ts` remain how the code
+actually works today.
+
 ## Authentication
 
 Auth state lives entirely in `AuthContext` (`contexts/AuthContext.tsx`):
