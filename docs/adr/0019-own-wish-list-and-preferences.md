@@ -2,6 +2,11 @@
 
 - Status: Accepted — implementation pending final Wayfinder handoff
 - Date: 2026-08-17
+- Superseded in part by
+  [ADR 0021](./0021-own-preferences-synchronization.md): the Boundaries
+  statement that this ADR "does not change the existing REST wire" no longer
+  holds for the additive `persisted` field on `GET /api/preferences`. Every
+  other decision here, including PUT's `503` and GET's `200`, remains in force.
 
 ## Context
 
@@ -218,6 +223,10 @@ HTTP asymmetry remains during this decision: GET `/api/preferences` maps
 unavailable persistence to defaults and 200, while PUT returns 503. The later
 browser-preference synchronization decision may revise failure visibility, but
 must not bypass this service or weaken atomic patches.
+[ADR 0021](./0021-own-preferences-synchronization.md) resolved this: both status
+codes stay exactly as described, and the provenance this adapter already
+computes is exposed as an additive `persisted` field so the browser can tell a
+genuinely new account from unavailable persistence.
 
 `PreferencesHandler` performs authentication, binding, typed error mapping, and
 serialization only. It does not own defaults, validation, write ordering, or
@@ -245,7 +254,10 @@ onboarding policy.
 - The frontend Preferences synchronization decision owns membership reset,
   stale-work fencing, write serialization, and visible failure state.
 - This ADR does not implement those frontend decisions and does not change the
-  existing REST wire.
+  existing REST wire. **Superseded in part:**
+  [ADR 0021](./0021-own-preferences-synchronization.md) adds the `persisted`
+  provenance field to `GET /api/preferences`. That is the only wire change; the
+  status codes, methods, and every other field described here are unchanged.
 
 ## Migration and test surface
 
