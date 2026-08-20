@@ -13,6 +13,20 @@ request.
 
 No unreleased changes.
 
+## [1.0.8] - 2026-08-20
+
+### Added
+
+- Documented the accepted frontend data-access ownership contract: one
+  data-access module per domain resource owning its query identity, endpoint
+  paths, projection to domain types, mutations with their optimistic
+  coordination, and its own invalidation. Modules export hooks, membership-scoped
+  reads take the current membership from the browser session client rather than
+  as an argument, a membership-refresh module invalidates through each module
+  instead of naming its keys, and the import boundary is enforced in CI rather
+  than documented. Implementation remains deferred to the final Wayfinder
+  handoff.
+
 ## [1.0.7] - 2026-08-19
 
 ### Added
