@@ -13,6 +13,23 @@ request.
 
 No unreleased changes.
 
+## [1.0.14] - 2026-08-20
+
+### Added
+
+- Added the manifest generation fence that will stop a slow request from
+  republishing data derived from a manifest version that has since been
+  replaced. Work now has a way to capture the generation it started under and
+  install its result only while that generation is still current; a request that
+  loses the race still returns its own coherent result but leaves nothing behind
+  for later requests to inherit. Advancing the generation and clearing the
+  owner's state happen as one transition, so no reader can observe a moved
+  generation over data that has not yet been cleared.
+
+  This is the seam only. No module uses it yet, so manifest-derived data behaves
+  exactly as before; each module adopts the fence as part of its own later
+  change.
+
 ## [1.0.13] - 2026-08-20
 
 ### Fixed
