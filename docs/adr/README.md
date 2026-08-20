@@ -8,6 +8,24 @@ Do not include secrets, private infrastructure runbooks, exploit-level security
 analysis, or raw private research notes in ADRs. Put that material under
 `private/`.
 
+## Status vocabulary
+
+Each record's `Status` line states whether its decision is merely accepted or
+actually built:
+
+- **Accepted** — the decision holds and describes how the code works.
+- **Accepted — implementation sequenced in #172** — the decision holds, but the
+  code does not work this way yet. ADRs 0014–0021 are architecture decisions
+  whose implementation is sequenced slice by slice; read them as plans, not as
+  descriptions of current behavior.
+- **Accepted — implemented in `vX.Y.Z`** — a sequenced decision whose
+  implementation has landed.
+
+A record may also carry a **Supersedes in part** or **Superseded in part by**
+line. Supersession here is narrow and bidirectional: it names the exact statement
+that changed rather than reissuing the record, and both records link to each
+other. See [ADR 0021](./0021-own-preferences-synchronization.md), the first one.
+
 ## Index
 
 - [ADR 0001: Public and Private Documentation Boundary](./0001-public-private-documentation-boundary.md)

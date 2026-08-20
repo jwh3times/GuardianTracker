@@ -1,6 +1,6 @@
 # ADR 0017: Own the Browser Session Projection
 
-- Status: Accepted — implementation pending final Wayfinder handoff
+- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-17
 
 ## Context
@@ -244,4 +244,4 @@ client owns only the browser projection and transport orchestration.
   query-key ownership is redesigned.
 - Authenticated refresh requires Web Locks; unsupported browsers retain their
   projection but must reauthenticate when the access token expires.
-- Implementation remains deferred to the final Wayfinder handoff.
+- Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.

@@ -1,6 +1,6 @@
 # ADR 0016: Own Acquisition Recommendation Outcomes
 
-- Status: Accepted — implementation pending final Wayfinder handoff
+- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-17
 
 ## Context
@@ -227,4 +227,4 @@ Weekly; it does not merely rename or forward `ScoredAction`.
   value, one canonical wire vocabulary, and one explicit frontend projection.
 - Existing recommendation and fallback behavior remains stable apart from the
   corrected difficulty representation and badge styling.
-- Implementation remains deferred to the final Wayfinder handoff.
+- Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.

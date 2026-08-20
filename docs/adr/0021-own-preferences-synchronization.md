@@ -1,6 +1,6 @@
 # ADR 0021: Own Preferences Synchronization
 
-- Status: Accepted — implementation pending final Wayfinder handoff
+- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-20
 - Supersedes in part: [ADR 0019](./0019-own-wish-list-and-preferences.md); see
   [Supersession](#supersession)
@@ -349,4 +349,4 @@ and including it would teach that "membership-scoped" implies "refreshable".
   one narrow statement.
 - A degraded read is visible rather than indistinguishable from saved defaults,
   at the cost of a read-only degraded session not observing recovery.
-- Implementation remains deferred to the final Wayfinder handoff.
+- Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.
