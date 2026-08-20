@@ -79,6 +79,15 @@ backend/api-service/
   services/manifest/provider.go        ← Shared lazy-opening repository; implements bungie.SwapParticipant
                                            (CloseForSwap/Reopen) for the hourly manifest swap; satisfies all
                                            consumer ManifestRepo interfaces
+  services/manifeststate/publication.go ← ADR 0014 generation fence: Begin captures a generation, Attempt.
+                                           Publish installs only while it is current, Advance retires
+                                           outstanding work and runs the owner's invalidation atomically.
+                                           Advance's signature matches OnVersionChanged.
+                                           NO OWNER HOLDS ONE YET — the seam exists, adoption is per-owner
+                                           and lands with each owner's own refactor slice.
+  services/manifeststate/load.go       ← Load/LoadIf: cache.Load semantics plus the fence. A value loaded
+                                           under a retired generation is returned to its caller but not
+                                           cached. Nil cache = load every time; nil publication = error.
   services/weekly/service.go           ← Weekly recommendations; Xûr inventory + XurItemHashes();
                                            milestone data; reset time math; ManifestRepo interface;
                                            bungie.ManifestObserver

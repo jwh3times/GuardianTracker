@@ -89,6 +89,17 @@ the next search request rather than waiting for the next manifest swap, throttle
 to one attempt per 30 seconds. Other affected endpoints can return warming
 responses during cold start or manifest swap.
 
+`services/manifeststate` provides the generation fence that keeps a slow request
+from republishing state derived from a manifest that has since been replaced.
+Work captures the current generation before it reads, and may install its result
+only while that generation is still current; a request that loses the race still
+returns its own coherent result but leaves nothing behind for anyone else.
+Advancing the generation and running the owner's invalidation are one
+transition, so a loader cannot observe a moved generation over uncleared state.
+The package is in place and fully tested; **no module holds a publication yet**,
+so manifest-derived state still behaves exactly as described above. See
+[ADR 0014](./adr/0014-own-manifest-derived-publication.md).
+
 ## Collection and Acquisition Model
 
 An inventory item can be linked from several manifest collectibles. Collection
