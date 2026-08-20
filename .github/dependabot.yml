@@ -142,7 +142,9 @@ updates:
 
   # ── Docker Compose images (docker-compose.yml — postgres, pgadmin) ──
   # Separate ecosystem from `docker`; the docker scanner only reads Dockerfiles.
-  # Workflow service images are not covered; keep CI Postgres aligned manually.
+  # Workflow service images are not covered, so a bump here leaves the CI
+  # integration database behind; scripts/postgres-pin-policy.test.mjs fails
+  # format-check until the ci-cd.yml service container is realigned.
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:

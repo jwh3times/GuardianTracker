@@ -59,7 +59,7 @@ jobs:
       # sees the actionable "run the sync script" failure rather than a confusing
       # Prettier diff on a generated file.
       - name: Test repository policy scripts
-        run: node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs
+        run: node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs
 
       - name: Check agent config sync (Codex agents + Claude skills)
         run: npm run sync:agents -- --check
@@ -142,6 +142,7 @@ jobs:
       postgres:
         # Dependabot does not manage service-container refs in workflow YAML;
         # keep this tag and digest aligned with the Compose PostgreSQL update.
+        # scripts/postgres-pin-policy.test.mjs fails format-check on drift.
         image: postgres:18.6@sha256:06cad38a5d9f5d24b4d83d86def30795d5e4b757fedbf5281172b576dedcd941
         env:
           POSTGRES_PASSWORD: test_password

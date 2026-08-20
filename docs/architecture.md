@@ -194,7 +194,11 @@ the full-SHA plus release-comment policy in the format job. Dependabot manages
 both those action pins and the declared Go vulnerability-scanner tool.
 Frontend development, CI, and container builds take one exact Node 26 patch from
 the root `.nvmrc`; a repository policy test checks the workflows, Dockerfiles,
-package engine range, and Node ambient types for alignment.
+package engine range, and Node ambient types for alignment. The three Compose
+PostgreSQL services and the `Test Go Services` service container share one
+`major.minor` server version across their Alpine and Debian variants; a
+repository policy test enforces the alignment and rejects a retired
+`postgres:<version>` reference left in a tracked file.
 
 The browser workflow keeps functional/axe and visual jobs advisory during
 stabilization. E2E/axe becomes required only after ten consecutive clean runs;

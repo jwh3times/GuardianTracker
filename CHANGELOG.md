@@ -13,6 +13,31 @@ request.
 
 No unreleased changes.
 
+## [1.0.7] - 2026-08-19
+
+### Added
+
+- The repository policy tests now enforce PostgreSQL container-image alignment
+  in `format-check`. A Compose PostgreSQL bump that leaves the CI integration
+  database, another Compose service, or a documented image reference on the old
+  version now fails the build instead of drifting unnoticed, and both refs must
+  stay tag-qualified and digest-pinned.
+
+## [1.0.6] - 2026-08-17
+
+### Changed
+
+- Updated the PostgreSQL container images from 18.4 to 18.6, covering the three
+  Compose services, the `Test Go Services` integration database, and the
+  documented image references in `SETUP.md` and the agent guides.
+
+## [1.0.5] - 2026-08-17
+
+### Changed
+
+- Updated frontend development dependencies: `@axe-core/playwright` 4.12.1 to
+  4.13.0 and `@testing-library/user-event` 14.6.3 to 14.6.4.
+
 ## [1.0.4] - 2026-08-17
 
 ### Added
