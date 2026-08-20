@@ -251,7 +251,13 @@ Two callers stay deliberately lenient on `ErrUnavailable` rather than
 surfacing it: `FlagResolver.List` treats it as "no flags configured" (flags
 are rollout controls, not a security boundary, so an absent DB must not hide
 pages), and `GET /api/preferences` returns default preferences with `200`
-instead of a 503 (the UI needs preferences to render). `auth.RevocationChecker`
+instead of a 503 (the UI needs preferences to render).
+[ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md) accepts
+keeping both status codes and adding an additive `persisted` field to the GET
+response, so the browser can tell a genuinely new account from unavailable
+persistence instead of reading defaults for both. That is planning only — the
+response shape documented above is still what the code returns today.
+`auth.RevocationChecker`
 already failed open on any store error before this existed. `SessionIssuer`
 follows the same pattern one level removed, through its own `auth.ErrUnavailable`
 sentinel rather than `db.ErrUnavailable` directly — see "Session issuer" above.

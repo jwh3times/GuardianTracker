@@ -306,6 +306,22 @@ authenticated pages go inside this group — do not add inline auth checks or re
 
 `CharacterContext` (`contexts/CharacterContext.tsx`) fetches and caches the character list, and persists the active character selection per Destiny membership. `useCharacters()` returns `{ characters, activeCharacter, setActiveCharacter }` and throws when called outside `CharacterProvider`, matching `useAuth`, `useFlags`, and `usePreferences` — there is no silent `characters: []` default. Collections, catalysts, and seals remain membership-wide; Dashboard and This Week include the active character ID in weekly query keys and requests so authenticated vendor context follows the selected character.
 
+## Preferences
+
+`PreferencesContext` (`contexts/PreferencesContext.tsx`) holds card style, the
+"for you" badge preference, and Guardian Tracker user-backed onboarding
+completion, mirroring them into the global `guardian_prefs` localStorage key.
+
+[ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md) accepts
+replacing it with a framework-neutral preferences client at
+`src/data/preferences.ts` — membership-keyed single-slot hydration, one read per
+resolved membership, single-flight coalescing writes that roll back and surface
+a typed error instead of the current silent `.catch(() => {})`, same-membership
+cross-tab adoption, and a fail-closed onboarding gate. Implementation is
+deferred to the final Wayfinder handoff, so the context described above, its
+global storage key, and its `preferencesReady` flag remain how the code actually
+works today.
+
 ## OAuth callback flow
 
 `OAuthCallback.tsx` handles the redirect from Bungie at `/auth/callback?code=...&state=...`:

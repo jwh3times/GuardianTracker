@@ -174,6 +174,13 @@ tombstone, not a dropped row. Owned by `services/wishlist`.
 updated as one atomic partial patch; onboarding completion is an irreversible,
 server-stamped preference transition. Owned by `services/preferences`.
 
+**Preference provenance** — whether a preference read is authoritative. A
+`persisted` read reflects stored state, and that includes a genuinely new
+account whose defaults are the domain value with no completion timestamp. A
+non-persisted read is unstored defaults returned because persistence is
+unavailable. There is no third "fresh account" provenance. See
+[ADR 0021](./docs/adr/0021-own-preferences-synchronization.md).
+
 **This Week** — the page combining weekly milestones, Xûr, and personalized
 acquisition recommendations. **Do This Today** — the Dashboard's short list of
 today actions. Both are served by `services/weekly`.
@@ -262,6 +269,18 @@ taking it as an argument. The **membership-refresh module** owns the refresh
 endpoint and calls each membership-scoped module's own invalidation; no module
 names another module's keys. See
 [ADR 0020](./docs/adr/0020-own-frontend-data-access.md).
+
+**Preferences client** (`data/preferences.ts`) — the framework-neutral owner of
+the browser preference projection and its synchronization: single-slot
+membership-keyed hydration, one read per resolved membership, single-flight
+coalescing writes that roll back and surface a typed error rather than failing
+silently, same-membership cross-tab adoption ordered by a monotonic envelope
+revision, and the fail-closed onboarding gate. It exports hooks and uses no
+React Query, and it is exempt from the membership-refresh fan-out because a
+Bungie data refresh cannot change a user setting. It does not own preference
+policy, which stays in `services/preferences`, or the identity-boundary
+definition, which stays in the browser session client. See
+[ADR 0021](./docs/adr/0021-own-preferences-synchronization.md).
 
 **CollectionsView / CollectionsSummaryView** (`lib/collectionsView.ts`) — the
 adapted collections payload the frontend reads. Two types because the endpoint
