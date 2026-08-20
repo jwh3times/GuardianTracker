@@ -251,6 +251,18 @@ notifies consumers. It does not own the HttpOnly refresh credential or the
 canonical server session. See
 [ADR 0017](./docs/adr/0017-own-the-browser-session-projection.md).
 
+**Data-access module** (`data/<resource>.ts`) — the owner of one domain
+resource on the frontend: its query identity, endpoint paths, projection to
+domain types, mutations and their optimistic coordination, and its own
+invalidation. One per resource, never per page, because a resource commonly has
+several consumers. It exports hooks; React Query and wire types stay inside it,
+and the boundary is enforced by lint rather than convention. Membership-scoped
+modules read the current membership from the browser session client instead of
+taking it as an argument. The **membership-refresh module** owns the refresh
+endpoint and calls each membership-scoped module's own invalidation; no module
+names another module's keys. See
+[ADR 0020](./docs/adr/0020-own-frontend-data-access.md).
+
 **CollectionsView / CollectionsSummaryView** (`lib/collectionsView.ts`) — the
 adapted collections payload the frontend reads. Two types because the endpoint
 has two shapes: `CollectionsSummaryView` carries tree counts and the summary,

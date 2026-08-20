@@ -29,3 +29,4 @@ analysis, or raw private research notes in ADRs. Put that material under
 - [ADR 0017: Own the Browser Session Projection](./0017-own-the-browser-session-projection.md)
 - [ADR 0018: Own Complete Membership Collections](./0018-own-complete-membership-collections.md)
 - [ADR 0019: Own Wish List and Preferences](./0019-own-wish-list-and-preferences.md)
+- [ADR 0020: Own Frontend Data Access](./0020-own-frontend-data-access.md)
