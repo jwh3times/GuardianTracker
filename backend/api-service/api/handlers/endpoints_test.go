@@ -160,9 +160,15 @@ func TestSearchHandler_NotReadyKicksIndexBuild(t *testing.T) {
 	r := gin.New()
 	r.GET("/api/items/search", NewSearchHandler(svc).Search)
 
-	// The build is asynchronous, so this request still gets its 503 …
-	if w := do(r, http.MethodGet, "/api/items/search?q=gjallarhorn"); w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("first search = %d, want 503", w.Code)
+	// The build is asynchronous and this fixture indexes a single item, so the
+	// goroutine can finish before the handler re-checks IsReady. Both outcomes
+	// are correct: 503 while the build is still running, 200 once it has landed.
+	// Asserting 503 here pins one side of a race the handler never promised —
+	// the deterministic not-ready 503 is covered by TestSearchHandler, which
+	// uses a service that can never become ready. What this test owns is the
+	// regression below: a not-ready search must itself kick the build.
+	if w := do(r, http.MethodGet, "/api/items/search?q=gjallarhorn"); w.Code != http.StatusServiceUnavailable && w.Code != http.StatusOK {
+		t.Fatalf("first search = %d, want 503 or 200", w.Code)
 	}
 
 	// … but it must have started the build the 503 path used to skip.
