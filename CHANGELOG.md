@@ -13,6 +13,42 @@ request.
 
 No unreleased changes.
 
+## [1.0.11] - 2026-08-20
+
+### Added
+
+- Documented the accepted Preferences synchronization contract: one
+  framework-neutral preferences client owns the browser preference projection
+  through a membership-keyed single-slot cache, one read per resolved
+  membership, single-flight coalescing writes that roll back and surface a
+  typed error instead of failing silently, same-membership cross-tab adoption
+  ordered by a monotonic revision, and an onboarding gate that stays closed in
+  every unresolved, failed, and degraded state. It also accepts an additive
+  `persisted` field on `GET /api/preferences` so a genuinely new account is
+  distinguishable from unavailable persistence. Implementation remains deferred
+  to the final Wayfinder handoff.
+
+### Changed
+
+- Recorded the repository's first architecture-decision supersession, together
+  with the convention it establishes: supersede a named statement rather than
+  reissuing a record, and link the two decisions in both directions.
+
+## [1.0.10] - 2026-08-20
+
+### Changed
+
+- Re-pinned the frontend runtime image to the current
+  `nginxinc/nginx-unprivileged:1.31.3-alpine3.24` publication digest. The image
+  tag is unchanged; only the digest advanced.
+
+## [1.0.9] - 2026-08-20
+
+### Changed
+
+- Advanced the pinned `docker/setup-buildx-action` release commit from `v4.2.0`
+  to `v4.3.0` in the CI/CD workflow.
+
 ## [1.0.8] - 2026-08-20
 
 ### Added
