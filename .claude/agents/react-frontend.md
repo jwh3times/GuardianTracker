@@ -247,8 +247,8 @@ const { data } = useQuery({
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) accepts moving this
 per-feature pattern to one data-access module per resource under
 `src/data/<resource>.ts` — owning query identity, projection, and mutations,
-with React Query kept out of feature modules. Implementation is deferred to the
-final Wayfinder handoff, so `lib/queries.ts`, the per-feature `useQuery` /
+with React Query kept out of feature modules. Implementation is sequenced by the #172 handoff and has not
+landed yet, so `lib/queries.ts`, the per-feature `useQuery` /
 `useMutation` calls documented in this file, and the consumer-side `toCharacter`
 / `toWishlistEntry` projections in `lib/adapters.ts` remain how the code
 actually works today.
@@ -314,8 +314,8 @@ replacing it with a framework-neutral preferences client at
 `src/data/preferences.ts` — membership-keyed single-slot hydration, one read per
 resolved membership, single-flight coalescing writes that roll back and surface
 a typed error instead of the current silent `.catch(() => {})`, same-membership
-cross-tab adoption, and a fail-closed onboarding gate. Implementation is
-deferred to the final Wayfinder handoff, so the context described above, its
+cross-tab adoption, and a fail-closed onboarding gate. Implementation is sequenced by the
+#172 handoff and has not landed yet, so the context described above, its
 global storage key, and its `preferencesReady` flag remain how the code actually
 works today.
 
