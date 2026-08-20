@@ -145,3 +145,8 @@ frontend Dockerfiles, and their OCI digests together. Keep
 `node --test scripts/node-version-policy.test.mjs` from the repository root.
 When updating Playwright, update its Dockerfile tag and digest with
 `@playwright/test`; the same policy test rejects version drift.
+When updating PostgreSQL: bump all three Compose services, the `Test Go Services`
+service container in `.github/workflows/ci-cd.yml` (Debian variant, its own
+digest), and every documented reference — `SETUP.md`'s drift-check commands and
+the agent guides — together, then run
+`node --test scripts/postgres-pin-policy.test.mjs` from the repository root.

@@ -151,6 +151,13 @@ docker buildx imagetools inspect postgres:18.6
 docker buildx imagetools inspect alpine:3.24.1
 ```
 
+The two PostgreSQL entries are the Compose (Alpine) and CI (Debian) variants of
+the same server release. Dependabot bumps the Compose services but not the
+`Test Go Services` service container in `.github/workflows/ci-cd.yml`, so both
+refs and every documented `postgres:<version>` mention move together.
+`scripts/postgres-pin-policy.test.mjs` enforces that in `format-check`; run it
+locally with `node --test scripts/postgres-pin-policy.test.mjs`.
+
 After pulling an image update, rebuild and recreate existing local containers so
 Docker does not keep serving an older cached layer or container:
 
