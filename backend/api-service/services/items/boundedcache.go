@@ -62,6 +62,31 @@ func (c *boundedCache[K, V]) load(key K, load func(K) (V, error), storeIf func(V
 	return v, nil
 }
 
+// get returns the cached value for key without loading on a miss.
+//
+// It exists for callers that resolve a whole batch coherently and therefore
+// cannot use load's one-key-at-a-time shape: they need to know whether every
+// key hit before deciding to serve any of them.
+func (c *boundedCache[K, V]) get(key K) (V, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	v, ok := c.entries[key]
+	return v, ok
+}
+
+// put stores one already-loaded value, evicting at capacity like load does.
+func (c *boundedCache[K, V]) put(key K, v V) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.entries[key]; !exists && len(c.entries) >= c.max {
+		for k := range c.entries {
+			delete(c.entries, k)
+			break
+		}
+	}
+	c.entries[key] = v
+}
+
 // size reports how many entries are held. Only the cap tests read it.
 func (c *boundedCache[K, V]) size() int {
 	c.mu.RLock()

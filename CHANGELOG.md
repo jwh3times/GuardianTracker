@@ -13,6 +13,39 @@ request.
 
 No unreleased changes.
 
+## [1.0.15] - 2026-08-20
+
+### Added
+
+- Item detail, wish list, and collection views can now read one canonical
+  description of an item — its name, icon, slot-specific type, rarity,
+  collection category, every linked collectible, the combined list of ways it
+  can be acquired, and whether it can still be reacquired. Previously each of
+  those views joined the manifest itself and had already drifted apart. Item
+  detail reads through the new description now; collections and the wish list
+  follow as they are reworked.
+
+### Fixed
+
+- The item-detail endpoint reported a generic "Armor" for every armour piece
+  while collections reported the equipment slot, so the same item was described
+  two different ways depending on where it was viewed. Item detail now reports
+  the slot — "Helmet", "Chest Armor", "Class Item" — matching collections.
+  Weapons, mods, emblems, and ships are unaffected.
+- An item's acquisition sources and its reacquirable status no longer depend on
+  the order the manifest happens to return rows in. Where an item has more than
+  one collectible, the one that decides reacquirable status is now chosen
+  deterministically. Verified against a current real manifest: this changes the
+  chosen collectible for 17 items and changes the answer for none of them.
+
+### Changed
+
+- Item lookups now read item definitions and their collectibles together under a
+  single lock, so a manifest update landing mid-request can no longer pair an
+  item from one manifest version with acquisition sources from another. Work
+  that began before a manifest update still answers the request that started it
+  but can no longer leave a stale result behind for later requests.
+
 ## [1.0.14] - 2026-08-20
 
 ### Added

@@ -18,7 +18,12 @@ func (f *fakeRepo) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) {
 	return f.cols, f.err
 }
 
-func (f *fakeRepo) GetItemView(uint32) (*manifest.ItemView, error) { return nil, nil }
+func (f *fakeRepo) GetAcquisitionRows([]uint32) (*manifest.AcquisitionRows, error) {
+	return &manifest.AcquisitionRows{}, nil
+}
+func (f *fakeRepo) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
+	return nil, nil
+}
 
 func (f *fakeRepo) GetWeaponCatalysts(uint32) ([]manifest.WeaponCatalyst, error) { return nil, nil }
 
@@ -87,74 +92,6 @@ func TestService_BoundsCacheSize(t *testing.T) {
 	}
 }
 
-type fakeItemRepo struct {
-	view  *manifest.ItemView
-	calls int
-}
-
-func (f *fakeItemRepo) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) { return nil, nil }
-func (f *fakeItemRepo) GetItemView(uint32) (*manifest.ItemView, error) {
-	f.calls++
-	return f.view, nil
-}
-func (f *fakeItemRepo) GetWeaponCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
-	return nil, nil
-}
-
-func TestService_GetItem_CachesAndInvalidates(t *testing.T) {
-	repo := &fakeItemRepo{view: &manifest.ItemView{ItemHash: "100", Name: "Fatebringer"}}
-	svc := NewService(repo)
-
-	if v, _ := svc.GetItem(100); v == nil || v.Name != "Fatebringer" {
-		t.Fatalf("GetItem = %+v", v)
-	}
-	if _, _ = svc.GetItem(100); repo.calls != 1 {
-		t.Errorf("repo called %d times, want 1 (cached)", repo.calls)
-	}
-	svc.InvalidateCache()
-	if _, _ = svc.GetItem(100); repo.calls != 2 {
-		t.Errorf("after invalidate, repo called %d times, want 2", repo.calls)
-	}
-}
-
-func TestService_GetItem_UnknownHashNotCached(t *testing.T) {
-	repo := &fakeItemRepo{view: nil}
-	svc := NewService(repo)
-
-	v, err := svc.GetItem(999)
-	if err != nil {
-		t.Fatalf("first call: %v", err)
-	}
-	if v != nil {
-		t.Fatalf("first call: got %+v, want nil", v)
-	}
-
-	v, err = svc.GetItem(999)
-	if err != nil {
-		t.Fatalf("second call: %v", err)
-	}
-	if v != nil {
-		t.Fatalf("second call: got %+v, want nil", v)
-	}
-
-	if repo.calls != 2 {
-		t.Errorf("repo calls = %d, want 2 (nil result must not be cached)", repo.calls)
-	}
-}
-
-func TestService_BoundsCacheSize_ViewCache(t *testing.T) {
-	repo := &fakeItemRepo{view: &manifest.ItemView{ItemHash: "1", Name: "Test"}}
-	svc := NewService(repo)
-	for i := uint32(0); i <= maxCacheEntries; i++ {
-		if _, err := svc.GetItem(i); err != nil {
-			t.Fatalf("hash %d: %v", i, err)
-		}
-	}
-	if got := svc.views.size(); got > maxCacheEntries {
-		t.Errorf("viewCache size = %d, want <= %d", got, maxCacheEntries)
-	}
-}
-
 // fakeCatalystRepo implements itemRepo for GetCatalysts caching tests.
 type fakeCatalystRepo struct {
 	cats  []manifest.WeaponCatalyst
@@ -163,7 +100,12 @@ type fakeCatalystRepo struct {
 }
 
 func (f *fakeCatalystRepo) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) { return nil, nil }
-func (f *fakeCatalystRepo) GetItemView(uint32) (*manifest.ItemView, error)       { return nil, nil }
+func (f *fakeCatalystRepo) GetAcquisitionRows([]uint32) (*manifest.AcquisitionRows, error) {
+	return &manifest.AcquisitionRows{}, nil
+}
+func (f *fakeCatalystRepo) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
+	return nil, nil
+}
 func (f *fakeCatalystRepo) GetWeaponCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
 	f.calls++
 	return f.cats, f.err

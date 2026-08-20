@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/manifest"
 )
 
@@ -19,7 +21,9 @@ type fakePerks struct {
 }
 
 func (f fakePerks) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) { return f.cols, f.err }
-func (f fakePerks) GetItem(uint32) (*manifest.ItemView, error)           { return nil, f.err }
+func (f fakePerks) Lookup(context.Context, []uint32) (map[uint32]items.AcquisitionFacts, error) {
+	return nil, f.err
+}
 func (f fakePerks) GetCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
 	return f.cats, f.err
 }
@@ -125,7 +129,9 @@ type catalystsOnlyErrProvider struct{}
 func (catalystsOnlyErrProvider) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) {
 	return nil, nil
 }
-func (catalystsOnlyErrProvider) GetItem(uint32) (*manifest.ItemView, error) { return nil, nil }
+func (catalystsOnlyErrProvider) Lookup(context.Context, []uint32) (map[uint32]items.AcquisitionFacts, error) {
+	return nil, nil
+}
 func (catalystsOnlyErrProvider) GetCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
 	return nil, manifest.ErrNotReady
 }
@@ -139,18 +145,21 @@ func TestGetPerks_CatalystsManifestNotReady(t *testing.T) {
 	}
 }
 
-// fakeItemsProvider implements itemProvider for handler tests (perks, item view, catalysts).
+// fakeItemsProvider implements itemProvider for handler tests (perks, canonical
+// facts, catalysts).
 type fakeItemsProvider struct {
-	cols []manifest.PerkColumn
-	cats []manifest.WeaponCatalyst
-	view *manifest.ItemView
-	err  error
+	cols  []manifest.PerkColumn
+	cats  []manifest.WeaponCatalyst
+	facts map[uint32]items.AcquisitionFacts
+	err   error
 }
 
 func (f fakeItemsProvider) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) {
 	return f.cols, f.err
 }
-func (f fakeItemsProvider) GetItem(uint32) (*manifest.ItemView, error) { return f.view, f.err }
+func (f fakeItemsProvider) Lookup(context.Context, []uint32) (map[uint32]items.AcquisitionFacts, error) {
+	return f.facts, f.err
+}
 func (f fakeItemsProvider) GetCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
 	return f.cats, f.err
 }
@@ -161,6 +170,9 @@ func doGet(t *testing.T, handler gin.HandlerFunc, _ string, hashParam string) *h
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	// The handler reads the request context to pass through to Lookup, so the
+	// test context needs a Request even though the URL is otherwise unused.
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/items/"+hashParam, nil)
 	c.Params = gin.Params{{Key: "itemHash", Value: hashParam}}
 	handler(c)
 	return w
@@ -168,7 +180,9 @@ func doGet(t *testing.T, handler gin.HandlerFunc, _ string, hashParam string) *h
 
 func TestItemsHandler_GetItem(t *testing.T) {
 	// 200 OK
-	h := NewItemsHandler(&fakeItemsProvider{view: &manifest.ItemView{ItemHash: "100", Name: "Fatebringer"}})
+	h := NewItemsHandler(&fakeItemsProvider{facts: map[uint32]items.AcquisitionFacts{
+		100: {ItemHash: 100, Name: "Fatebringer", ItemType: "Hand Cannon"},
+	}})
 	w := doGet(t, h.GetItem, "/api/items/100", "100")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
@@ -183,7 +197,8 @@ func TestItemsHandler_GetItem(t *testing.T) {
 	}
 
 	// 404 unknown
-	h404 := NewItemsHandler(&fakeItemsProvider{view: nil})
+	// An unknown hash is absent from a SUCCESSFUL lookup, which is the 404 case.
+	h404 := NewItemsHandler(&fakeItemsProvider{facts: map[uint32]items.AcquisitionFacts{}})
 	if w := doGet(t, h404.GetItem, "/api/items/1", "1"); w.Code != http.StatusNotFound {
 		t.Errorf("unknown status = %d, want 404", w.Code)
 	}
