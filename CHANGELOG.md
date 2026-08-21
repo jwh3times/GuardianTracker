@@ -13,6 +13,20 @@ request.
 
 No unreleased changes.
 
+## [1.0.16] - 2026-08-20
+
+### Added
+
+- Added the `end-session` agent skill, which closes out a work session by
+  recording what it produced before clearing what holds the evidence. It
+  inventories the session first, routes each discovery to the single place that
+  owns it — agent memory, a `private/` working document, or a GitHub issue — and
+  only then cleans the local workspace: uncommitted work resolved with the
+  developer, the regenerable test and coverage artifacts removed by name, and the
+  throwaway test and end-to-end database containers stopped. It leaves the
+  Bungie manifest volume, environment files, and private documents in place, and
+  it neither pushes nor merges; shipping remains `/ship`'s job.
+
 ## [1.0.15] - 2026-08-20
 
 ### Added
