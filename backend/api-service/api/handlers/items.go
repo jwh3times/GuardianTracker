@@ -1,19 +1,36 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
+	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/manifest"
 )
 
 // itemProvider returns manifest-derived item detail. Satisfied by *items.Service.
 type itemProvider interface {
 	GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
-	GetItem(itemHash uint32) (*manifest.ItemView, error)
 	GetCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, error)
+	Lookup(ctx context.Context, hashes []uint32) (map[uint32]items.AcquisitionFacts, error)
+}
+
+// itemViewResponse is the wire shape of GET /api/items/:itemHash. It is
+// unchanged apart from itemType, which now carries the canonical slot-specific
+// value ("Helmet" rather than "Armor") that Collections has always used — the
+// two disagreed about the same item until this handler started reading
+// canonical facts.
+type itemViewResponse struct {
+	ItemHash    string `json:"itemHash"`
+	Name        string `json:"name"`
+	Icon        string `json:"icon"`
+	ItemType    string `json:"itemType"`
+	TierType    int    `json:"tierType"`
+	Rarity      string `json:"rarity"`
+	Description string `json:"description"`
 }
 
 // ItemsHandler serves manifest-derived item detail (perk pools, item views).
@@ -70,14 +87,27 @@ func (h *ItemsHandler) GetItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid item hash"})
 		return
 	}
-	view, err := h.items.GetItem(uint32(hash64))
+	itemHash := uint32(hash64)
+	facts, err := h.items.Lookup(c.Request.Context(), []uint32{itemHash})
 	if err != nil {
 		handleBungieError(c, err) // manifest.ErrNotReady → 503
 		return
 	}
-	if view == nil {
+	// An unknown hash is absent from a successful lookup rather than an error,
+	// which is exactly the 404 case — and is kept distinct from the failure
+	// above, where the manifest could not answer at all.
+	f, ok := facts[itemHash]
+	if !ok {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Item not found"})
 		return
 	}
-	c.JSON(http.StatusOK, view)
+	c.JSON(http.StatusOK, itemViewResponse{
+		ItemHash:    c.Param("itemHash"),
+		Name:        f.Name,
+		Icon:        f.Icon,
+		ItemType:    f.ItemType,
+		TierType:    f.TierType,
+		Rarity:      f.Rarity,
+		Description: f.Description,
+	})
 }

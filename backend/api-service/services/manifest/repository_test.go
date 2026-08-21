@@ -348,26 +348,40 @@ func TestCollectibleCategory(t *testing.T) {
 	}
 }
 
-func TestGetItemView(t *testing.T) {
+func TestGetAcquisitionRows(t *testing.T) {
 	repo, _ := fixtureRepo(t)
 
-	view, err := repo.GetItemView(100)
+	rows, err := repo.GetAcquisitionRows([]uint32{100, 999999})
 	if err != nil {
-		t.Fatalf("GetItemView: %v", err)
+		t.Fatalf("GetAcquisitionRows: %v", err)
 	}
-	if view == nil || view.Name != "Fatebringer" {
-		t.Fatalf("view = %+v, want Name=Fatebringer", view)
+	item := rows.Items[100]
+	if item == nil || item.DisplayProperties.Name != "Fatebringer" {
+		t.Fatalf("item 100 = %+v, want Name=Fatebringer", item)
 	}
-	if view.ItemHash != "100" {
-		t.Errorf("ItemHash = %q, want \"100\"", view.ItemHash)
+	if _, ok := rows.Items[999999]; ok {
+		t.Error("unknown hash should be absent from Items")
 	}
+	// The collectibles half is keyed by item hash and may legitimately be empty
+	// for an item the fixture links to nothing; what matters is that both halves
+	// came back from one read.
+	if rows.Collectibles == nil {
+		t.Error("Collectibles map is nil, want allocated")
+	}
+}
 
-	missing, err := repo.GetItemView(999999)
+func TestGetAcquisitionRows_EmptyRequestTouchesNothing(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+
+	rows, err := repo.GetAcquisitionRows(nil)
 	if err != nil {
-		t.Fatalf("GetItemView(unknown): %v", err)
+		t.Fatalf("GetAcquisitionRows(nil): %v", err)
 	}
-	if missing != nil {
-		t.Errorf("unknown hash should return nil, got %+v", missing)
+	if len(rows.Items) != 0 || len(rows.Collectibles) != 0 {
+		t.Errorf("rows = %+v, want both halves empty", rows)
+	}
+	if rows.Items == nil || rows.Collectibles == nil {
+		t.Error("empty request should still return allocated maps")
 	}
 }
 

@@ -189,6 +189,16 @@ var difficultyTable = []entry{
 // so it cannot steal a real rating.
 const unreacquirable = "cannot be reacquired"
 
+// IsUnreacquirable reports whether a source string marks an item that cannot be
+// reacquired from Collections.
+//
+// It lives here because this package owns what a source string means. Callers
+// deriving farm-only status use it instead of spelling the marker themselves,
+// so the phrase has one definition rather than one per consumer.
+func IsUnreacquirable(source string) bool {
+	return strings.Contains(strings.ToLower(source), unreacquirable)
+}
+
 // Difficulty infers an acquisition-difficulty estimate from a source string.
 func Difficulty(source string) string {
 	s := strings.ToLower(strings.TrimSpace(source))

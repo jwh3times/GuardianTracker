@@ -96,9 +96,19 @@ only while that generation is still current; a request that loses the race still
 returns its own coherent result but leaves nothing behind for anyone else.
 Advancing the generation and running the owner's invalidation are one
 transition, so a loader cannot observe a moved generation over uncleared state.
-The package is in place and fully tested; **no module holds a publication yet**,
-so manifest-derived state still behaves exactly as described above. See
+**Items is the first owner to hold a publication**; Records, Weekly,
+Collections, and Efficiency still invalidate without one and adopt the fence
+as each is reworked. See
 [ADR 0014](./adr/0014-own-manifest-derived-publication.md).
+
+`services/items` owns the canonical, user-independent facts about an item — its
+name, icon, slot-specific type, rarity, collection category, linked collectible
+hashes, the deterministic union of acquisition sources contributed by all of
+them, and farm-only status. Item detail reads those facts through one seam
+rather than joining the manifest itself, which is what stops separate consumers
+describing the same item differently. Collections and the wish list still carry
+their own projections and move onto this seam as they are reworked. See
+[ADR 0015](./adr/0015-own-item-acquisition-facts-in-items.md).
 
 ## Collection and Acquisition Model
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"maps"
 	"math"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -165,39 +164,6 @@ func (r *Repository) ResolveVendorLocation(vendorHash uint32, locationIndex int)
 		return 0, "", fmt.Errorf("failed to parse vendor destination JSON: %w", err)
 	}
 	return destinationHash, destination.DisplayProperties.Name, nil
-}
-
-// ItemView is a minimal, manifest-only item projection for the item-by-hash endpoint
-// (deep-linked non-collectible items). No user/collection state.
-type ItemView struct {
-	ItemHash    string `json:"itemHash"`
-	Name        string `json:"name"`
-	Icon        string `json:"icon"`
-	ItemType    string `json:"itemType"`
-	TierType    int    `json:"tierType"`
-	Rarity      string `json:"rarity"`
-	Description string `json:"description"`
-}
-
-// GetItemView returns a minimal item projection, or (nil, nil) when the hash is not in
-// the manifest.
-func (r *Repository) GetItemView(itemHash uint32) (*ItemView, error) {
-	def, err := r.GetInventoryItemDefinition(itemHash)
-	if err != nil {
-		return nil, err
-	}
-	if def == nil {
-		return nil, nil
-	}
-	return &ItemView{
-		ItemHash:    strconv.FormatUint(uint64(itemHash), 10),
-		Name:        def.DisplayProperties.Name,
-		Icon:        def.DisplayProperties.Icon,
-		ItemType:    bungie.ItemTypeName(def.ItemType, def.ItemSubType),
-		TierType:    def.Inventory.TierType,
-		Rarity:      bungie.GetTierName(def.Inventory.TierType),
-		Description: def.DisplayProperties.Description,
-	}, nil
 }
 
 func (r *Repository) GetAllCollectibles() ([]bungie.CollectibleDefinition, error) {
@@ -687,11 +653,54 @@ func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32
 // interface rather than an implementation detail. Hashes are chunked at 500 to
 // avoid SQLite IN-clause limits.
 func (r *Repository) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.getCollectiblesByItemHashesLocked(hashes)
+}
+
+// AcquisitionRows is one coherent read of the item definitions and linked
+// collectibles behind a set of item hashes.
+//
+// The two halves are read under a single lock because they are only meaningful
+// together: matching items from one manifest against collectibles from another
+// would attribute the wrong acquisition sources to an item. Callers that need
+// both must use this rather than two separate calls.
+type AcquisitionRows struct {
+	Items        map[uint32]*bungie.InventoryItemDefinition
+	Collectibles map[uint32][]bungie.CollectibleDefinition
+}
+
+// GetAcquisitionRows reads item definitions and their linked collectibles for
+// the requested hashes under one read lock, so a manifest swap cannot land
+// between the two queries. An empty request touches the database not at all.
+func (r *Repository) GetAcquisitionRows(hashes []uint32) (*AcquisitionRows, error) {
+	if len(hashes) == 0 {
+		return &AcquisitionRows{
+			Items:        map[uint32]*bungie.InventoryItemDefinition{},
+			Collectibles: map[uint32][]bungie.CollectibleDefinition{},
+		}, nil
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	items, err := r.getItemsByHashesChunkedLocked(hashes)
+	if err != nil {
+		return nil, err
+	}
+	collectibles, err := r.getCollectiblesByItemHashesLocked(hashes)
+	if err != nil {
+		return nil, err
+	}
+	return &AcquisitionRows{Items: items, Collectibles: collectibles}, nil
+}
+
+// getCollectiblesByItemHashesLocked is GetCollectiblesByItemHashes assuming
+// r.mu is already held.
+func (r *Repository) getCollectiblesByItemHashesLocked(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
 	if len(hashes) == 0 {
 		return map[uint32][]bungie.CollectibleDefinition{}, nil
 	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 
 	out := make(map[uint32][]bungie.CollectibleDefinition, len(hashes))
 	const chunkSize = 500

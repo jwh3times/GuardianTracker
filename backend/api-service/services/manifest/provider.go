@@ -214,12 +214,12 @@ func (p *Provider) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 	return r.GetWeaponPerks(itemHash)
 }
 
-func (p *Provider) GetItemView(itemHash uint32) (*ItemView, error) {
+func (p *Provider) GetAcquisitionRows(hashes []uint32) (*AcquisitionRows, error) {
 	r, err := p.get()
 	if err != nil {
 		return nil, err
 	}
-	return r.GetItemView(itemHash)
+	return r.GetAcquisitionRows(hashes)
 }
 
 func (p *Provider) GetWeaponCatalysts(itemHash uint32) ([]WeaponCatalyst, error) {
