@@ -36,6 +36,18 @@ No unreleased changes.
   statement, preventing concurrent partial requests from restoring stale values.
   Degraded writes retain the existing `503 DB_UNAVAILABLE` response.
 
+## [1.0.18] - 2026-08-21
+
+### Changed
+
+- Updated `github.com/mattn/go-sqlite3` from 1.14.49 to 1.14.50.
+
+## [1.0.17] - 2026-08-21
+
+### Changed
+
+- Updated `@testing-library/user-event` from 14.6.4 to 14.6.5.
+
 ## [1.0.16] - 2026-08-20
 
 ### Added

@@ -205,10 +205,13 @@ nominal 500-character product limit is unchanged.
 ### Preferences service
 
 `preferences.Service` uses a consumer-side repository with an atomic
-`Apply(ctx, membershipID, Patch)` operation. Patch represents field presence
-separately from the field value and updates only supplied fields in one
-transactional statement. It replaces the current sequence of field-level
-writes, preventing concurrent partial patches from restoring stale values.
+`Apply(ctx, membershipID, initial Values, Patch)` operation. The service passes
+its defaults as the initial values for a missing row; the database adapter
+translates them to `PreferenceInitial`, so persistence does not define domain
+defaults. Patch represents field presence separately from the field value and
+updates only supplied fields in one transactional statement. It replaces the
+current sequence of field-level writes, preventing concurrent partial patches
+from restoring stale values.
 
 The service owns:
 
