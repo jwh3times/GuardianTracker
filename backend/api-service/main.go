@@ -30,6 +30,7 @@ import (
 	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/items"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/preferences"
 	"guardian-tracker/api-service/services/records"
 	"guardian-tracker/api-service/services/search"
 	"guardian-tracker/api-service/services/weekly"
@@ -164,6 +165,7 @@ func main() {
 
 	// Records service (catalysts, crafting, seals)
 	recordsService := records.NewService(bungieClient, manifestProvider, appCache, cfg.CacheTTLRecords)
+	preferencesService := preferences.NewService(adapters.NewPreferencesRepository(stores.Prefs))
 
 	// Manifest swap enrolment. Must happen before EnsureReady can trigger a
 	// download, and therefore after every participant and observer exists.
@@ -247,7 +249,8 @@ func main() {
 		Handlers: api.Handlers{
 			Health:      handlers.NewHealthHandler(manifestService, readinessPinger),
 			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
-			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, stores.Prefs, weeklyService, tokenStore),
+			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, weeklyService, tokenStore),
+			Preferences: handlers.NewPreferencesHandler(preferencesService),
 			User:        handlers.NewUserHandler(stores.Users, stores.Flags, appCache, auditLogger),
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),
 			Audit:       handlers.NewAuditHandler(stores.Audit),

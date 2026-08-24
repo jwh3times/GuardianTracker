@@ -47,6 +47,9 @@ backend/api-service/
                                            defs, every collectible-derived acquisition source, and
                                            all-rotating-vendor availability
                                            (via liveVendorIface → weekly.Service.LiveVendorItemHashes)
+  api/handlers/preferences.go          ← Thin Preferences HTTP adapter: binds partial patches, maps typed
+                                           service errors, and serializes GET provenance; owns no defaults,
+                                           validation, write ordering, or onboarding policy
   api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
                                            resolved feature-flag state (GET /api/flags)
   api/handlers/admin.go                ← Admin console: user roster, role management, feature-flag
@@ -99,6 +102,9 @@ backend/api-service/
                                            bungie.ManifestObserver
   services/weekly/availability.go      ← LiveVendorItemHashes: best-effort all-rotating-vendor item
                                            availability (Xûr, Banshee-44, Ada-1, ritual vendors) for wishlist
+  services/preferences/service.go      ← Preferences owner: framed/personalized defaults, card-style
+                                           validation, atomic field-presence patches, irreversible
+                                           onboarding completion, and authoritative/degraded read provenance
   services/search/service.go           ← Manifest item search index with versioned disk snapshots; opens its
                                            own SQLite handle on the manifest (not manifest.Provider), so it
                                            registers itself as its own bungie.SwapParticipant (CloseForSwap/
@@ -135,6 +141,8 @@ backend/api-service/
                                            (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
   db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens
   db/wishlist.go, db/prefs.go          ← DB stores for wishlist and preferences
+  db/adapters/preferences.go           ← Membership-keyed Preferences repository adapter; hides internal
+                                           user IDs and translates db.ErrUnavailable to the domain sentinel
   db/audit.go                          ← Unified append-only audit trail store (audit_log): best-effort
                                            Log, in-transaction insertAudit, filtered/keyset List, prune
   db/flags.go                          ← Feature flags store (get all, get by key, upsert)
@@ -156,7 +164,7 @@ backend/api-service/
 | PUT    | `/api/wishlist/:id`                                      | JWT                           | Update wishlist item priority/notes                                                                                                                                                                                                                                                                               |
 | DELETE | `/api/wishlist/:id`                                      | JWT                           | Remove wishlist item                                                                                                                                                                                                                                                                                              |
 | POST   | `/api/wishlist/bulk`                                     | JWT                           | Bulk `delete` / `set_priority` over selected ids; partial-success `{updated, skipped}`                                                                                                                                                                                                                            |
-| GET    | `/api/preferences`                                       | JWT                           | Get user preferences and `onboardedAt`                                                                                                                                                                                                                                                                            |
+| GET    | `/api/preferences`                                       | JWT                           | Get user preferences, `onboardedAt`, and authoritative/degraded `persisted` provenance; degraded defaults remain `200`                                                                                                                                                                                            |
 | PUT    | `/api/preferences`                                       | JWT                           | Update preferences; `onboardingComplete:true` stamps completion and cannot reset it                                                                                                                                                                                                                               |
 | PUT    | `/api/account/role`                                      | JWT                           | Self-service opt-in to standard/beta/alpha; admin rejected, admin callers rejected                                                                                                                                                                                                                                |
 | GET    | `/api/flags`                                             | JWT                           | Resolved feature-flag state for caller (enabled/accessible/locked + role)                                                                                                                                                                                                                                         |
@@ -249,10 +257,12 @@ if err != nil {
 
 `HandleStoreError(c, err, logMsg) bool` maps `errors.Is(err, db.ErrUnavailable)`
 to `503 {"error": "...", "code": "DB_UNAVAILABLE"}` and anything else to a
-logged `500 INTERNAL_ERROR`. All seven wishlist/preferences handlers and the
-admin/audit/account handlers route store errors through it, so a missing
-database now produces one response shape everywhere instead of the bare
-`{"error": "database not configured"}` the wishlist handlers used to emit.
+logged `500 INTERNAL_ERROR`. Wishlist and the admin/audit/account handlers route
+direct store errors through it, so a missing database produces one response
+shape everywhere instead of the bare `{"error": "database not configured"}`
+the wishlist handlers used to emit. `PreferencesHandler` maps the equivalent
+typed `preferences.ErrUnavailable` after the database adapter has removed the
+storage vocabulary.
 `auth.RequireTier`'s own 503 (no store involved — it never reads one) uses
 matching wording so both paths read as the same failure.
 
@@ -266,12 +276,11 @@ Two callers stay deliberately lenient on `ErrUnavailable` rather than
 surfacing it: `FlagResolver.List` treats it as "no flags configured" (flags
 are rollout controls, not a security boundary, so an absent DB must not hide
 pages), and `GET /api/preferences` returns default preferences with `200`
-instead of a 503 (the UI needs preferences to render).
-[ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md) accepts
-keeping both status codes and adding an additive `persisted` field to the GET
-response, so the browser can tell a genuinely new account from unavailable
-persistence instead of reading defaults for both. That is planning only — the
-response shape documented above is still what the code returns today.
+instead of a 503 (the UI needs preferences to render). Its additive `persisted`
+field is `true` for every authoritative read, including fresh-account defaults,
+and `false` only for unstored defaults returned because persistence is
+unavailable. PUT remains strict and maps `preferences.ErrUnavailable` to status
+`503` with code `DB_UNAVAILABLE`.
 `auth.RevocationChecker`
 already failed open on any store error before this existed. `SessionIssuer`
 follows the same pattern one level removed, through its own `auth.ErrUnavailable`

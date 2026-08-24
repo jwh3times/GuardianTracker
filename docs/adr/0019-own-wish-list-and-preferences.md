@@ -7,6 +7,11 @@
   statement that this ADR "does not change the existing REST wire" no longer
   holds for the additive `persisted` field on `GET /api/preferences`. Every
   other decision here, including PUT's `503` and GET's `200`, remains in force.
+- Implementation note (2026-08-24): the Preferences backend slice is complete.
+  `services/preferences`, its membership-keyed database adapter, the atomic
+  storage `Apply`, and `PreferencesHandler` now implement the Preferences
+  decisions below. Wish list ownership slices B3/B5 remain pending, so this ADR
+  remains Accepted with sequenced implementation rather than Implemented.
 
 ## Context
 
@@ -200,10 +205,13 @@ nominal 500-character product limit is unchanged.
 ### Preferences service
 
 `preferences.Service` uses a consumer-side repository with an atomic
-`Apply(ctx, membershipID, Patch)` operation. Patch represents field presence
-separately from the field value and updates only supplied fields in one
-transactional statement. It replaces the current sequence of field-level
-writes, preventing concurrent partial patches from restoring stale values.
+`Apply(ctx, membershipID, initial Values, Patch)` operation. The service passes
+its defaults as the initial values for a missing row; the database adapter
+translates them to `PreferenceInitial`, so persistence does not define domain
+defaults. Patch represents field presence separately from the field value and
+updates only supplied fields in one transactional statement. It replaces the
+current sequence of field-level writes, preventing concurrent partial patches
+from restoring stale values.
 
 The service owns:
 

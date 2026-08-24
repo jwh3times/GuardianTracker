@@ -4,6 +4,12 @@
 - Date: 2026-08-20
 - Supersedes in part: [ADR 0019](./0019-own-wish-list-and-preferences.md); see
   [Supersession](#supersession)
+- Implementation note (2026-08-24): the backend provenance slice is complete.
+  `preferences.Service` now distinguishes authoritative reads from degraded
+  defaults, and `PreferencesHandler` serializes the additive `persisted` field
+  while preserving GET's `200` and PUT's `503`. The frontend Preferences client
+  and synchronization slice E15 remains pending, so this ADR remains Accepted
+  with sequenced implementation rather than Implemented.
 
 ## Context
 

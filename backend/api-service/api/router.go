@@ -32,6 +32,7 @@ type Handlers struct {
 	Health      *handlers.HealthHandler
 	Auth        *handlers.AuthHandler
 	Wishlist    *handlers.WishlistHandler
+	Preferences *handlers.PreferencesHandler
 	User        *handlers.UserHandler
 	Admin       *handlers.AdminHandler
 	Audit       *handlers.AuditHandler
@@ -133,8 +134,8 @@ func NewRouter(d Deps) *gin.Engine {
 	authed.POST("/wishlist/bulk", d.Handlers.Wishlist.BulkUpdate)
 
 	// Preferences
-	authed.GET("/preferences", d.Handlers.Wishlist.GetPreferences)
-	authed.PUT("/preferences", d.Handlers.Wishlist.UpdatePreferences)
+	authed.GET("/preferences", d.Handlers.Preferences.GetPreferences)
+	authed.PUT("/preferences", d.Handlers.Preferences.UpdatePreferences)
 
 	// Compatibility path: /account/role changes the Guardian Tracker user's tier.
 	authed.PUT("/account/role", d.Handlers.User.SetRole)
