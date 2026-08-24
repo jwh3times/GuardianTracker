@@ -160,6 +160,22 @@ non-admins and degraded builds — are asserted against the built route table in
 `api/router_test.go`. See
 [ADR 0011](./adr/0011-route-table-as-a-testable-composition-root.md).
 
+Preferences are owned behind the HTTP boundary by `services/preferences`, which
+defines the defaults, validates partial patches, and owns irreversible,
+server-stamped onboarding completion. Its consumer-side repository is keyed by
+Destiny membership; the adapter in `db/adapters` resolves PostgreSQL's internal
+user ID and translates storage values without exposing either detail to the
+service or Gin. The store applies every supplied field in one atomic statement,
+so independent partial updates cannot restore stale values.
+
+`GET /api/preferences` remains available in degraded mode. It returns `200` and
+adds `persisted: true` for every authoritative read, including a genuinely new
+account whose defaults have no stored row, or `persisted: false` when the values
+are unstored defaults returned because persistence is unavailable. Writes do not
+degrade: `PUT /api/preferences` returns `503 DB_UNAVAILABLE` when persistence is
+unavailable. `PreferencesHandler` owns request binding, typed error mapping, and
+serialization; preference policy does not live in Gin.
+
 ## Request Logging
 
 The API generates a UUID for every request, exposes it as `X-Request-ID`, and

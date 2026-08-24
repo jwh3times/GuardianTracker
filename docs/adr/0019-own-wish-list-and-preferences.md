@@ -7,6 +7,11 @@
   statement that this ADR "does not change the existing REST wire" no longer
   holds for the additive `persisted` field on `GET /api/preferences`. Every
   other decision here, including PUT's `503` and GET's `200`, remains in force.
+- Implementation note (2026-08-24): the Preferences backend slice is complete.
+  `services/preferences`, its membership-keyed database adapter, the atomic
+  storage `Apply`, and `PreferencesHandler` now implement the Preferences
+  decisions below. Wish list ownership slices B3/B5 remain pending, so this ADR
+  remains Accepted with sequenced implementation rather than Implemented.
 
 ## Context
 
