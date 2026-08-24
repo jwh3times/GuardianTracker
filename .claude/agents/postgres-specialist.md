@@ -90,18 +90,19 @@ PostgreSQL is the primary persistence layer for all user data. The api-service c
 
 ### DB package structure
 
-| File             | Contents                                                                                                                                                                                                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `db/db.go`       | Pool creation (`NewPool`); `Close`                                                                                                                                                                                                                                 |
-| `db/migrate.go`  | Migration runner; `schema_migrations` table                                                                                                                                                                                                                        |
-| `db/stores.go`   | `Stores` struct — interface fields (`UserRepo`, `TokenRepo`, `WishlistRepo`, `PrefsRepo`, `FlagRepo`, `AuditRepo`, `Pinger`), never nil; `NewStores(nil)` returns the degraded set; `Available() bool` reports whether persistence is real                         |
-| `db/degraded.go` | `ErrUnavailable` sentinel + the six store interfaces + degraded implementations whose every method returns `ErrUnavailable` (handlers map it to a 503 via `handlers.HandleStoreError`)                                                                             |
-| `db/users.go`    | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)                                                                                                               |
-| `db/tokens.go`   | `BungieTokenStore` — encrypted Bungie OAuth tokens                                                                                                                                                                                                                 |
-| `db/wishlist.go` | `WishlistStore` — wishlist CRUD, user-scoped; `BulkDelete`/`BulkSetPriority` for `POST /api/wishlist/bulk` (user-scoped `id = ANY($1)`; foreign/missing ids silently skipped; `RowsAffected()` drives the handler's partial-success `{updated, skipped}` response) |
-| `db/prefs.go`    | `PrefsStore` — user preferences and irreversible onboarding completion                                                                                                                                                                                             |
-| `db/audit.go`    | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune                                                                                                                      |
-| `db/flags.go`    | `FlagsStore` — feature flag get/list/upsert                                                                                                                                                                                                                        |
+| File                         | Contents                                                                                                                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `db/db.go`                   | Pool creation (`NewPool`); `Close`                                                                                                                                                                                                                                 |
+| `db/migrate.go`              | Migration runner; `schema_migrations` table                                                                                                                                                                                                                        |
+| `db/stores.go`               | `Stores` struct — interface fields (`UserRepo`, `TokenRepo`, `WishlistRepo`, `PrefsRepo`, `FlagRepo`, `AuditRepo`, `Pinger`), never nil; `NewStores(nil)` returns the degraded set; `Available() bool` reports whether persistence is real                         |
+| `db/degraded.go`             | `ErrUnavailable` sentinel + the six store interfaces + degraded implementations whose every method returns `ErrUnavailable` (handlers map it to a 503 via `handlers.HandleStoreError`)                                                                             |
+| `db/users.go`                | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)                                                                                                               |
+| `db/tokens.go`               | `BungieTokenStore` — encrypted Bungie OAuth tokens                                                                                                                                                                                                                 |
+| `db/wishlist.go`             | `WishlistStore` — wishlist CRUD, user-scoped; `BulkDelete`/`BulkSetPriority` for `POST /api/wishlist/bulk` (user-scoped `id = ANY($1)`; foreign/missing ids silently skipped; `RowsAffected()` drives the handler's partial-success `{updated, skipped}` response) |
+| `db/prefs.go`                | `PrefsStore` — missing-row signaling plus one field-presence-aware `Apply` statement that consumes service-owned initial values for atomic partial preference updates and irreversible onboarding completion                                                       |
+| `db/adapters/preferences.go` | Membership-keyed adapter for `services/preferences`; resolves the internal user ID, translates storage values, and maps `db.ErrUnavailable` to the Preferences domain sentinel                                                                                     |
+| `db/audit.go`                | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune                                                                                                                      |
+| `db/flags.go`                | `FlagsStore` — feature flag get/list/upsert                                                                                                                                                                                                                        |
 
 ### Bungie token store (`db/tokens.go`)
 
@@ -184,12 +185,12 @@ enforces alignment across Compose, the CI service container, and this file.
 
 ## When to use which database
 
-| Use case                                          | Database                                         |
-| ------------------------------------------------- | ------------------------------------------------ |
-| Looking up item names, icons, sources from Bungie | SQLite manifest (read-only)                      |
-| Storing user wishlists                            | PostgreSQL (`db/wishlist.go`)                    |
-| Storing Guardian Tracker user / token_version     | PostgreSQL (`db/users.go`)                       |
-| Storing encrypted Bungie OAuth tokens             | PostgreSQL (`db/tokens.go`)                      |
-| User preferences                                  | PostgreSQL (`db/prefs.go`)                       |
-| Collections analysis (missing items)              | SQLite manifest + Bungie API live data           |
-| Weapon type enrichment for catalysts              | SQLite manifest (`GetWeaponTypesByName`; cached) |
+| Use case                                          | Database                                                       |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| Looking up item names, icons, sources from Bungie | SQLite manifest (read-only)                                    |
+| Storing user wishlists                            | PostgreSQL (`db/wishlist.go`)                                  |
+| Storing Guardian Tracker user / token_version     | PostgreSQL (`db/users.go`)                                     |
+| Storing encrypted Bungie OAuth tokens             | PostgreSQL (`db/tokens.go`)                                    |
+| User preferences                                  | PostgreSQL (`db/prefs.go`) behind `db/adapters/preferences.go` |
+| Collections analysis (missing items)              | SQLite manifest + Bungie API live data                         |
+| Weapon type enrichment for catalysts              | SQLite manifest (`GetWeaponTypesByName`; cached)               |

@@ -53,23 +53,18 @@ type tokenProvider interface {
 	GetValidToken(membershipID string) (string, error)
 }
 
-type prefsStoreIface interface {
-	Get(ctx context.Context, userID int64) (*db.UserPreferences, error)
-	Upsert(ctx context.Context, userID int64, cardStyle string, personalize, completeOnboarding bool) (*db.UserPreferences, error)
-}
-
-// WishlistHandler handles wishlist and preferences endpoints.
+// WishlistHandler handles wishlist endpoints.
 type WishlistHandler struct {
-	store       wishlistStoreIface  // nil = degraded mode
+	store       wishlistStoreIface  // degraded implementation when no database exists
 	manifest    manifestLookupIface // nil = no enrichment
-	prefs       prefsStoreIface     // nil = degraded mode
 	liveVendors liveVendorIface     // nil = availability always false
 	tokens      tokenProvider       // nil = public-only availability
 }
 
-// NewWishlistHandler creates a handler. Any argument may be nil for degraded-mode operation.
-func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, prefs prefsStoreIface, liveVendors liveVendorIface, tokens tokenProvider) *WishlistHandler {
-	return &WishlistHandler{store: store, manifest: manifest, prefs: prefs, liveVendors: liveVendors, tokens: tokens}
+// NewWishlistHandler creates a handler. Store is required and remains non-nil
+// in degraded mode; enrichment dependencies may be nil when unavailable.
+func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, liveVendors liveVendorIface, tokens tokenProvider) *WishlistHandler {
+	return &WishlistHandler{store: store, manifest: manifest, liveVendors: liveVendors, tokens: tokens}
 }
 
 // wishlistResponse is the JSON shape returned to clients.
@@ -303,101 +298,7 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"updated": updated, "skipped": int64(len(ids)) - updated})
 }
 
-// GetPreferences handles GET /api/preferences
-func (h *WishlistHandler) GetPreferences(c *gin.Context) {
-	membershipID := c.GetString("membership_id")
-	userID, err := h.getUserID(c.Request.Context(), membershipID)
-	if err != nil {
-		if errors.Is(err, db.ErrUnavailable) {
-			c.JSON(http.StatusOK, defaultPreferences())
-			return
-		}
-		HandleStoreError(c, err, "preference user lookup failed")
-		return
-	}
-	p, err := h.prefs.Get(c.Request.Context(), userID)
-	if err != nil {
-		if errors.Is(err, db.ErrUnavailable) {
-			c.JSON(http.StatusOK, defaultPreferences())
-			return
-		}
-		HandleStoreError(c, err, "preference listing failed")
-		return
-	}
-	c.JSON(http.StatusOK, preferencesResponse(p))
-}
-
-// UpdatePreferences handles PUT /api/preferences
-func (h *WishlistHandler) UpdatePreferences(c *gin.Context) {
-	var body struct {
-		CardStyle          string `json:"cardStyle"`
-		Personalize        *bool  `json:"personalize"`
-		OnboardingComplete *bool  `json:"onboardingComplete"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
-		return
-	}
-	if body.CardStyle != "" && body.CardStyle != "framed" && body.CardStyle != "compact" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cardStyle must be 'framed' or 'compact'"})
-		return
-	}
-	if body.OnboardingComplete != nil && !*body.OnboardingComplete {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "onboardingComplete can only be set to true"})
-		return
-	}
-	membershipID := c.GetString("membership_id")
-	userID, err := h.getUserID(c.Request.Context(), membershipID)
-	if err != nil {
-		HandleStoreError(c, err, "preference user lookup failed")
-		return
-	}
-	// Read current prefs to fill in defaults for missing fields
-	current, err := h.prefs.Get(c.Request.Context(), userID)
-	if err != nil {
-		HandleStoreError(c, err, "current preference lookup failed")
-		return
-	}
-	cardStyle := current.CardStyle
-	if body.CardStyle != "" {
-		cardStyle = body.CardStyle
-	}
-	personalize := current.Personalize
-	if body.Personalize != nil {
-		personalize = *body.Personalize
-	}
-	completeOnboarding := body.OnboardingComplete != nil && *body.OnboardingComplete
-	p, err := h.prefs.Upsert(c.Request.Context(), userID, cardStyle, personalize, completeOnboarding)
-	if err != nil {
-		HandleStoreError(c, err, "preference update failed")
-		return
-	}
-	c.JSON(http.StatusOK, preferencesResponse(p))
-}
-
-// defaultPreferences is what the UI gets when there is nowhere to store a
-// preference: the same shape a fresh account would have.
-func defaultPreferences() gin.H {
-	return gin.H{"cardStyle": "framed", "personalize": true, "onboardedAt": nil}
-}
-
-func preferencesResponse(p *db.UserPreferences) gin.H {
-	return gin.H{
-		"cardStyle":   p.CardStyle,
-		"personalize": p.Personalize,
-		"onboardedAt": p.OnboardedAt,
-	}
-}
-
 // --- helpers ---
-
-// getUserID resolves a membershipID to a DB user ID using the wishlist store.
-func (h *WishlistHandler) getUserID(ctx context.Context, membershipID string) (int64, error) {
-	if h.store != nil {
-		return h.store.GetUserID(ctx, membershipID)
-	}
-	return 0, fmt.Errorf("no store available")
-}
 
 func (h *WishlistHandler) enrichItems(items []db.WishlistItem, live map[uint32]string) []wishlistResponse {
 	if len(items) == 0 {

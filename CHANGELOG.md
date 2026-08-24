@@ -13,6 +13,41 @@ request.
 
 No unreleased changes.
 
+## [1.1.0] - 2026-08-24
+
+### Added
+
+- `GET /api/preferences` now reports whether its result is authoritative through
+  an additive `persisted` field. Successful stored and fresh-account reads return
+  `true`; degraded defaults returned while persistence is unavailable return
+  `false` and retain the existing `200` response.
+
+### Changed
+
+- Preference defaults, validation, atomic partial updates, and irreversible
+  onboarding completion now belong to a dedicated Preferences service behind a
+  membership-keyed persistence adapter and a thin HTTP handler. Internal
+  Guardian Tracker user IDs and PostgreSQL-shaped values no longer cross into
+  preference policy or Gin.
+
+### Fixed
+
+- Independent preference updates are now applied as one field-presence-aware SQL
+  statement, preventing concurrent partial requests from restoring stale values.
+  Degraded writes retain the existing `503 DB_UNAVAILABLE` response.
+
+## [1.0.18] - 2026-08-21
+
+### Changed
+
+- Updated `github.com/mattn/go-sqlite3` from 1.14.49 to 1.14.50.
+
+## [1.0.17] - 2026-08-21
+
+### Changed
+
+- Updated `@testing-library/user-event` from 14.6.4 to 14.6.5.
+
 ## [1.0.16] - 2026-08-20
 
 ### Added

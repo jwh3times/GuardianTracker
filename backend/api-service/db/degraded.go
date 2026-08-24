@@ -57,8 +57,9 @@ type WishlistRepo interface {
 }
 
 type PrefsRepo interface {
+	GetUserID(ctx context.Context, membershipID string) (int64, error)
 	Get(ctx context.Context, userID int64) (*UserPreferences, error)
-	Upsert(ctx context.Context, userID int64, cardStyle string, personalize, completeOnboarding bool) (*UserPreferences, error)
+	Apply(ctx context.Context, userID int64, initial PreferenceInitial, patch PreferencePatch) (*UserPreferences, error)
 }
 
 type FlagRepo interface {
@@ -162,10 +163,13 @@ func (degradedWishlist) BulkSetPriority(context.Context, int64, []int64, int16) 
 
 type degradedPrefs struct{}
 
+func (degradedPrefs) GetUserID(context.Context, string) (int64, error) {
+	return 0, ErrUnavailable
+}
 func (degradedPrefs) Get(context.Context, int64) (*UserPreferences, error) {
 	return nil, ErrUnavailable
 }
-func (degradedPrefs) Upsert(context.Context, int64, string, bool, bool) (*UserPreferences, error) {
+func (degradedPrefs) Apply(context.Context, int64, PreferenceInitial, PreferencePatch) (*UserPreferences, error) {
 	return nil, ErrUnavailable
 }
 
