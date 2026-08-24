@@ -116,7 +116,24 @@
         "typescript/triple-slash-reference": "error",
         "react/rules-of-hooks": "error",
         "react/exhaustive-deps": "warn",
-        "react/react-compiler": "warn",
+        "react/jsx-key": "error",
+        "react/jsx-no-duplicate-props": "error",
+        "react/jsx-no-target-blank": "error",
+        "react/no-danger-with-children": "error",
+        "react/no-unknown-property": "error",
+        "react/error-boundaries": "warn",
+        "react/globals": "warn",
+        "react/immutability": "warn",
+        "react/incompatible-library": "warn",
+        "react/preserve-manual-memoization": "warn",
+        "react/purity": "warn",
+        "react/refs": "warn",
+        "react/set-state-in-effect": "warn",
+        "react/set-state-in-render": "warn",
+        "react/static-components": "warn",
+        "react/unsupported-syntax": "warn",
+        "react/use-memo": "warn",
+        "react/void-use-memo": "warn",
         "react/only-export-components": [
           "warn",
           {
@@ -157,6 +174,22 @@
         "typescript/restrict-plus-operands": "warn",
         "typescript/restrict-template-expressions": "warn",
         "typescript/unbound-method": "warn"
+      }
+    },
+    {
+      "files": ["src/**/*.test.{ts,tsx}"],
+      "plugins": ["typescript", "react", "vitest"],
+      "rules": {
+        "vitest/expect-expect": "error",
+        "vitest/no-conditional-expect": "error",
+        "vitest/no-conditional-tests": "error",
+        "vitest/no-focused-tests": "error",
+        "vitest/no-standalone-expect": "error",
+        "vitest/require-mock-type-parameters": "warn",
+        "vitest/valid-describe-callback": "error",
+        "vitest/valid-expect": "error",
+        "vitest/valid-expect-in-promise": "error",
+        "vitest/valid-title": "error"
       }
     }
   ]
