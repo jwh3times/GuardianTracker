@@ -13,6 +13,7 @@ import (
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/config"
+	"guardian-tracker/api-service/services/preferences"
 
 	"github.com/gin-gonic/gin"
 )
@@ -70,7 +71,8 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 		Handlers: Handlers{
 			Health:      handlers.NewHealthHandler(nil, nil),
 			Auth:        handlers.NewAuthHandler(nil, cfg, nil),
-			Wishlist:    handlers.NewWishlistHandler(nil, nil, nil, nil, nil),
+			Wishlist:    handlers.NewWishlistHandler(nil, nil, nil, nil),
+			Preferences: handlers.NewPreferencesHandler(preferences.NewService(nil)),
 			User:        handlers.NewUserHandler(nil, nil, nil, nil),
 			Admin:       handlers.NewAdminHandler(nil, nil, nil),
 			Audit:       handlers.NewAuditHandler(nil),
