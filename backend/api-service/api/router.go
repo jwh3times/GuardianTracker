@@ -118,6 +118,7 @@ func NewRouter(d Deps) *gin.Engine {
 	jwtGate := d.JWT.Middleware(d.Revoker)
 
 	authedAuthRoutes := authRoutes.Group("", jwtGate)
+	authedAuthRoutes.POST("/bungie/reconnect", middleware.RequireAllowedOrigin(cfg.CORSAllowedOrigins), authLimiter, d.Handlers.Auth.ReconnectBungie)
 	authedAuthRoutes.GET("/validate", d.Handlers.Auth.ValidateToken)
 	// Compatibility path: this returns the session user, not Bungie profile data.
 	authedAuthRoutes.GET("/profile", d.Handlers.Auth.GetSessionUser)

@@ -18,7 +18,10 @@ const authed = () => {
 };
 
 describe("App routing", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   it("redirects an unauthenticated visitor to the login page", async () => {
     render(
@@ -57,6 +60,37 @@ describe("App routing", () => {
       // 1s default is too tight under a loaded parallel suite.
       await screen.findByText(/Welcome, TestGuardian/, {}, { timeout: 5000 }),
     ).toBeInTheDocument();
+  });
+
+  it("renders the dedicated reconnect screen for an authenticated user", async () => {
+    authed();
+    render(
+      <MemoryRouter initialEntries={["/reauthorize"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /Reconnect Bungie to continue/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Reconnect Bungie/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("requires a Guardian Tracker session for the reconnect screen", async () => {
+    render(
+      <MemoryRouter initialEntries={["/reauthorize"]}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Sign in with Bungie")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Reconnect Bungie/i }),
+    ).not.toBeInTheDocument();
   });
 });
 

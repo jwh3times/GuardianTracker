@@ -23,7 +23,8 @@ backend/api-service/
   auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
   auth/middleware.go                   ← JWT middleware for protected routes
   auth/state.go                        ← Stateless HMAC-signed OAuth state (CSRF, multi-replica safe)
-  auth/tokenstore.go                   ← DB-backed encrypted Bungie OAuth token store; CAS refresh writes
+  auth/tokenstore.go                   ← DB-backed encrypted Bungie OAuth authorization store;
+                                           public access-only leases + legacy CAS refresh compatibility
   auth/crypto.go                       ← AES-256-GCM cipher; exact current/previous key versions
   auth/revocation.go                   ← JWT revocation: checks token_version (Guardian Tracker user-wide) + session
                                            existence (per-device) via RevocationChecker; 60s in-memory
@@ -31,14 +32,15 @@ backend/api-service/
   auth/roles.go                        ← Role tiers (standard/beta/alpha/admin) + RequireAdmin/RequireTier
                                            tier-gating middleware
   auth/session.go                      ← SessionIssuer: owns the browser session lifecycle
-                                           (AuthorizeURL/Login/Refresh/EndSession/EndAllSessions);
+                                           (AuthorizeURL/Login/Reconnect/Refresh/EndSession/EndAllSessions);
                                            failures cross as SessionError{Reason,...} — see
                                            "Session issuer" below
-  auth/bungieoauth.go                  ← bungieOAuth: one Bungie OAuth token-endpoint client for both
-                                           grants (authorization_code, refresh_token), shared by
-                                           SessionIssuer (login) and TokenStore (Bungie-token refresh)
+  auth/bungieoauth.go                  ← bungieOAuth: Bungie's token-endpoint adapter; public-client
+                                           authorization-code exchanges return access-only leases;
+                                           legacy refresh support remains for old stored rows
   api/handlers/auth.go                 ← Maps SessionIssuer results to HTTP via loginFailures/
-                                           refreshFailures tables (status, cookie, audit, body); holds
+                                           reconnectFailures/refreshFailures tables (status, cookie,
+                                           audit, body); holds
                                            no session logic of its own
   api/handlers/characters.go           ← HTTP handler for characters
   api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
@@ -157,6 +159,7 @@ backend/api-service/
 | ------ | -------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/api/auth/bungie`                                       | None                          | Initiate OAuth — returns `{ authUrl, state }`                                                                                                                                                                                                                                                                     |
 | POST   | `/api/auth/bungie/callback`                              | Exact Origin + OAuth state    | Exchange code; set refresh cookie; return `{token,user}`                                                                                                                                                                                                                                                          |
+| POST   | `/api/auth/bungie/reconnect`                             | JWT + exact Origin + state    | Replace expired Bungie authorization for the same membership; return 204 without changing the Guardian Tracker session                                                                                                                                                                                            |
 | POST   | `/api/auth/refresh`                                      | Exact Origin + refresh cookie | Empty JSON request; rotate cookie + access token (per-session, reuse detection)                                                                                                                                                                                                                                   |
 | GET    | `/api/auth/validate`                                     | JWT                           | Validate JWT                                                                                                                                                                                                                                                                                                      |
 | GET    | `/api/auth/profile`                                      | JWT                           | Guardian Tracker session user (legacy route name; not Bungie gameplay profile data)                                                                                                                                                                                                                               |
@@ -194,14 +197,31 @@ Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_R
 
 ## Bungie OAuth flow
 
+`BUNGIE_CLIENT_ID` is the public OAuth client identifier used for the
+authorization-code grant. The API does not configure or send a Bungie client
+secret, and Bungie public clients return no refresh token. `BUNGIE_API_KEY`
+separately authenticates Bungie Platform API requests.
+
 1. `GET /api/auth/bungie` — `SessionIssuer.AuthorizeURL()` generates the HMAC-signed state token via `auth.StateSigner` (derived from `JWT_SECRET`); handler returns `{ authUrl, state }`
 2. User visits Bungie.net, authorizes, Bungie redirects to frontend `/auth/callback?code=...&state=...`
-3. Frontend credentialed-POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — exact Origin required; `SessionIssuer.Login()` verifies state with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code), exchanges the code via `bungieOAuth`, stores Bungie tokens, mints the JWT pair, and creates a `refresh_sessions` row (skipped, not failed, when no database is configured); the handler sets the HttpOnly refresh cookie and returns `{token,user}`
+3. Frontend credentialed-POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — exact Origin required; `SessionIssuer.Login()` verifies state with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code), exchanges the code via `bungieOAuth`, stores the access-only Bungie authorization, mints the Guardian Tracker JWT pair, and creates a `refresh_sessions` row (skipped, not failed, when no database is configured); the handler sets the HttpOnly refresh cookie and returns `{token,user}`
+
+When the Bungie access authorization reaches its five-minute expiry buffer,
+`TokenStore.GetValidToken()` returns
+`ErrBungieReauthorizationRequired`. The API maps that sentinel to
+`401 BUNGIE_REAUTH_REQUIRED`; it does not treat the still-valid Guardian Tracker
+session as expired. The frontend preserves its return path, sends the user
+through the same authorization URL, then authenticated-POSTs `{ code, state }`
+to `/api/auth/bungie/reconnect`. `SessionIssuer.Reconnect()` verifies state,
+resolves the authorized Destiny membership, requires it to match the access
+JWT's membership, and replaces only the Bungie authorization. Success is 204;
+it does not upsert the user, mint or rotate Guardian Tracker JWTs, create a
+`refresh_sessions` row, or replace the refresh cookie.
 
 ## Session issuer (`auth/session.go`)
 
 `SessionIssuer` owns the whole browser session lifecycle behind one seam:
-`AuthorizeURL`, `Login`, `Refresh`, `EndSession`, `EndAllSessions`.
+`AuthorizeURL`, `Login`, `Reconnect`, `Refresh`, `EndSession`, `EndAllSessions`.
 `api/handlers/auth.go` calls it and translates the result to HTTP; it holds no
 session logic itself.
 
@@ -209,7 +229,7 @@ session logic itself.
   `Reason` is also the audit reason string — a new failure mode needs a
   `Reason` constant before a handler can report it. `auth.AsSessionError(err)`
   unwraps one.
-- The handler maps `Reason` through `loginFailures` or `refreshFailures`
+- The handler maps `Reason` through `loginFailures`, `reconnectFailures`, or `refreshFailures`
   (`api/handlers/auth.go`) to a status, message, audit event, and whether the
   refresh cookie is cleared. An unmapped `Reason` falls through to 500 rather
   than a silent success.
@@ -221,8 +241,8 @@ session logic itself.
   [ADR 0012](../../docs/adr/0012-session-issuance-owns-the-session-lifecycle.md).
 - The `user` response body has one builder (`userPayload` in
   `api/handlers/auth.go`), used by all four endpoints that return it
-  (`bungie/callback`, `refresh`, `validate`, `profile`) — all four now
-  include `role`.
+  (`bungie/callback`, `refresh`, `validate`, `profile`) — all four include
+  `role`.
 
 ## JWT format
 
@@ -235,10 +255,21 @@ session logic itself.
 
 ## Token store (`auth/tokenstore.go`)
 
-DB-backed encrypted Bungie OAuth token store. Tokens are stored AES-256-GCM encrypted in the `bungie_tokens` table with exact positive current/previous key versions; unknown versions are rejected. Auto-refreshes via Bungie's OAuth refresh endpoint when within 5 minutes of expiry. Refresh writes use compare-and-swap on `updated_at` — a replica that loses the race reads and adopts the winner's tokens. The refresh-grant HTTP call goes through `bungieOAuth` (`auth/bungieoauth.go`), the same client `SessionIssuer` uses for the login grant, so the 90-day `refresh_expires_in` fallback is written once.
+DB-backed encrypted Bungie OAuth authorization store. Public-client rows carry an
+access token and expiry but no refresh token; both the access value and the
+schema-compatible empty refresh value are AES-256-GCM encrypted in
+`bungie_tokens` with exact positive current/previous key versions. Unknown key
+versions are rejected. `GetValidToken` returns a usable access token until its
+five-minute expiry buffer, then returns
+`ErrBungieReauthorizationRequired` without calling Bungie so the browser can
+perform authenticated reconnect. The store retains the old refresh/CAS path for
+legacy rows that already contain a refresh token: refresh writes compare-and-swap
+`updated_at`, and a replica that loses the race adopts the winner's row. New
+public-client exchanges never enter that path.
 
 Sentinel errors:
 
+- `auth.ErrBungieReauthorizationRequired` — no usable Bungie authorization remains; the Guardian Tracker session is still valid
 - `auth.ErrTokensNotFound` — no token row exists
 - `auth.ErrNoUserRow` — no users row for the membership
 
@@ -314,8 +345,8 @@ with no database configured); the `sid` JWT claim holds the session ID:
 - `POST /api/auth/refresh` reads the refresh JWT only from its cookie; `SessionIssuer.Refresh` compare-and-swaps the session's refresh `jti` (`SessionStore.RotateSession`). A replayed (already-rotated) token is detected as reuse → **revokes the whole session** (401, even if the revoking commit errors). Successful refresh rotates the cookie; definitive failures expire it.
 - Sessions are independent → fully multi-device. `expires_at` slides forward on each rotation.
 - Sessions are capped per user (`maxSessionsPerUser`); an hourly `startSessionPruner` deletes expired rows.
-- `POST /api/auth/logout` — `SessionIssuer.EndSession` ends only the current session (`DeleteSession`); other devices stay signed in; Bungie token preserved.
-- `POST /api/auth/logout/all` — `SessionIssuer.EndAllSessions` bumps `token_version` + deletes all sessions (`DeleteUserSessions`) + evicts the Bungie token.
+- `POST /api/auth/logout` — `SessionIssuer.EndSession` ends only the current session (`DeleteSession`); other devices stay signed in; membership-wide Bungie authorization preserved.
+- `POST /api/auth/logout/all` — `SessionIssuer.EndAllSessions` bumps `token_version` + deletes all sessions (`DeleteUserSessions`) + evicts the Bungie authorization.
 - Pre-`0003` tokens (no `sid`) are adopted into a fresh session on their first `SessionIssuer.Refresh` call.
 
 ## Audit logging (`db/audit.go`)
@@ -466,7 +497,7 @@ made a milestone's missing-count badge silently not appear.
 ## Environment variables
 
 ```
-PORT, GO_ENV, BUNGIE_API_KEY, BUNGIE_CLIENT_ID, BUNGIE_CLIENT_SECRET
+PORT, GO_ENV, BUNGIE_API_KEY, BUNGIE_CLIENT_ID
 AUTH_REDIRECT_URI, JWT_SECRET, JWT_ACCESS_TTL, JWT_EXPIRY_HOURS (legacy), JWT_REFRESH_EXPIRY_DAYS
 DATABASE_URL, TOKEN_ENCRYPTION_KEY, TOKEN_ENCRYPTION_KEY_VERSION
 TOKEN_ENCRYPTION_KEY_PREVIOUS, TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION
@@ -517,7 +548,7 @@ air   # from backend/api-service/ (requires .air.toml)
 
 ```powershell
 cd backend/api-service
-cp .env.example .env   # fill in secrets
+cp .env.example .env   # fill in required runtime values
 go run .               # :8081
 ```
 '''

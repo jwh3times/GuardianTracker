@@ -27,11 +27,29 @@ The state parameter is a stateless HMAC-SHA256-signed token (`v1.<ts>.<nonce>.<s
 
 ### Bungie OAuth — authorization code exchange
 
-The frontend receives the authorization code in the callback URL and immediately exchanges it server-side; it never receives Bungie access or refresh tokens.
+The frontend receives the authorization code in the callback URL and immediately
+exchanges it server-side; it never receives Bungie access tokens. Guardian
+Tracker is a public client: the grant sends the public client ID with no client
+secret, and Bungie returns no refresh token.
 
 - Test: POST to `/api/auth/bungie/callback` with an exact allowlisted `Origin`, a fabricated `code`, and valid `state` — must return a controlled error from Bungie exchange
+- Test: inspect the authorization-code request — it must contain `client_id` and no `client_secret`
 - Test: POST with a replayed `code` (after it has already been exchanged) — Bungie's server must reject the second exchange; the api-service must surface that error correctly
 - Test: omit `Origin` or use an unlisted origin on callback — must be rejected before a cookie is issued
+
+### Bungie OAuth — authenticated reconnect
+
+An expired public-client access authorization returns
+`401 BUNGIE_REAUTH_REQUIRED` while the Guardian Tracker session remains valid.
+`POST /api/auth/bungie/reconnect` requires both that access JWT and an exact
+allowlisted Origin, verifies OAuth state, and accepts only the Bungie membership
+already named by the session. Success replaces only the Bungie authorization
+and returns 204.
+
+- Test: reconnect without a JWT, without `Origin`, or with an unlisted Origin — each must be rejected
+- Test: authorize a different Destiny membership — must return 403 and leave the current user's Bungie authorization unchanged
+- Test: successful reconnect must not issue or rotate Guardian Tracker JWTs, create a `refresh_sessions` row, upsert the user, or replace the refresh cookie
+- Test: an expired access-only Bungie row must trigger zero outbound refresh-token grants
 
 ### JWT configuration
 
@@ -50,9 +68,9 @@ Single-device logout deletes that refresh session; logout-all also bumps `token_
 
 - Test: logout, then immediately use the old access token — should get 401 (revocation checked within the 60s cache window)
 - Test: DB is unavailable during the token_version check — revocation fails open (request allowed) — document as known limitation
-- Test: after single-device logout, confirm the Bungie OAuth token stored for the tracked Destiny membership remains; after logout-all, confirm it is deleted from `bungie_tokens`
+- Test: after single-device logout, confirm the Bungie authorization stored for the tracked Destiny membership remains; after logout-all, confirm it is deleted from `bungie_tokens`
 
-### Refresh token behavior
+### Guardian Tracker refresh-token behavior
 
 Refresh tokens are stored only in the host-only HttpOnly `guardian_refresh_token` cookie (`SameSite=Lax`, `Path=/api/auth`, and `Secure` in production). JavaScript stores only the access token and user snapshot.
 
@@ -137,9 +155,12 @@ All wishlist endpoints (`GET/POST/PUT/DELETE /api/wishlist`) are JWT-protected a
 
 ## Bungie token encryption
 
-Bungie OAuth tokens are stored AES-256-GCM encrypted in `bungie_tokens`. The membership row is bound as AAD.
+Bungie OAuth authorization is stored AES-256-GCM encrypted in `bungie_tokens`.
+The membership row is bound as AAD. Public-client rows encrypt the access token
+and a schema-compatible empty refresh value; they do not hold a Bungie refresh
+token.
 
-- Audit: verify the DB row for a logged-in user contains encrypted blobs — `access_token_enc`, `refresh_token_enc` — not plaintext
+- Audit: verify the DB row for a logged-in user contains encrypted blobs — `access_token_enc` and the encrypted empty `refresh_token_enc` compatibility value — not plaintext
 - Test: rotate A/v1 to B/v2 with A/v1 configured as previous; old rows decrypt, new rows use v2, and unknown versions are rejected
 - Test: zero, negative, duplicate, incomplete current/previous key versions fail configuration validation
 - Test: if `TOKEN_ENCRYPTION_KEY` is unset in explicit development, verify that login still works (tokens stored in memory only) and that the consolidated degraded-mode warning names the missing protection
@@ -182,7 +203,7 @@ Only `guardian_token` (short-lived access JWT) and the non-secret user snapshot 
 api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 
 - Test: trigger various error conditions (invalid membershipId, bad JWT, missing Bungie token) — verify responses don't include stack traces, internal file paths, connection strings, or other internal details
-- Confirm: the `code` field uses only the defined machine-readable values (`PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`)
+- Confirm: the `code` field uses only the defined machine-readable values (`BUNGIE_REAUTH_REQUIRED`, `PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`)
 
 ### Request IDs and application-log privacy
 

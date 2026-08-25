@@ -324,14 +324,14 @@ $definitions = @(
         Template = "private/bootstrap/templates/root.env.tpl"
         Output = ".env"
         Format = "env"
-        RequiredKeys = @("GO_ENV", "BUNGIE_API_KEY", "BUNGIE_CLIENT_ID", "BUNGIE_CLIENT_SECRET", "JWT_SECRET", "POSTGRES_PASSWORD", "TOKEN_ENCRYPTION_KEY", "TOKEN_ENCRYPTION_KEY_VERSION")
+        RequiredKeys = @("GO_ENV", "BUNGIE_API_KEY", "BUNGIE_CLIENT_ID", "JWT_SECRET", "POSTGRES_PASSWORD", "TOKEN_ENCRYPTION_KEY", "TOKEN_ENCRYPTION_KEY_VERSION")
     },
     @{
         Name = "api"
         Template = "private/bootstrap/templates/api-service.env.tpl"
         Output = "backend/api-service/.env"
         Format = "env"
-        RequiredKeys = @("GO_ENV", "BUNGIE_API_KEY", "BUNGIE_CLIENT_ID", "BUNGIE_CLIENT_SECRET", "JWT_SECRET", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "TOKEN_ENCRYPTION_KEY_VERSION")
+        RequiredKeys = @("GO_ENV", "BUNGIE_API_KEY", "BUNGIE_CLIENT_ID", "JWT_SECRET", "DATABASE_URL", "TOKEN_ENCRYPTION_KEY", "TOKEN_ENCRYPTION_KEY_VERSION")
     },
     @{
         Name = "frontend"
@@ -345,7 +345,7 @@ $definitions = @(
         Template = "private/bootstrap/templates/api-service-secret.yaml.tpl"
         Output = "k8s/api-service-secret.yaml"
         Format = "yaml"
-        RequiredKeys = @("BUNGIE_API_KEY", "BUNGIE_CLIENT_ID", "BUNGIE_CLIENT_SECRET", "JWT_SECRET", "TOKEN_ENCRYPTION_KEY")
+        RequiredKeys = @("BUNGIE_API_KEY", "BUNGIE_CLIENT_ID", "JWT_SECRET", "TOKEN_ENCRYPTION_KEY")
     }
 )
 

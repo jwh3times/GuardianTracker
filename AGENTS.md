@@ -41,7 +41,7 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 
 ### Key directories
 
-- `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences repository), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency, sources, preferences), `config/`, `cache/`.
+- `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/reconnect/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences repository), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency, sources, preferences), `config/`, `cache/`.
 - `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `lib/`, `types/`.
 - `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
 - `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
@@ -66,15 +66,25 @@ invariants:
 
 ### Auth & token flow
 
-Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the Bungie
-account's OAuth tokens against the tracked Destiny membership, **AES-256-GCM encrypted** in Postgres
-with explicit current/previous key versions.
-It returns a short-lived access JWT for localStorage and sends the per-device rotating refresh JWT
-only in a host-only HttpOnly cookie scoped to `/api/auth`. Callback and refresh require an exact
-allowlisted browser origin; the cookie policy assumes the frontend and API are same-site. Refresh
-sessions retain Postgres-backed revocation and reuse detection. Role tiers (standard / beta / alpha / admin) and feature
-flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login. Security details and the
-credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
+Bungie OAuth login uses a public client with stateless, HMAC-signed CSRF `state`.
+The API sends no Bungie client secret; Bungie returns an expiring access token
+without a refresh token. The access-only Bungie authorization is stored against
+the tracked Destiny membership, **AES-256-GCM encrypted** in Postgres with
+explicit current/previous key versions. When it expires, authenticated users
+reconnect the same Bungie membership through `POST /api/auth/bungie/reconnect`;
+that replaces only the Bungie authorization and does not mint or rotate a
+Guardian Tracker session.
+
+Guardian Tracker separately returns a short-lived access JWT for localStorage
+and sends its per-device rotating refresh JWT only in a host-only HttpOnly cookie
+scoped to `/api/auth`. The callback, reconnect, and refresh endpoints require an
+exact allowlisted browser origin; the cookie policy assumes the frontend and API
+are same-site. Refresh sessions retain Postgres-backed revocation and reuse
+detection. Single-device logout preserves the membership-wide Bungie
+authorization; logout-all evicts it. Role tiers (standard / beta / alpha / admin)
+and feature flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login.
+Security details and the credential-rotation runbook live in
+[SECURITY.md](./SECURITY.md).
 
 ## Running Services
 
@@ -166,7 +176,7 @@ scheduled LTS transition on October 28, 2026; this project intentionally accepts
 that short-term churn because Node is frontend development/build tooling and the
 deployed frontend runtime is nginx.
 
-### Required secrets
+### Required runtime values
 
 | Variable                                | Purpose                                                                                               |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -174,12 +184,11 @@ deployed frontend runtime is nginx.
 | `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                               |
 | `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                              |
 | `BUNGIE_API_KEY`                        | From <https://www.bungie.net/en/Application>                                                          |
-| `BUNGIE_CLIENT_ID`                      | Bungie app settings                                                                                   |
-| `BUNGIE_CLIENT_SECRET`                  | Bungie app settings                                                                                   |
+| `BUNGIE_CLIENT_ID`                      | Public Bungie OAuth client identifier; no client secret is used                                       |
 | `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                                                    |
 | `JWT_SECRET`                            | 32+ char random string (`openssl rand -base64 32`)                                                    |
 | `DATABASE_URL`                          | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
-| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
+| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie authorization encryption (`openssl rand -base64 32`)                    |
 | `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                           |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                             |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
@@ -189,10 +198,11 @@ deployed frontend runtime is nginx.
 ### Auth and security behavior to preserve
 
 - OAuth state is HMAC signed.
-- Bungie tokens are encrypted at rest with AES-256-GCM and exact current/previous key versions.
+- The access-only Bungie authorization is encrypted at rest with AES-256-GCM and exact current/previous key versions; expiry requires an authenticated reconnect of the same Bungie membership.
 - Access JWTs and the user snapshot are stored in localStorage; the rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
 - Refresh token revocation is backed by PostgreSQL.
-- Callback and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
+- Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
+- Single-device logout preserves Bungie authorization; logout-all evicts it.
 - Admin access is controlled by explicit membership ID configuration.
 
 See `SECURITY.md` for public security posture and reporting guidance.

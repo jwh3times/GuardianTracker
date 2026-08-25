@@ -97,6 +97,15 @@ const ProtectedLayout: React.FC = () => {
   );
 };
 
+const ReauthorizeRoute: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? (
+    <Login mode="reauthorize" />
+  ) : (
+    <Navigate to="/login" replace />
+  );
+};
+
 // AdminRoute guards the admin console; the server enforces RequireAdmin regardless.
 const AdminRoute: React.FC<{ children: React.ReactElement }> = ({
   children,
@@ -143,6 +152,7 @@ const AppContent: React.FC = () => {
           path="/login"
           element={isAuthenticated ? <Navigate to="/dashboard" /> : <Login />}
         />
+        <Route path="/reauthorize" element={<ReauthorizeRoute />} />
         <Route path="/auth/callback" element={<OAuthCallback />} />
 
         <Route element={<ProtectedLayout />}>

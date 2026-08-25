@@ -17,11 +17,10 @@ type Config struct {
 	LogLevel  string
 	LogFormat string
 
-	BungieAPIKey       string
-	BungieAPIBaseURL   string
-	BungieClientID     string
-	BungieClientSecret string
-	AuthRedirectURI    string
+	BungieAPIKey     string
+	BungieAPIBaseURL string
+	BungieClientID   string
+	AuthRedirectURI  string
 
 	// BungieAuthorizeURL / BungieTokenURL / BungieCDNBaseURL let dev & E2E point
 	// the OAuth pages, token endpoint, and manifest-zip host at a fake Bungie.
@@ -94,11 +93,10 @@ func Load() *Config {
 		LogLevel:  strings.ToLower(strings.TrimSpace(getEnv("LOG_LEVEL", "info"))),
 		LogFormat: strings.ToLower(strings.TrimSpace(getEnv("LOG_FORMAT", defaultLogFormat))),
 
-		BungieAPIKey:       os.Getenv("BUNGIE_API_KEY"),
-		BungieAPIBaseURL:   getEnv("BUNGIE_API_BASE_URL", "https://www.bungie.net/Platform"),
-		BungieClientID:     os.Getenv("BUNGIE_CLIENT_ID"),
-		BungieClientSecret: os.Getenv("BUNGIE_CLIENT_SECRET"),
-		AuthRedirectURI:    getEnv("AUTH_REDIRECT_URI", "http://localhost:3000/auth/callback"),
+		BungieAPIKey:     os.Getenv("BUNGIE_API_KEY"),
+		BungieAPIBaseURL: getEnv("BUNGIE_API_BASE_URL", "https://www.bungie.net/Platform"),
+		BungieClientID:   os.Getenv("BUNGIE_CLIENT_ID"),
+		AuthRedirectURI:  getEnv("AUTH_REDIRECT_URI", "http://localhost:3000/auth/callback"),
 
 		BungieAuthorizeURL: getEnv("BUNGIE_AUTHORIZE_URL", "https://www.bungie.net/en/OAuth/Authorize"),
 		BungieTokenURL:     getEnv("BUNGIE_TOKEN_URL", "https://www.bungie.net/platform/app/oauth/token/"),

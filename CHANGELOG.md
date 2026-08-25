@@ -26,6 +26,15 @@ No unreleased changes.
 - Added public-safe VS Code settings and tasks plus Windows CI coverage for the
   portability workflow under Windows PowerShell 5.1 and PowerShell 7.
 
+### Changed
+
+- Removed the unused Bungie OAuth client-secret configuration and consistently
+  model the application as a public OAuth client. Authorization-code grants send
+  the public client ID without a `client_secret`; Bungie's access-only
+  authorization is encrypted at rest and, after expiry, can be reconnected to
+  the same membership without ending or rotating the Guardian Tracker browser
+  session.
+
 ### Security
 
 - Private workspace cloning and secret restoration now suppress Git tracing,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -126,7 +127,7 @@ type fakeBungie struct {
 func newFakeBungie(t *testing.T) *fakeBungie {
 	t.Helper()
 	f := &fakeBungie{
-		tokenBody:   `{"access_token":"bungie-access","refresh_token":"bungie-refresh","expires_in":3600,"refresh_expires_in":7776000}`,
+		tokenBody:   `{"access_token":"bungie-access","expires_in":3600}`,
 		profileBody: `{"Response":{"destinyMemberships":[{"membershipType":3,"membershipId":"` + testMembership + `","displayName":"TestGuardian"}],"primaryMembershipId":"` + testMembership + `"},"ErrorCode":1}`,
 	}
 	f.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +158,7 @@ func newIssuer(t *testing.T, store *stubSessionStore, bungie *fakeBungie, admins
 	}
 	return NewSessionIssuer(SessionDeps{
 		JWT:     NewJWTWithTTL(testSecret, time.Hour, 30),
-		Tokens:  NewTokenStore(ctx, "cid", "secret", tokenURL, nil, nil),
+		Tokens:  NewTokenStore(ctx, "cid", tokenURL, nil, nil),
 		Users:   store,
 		Revoker: NewRevocationChecker(store, cache.NewNoOpCache()),
 		Cache:   cache.NewNoOpCache(),
@@ -217,6 +218,17 @@ func TestLogin_Success(t *testing.T) {
 		t.Errorf("AppUserID = %v, want the users-row id for the audit trail", session.AppUserID)
 	}
 
+	grant, err := url.ParseQuery(bungie.lastGrant)
+	if err != nil {
+		t.Fatalf("parse authorization-code grant: %v", err)
+	}
+	if got := grant.Get("client_id"); got != "cid" {
+		t.Errorf("authorization-code client_id = %q, want cid", got)
+	}
+	if _, present := grant["client_secret"]; present {
+		t.Error("authorization-code grant unexpectedly included client_secret")
+	}
+
 	// Both JWTs carry the session id, and the access token carries the token
 	// version the upsert reported — not the fallback.
 	claims, err := issuer.jwt.ValidateToken(session.AccessToken)
@@ -247,6 +259,9 @@ func TestLogin_Success(t *testing.T) {
 	// membership, which is what every later Bungie call depends on.
 	if tok, err := issuer.tokens.GetValidToken(testMembership); err != nil || tok != "bungie-access" {
 		t.Errorf("stored Bungie token = %q, %v; want bungie-access", tok, err)
+	}
+	if tokens := issuer.tokens.tokens[testMembership]; tokens.RefreshToken != "" || !tokens.RefreshTokenExpiresAt.IsZero() {
+		t.Errorf("public-client token unexpectedly has refresh capability: %+v", tokens)
 	}
 }
 
@@ -424,6 +439,20 @@ func TestLogin_BungieFailuresAreDistinguishable(t *testing.T) {
 	})
 }
 
+func TestLogin_RejectsUnusableAccessTokenResponse(t *testing.T) {
+	for _, body := range []string{
+		`{"expires_in":3600}`,
+		`{"access_token":"access","expires_in":0}`,
+	} {
+		bungie := newFakeBungie(t)
+		bungie.tokenBody = body
+		issuer := newIssuer(t, newStubStore(), bungie)
+		if _, err := login(t, issuer, "code"); reasonOf(t, err) != ReasonCodeExchange {
+			t.Errorf("body %s reason = %q, want %q", body, reasonOf(t, err), ReasonCodeExchange)
+		}
+	}
+}
+
 // TestLogin_BungieRefreshExpiryFallback pins the 90-day default for a token
 // response that omits refresh_expires_in. The rule used to be written twice —
 // here and in TokenStore — and now has one home.
@@ -445,6 +474,73 @@ func TestLogin_BungieRefreshExpiryFallback(t *testing.T) {
 	want := before.Add(90 * 24 * time.Hour)
 	if delta := tokens.RefreshTokenExpiresAt.Sub(want); delta < -time.Minute || delta > time.Minute {
 		t.Errorf("refresh expiry = %v, want ~%v (the 90-day fallback)", tokens.RefreshTokenExpiresAt, want)
+	}
+}
+
+func TestReconnect_ReplacesOnlyBungieAuthorization(t *testing.T) {
+	store := newStubStore()
+	bungie := newFakeBungie(t)
+	issuer := newIssuer(t, store, bungie)
+	issuer.tokens.Store(testMembership, publicClientTokens(testMembership, time.Now().Add(-time.Hour)))
+	_, state, err := issuer.AuthorizeURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := issuer.Reconnect(context.Background(), testMembership, "new-code", state); err != nil {
+		t.Fatalf("Reconnect: %v", err)
+	}
+	if store.upsertCalls != 0 || store.createCalls != 0 || store.rotateCalls != 0 {
+		t.Fatalf("reconnect touched Guardian session persistence: upsert=%d create=%d rotate=%d",
+			store.upsertCalls, store.createCalls, store.rotateCalls)
+	}
+	if got, err := issuer.tokens.GetValidToken(testMembership); err != nil || got != "bungie-access" {
+		t.Fatalf("reconnected token = %q, %v; want bungie-access, nil", got, err)
+	}
+}
+
+func TestReconnect_RejectsDifferentBungieMembership(t *testing.T) {
+	store := newStubStore()
+	bungie := newFakeBungie(t)
+	bungie.profileBody = `{"Response":{"destinyMemberships":[{"membershipType":3,"membershipId":"4611686018467260999","displayName":"OtherGuardian"}],"primaryMembershipId":"4611686018467260999"},"ErrorCode":1}`
+	issuer := newIssuer(t, store, bungie)
+	_, state, err := issuer.AuthorizeURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = issuer.Reconnect(context.Background(), testMembership, "new-code", state)
+	if got := reasonOf(t, err); got != ReasonMembershipMismatch {
+		t.Fatalf("reason = %q, want %q", got, ReasonMembershipMismatch)
+	}
+	if store.upsertCalls != 0 || store.createCalls != 0 {
+		t.Fatal("membership mismatch touched Guardian session persistence")
+	}
+	if _, exists := issuer.tokens.tokens[testMembership]; exists {
+		t.Fatal("membership mismatch replaced the authenticated user's Bungie token")
+	}
+}
+
+func TestReconnect_PersistenceFailureDoesNotReplaceAuthorization(t *testing.T) {
+	store := newStubStore()
+	bungie := newFakeBungie(t)
+	issuer := newIssuer(t, store, bungie)
+	failingTokens, _ := newTestStore(t, &fakeTokenRepo{failAll: true}, "")
+	issuer.tokens = failingTokens
+	_, state, err := issuer.AuthorizeURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = issuer.Reconnect(context.Background(), testMembership, "new-code", state)
+	if got := reasonOf(t, err); got != ReasonAuthorizationWrite {
+		t.Fatalf("reason = %q, want %q", got, ReasonAuthorizationWrite)
+	}
+	if _, exists := issuer.tokens.tokens[testMembership]; exists {
+		t.Fatal("failed reconnect left a false-success authorization in memory")
+	}
+	if store.upsertCalls != 0 || store.createCalls != 0 || store.rotateCalls != 0 {
+		t.Fatal("failed reconnect touched Guardian session persistence")
 	}
 }
 

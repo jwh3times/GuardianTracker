@@ -29,8 +29,12 @@ frontend runtime is nginx.
 Create an application at <https://www.bungie.net/en/Application> and record:
 
 - API key
-- OAuth client ID
-- OAuth client secret
+- OAuth client ID (a public client identifier)
+
+Guardian Tracker uses Bungie's public OAuth-client flow. It does not require or
+send a Bungie client secret. Bungie public clients receive an expiring access
+token and no refresh token; when it expires, the app asks the still-authenticated
+user to reconnect Bungie.
 
 For local development, set the redirect URI to:
 
@@ -131,16 +135,15 @@ cp backend/api-service/.env.example backend/api-service/.env
 cp frontend/.env.example frontend/.env.local
 ```
 
-Fill in the required secrets:
+Fill in the required runtime values:
 
 | Variable               | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
 | `BUNGIE_API_KEY`       | Bungie API key                                                  |
-| `BUNGIE_CLIENT_ID`     | Bungie OAuth client ID                                          |
-| `BUNGIE_CLIENT_SECRET` | Bungie OAuth client secret                                      |
+| `BUNGIE_CLIENT_ID`     | Public Bungie OAuth client identifier; no client secret is used |
 | `JWT_SECRET`           | 32+ character signing secret                                    |
 | `DATABASE_URL`         | Postgres connection string; Compose sets this for the container |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie tokens         |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie authorization  |
 
 Set the required runtime mode. Keep the current key version explicit in new
 environment files; it defaults to `1` only to preserve existing version-1 rows:

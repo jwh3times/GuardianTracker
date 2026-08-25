@@ -28,7 +28,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **CSRF state (auth handler)**
 
-- The state parameter in `POST /api/auth/bungie/callback` is verified via `auth.StateSigner.Verify()`. This is not single-use by design (stateless HMAC). Do not add a single-use map — see the known limitations in AGENTS.md.
+- The state parameter in `POST /api/auth/bungie/callback` and authenticated `POST /api/auth/bungie/reconnect` is verified via `auth.StateSigner.Verify()`. This is not single-use by design (stateless HMAC). Do not add a single-use map — see the known limitations in AGENTS.md.
 - Flag any implementation that bypasses `StateSigner.Verify()` and uses a raw equality check or stores state in memory.
 
 **JWT token-type claim**
@@ -110,7 +110,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Data fetching**
 
-- All data fetching must use `useQuery` / `useMutation` from `@tanstack/react-query` with `apiFetch` from `lib/api.ts`. Flag direct `fetch()` calls from page/component files (except `OAuthCallback.tsx` and `Login.tsx` which call the OAuth endpoints before any session exists).
+- All data fetching must use `useQuery` / `useMutation` from `@tanstack/react-query` with `apiFetch` from `lib/api.ts`. Flag direct `fetch()` calls from page/component files except the public OAuth starter and initial callback. The authenticated reconnect branch in `OAuthCallback.tsx` must use `apiFetch`.
 - Flag any component that manually constructs an `Authorization` header — `apiFetch` handles token injection.
 - Do not reference Apollo Client (`@apollo/client`) — it is not in this project.
 
@@ -119,6 +119,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads `guardian_token` directly from localStorage or references the legacy `guardian_refresh_token` localStorage key.
 - Flag JWT decode operations outside of `AuthContext`.
 - Flag token refresh logic in page components or custom hooks — it belongs in `AuthContext`.
+- `apiFetch` must inspect a 401 response before attempting Guardian Tracker session refresh. Flag code that sends `BUNGIE_REAUTH_REQUIRED` through `/api/auth/refresh`, clears app auth state, or treats it as logout; it means only the access-only Bungie authorization expired.
 
 **Token storage**
 
@@ -173,8 +174,10 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 - `GET /health` and `GET /ready` have no auth — intentional for Kubernetes probes.
 - `GET /api/auth/bungie` has no auth — initiates the OAuth flow before any session exists.
+- Guardian Tracker is a Bungie public client. Authorization-code exchanges must send `client_id` and no `client_secret`; new rows receive no Bungie refresh token.
 - `GET /api/manifest/status` has no auth — public readiness endpoint.
-- `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` have no JWT auth — callback uses the CSRF state, refresh uses the HttpOnly cookie as its own credential; both require an exact allowlisted `Origin`.
+- `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` have no access-JWT auth — callback uses the CSRF state, refresh uses the HttpOnly cookie as its own credential; both require an exact allowlisted `Origin`.
+- `POST /api/auth/bungie/reconnect` requires an access JWT, exact allowlisted `Origin`, valid OAuth state, and a Bungie membership matching the JWT. Flag reconnect code that mints or rotates Guardian Tracker JWTs, creates a refresh-session row, upserts the user, replaces the refresh cookie, or stores authorization for a different membership.
 - OAuth state is not single-use — this is the intentional stateless HMAC design.
 - `GET /api/admin/users`, `PUT /api/admin/users/:id/role`, `GET /api/admin/flags`, `PUT /api/admin/flags/:key`, `GET /api/admin/audit` — require admin role via `RequireAdmin`; the restriction itself is correct.
 - `PUT /api/account/role` — self-service role opt-in; deliberately rejects `admin` as a target role and rejects admin callers (`ADMIN_OPT_IN`).

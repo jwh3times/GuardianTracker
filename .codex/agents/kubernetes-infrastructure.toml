@@ -77,22 +77,23 @@ kubectl rollout restart deployment/api-service
 
 ## Secret — api-service-secrets
 
-Sensitive env vars for api-service. The checked-in `api-service-secret.yaml` contains placeholder values — replace before deploying:
+Runtime values for api-service are wired through the ignored, machine-local
+`api-service-secret.yaml`. `BUNGIE_CLIENT_ID` is a public identifier, but this
+Minikube validation setup keeps it in the same Kubernetes Secret for wiring
+convenience. Replace all placeholder values before deploying:
 
 ```powershell
 kubectl create secret generic api-service-secrets `
   --from-literal=BUNGIE_API_KEY=<key> `
   --from-literal=BUNGIE_CLIENT_ID=<id> `
-  --from-literal=BUNGIE_CLIENT_SECRET=<secret> `
   --from-literal=JWT_SECRET=<32+char-random>
 ```
 
-| Secret key             | Purpose                                                      |
-| ---------------------- | ------------------------------------------------------------ |
-| `BUNGIE_API_KEY`       | Bungie API requests                                          |
-| `BUNGIE_CLIENT_ID`     | OAuth app client ID                                          |
-| `BUNGIE_CLIENT_SECRET` | OAuth app client secret (required for login)                 |
-| `JWT_SECRET`           | HS256 JWT signing key; also derives the OAuth state HMAC key |
+| Secret key         | Purpose                                                      |
+| ------------------ | ------------------------------------------------------------ |
+| `BUNGIE_API_KEY`   | Bungie API requests                                          |
+| `BUNGIE_CLIENT_ID` | Public OAuth client identifier; no client secret is used     |
+| `JWT_SECRET`       | HS256 JWT signing key; also derives the OAuth state HMAC key |
 
 Note: `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` are not in the Minikube secret because the stack runs in development mode without Postgres. Do not treat this omission or these manifests as production guidance.
 

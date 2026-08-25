@@ -24,7 +24,6 @@ const apiEnvironment: Record<string, string> = {
   LOG_FORMAT: "text",
   BUNGIE_API_KEY: "e2e",
   BUNGIE_CLIENT_ID: "e2e-client",
-  BUNGIE_CLIENT_SECRET: "e2e-client-secret",
   BUNGIE_AUTHORIZE_URL: `${FAKE_URL}/en/OAuth/Authorize`,
   BUNGIE_TOKEN_URL: `${FAKE_URL}/platform/app/oauth/token/`,
   BUNGIE_API_BASE_URL: `${FAKE_URL}/Platform`,

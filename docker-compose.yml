@@ -63,7 +63,6 @@ services:
       BUNGIE_API_KEY: ${BUNGIE_API_KEY:-}
       BUNGIE_API_BASE_URL: https://www.bungie.net/Platform
       BUNGIE_CLIENT_ID: ${BUNGIE_CLIENT_ID:-}
-      BUNGIE_CLIENT_SECRET: ${BUNGIE_CLIENT_SECRET:-}
       AUTH_REDIRECT_URI: ${AUTH_REDIRECT_URI:-http://localhost:5273/auth/callback}
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_me_minimum_32_characters_long}
       JWT_ACCESS_TTL: "30m"

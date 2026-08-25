@@ -1,5 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import type { AuthTokenResponse } from "../types/api";
+import {
+  currentReturnPath,
+  markBungieReconnect,
+} from "./bungieReauthorization";
 
 /** Base URL of the Go API service. Exported so pre-auth flows (e.g. the OAuth
  *  callback) that can't use apiFetch still derive the host from one place. */
@@ -31,6 +35,35 @@ type RefreshResult =
 
 // Single in-flight refresh — concurrent 401s share one refresh call.
 let refreshPromise: Promise<RefreshResult> | null = null;
+
+interface APIErrorBody {
+  error?: string;
+  code?: string;
+  retryAfter?: number;
+}
+
+async function responseErrorBody(res: Response): Promise<APIErrorBody> {
+  return (await res.json().catch(() => ({}))) as APIErrorBody;
+}
+
+async function redirectForBungieReconnect(res: Response): Promise<void> {
+  if (res.status !== 401) return;
+
+  const errorBody = await responseErrorBody(res.clone());
+  if (errorBody.code !== "BUNGIE_REAUTH_REQUIRED") return;
+
+  // Bungie's public-client authorization expired; the Guardian Tracker app
+  // session is still valid. Preserve it and route through the dedicated
+  // reconnect flow instead of rotating or clearing the app's refresh session.
+  markBungieReconnect(currentReturnPath());
+  window.location.href = "/reauthorize";
+  throw new ApiError(
+    errorBody.error || "Bungie authorization expired",
+    res.status,
+    errorBody.code,
+    errorBody.retryAfter,
+  );
+}
 
 async function doRefresh(): Promise<RefreshResult> {
   try {
@@ -74,6 +107,8 @@ export async function apiFetch<T>(
     headers,
   });
 
+  await redirectForBungieReconnect(res);
+
   if (res.status === 401) {
     if (!refreshPromise) {
       refreshPromise = doRefresh().finally(() => {
@@ -88,6 +123,7 @@ export async function apiFetch<T>(
         credentials: "include",
         headers: { ...headers, Authorization: `Bearer ${result.token}` },
       });
+      await redirectForBungieReconnect(res);
     } else if (result.transient) {
       // Refresh temporarily unavailable (rate-limited / server error). Keep the
       // session and surface a retryable error so callers show "try again," not logout.
@@ -107,11 +143,7 @@ export async function apiFetch<T>(
   }
 
   if (!res.ok) {
-    const errorBody = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      code?: string;
-      retryAfter?: number;
-    };
+    const errorBody = await responseErrorBody(res);
     throw new ApiError(
       errorBody.error || `API error ${res.status}`,
       res.status,

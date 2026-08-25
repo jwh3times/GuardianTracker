@@ -50,7 +50,7 @@ func newTokenStore(t *testing.T) *auth.TokenStore {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	return auth.NewTokenStore(ctx, "cid", "secret", "", nil, nil)
+	return auth.NewTokenStore(ctx, "cid", "", nil, nil)
 }
 
 func storeValidToken(ts *auth.TokenStore, id string) {
@@ -213,8 +213,10 @@ func TestCharacters_OwnershipMismatch(t *testing.T) {
 func TestCharacters_NoToken(t *testing.T) {
 	h := charactersHandler(t, "http://x", newTokenStore(t)) // nothing stored
 	r := authedRouter(http.MethodGet, "/api/characters/:membershipType/:membershipId", testUserID, h.GetCharacters)
-	if w := do(r, http.MethodGet, "/api/characters/3/"+testUserID); w.Code != http.StatusServiceUnavailable {
-		t.Errorf("no token = %d, want 503", w.Code)
+	if w := do(r, http.MethodGet, "/api/characters/3/"+testUserID); w.Code != http.StatusUnauthorized {
+		t.Errorf("no token = %d, want 401", w.Code)
+	} else if !strings.Contains(w.Body.String(), "BUNGIE_REAUTH_REQUIRED") {
+		t.Errorf("no token body = %s, want BUNGIE_REAUTH_REQUIRED", w.Body.String())
 	}
 }
 
@@ -229,6 +231,8 @@ func TestCharacters_ExpiredRefreshToken(t *testing.T) {
 	r := authedRouter(http.MethodGet, "/api/characters/:membershipType/:membershipId", testUserID, h.GetCharacters)
 	if w := do(r, http.MethodGet, "/api/characters/3/"+testUserID); w.Code != http.StatusUnauthorized {
 		t.Errorf("expired refresh = %d, want 401", w.Code)
+	} else if !strings.Contains(w.Body.String(), "BUNGIE_REAUTH_REQUIRED") {
+		t.Errorf("expired refresh body = %s, want BUNGIE_REAUTH_REQUIRED", w.Body.String())
 	}
 }
 

@@ -2,8 +2,8 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	"strings"
 
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/observability"
@@ -33,10 +33,10 @@ func getBungieToken(c *gin.Context, membershipID string, tokenStore *auth.TokenS
 	if err != nil {
 		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "Bungie token unavailable",
 			observability.ID("membership", membershipID), observability.Err(err))
-		if strings.Contains(err.Error(), "re-authentication required") {
+		if errors.Is(err, auth.ErrBungieReauthorizationRequired) {
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Your Bungie session has expired. Please log in again.",
-				"code":  "BUNGIE_TOKEN_EXPIRED",
+				"error": "Your Bungie authorization has expired. Reconnect Bungie to continue.",
+				"code":  "BUNGIE_REAUTH_REQUIRED",
 			})
 		} else {
 			c.JSON(http.StatusServiceUnavailable, gin.H{

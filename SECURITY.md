@@ -19,7 +19,6 @@ If you have previously committed credentials to this repository, you **must**:
 1. **Rotate ALL credentials immediately:**
 
    - Bungie API Key: Generate a new key at <https://www.bungie.net/en/Application>
-   - Bungie Client Secret: Regenerate in your Bungie application settings
    - JWT Secret: Generate a new 32+ character random string
    - Database passwords: Change in your database and update configs
 
@@ -49,15 +48,17 @@ If you have previously committed credentials to this repository, you **must**:
 
 ### Secrets (Never Commit!)
 
+Guardian Tracker is a public Bungie OAuth client. `BUNGIE_CLIENT_ID` identifies
+the application but is not a secret. The authorization-code grant sends no
+Bungie client secret, and Bungie public clients issue no refresh token.
+
 | Variable                        | Description                                                           | Where to Get                                                 |
 | ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
 | `BUNGIE_API_KEY`                | Bungie API access key                                                 | [Bungie Applications](https://www.bungie.net/en/Application) |
-| `BUNGIE_CLIENT_ID`              | OAuth client ID                                                       | Bungie application settings                                  |
-| `BUNGIE_CLIENT_SECRET`          | OAuth client secret                                                   | Bungie application settings                                  |
 | `JWT_SECRET`                    | Token signing key (32+ chars); also derives the OAuth state HMAC key  | `openssl rand -base64 32`                                    |
 | `POSTGRES_PASSWORD`             | Database password                                                     | Generate a strong random password                            |
 | `DATABASE_URL`                  | Postgres connection string (contains credentials)                     | Compose your provider's connection string                    |
-| `TOKEN_ENCRYPTION_KEY`          | 32-byte base64 key — AES-256-GCM encryption of stored Bungie tokens   | `openssl rand -base64 32`                                    |
+| `TOKEN_ENCRYPTION_KEY`          | 32-byte base64 key — encrypts stored Bungie authorization             | `openssl rand -base64 32`                                    |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous encryption key, kept readable during key rotation | the key being rotated out                                    |
 
 `GO_ENV` is required and accepts exactly `development` or `production`.
@@ -96,13 +97,13 @@ deferred until a deployment target is selected.
 - **Bungie OAuth 2.0** with CSRF protection — stateless HMAC-SHA256-signed state parameter (`v1.<ts>.<nonce>.<sig>`, key derived from `JWT_SECRET` with domain separation), verified with a 10-minute TTL. Stateless by design: login survives restarts and works across replicas. Tradeoff: a state token is replayable within its TTL (the previous in-memory store was not browser-bound either, and the Bungie authorization code it accompanies is single-use)
 - **JWT tokens** — HS256 signed access token (30-minute default) plus a rotating 30-day refresh credential; `tver` (token_version), `jti`, and `sid` (session id) claims. The access lifetime is configurable with the duration-based `JWT_ACCESS_TTL` setting; `JWT_EXPIRY_HOURS` remains a legacy fallback when the new setting is absent. Tokens already issued retain their original expiry until they are refreshed or revoked.
 - **Browser credential split** — the access JWT and non-secret user snapshot remain in `localStorage`. The refresh JWT is delivered only as the host-only `guardian_refresh_token` cookie with `HttpOnly`, `SameSite=Lax`, and `Path=/api/auth`; production also sets `Secure`. Callback and refresh responses contain `{token,user}` and never expose the refresh token to JavaScript. There is no localStorage compatibility bridge, so sessions created before this migration sign in once again.
+- **Independent Bungie authorization lease** — Bungie's public-client authorization is an expiring access token with no refresh token. An authenticated browser reconnects the same Bungie membership through `POST /api/auth/bungie/reconnect`; the API replaces only the encrypted Bungie access authorization and returns 204. It does not mint or rotate Guardian Tracker JWTs, create a `refresh_sessions` row, change the user, or replace the refresh cookie. A different Bungie membership is rejected.
 - **Per-device refresh sessions + reuse detection** — each login opens a row in `refresh_sessions` (the `sid` claim) holding the current refresh `jti`. `POST /api/auth/refresh` compare-and-swaps it (`RotateSession`); a replayed (already-rotated) refresh token is detected as reuse and the **whole session is revoked** with 401, rather than staying valid to expiry. Sessions are independent, so this is fully multi-device. The CAS **fails open** on DB errors, consistent with revocation below — except a definitive reuse always 401s. Session `expires_at` slides forward on each rotation to match the freshly issued refresh token, so an active session is not force-expired at its original creation time. Sessions are capped per user (oldest-by-use evicted) and a background pruner deletes expired rows, so the table can't grow unbounded. If a session row can't be persisted at login because the write itself failed, the login fails (the session is load-bearing — the access token is checked against it on every request); a deployment with no database configured is the one exception, where login succeeds without a session row since nothing checks for one there
-- **Two logout scopes** — `POST /api/auth/logout` ends only the current device's session (others stay signed in; the access token is rejected within the cache window via the session check, and the Bungie OAuth token is preserved). `POST /api/auth/logout/all` bumps `token_version`, deletes every session, and evicts the Bungie token (sign out everywhere). Both responses expire the refresh cookie; definitive refresh failures expire it too.
+- **Two logout scopes** — `POST /api/auth/logout` ends only the current device's session (others stay signed in; the access token is rejected within the cache window via the session check, and the membership-wide Bungie authorization is preserved). `POST /api/auth/logout/all` bumps `token_version`, deletes every session, and evicts the Bungie authorization (sign out everywhere). Both responses expire the refresh cookie; definitive refresh failures expire it too.
 - **JWT revocation** — sign-out-everywhere bumps `token_version` in Postgres; the access-token middleware verifies both `token_version` (Guardian Tracker user-wide) and session existence (per-device) via `RevocationChecker` with a 60-second cache window. The checks **fail open** on DB errors (availability over strict revocation — logout is not guaranteed during a DB outage)
 - **Logout exposure window** — with the default 30-minute access lifetime, an access token whose session revocation cannot be observed immediately is bounded by the token lifetime plus the 60-second revocation cache window; the frontend silently refreshes expired access tokens while the refresh session remains valid
 - **Token-type claims** — refresh tokens cannot be used as access tokens (enforced in middleware)
-- **Bungie tokens encrypted at rest** — AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and exact key-version metadata stored with each encrypted row. Decryption accepts only an exact current- or previous-version match and rejects unknown versions.
-- **Bungie token auto-refresh** — stored Bungie OAuth tokens are refreshed automatically before expiry (5-min buffer); refresh writes are compare-and-swap on `updated_at`, and a replica that loses the race adopts the winner's tokens instead of clobbering them
+- **Bungie authorization encrypted at rest** — the access-only public-client authorization is stored with AES-256-GCM in the `bungie_tokens` table, with the membership row bound as AAD and exact key-version metadata stored with each encrypted row. Decryption accepts only an exact current- or previous-version match and rejects unknown versions. Strict requests within the five-minute expiry buffer receive `BUNGIE_REAUTH_REQUIRED` so the browser reconnects instead of attempting to refresh at Bungie.
 
 ### Token-encryption key rotation
 
@@ -120,11 +121,11 @@ Existing version-1 rows remain readable during the first rotation:
    TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION=1
    ```
 
-3. New or refreshed rows are encrypted with B/v2; existing A/v1 rows continue
+3. New or reconnected rows are encrypted with B/v2; existing A/v1 rows continue
    to decrypt only through the exact previous-version match.
 4. Keep A/v1 configured until no `bungie_tokens.key_version = 1` rows remain.
-   Rows are rewritten through normal login/token persistence; users whose rows
-   are removed must authenticate again.
+   Rows are rewritten through normal login or authenticated Bungie reconnect;
+   users whose rows are removed must authenticate again.
 5. Remove both previous-key variables only after version 1 is no longer stored.
 
 Unknown, zero, negative, duplicate, or keyless versions are configuration/data
@@ -147,7 +148,7 @@ errors; do not change a version independently of its key.
 
 - **Membership ID validation**: numeric-only, 10–25 chars
 - **Membership type allowlist** — only valid Bungie platform types accepted
-- **Authorization code length limit** — max 500 chars to prevent DoS on OAuth callback
+- **Authorization code length limit** — max 500 chars to prevent DoS on OAuth callback and reconnect
 
 ### Rate Limiting
 
@@ -158,7 +159,7 @@ errors; do not change a version independently of its key.
 
 - **Strict origin validation** — only explicitly configured origins allowed (set via `CORS_ALLOWED_ORIGINS`)
 - **Credentials**: allowed only with explicit origin match
-- **Credential-issuing endpoints** — `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` require an exact allowlisted `Origin`; missing or unlisted origins are rejected. CORS responses vary on `Origin`.
+- **Browser auth endpoints** — `POST /api/auth/bungie/callback`, authenticated `POST /api/auth/bungie/reconnect`, and `POST /api/auth/refresh` require an exact allowlisted `Origin`; missing or unlisted origins are rejected. Reconnect also requires the Guardian Tracker access JWT and refuses a Bungie membership that differs from its `sub`. CORS responses vary on `Origin`.
 
 The refresh-cookie design assumes the frontend and API are same-site. A future
 cross-site production topology must revisit the cookie policy and would require
