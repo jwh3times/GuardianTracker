@@ -268,6 +268,9 @@ To change the gate, update the repository ruleset through GitHub UI or the GitHu
 Use the narrowest relevant test first, then run broader checks when the change crosses module boundaries.
 
 ```powershell
+# Windows workspace portability (from the repo root)
+npm run test:workspace-portability
+
 # Go (from backend/api-service/)
 go test ./...
 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...

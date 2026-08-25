@@ -319,6 +319,15 @@ Minikube mappings:
 
 ## Tests and Checks
 
+Windows workspace portability (from the repository root):
+
+```powershell
+npm run test:workspace-portability
+```
+
+This exercises the bootstrap, secret-restoration, and status helpers with local
+fixtures. CI runs the same suite on Windows PowerShell 5.1 and PowerShell 7.
+
 Backend:
 
 ```powershell
