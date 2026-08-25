@@ -11,7 +11,14 @@ request.
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- Added Windows workspace-portability helpers for optional restoration of the
+  independent ignored private documentation workspace, guarded 1Password-backed
+  local secret restoration, and value-free public/private workspace status. The
+  public setup path remains usable without private access, private branch names
+  are redacted by default, and secret targets must be ignored and absent before
+  restoration.
 
 ## [1.1.0] - 2026-08-24
 

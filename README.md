@@ -61,6 +61,11 @@ Detailed setup, ports, environment variables, and test commands live in
 docker compose up --build
 ```
 
+Public-only contributors do not need access to any private workspace. Authorized
+maintainers restoring an existing development environment should follow the
+optional portability workflow in [SETUP.md](./SETUP.md#optional-restore-a-private-workspace)
+before running `setup.ps1`.
+
 Open:
 
 - Frontend: <http://localhost:5273>
@@ -128,7 +133,7 @@ backend/api-service/      Go API service
 database/init/            Postgres bootstrap SQL
 k8s/                      Minikube validation manifests and scripts
 docs/                     Public architecture docs and ADRs
-private/                  Gitignored private plans, runbooks, and research
+private/                  Optional ignored, independent private-docs repository
 .github/workflows/        CI and version-release workflows
 ```
 

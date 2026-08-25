@@ -139,6 +139,24 @@ To test Bungie OAuth, tunnel the frontend with ngrok. Add the ngrok URL to `CORS
 
 Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`.
 
+Public-only development requires no private workspace. Authorized maintainers
+can optionally restore the ignored `private/` directory as an independent Git
+repository with `./scripts/bootstrap-private-workspace.ps1 -PrivateFromPrompt`,
+or through 1Password with `-PrivateFromOnePassword` after creating the ignored
+machine-local `.private-workspace/repository.env.ref` file containing only
+`GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>`. Do not put the
+private repository location or real 1Password identifiers in public docs.
+
+When private restoration templates are available, run
+`./scripts/restore-private-secrets.ps1` before `./setup.ps1`; both helpers refuse
+to overwrite existing environment files, so `setup.ps1` must not create example
+copies first. The restore helper supports `-Target root,api,frontend,k8s` and
+writes only targets protected by committed ignore rules. Run
+`./scripts/workspace-status.ps1` for value-free public/private status and target
+protection checks. It redacts the private branch by default; ahead/behind values
+use local tracking refs without fetching. `-IncludePrivateBranch` opts into
+showing the private branch name.
+
 **Never commit real secrets. Use `.env` locally and keep generated/private files out of git.**
 
 Frontend tooling uses the exact Node.js 26 patch in the root `.nvmrc`.
@@ -197,7 +215,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, and PostgreSQL-image alignment policies. The Node policy keeps
    `.nvmrc`, both workflows, both frontend Dockerfiles, package engine metadata, and Node ambient
@@ -218,6 +236,11 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
    merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
    Bot-authored PRs are exempt; `/ship` backfills their entries.
+
+The workflow also runs **Test Workspace Portability (Windows)** as a non-required
+validation job. It executes the portability suite on `windows-latest` under both
+Windows PowerShell 5.1 and PowerShell 7; the five jobs above remain the protected
+branch's required checks.
 
 `.github/workflows/browser.yml` adds two advisory jobs: **Browser E2E + Axe**
 and **Browser Visual Regression**. They report failures normally (no
@@ -321,9 +344,11 @@ Rules:
 - When deleting or consolidating private docs, scrub references to the removed file.
 
 Public committed docs describe implemented behavior, local setup, durable decisions, security
-model, shipped changes, and gated future work. `private/` is gitignored and holds detailed
+model, shipped changes, and gated future work. `private/` is gitignored and, for authorized
+maintainers, can be an independent private documentation repository. It holds detailed
 implementation plans, deployment runbooks, private security reviews, raw Bungie/API research, and
-environment-specific operations notes. Do not move private operational detail into public docs.
+environment-specific operations notes. Public contributors do not need it. Do not move private
+operational detail into public docs or expose its remote location through the public repository.
 
 ## Agent Routing
 
