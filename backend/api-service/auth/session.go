@@ -41,17 +41,19 @@ const (
 	ReasonCodeExchange Reason = "code_exchange"
 	// ReasonMembershipFetch retains the historical audit reason value while
 	// naming what the Bungie call actually resolves.
-	ReasonMembershipFetch Reason = "profile_fetch"
-	ReasonTokenMint       Reason = "token_mint"
-	ReasonSessionWrite    Reason = "session_write"
-	ReasonMissingCookie   Reason = "missing_cookie"
-	ReasonInvalidToken    Reason = "invalid_token"
-	ReasonRevoked         Reason = "revoked"
-	ReasonReuse           Reason = "reuse"
-	ReasonExpired         Reason = "expired"
+	ReasonMembershipFetch    Reason = "profile_fetch"
+	ReasonMembershipMismatch Reason = "membership_mismatch"
+	ReasonAuthorizationWrite Reason = "authorization_write"
+	ReasonTokenMint          Reason = "token_mint"
+	ReasonSessionWrite       Reason = "session_write"
+	ReasonMissingCookie      Reason = "missing_cookie"
+	ReasonInvalidToken       Reason = "invalid_token"
+	ReasonRevoked            Reason = "revoked"
+	ReasonReuse              Reason = "reuse"
+	ReasonExpired            Reason = "expired"
 )
 
-// SessionError is every failure Login and Refresh report. It carries the
+// SessionError is every failure Login, Reconnect, and Refresh report. It carries the
 // identity the caller can no longer recover for itself: once the issuer owns
 // refresh-token validation, the handler has no claims to read a membership or
 // session id from when it writes the audit event.
@@ -110,8 +112,7 @@ type SessionStore interface {
 // OAuthConfig is the Bungie OAuth wiring the issuer needs. main.go builds it
 // from config.Config so this package stays free of configuration loading.
 type OAuthConfig struct {
-	ClientID     string
-	ClientSecret string
+	ClientID string
 	// TokenURL and APIBaseURL are overridable for the fake-Bungie fixture;
 	// an empty TokenURL uses Bungie's real endpoint.
 	TokenURL     string
@@ -137,8 +138,9 @@ type SessionDeps struct {
 	OAuth   OAuthConfig
 }
 
-// SessionIssuer owns the browser session lifecycle: start the OAuth flow, turn
-// a callback into a session, rotate one, and end one.
+// SessionIssuer owns the browser session lifecycle and its Bungie authorization:
+// start the OAuth flow, turn an initial callback into a session, reconnect an
+// existing session to Bungie, rotate the Guardian tokens, and end the session.
 //
 // It exists because that lifecycle was two Gin handlers reaching nine
 // collaborators through *gin.Context, so none of the composed rules — the
@@ -166,7 +168,7 @@ func NewSessionIssuer(d SessionDeps) *SessionIssuer {
 		cache:   d.Cache,
 		state:   d.State,
 		oauth:   d.OAuth,
-		bungie:  newBungieOAuth(d.OAuth.ClientID, d.OAuth.ClientSecret, d.OAuth.TokenURL),
+		bungie:  newBungieOAuth(d.OAuth.ClientID, d.OAuth.TokenURL),
 	}
 }
 
@@ -191,20 +193,9 @@ func (s *SessionIssuer) AuthorizeURL() (authURL, state string, err error) {
 // code, resolve the primary Destiny membership, upsert the user, store the
 // Bungie tokens, mint the JWT pair, and record the session row they rotate against.
 func (s *SessionIssuer) Login(ctx context.Context, code, state, userAgent string) (*Session, error) {
-	if code == "" || len(code) > maxAuthCodeLen {
-		return nil, &SessionError{Reason: ReasonInvalidCode}
-	}
-	if state == "" || !s.state.Verify(state, time.Now(), stateTTL) {
-		return nil, &SessionError{Reason: ReasonInvalidState}
-	}
-
-	bungieTokens, err := s.bungie.exchangeCode(ctx, code)
+	bungieTokens, membership, err := s.exchangeAuthorization(ctx, code, state)
 	if err != nil {
-		return nil, &SessionError{Reason: ReasonCodeExchange, Err: err}
-	}
-	membership, err := s.bungie.primaryDestinyMembership(ctx, s.oauth.APIBaseURL, s.oauth.APIKey, bungieTokens.AccessToken)
-	if err != nil {
-		return nil, &SessionError{Reason: ReasonMembershipFetch, Err: err}
+		return nil, err
 	}
 
 	// The Guardian Tracker user row is best-effort: a login that cannot be recorded still works,
@@ -235,6 +226,59 @@ func (s *SessionIssuer) Login(ctx context.Context, code, state, userAgent string
 		return nil, err
 	}
 	return session, nil
+}
+
+// Reconnect renews the Bungie authorization attached to an already-valid
+// Guardian Tracker session. It deliberately does not mint Guardian JWTs,
+// create a refresh_sessions row, or change the user: public-client access-token
+// expiry is independent from the application's rotating browser session.
+func (s *SessionIssuer) Reconnect(ctx context.Context, authenticatedMembershipID, code, state string) error {
+	bungieTokens, membership, err := s.exchangeAuthorization(ctx, code, state)
+	if err != nil {
+		if sessionErr, ok := AsSessionError(err); ok && sessionErr.MembershipID == "" {
+			sessionErr.MembershipID = authenticatedMembershipID
+		}
+		return err
+	}
+	if authenticatedMembershipID == "" || membership.MembershipID != authenticatedMembershipID {
+		return &SessionError{
+			Reason:       ReasonMembershipMismatch,
+			MembershipID: authenticatedMembershipID,
+			Err:          fmt.Errorf("authorized Bungie membership does not match the Guardian Tracker session"),
+		}
+	}
+	if err := s.tokens.StoreConfirmed(authenticatedMembershipID, bungieTokens); err != nil {
+		return &SessionError{
+			Reason:       ReasonAuthorizationWrite,
+			MembershipID: authenticatedMembershipID,
+			Err:          err,
+		}
+	}
+	return nil
+}
+
+// exchangeAuthorization owns the rules shared by initial login and an
+// authenticated reconnect: validate the callback, exchange its single-use
+// code, and resolve the primary Destiny membership represented by the access
+// token. Callers decide whether to issue a new Guardian session or only replace
+// the Bungie authorization.
+func (s *SessionIssuer) exchangeAuthorization(ctx context.Context, code, state string) (*BungieTokens, *DestinyMembership, error) {
+	if code == "" || len(code) > maxAuthCodeLen {
+		return nil, nil, &SessionError{Reason: ReasonInvalidCode}
+	}
+	if state == "" || !s.state.Verify(state, time.Now(), stateTTL) {
+		return nil, nil, &SessionError{Reason: ReasonInvalidState}
+	}
+
+	bungieTokens, err := s.bungie.exchangeCode(ctx, code)
+	if err != nil {
+		return nil, nil, &SessionError{Reason: ReasonCodeExchange, Err: err}
+	}
+	membership, err := s.bungie.primaryDestinyMembership(ctx, s.oauth.APIBaseURL, s.oauth.APIKey, bungieTokens.AccessToken)
+	if err != nil {
+		return nil, nil, &SessionError{Reason: ReasonMembershipFetch, Err: err}
+	}
+	return bungieTokens, membership, nil
 }
 
 // Refresh rotates a session: validate the presented refresh JWT, check it has

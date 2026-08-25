@@ -1,15 +1,22 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../../contexts/AuthContext";
 import { Brand } from "../../components/Brand";
 import { Icon } from "../../components/Icon";
-import { API_URL } from "../../lib/api";
+import { API_URL, apiFetch } from "../../lib/api";
+import {
+  bungieReconnectReturnTo,
+  clearBungieReconnect,
+  hasBungieReconnectIntent,
+} from "../../lib/bungieReauthorization";
 import type { AuthTokenResponse } from "../../types/api";
 
 export const OAuthCallback: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { login } = useAuth();
+  const { isAuthenticated, login } = useAuth();
   const [error, setError] = useState<string | null>(null);
   // The auth code is single-use; React StrictMode double-invokes effects in dev,
   // so guard against submitting it twice.
@@ -20,6 +27,12 @@ export const OAuthCallback: React.FC = () => {
     submitted.current = true;
 
     const handleCallback = async () => {
+      const reconnect = hasBungieReconnectIntent() && isAuthenticated;
+      if (hasBungieReconnectIntent() && !isAuthenticated) {
+        // The app session disappeared while the user was at Bungie. The same
+        // authorization code can complete a normal login instead.
+        clearBungieReconnect();
+      }
       const code = searchParams.get("code");
       const returnedState = searchParams.get("state");
       const oauthError = searchParams.get("error");
@@ -30,30 +43,53 @@ export const OAuthCallback: React.FC = () => {
         setError(
           `OAuth error: ${oauthError} - ${errorDescription || "Unknown error"}`,
         );
-        setTimeout(() => navigate("/login?error=oauth_error"), 3000);
+        setTimeout(() => {
+          void navigate(
+            reconnect ? "/reauthorize" : "/login?error=oauth_error",
+          );
+        }, 3000);
         return;
       }
 
       if (!code) {
         console.error("No authorization code received");
         setError("No authorization code received from Bungie.");
-        setTimeout(() => navigate("/login?error=no_code"), 3000);
+        setTimeout(() => {
+          void navigate(reconnect ? "/reauthorize" : "/login?error=no_code");
+        }, 3000);
         return;
       }
 
       try {
+        const formBody = new URLSearchParams({
+          code,
+          state: returnedState ?? "",
+        }).toString();
+
+        if (reconnect) {
+          const returnTo = bungieReconnectReturnTo();
+          await apiFetch<void>("/api/auth/bungie/reconnect", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: formBody,
+          });
+          await queryClient.invalidateQueries();
+          clearBungieReconnect();
+          void navigate(returnTo, { replace: true });
+          return;
+        }
+
         const response = await fetch(`${API_URL}/api/auth/bungie/callback`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            code,
-            state: returnedState ?? "",
-          }).toString(),
+          body: formBody,
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = (await response.json().catch(() => ({}))) as {
+            error?: string;
+          };
           throw new Error(
             errorData.error || `Authentication failed (${response.status})`,
           );
@@ -65,17 +101,21 @@ export const OAuthCallback: React.FC = () => {
         }
 
         login(data.token, data.user);
-        navigate("/dashboard");
+        void navigate("/dashboard");
       } catch (err) {
         console.error("Error during OAuth callback:", err);
         const message = err instanceof Error ? err.message : "Unknown error";
         setError(`Authentication failed: ${message}`);
-        setTimeout(() => navigate("/login?error=callback_failed"), 3000);
+        setTimeout(() => {
+          void navigate(
+            reconnect ? "/reauthorize" : "/login?error=callback_failed",
+          );
+        }, 3000);
       }
     };
 
-    handleCallback();
-  }, [searchParams, navigate, login]);
+    void handleCallback();
+  }, [searchParams, navigate, isAuthenticated, login, queryClient]);
 
   return (
     <div className="gt-login">
@@ -105,7 +145,9 @@ export const OAuthCallback: React.FC = () => {
         ) : (
           <>
             <h1 className="gt-login-title" style={{ fontSize: "var(--t-xl)" }}>
-              Completing sign-in…
+              {hasBungieReconnectIntent() && isAuthenticated
+                ? "Reconnecting Bungie…"
+                : "Completing sign-in…"}
             </h1>
             <p className="gt-login-sub">
               Verifying your Bungie.net authorization.

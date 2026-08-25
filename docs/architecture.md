@@ -1,9 +1,9 @@
 # Architecture
 
 Guardian Tracker is a two-service Destiny 2 companion app. Players authenticate
-with Bungie OAuth, the API stores the tokens encrypted, and the frontend renders
-collection, wishlist, weekly, and settings surfaces through same-origin REST calls
-to the API service.
+with Bungie OAuth, the API stores the access authorization encrypted, and the
+frontend renders collection, wishlist, weekly, and settings surfaces through
+same-origin REST calls to the API service.
 
 ## Runtime Shape
 
@@ -22,7 +22,8 @@ React/Vite frontend (:5273)
   wishlist, preferences, roles, flags, admin endpoints, and structured request
   logging.
 - **Postgres:** users, wishlist, preferences and onboarding completion, encrypted
-  Bungie tokens, refresh sessions, roles, feature flags, and audit log.
+  Bungie access authorization, Guardian Tracker refresh sessions, roles, feature
+  flags, and audit log.
 - **SQLite:** local copy of the Bungie Destiny 2 manifest, downloaded and
   swapped by the API service.
 - **Cache:** in-memory service caches for collection results, weekly data,
@@ -31,25 +32,40 @@ React/Vite frontend (:5273)
 
 ## Authentication and Sessions
 
-Bungie OAuth login uses a stateless HMAC-signed CSRF state. On callback, the API
-stores Bungie OAuth tokens AES-256-GCM encrypted in Postgres and issues Guardian
-Tracker JWTs. One module, `auth.SessionIssuer`, owns the whole session
-lifecycle — starting the OAuth flow, turning a callback or refresh into a
-session, and ending one session or all of them; the Gin handlers only map the
-result to HTTP (status code, cookie, audit event, response body).
+Bungie OAuth login uses a public client and a stateless HMAC-signed CSRF state.
+The authorization-code grant sends the public client ID without a client secret;
+Bungie public clients return an expiring access token without a refresh token.
+The API stores that access-only authorization AES-256-GCM encrypted in Postgres
+and issues separate Guardian Tracker JWTs. One module, `auth.SessionIssuer`, owns
+the whole session lifecycle — starting the OAuth flow, turning the initial
+callback or a Guardian Tracker refresh into a session, reconnecting Bungie, and
+ending one session or all of them; the Gin handlers only map the result to HTTP
+(status code, cookie, audit event, response body).
+
+Once the Bungie access authorization enters its five-minute expiry buffer,
+strict endpoints that require it return `401 BUNGIE_REAUTH_REQUIRED`. The
+frontend routes the still-authenticated user through Bungie again, then sends the
+code and state to authenticated `POST /api/auth/bungie/reconnect`. Reconnect
+verifies that the newly authorized Destiny membership matches the Guardian
+Tracker JWT, replaces only the encrypted Bungie authorization, and returns 204.
+It does not issue or rotate Guardian Tracker JWTs, create a refresh-session row,
+change the user, or replace the refresh cookie.
 
 Access tokens are short-lived bearer tokens stored with the non-secret user
 snapshot in browser localStorage. Refresh tokens are rotating, per-device
 sessions backed by Postgres and delivered only through a host-only HttpOnly
 cookie scoped to `/api/auth`. Reused refresh tokens revoke the affected session.
-Sign-out-everywhere bumps the user's token version and removes sessions.
+Single-device logout preserves the membership-wide Bungie authorization.
+Sign-out-everywhere bumps the user's token version, removes every Guardian
+Tracker session, and evicts the Bungie authorization.
 Without a configured database, login still succeeds without a session row; a
 session write failure with a database configured still fails the login, since
 the access token is checked against that row on every request.
 
-The callback and refresh endpoints require an exact allowlisted browser origin.
-This cookie policy assumes the frontend and API are same-site; a cross-site
-deployment would require a new cookie and CSRF decision.
+The callback, authenticated Bungie reconnect, and Guardian Tracker refresh
+endpoints require an exact allowlisted browser origin. This cookie policy assumes
+the frontend and API are same-site; a cross-site deployment would require a new
+cookie and CSRF decision.
 
 Authorization reads the current role from the DB-backed revocation cache rather
 than trusting the JWT role hint.
@@ -67,7 +83,7 @@ authorization remains the boundary for protected API surfaces.
 
 The API talks to Bungie for:
 
-- OAuth token exchange and refresh
+- public-client OAuth authorization-code exchange and authenticated reconnect
 - Bungie account and Destiny membership data
 - collections, records, characters, and weekly public data
 - manifest version and manifest database download
@@ -138,7 +154,8 @@ is not inferred across an item's full source union.
 
 Primary route groups:
 
-- auth: Bungie login, callback, refresh, logout, logout-all
+- auth: Bungie login, initial callback, authenticated Bungie reconnect, Guardian
+  Tracker session refresh, logout, logout-all
 - account: Guardian Tracker user snapshot, role opt-in, feature flags
 - collections: collection tree, refresh, item views, item perk pools
 - weekly: recommendations, Xur inventory and authenticated location, milestones,
@@ -204,7 +221,8 @@ environment runs in development mode and is not production parity.
 
 - Secrets are read from environment files or runtime environment variables, never
   committed.
-- Bungie tokens are encrypted at rest with exact current/previous key versions.
+- Bungie's access-only authorization is encrypted at rest with exact
+  current/previous key versions.
 - CORS allows only configured origins.
 - API server timeouts, body limits, no-sniff/referrer headers, and no-store auth
   responses are configured.

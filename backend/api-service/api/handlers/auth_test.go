@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -444,6 +445,8 @@ func TestSessionFailureMapping(t *testing.T) {
 			http.StatusUnauthorized, "Session has expired", "refresh.failure", "expired", true},
 		{"refresh token mint", refreshFailures, &auth.SessionError{Reason: auth.ReasonTokenMint},
 			http.StatusInternalServerError, "Failed to refresh session", "", "", false},
+		{"reconnect authorization write", reconnectFailures, &auth.SessionError{Reason: auth.ReasonAuthorizationWrite, MembershipID: testUserID},
+			http.StatusServiceUnavailable, "Failed to save Bungie authorization", "reconnect.failure", "authorization_write", false},
 		// A reason with no table entry, and an error that is not a session
 		// failure at all, must both surface as 500 rather than as success.
 		{"unmapped reason", loginFailures, &auth.SessionError{Reason: auth.Reason("something_new")},
@@ -544,5 +547,102 @@ func TestBungieCallback_ValidationBranches(t *testing.T) {
 	// Valid-length code but a forged/invalid state → 400.
 	if code := post(url.Values{"code": {"abc123"}, "state": {"forged-state"}}); code != http.StatusBadRequest {
 		t.Errorf("bad state = %d, want 400", code)
+	}
+}
+
+func TestReconnectBungie_PreservesGuardianSession(t *testing.T) {
+	store := newFakeUserStore()
+	store.sessions["existing-session"] = "existing-jti"
+	bungie := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "GetMembershipsForCurrentUser") {
+			fmt.Fprintf(w, `{"Response":{"destinyMemberships":[{"membershipType":3,"membershipId":"%s","displayName":"TestGuardian"}],"primaryMembershipId":"%s"},"ErrorCode":1}`, testUserID, testUserID)
+			return
+		}
+		fmt.Fprint(w, `{"access_token":"new-bungie-access","expires_in":3600}`)
+	}))
+	t.Cleanup(bungie.Close)
+
+	cfg := &config.Config{JWTSecret: testJWTSecret}
+	issuer := auth.NewSessionIssuer(auth.SessionDeps{
+		JWT:     auth.NewJWT(cfg.JWTSecret, 24, 30),
+		Tokens:  newTokenStore(t),
+		Users:   store,
+		Revoker: auth.NewRevocationChecker(store, cache.NewNoOpCache()),
+		Cache:   cache.NewNoOpCache(),
+		State:   auth.NewStateSigner(cfg.JWTSecret),
+		OAuth: auth.OAuthConfig{
+			ClientID:   "client-123",
+			TokenURL:   bungie.URL,
+			APIBaseURL: bungie.URL,
+		},
+	})
+	audit := &fakeAudit{}
+	h := NewAuthHandler(issuer, cfg, audit)
+	_, state, err := issuer.AuthorizeURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := gin.New()
+	r.POST("/reconnect", func(c *gin.Context) {
+		c.Set("membership_id", testUserID)
+		h.ReconnectBungie(c)
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/reconnect", strings.NewReader(url.Values{
+		"code": {"reconnect-code"}, "state": {state},
+	}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("reconnect = %d, body=%s", w.Code, w.Body.String())
+	}
+	if got := store.sessions["existing-session"]; got != "existing-jti" || len(store.sessions) != 1 {
+		t.Fatalf("Guardian sessions changed: %+v", store.sessions)
+	}
+	if len(w.Result().Cookies()) != 0 {
+		t.Fatalf("reconnect unexpectedly wrote a refresh cookie: %+v", w.Result().Cookies())
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("audit events = %+v, want one reconnect.success", audit.events)
+	}
+	if event := audit.events[0]; event.EventType != "reconnect.success" || event.ActorMembershipID != testUserID || len(event.Details) != 0 {
+		t.Fatalf("success audit = %+v, want value-free reconnect.success for authenticated membership", event)
+	}
+}
+
+func TestReconnectBungie_RejectsForgedState(t *testing.T) {
+	audit := &fakeAudit{}
+	h, _ := newAuthHandlerWith(t, newFakeUserStore(), audit)
+	r := gin.New()
+	r.POST("/reconnect", func(c *gin.Context) {
+		c.Set("membership_id", testUserID)
+		h.ReconnectBungie(c)
+	})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/reconnect", strings.NewReader(url.Values{
+		"code": {"code"}, "state": {"forged"},
+	}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("forged reconnect state = %d, want 400", w.Code)
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("audit events = %+v, want one reconnect.failure", audit.events)
+	}
+	event := audit.events[0]
+	if event.EventType != "reconnect.failure" || event.ActorMembershipID != testUserID {
+		t.Fatalf("failure audit identity = %+v", event)
+	}
+	if got := event.Details["reason"]; got != "invalid_state" {
+		t.Fatalf("failure reason = %v, want invalid_state", got)
+	}
+	if _, present := event.Details["code"]; present {
+		t.Fatal("failure audit recorded OAuth code")
+	}
+	if _, present := event.Details["state"]; present {
+		t.Fatal("failure audit recorded OAuth state")
 	}
 }

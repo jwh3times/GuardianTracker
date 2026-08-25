@@ -10,6 +10,7 @@ import { OAuthCallback } from "./OAuthCallback";
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   localStorage.setItem("guardian_token", "test-token");
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
 });
@@ -72,5 +73,106 @@ describe("OAuthCallback", () => {
       </QueryClientProvider>,
     );
     expect(await screen.findByText("Authentication error")).toBeInTheDocument();
+  });
+
+  it("uses the authenticated reconnect endpoint and returns to the saved app route", async () => {
+    sessionStorage.setItem("guardian_bungie_reconnect", "1");
+    sessionStorage.setItem(
+      "guardian_bungie_reconnect_return_to",
+      "/collections?node=10",
+    );
+    let reconnectAuthorization: string | null = null;
+    let reconnectBody = "";
+    let normalCallbackPosts = 0;
+    server.use(
+      http.post(`${API}/api/auth/bungie/reconnect`, async ({ request }) => {
+        reconnectAuthorization = request.headers.get("authorization");
+        reconnectBody = await request.text();
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.post(`${API}/api/auth/bungie/callback`, () => {
+        normalCallbackPosts++;
+        return HttpResponse.json({ token: "wrong-path", user: sampleUser });
+      }),
+    );
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const collectionsKey = ["collections", 3, sampleUser.membershipId, "all"];
+    qc.setQueryData(collectionsKey, { degraded: true });
+    render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider>
+          <MemoryRouter
+            initialEntries={["/auth/callback?code=reconnect-code&state=sig"]}
+          >
+            <Routes>
+              <Route path="/auth/callback" element={<OAuthCallback />} />
+              <Route
+                path="/collections"
+                element={<div>collections-stub</div>}
+              />
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("collections-stub")).toBeInTheDocument();
+    expect(reconnectAuthorization).toBe("Bearer test-token");
+    expect(new URLSearchParams(reconnectBody).get("code")).toBe(
+      "reconnect-code",
+    );
+    expect(new URLSearchParams(reconnectBody).get("state")).toBe("sig");
+    expect(normalCallbackPosts).toBe(0);
+    expect(qc.getQueryState(collectionsKey)?.isInvalidated).toBe(true);
+    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
+    expect(localStorage.getItem("guardian_token")).toBe("test-token");
+  });
+
+  it("falls back to normal login when the Guardian Tracker session is gone", async () => {
+    localStorage.clear();
+    sessionStorage.setItem("guardian_bungie_reconnect", "1");
+    sessionStorage.setItem(
+      "guardian_bungie_reconnect_return_to",
+      "/collections",
+    );
+    let reconnectPosts = 0;
+    let normalCallbackPosts = 0;
+    server.use(
+      http.post(`${API}/api/auth/bungie/reconnect`, () => {
+        reconnectPosts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.post(`${API}/api/auth/bungie/callback`, () => {
+        normalCallbackPosts++;
+        return HttpResponse.json({ token: "new-login", user: sampleUser });
+      }),
+    );
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider>
+          <MemoryRouter
+            initialEntries={["/auth/callback?code=login-code&state=sig"]}
+          >
+            <Routes>
+              <Route path="/auth/callback" element={<OAuthCallback />} />
+              <Route path="/dashboard" element={<div>dashboard-stub</div>} />
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("dashboard-stub")).toBeInTheDocument();
+    expect(normalCallbackPosts).toBe(1);
+    expect(reconnectPosts).toBe(0);
+    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
+    expect(localStorage.getItem("guardian_token")).toBe("new-login");
   });
 });

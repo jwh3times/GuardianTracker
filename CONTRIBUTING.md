@@ -41,7 +41,8 @@ By participating in this project you agree to abide by our
   frontend Dockerfiles use the exact `.nvmrc` patch, and npm rejects other Node
   lines.
 - A [Bungie API application](https://www.bungie.net/en/Application) for OAuth
-  credentials (API key, client ID, client secret)
+  configuration (API key and public client ID; public clients have no client
+  secret or refresh token)
 
 ### 1. Configure environment variables
 

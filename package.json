@@ -3,6 +3,7 @@
   "private": true,
   "description": "Root-level scripts only — application code lives in frontend/ and backend/api-service/.",
   "scripts": {
-    "sync:agents": "node scripts/sync-agent-configs.mjs"
+    "sync:agents": "node scripts/sync-agent-configs.mjs",
+    "test:workspace-portability": "node --test scripts/workspace-portability.test.mjs"
   }
 }

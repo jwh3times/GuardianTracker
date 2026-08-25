@@ -59,7 +59,7 @@ jobs:
       # sees the actionable "run the sync script" failure rather than a confusing
       # Prettier diff on a generated file.
       - name: Test repository policy scripts
-        run: node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs
+        run: node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs
 
       - name: Check agent config sync (Codex agents + Claude skills)
         run: npm run sync:agents -- --check
@@ -89,6 +89,31 @@ jobs:
             exit 1
           fi
           echo "All Go files are gofmt-formatted."
+
+  test-workspace-portability-windows:
+    name: Test Workspace Portability (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Test Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $env:PORTABILITY_POWERSHELL = "powershell.exe"
+          node --test scripts/workspace-portability.test.mjs
+
+      - name: Test PowerShell 7
+        shell: pwsh
+        run: |
+          $env:PORTABILITY_POWERSHELL = "pwsh"
+          node --test scripts/workspace-portability.test.mjs
 
   test-frontend:
     name: Test Frontend

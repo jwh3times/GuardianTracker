@@ -26,7 +26,10 @@ These files are committed and maintained as public sources of truth:
 
 ## Private Docs
 
-The `private/` directory is gitignored. Keep these categories there:
+The `private/` directory is gitignored and may be restored by authorized
+maintainers as an independent private documentation repository. It is not a
+submodule, its remote location is not public configuration, and public-only
+contributors do not need it. Keep these categories there:
 
 - deployment runbooks and cloud resource names
 - production incident notes

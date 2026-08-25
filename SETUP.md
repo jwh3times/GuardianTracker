@@ -16,6 +16,8 @@ secrets, and incident notes belong under `private/`, which is gitignored.
   Dockerfiles use the exact `.nvmrc` patch, and npm rejects other Node lines.
 - A Bungie application for API and OAuth credentials.
 - Minikube only if you need to validate the Kubernetes manifests.
+- The 1Password CLI only if you are an authorized maintainer restoring the
+  optional private workspace or its local secret files.
 
 Node 26 remains the Current release line until its scheduled LTS transition on
 October 28, 2026. Guardian Tracker intentionally accepts that short-term Current
@@ -27,8 +29,12 @@ frontend runtime is nginx.
 Create an application at <https://www.bungie.net/en/Application> and record:
 
 - API key
-- OAuth client ID
-- OAuth client secret
+- OAuth client ID (a public client identifier)
+
+Guardian Tracker uses Bungie's public OAuth-client flow. It does not require or
+send a Bungie client secret. Bungie public clients receive an expiring access
+token and no refresh token; when it expires, the app asks the still-authenticated
+user to reconnect Bungie.
 
 For local development, set the redirect URI to:
 
@@ -39,6 +45,76 @@ http://localhost:5273/auth/callback
 If you use a public HTTPS tunnel for OAuth testing, add that tunnel callback URL
 to the Bungie application too, then update the local environment values to match.
 
+## Optional: Restore a Private Workspace
+
+Public-only contributors can skip this section. The application, tests, and
+normal `setup.ps1` flow do not require private access.
+
+Authorized maintainers can restore the ignored `private/` directory as an
+independent Git repository. The helper never registers a submodule and does not
+publish the private repository location in the public repository. To enter a
+credential-free GitHub clone URL at a secure prompt, run:
+
+```powershell
+./scripts/bootstrap-private-workspace.ps1 -PrivateFromPrompt
+```
+
+To obtain that location through 1Password instead, first create the ignored,
+machine-local `.private-workspace/repository.env.ref` file with this placeholder
+shape, replacing the placeholder only in your local file:
+
+```dotenv
+GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>
+```
+
+Then make the approved least-privilege 1Password service-account token available
+to the current process through the maintainer's secure delivery mechanism. Do not
+type the token into a command, save it in a profile or environment file, or print
+it. Verify the metadata-only `op vault list` command succeeds, then run:
+
+```powershell
+./scripts/bootstrap-private-workspace.ps1 -PrivateFromOnePassword
+```
+
+Do not commit the reference file or put resolved credentials in it. The helper
+accepts only credential-free GitHub HTTPS or `ssh://git@github.com` repository
+locations. It also refuses to clone over an existing `private/` directory; an
+existing directory must be preserved and migrated deliberately.
+
+If the restored private repository contains the approved 1Password templates,
+restore plaintext local configuration before running `setup.ps1`:
+
+```powershell
+# Restore all approved targets
+./scripts/restore-private-secrets.ps1
+
+# Or restore selected targets: root, api, frontend, or k8s
+./scripts/restore-private-secrets.ps1 -Target root,frontend
+```
+
+The restoration helper writes only `.env`, `backend/api-service/.env`,
+`frontend/.env.local`, and `k8s/api-service-secret.yaml`. It verifies that each
+target is untracked and protected by a committed ignore rule, writes through a
+temporary file, validates the expected structure, and refuses to inspect or
+overwrite an existing target. Run it before `setup.ps1`: that script also leaves
+existing files untouched, so reversing the order would leave example-derived
+files in place instead of restoring them.
+
+Check both repositories and the plaintext-target protections without displaying
+secret contents:
+
+```powershell
+./scripts/workspace-status.ps1
+```
+
+Private branch names are redacted by default. The reported ahead/behind counts
+come only from local tracking refs—the command does not fetch—and can therefore
+be stale. Use `-IncludePrivateBranch` only when it is safe to show the private
+branch name in the current terminal or transcript.
+
+Running `./scripts/bootstrap-private-workspace.ps1` without a private switch is a
+public-only readiness check and does not install private content.
+
 ## 2. Create Environment Files
 
 Run the helper from the repository root:
@@ -46,6 +122,10 @@ Run the helper from the repository root:
 ```powershell
 ./setup.ps1
 ```
+
+The helper creates only missing files and never overwrites existing ones. If you
+used the optional private restoration workflow, restore secret files first and
+then run this helper to create any remaining files from public examples.
 
 Or copy the templates manually:
 
@@ -55,16 +135,15 @@ cp backend/api-service/.env.example backend/api-service/.env
 cp frontend/.env.example frontend/.env.local
 ```
 
-Fill in the required secrets:
+Fill in the required runtime values:
 
 | Variable               | Purpose                                                         |
 | ---------------------- | --------------------------------------------------------------- |
 | `BUNGIE_API_KEY`       | Bungie API key                                                  |
-| `BUNGIE_CLIENT_ID`     | Bungie OAuth client ID                                          |
-| `BUNGIE_CLIENT_SECRET` | Bungie OAuth client secret                                      |
+| `BUNGIE_CLIENT_ID`     | Public Bungie OAuth client identifier; no client secret is used |
 | `JWT_SECRET`           | 32+ character signing secret                                    |
 | `DATABASE_URL`         | Postgres connection string; Compose sets this for the container |
-| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie tokens         |
+| `TOKEN_ENCRYPTION_KEY` | 32-byte base64 AES-256-GCM key for stored Bungie authorization  |
 
 Set the required runtime mode. Keep the current key version explicit in new
 environment files; it defaults to `1` only to preserve existing version-1 rows:
@@ -242,6 +321,15 @@ Minikube mappings:
 | `startup.ps1` port-forward | `localhost:5273 -> frontend:80` | local browser access                   |
 
 ## Tests and Checks
+
+Windows workspace portability (from the repository root):
+
+```powershell
+npm run test:workspace-portability
+```
+
+This exercises the bootstrap, secret-restoration, and status helpers with local
+fixtures. CI runs the same suite on Windows PowerShell 5.1 and PowerShell 7.
 
 Backend:
 

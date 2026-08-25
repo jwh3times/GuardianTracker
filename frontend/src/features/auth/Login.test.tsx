@@ -8,6 +8,7 @@ import { Login } from "./Login";
 
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 function renderPage(ui: React.ReactNode, route = "/") {
@@ -63,5 +64,28 @@ describe("Login page", () => {
     expect(
       await screen.findByText(/No authorization URL received/),
     ).toBeInTheDocument();
+  });
+
+  it("starts the same Bungie authorization flow in reconnect mode without clearing app auth", async () => {
+    server.use(
+      http.get(`${API}/api/auth/bungie`, () =>
+        HttpResponse.json({
+          authUrl: "https://bungie.net/authorize",
+          state: "xyz",
+        }),
+      ),
+    );
+
+    renderPage(<Login mode="reauthorize" />);
+    expect(
+      screen.getByRole("heading", { name: /Reconnect Bungie to continue/i }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Reconnect Bungie/i }));
+
+    expect(
+      await screen.findByText("Redirecting to Bungie.net…"),
+    ).toBeInTheDocument();
+    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBe("1");
+    expect(localStorage.getItem("guardian_token")).toBe("test-token");
   });
 });

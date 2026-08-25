@@ -43,7 +43,9 @@ yarn-error.log*
 backend/bungie-service/data/
 
 # IDE files
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
 .idea/
 *.swp
 *.swo
@@ -100,5 +102,7 @@ temp/
 
 # Private files
 private/
+.private-workspace/
+.private-bootstrap-*/
 .superpowers/
 docs/superpowers/

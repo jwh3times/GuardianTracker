@@ -13,6 +13,51 @@ request.
 
 No unreleased changes.
 
+## [1.2.0] - 2026-08-25
+
+### Added
+
+- Added Windows workspace-portability helpers for optional restoration of the
+  independent ignored private documentation workspace, guarded 1Password-backed
+  local secret restoration, and value-free public/private workspace status. The
+  public setup path remains usable without private access, private branch names
+  are redacted by default, and secret targets must be ignored and absent before
+  restoration.
+- Added public-safe VS Code settings and tasks plus Windows CI coverage for the
+  portability workflow under Windows PowerShell 5.1 and PowerShell 7.
+
+### Changed
+
+- Removed the unused Bungie OAuth client-secret configuration and consistently
+  model the application as a public OAuth client. Authorization-code grants send
+  the public client ID without a `client_secret`; Bungie's access-only
+  authorization is encrypted at rest and, after expiry, can be reconnected to
+  the same membership without ending or rotating the Guardian Tracker browser
+  session.
+
+### Security
+
+- Private workspace cloning and secret restoration now suppress Git tracing,
+  remove all `OP_*` credentials from Git and transport-helper environments,
+  evaluate the complete committed ignore-rule semantics, reject reparse-point
+  paths, and require quoted Kubernetes `stringData` values before installing a
+  plaintext target.
+
+## [1.1.2] - 2026-08-24
+
+### Changed
+
+- Updated `@tanstack/react-virtual` from 3.14.9 to 3.14.10,
+  `@vitejs/plugin-react` from 6.0.5 to 6.1.0, Vitest coverage/runtime packages
+  from 4.1.10 to 4.1.11, Oxlint from 1.78.0 to 1.79.0, and Vite from 8.2.1 to
+  8.2.2. Unused Oxlint disable directives now fail linting.
+
+## [1.1.1] - 2026-08-24
+
+### Changed
+
+- Updated the API service Docker build stage from Go 1.26.6 to Go 1.27.0.
+
 ## [1.1.0] - 2026-08-24
 
 ### Added
