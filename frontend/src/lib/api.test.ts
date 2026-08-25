@@ -19,10 +19,16 @@ describe("apiFetch", () => {
 
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     // jsdom throws on real navigation; stub location for the redirect path.
-    vi.stubGlobal("location", { href: "" });
+    vi.stubGlobal("location", {
+      href: "",
+      pathname: "/collections",
+      search: "?node=10",
+      hash: "",
+    });
   });
 
   afterEach(() => {
@@ -92,6 +98,40 @@ describe("apiFetch", () => {
     expect(refreshCall).toBeDefined();
     expect(refreshCall?.[1]?.credentials).toBe("include");
     expect(refreshCall?.[1]?.body).toBe("{}");
+  });
+
+  it("routes a Bungie reauthorization 401 without refreshing or clearing the app session", async () => {
+    localStorage.setItem("guardian_token", "still-valid");
+    localStorage.setItem("guardian_user", '{"membershipId":"1"}');
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(401, {
+        error: "Reconnect Bungie",
+        code: "BUNGIE_REAUTH_REQUIRED",
+      }),
+    );
+
+    let error: unknown;
+    try {
+      await apiFetch("/api/thing");
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).code).toBe("BUNGIE_REAUTH_REQUIRED");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("/api/auth/refresh"),
+      ),
+    ).toBe(false);
+    expect(localStorage.getItem("guardian_token")).toBe("still-valid");
+    expect(localStorage.getItem("guardian_user")).not.toBeNull();
+    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBe("1");
+    expect(sessionStorage.getItem("guardian_bungie_reconnect_return_to")).toBe(
+      "/collections?node=10",
+    );
+    expect(window.location.href).toBe("/reauthorize");
   });
 
   it("shares one in-flight refresh across concurrent 401s", async () => {

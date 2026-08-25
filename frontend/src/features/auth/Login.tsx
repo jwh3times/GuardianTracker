@@ -3,8 +3,16 @@ import { Brand } from "../../components/Brand";
 import { Button } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
 import type { AuthURLResponse } from "../../types/api";
+import {
+  currentReturnPath,
+  markBungieReconnect,
+} from "../../lib/bungieReauthorization";
 
-export function Login() {
+interface LoginProps {
+  mode?: "login" | "reauthorize";
+}
+
+export function Login({ mode = "login" }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,6 +23,10 @@ export function Login() {
     try {
       setLoading(true);
       setError(null);
+
+      if (mode === "reauthorize") {
+        markBungieReconnect(currentReturnPath());
+      }
 
       const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/bungie`);
       if (!response.ok) {
@@ -41,13 +53,20 @@ export function Login() {
       <div className="gt-login-card">
         <Brand />
         <h1 className="gt-login-title">
-          See what you're missing.
-          <br />
-          Chase what matters this week.
+          {mode === "reauthorize" ? (
+            <>Reconnect Bungie to continue.</>
+          ) : (
+            <>
+              See what you're missing.
+              <br />
+              Chase what matters this week.
+            </>
+          )}
         </h1>
         <p className="gt-login-sub">
-          A Destiny 2 companion that turns your sprawling collection into a
-          focused plan of action.
+          {mode === "reauthorize"
+            ? "Your Guardian Tracker session is still active. Bungie authorization expired and needs to be renewed."
+            : "A Destiny 2 companion that turns your sprawling collection into a focused plan of action."}
         </p>
 
         {error && (
@@ -82,10 +101,12 @@ export function Login() {
           <Button
             variant="primary"
             icon="bungie"
-            onClick={handleBungieLogin}
+            onClick={() => void handleBungieLogin()}
             style={{ width: "100%" }}
           >
-            Sign in with Bungie
+            {mode === "reauthorize"
+              ? "Reconnect Bungie"
+              : "Sign in with Bungie"}
           </Button>
         )}
 

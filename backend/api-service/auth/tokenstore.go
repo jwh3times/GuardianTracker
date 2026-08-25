@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sync"
 	"time"
 
@@ -18,6 +19,11 @@ var (
 	ErrTokensNotFound = errors.New("bungie tokens not found")
 	// ErrNoUserRow: no users row exists, so tokens cannot be persisted.
 	ErrNoUserRow = errors.New("no users row for membership")
+	// ErrBungieReauthorizationRequired means the Guardian Tracker browser
+	// session is still valid, but no usable Bungie access credential remains.
+	// Public Bungie clients receive no refresh token, so renewing consent is the
+	// only recovery after their access token expires.
+	ErrBungieReauthorizationRequired = errors.New("bungie reauthorization required")
 	// errCASLost: a compare-and-swap refresh write lost to a concurrent writer.
 	errCASLost = errors.New("token cas lost")
 )
@@ -86,12 +92,12 @@ type TokenStore struct {
 // NewTokenStore creates a token store and starts the background cleanup goroutine.
 // repo and cipher may both be nil for degraded/dev mode. tokenURL overrides the
 // Bungie OAuth token endpoint (E2E/fake-Bungie); empty uses the real one.
-func NewTokenStore(ctx context.Context, clientID, clientSecret, tokenURL string, repo TokenRepo, cipher *TokenCipher) *TokenStore {
+func NewTokenStore(ctx context.Context, clientID, tokenURL string, repo TokenRepo, cipher *TokenCipher) *TokenStore {
 	s := &TokenStore{
 		tokens: make(map[string]*BungieTokens),
 		repo:   repo,
 		cipher: cipher,
-		oauth:  newBungieOAuth(clientID, clientSecret, tokenURL),
+		oauth:  newBungieOAuth(clientID, tokenURL),
 	}
 	go s.cleanupLoop(ctx)
 	return s
@@ -113,7 +119,31 @@ func (s *TokenStore) Store(membershipID string, tokens *BungieTokens) {
 		}
 	}
 
-	// Always update memory cache
+	s.storeInMemory(membershipID, tokens)
+}
+
+// StoreConfirmed saves tokens only after every configured persistence step has
+// succeeded. Intentional memory-only mode (both repo and cipher nil) remains a
+// valid configuration. A partial persistence configuration or any encryption /
+// database failure returns an error and leaves the in-memory credential
+// unchanged, so a reconnect cannot report a false durable success.
+func (s *TokenStore) StoreConfirmed(membershipID string, tokens *BungieTokens) error {
+	tokens.MembershipID = membershipID
+	switch {
+	case s.repo == nil && s.cipher == nil:
+		// Intentional degraded mode: memory is the only configured store.
+	case s.repo == nil || s.cipher == nil:
+		return fmt.Errorf("incomplete Bungie token persistence configuration")
+	default:
+		if err := s.persist(membershipID, tokens, time.Time{}); err != nil {
+			return fmt.Errorf("persist Bungie tokens: %w", err)
+		}
+	}
+	s.storeInMemory(membershipID, tokens)
+	return nil
+}
+
+func (s *TokenStore) storeInMemory(membershipID string, tokens *BungieTokens) {
 	s.mu.Lock()
 	s.tokens[membershipID] = tokens
 	s.mu.Unlock()
@@ -199,7 +229,11 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 
 	// Memory miss — try DB
 	if !exists {
-		if loaded, _ := s.loadFromDB(membershipID); loaded != nil {
+		loaded, err := s.loadFromDB(membershipID)
+		if err != nil {
+			return "", fmt.Errorf("load Bungie tokens: %w", err)
+		}
+		if loaded != nil {
 			tokens = loaded
 			s.mu.Lock()
 			s.tokens[membershipID] = tokens
@@ -209,16 +243,16 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 	}
 
 	if !exists {
-		return "", fmt.Errorf("no Bungie tokens found")
-	}
-	if tokens.isRefreshTokenExpired() {
-		s.mu.Lock()
-		delete(s.tokens, membershipID)
-		s.mu.Unlock()
-		return "", fmt.Errorf("refresh token expired; re-authentication required")
+		return "", fmt.Errorf("%w: no stored tokens", ErrBungieReauthorizationRequired)
 	}
 	if !tokens.isAccessTokenExpired() {
 		return tokens.AccessToken, nil
+	}
+	if tokens.RefreshToken == "" {
+		return "", fmt.Errorf("%w: public-client access token expired", ErrBungieReauthorizationRequired)
+	}
+	if tokens.isRefreshTokenExpired() {
+		return "", fmt.Errorf("%w: refresh token expired", ErrBungieReauthorizationRequired)
 	}
 
 	// Access token expired. Acquire per-user lock to serialize the refresh call.
@@ -232,15 +266,25 @@ func (s *TokenStore) GetValidToken(membershipID string) (string, error) {
 	tokens = s.tokens[membershipID]
 	s.mu.RUnlock()
 	if tokens == nil {
-		return "", fmt.Errorf("no Bungie tokens found")
+		return "", fmt.Errorf("%w: no stored tokens", ErrBungieReauthorizationRequired)
 	}
 	if !tokens.isAccessTokenExpired() {
 		return tokens.AccessToken, nil
+	}
+	if tokens.RefreshToken == "" {
+		return "", fmt.Errorf("%w: public-client access token expired", ErrBungieReauthorizationRequired)
+	}
+	if tokens.isRefreshTokenExpired() {
+		return "", fmt.Errorf("%w: refresh token expired", ErrBungieReauthorizationRequired)
 	}
 
 	slog.Info("refreshing expired Bungie access token", observability.ID("membership", membershipID))
 	newTokens, err := s.refreshBungieToken(tokens)
 	if err != nil {
+		var grantErr *oauthGrantError
+		if errors.As(err, &grantErr) && (grantErr.StatusCode == http.StatusBadRequest || grantErr.StatusCode == http.StatusUnauthorized) {
+			return "", fmt.Errorf("%w: refresh grant rejected", ErrBungieReauthorizationRequired)
+		}
 		return "", fmt.Errorf("failed to refresh token: %w", err)
 	}
 	newTokens.MembershipID = membershipID
@@ -322,7 +366,11 @@ func (s *TokenStore) cleanupLoop(ctx context.Context) {
 			s.mu.Lock()
 			now := time.Now()
 			for id, t := range s.tokens {
-				if now.After(t.RefreshTokenExpiresAt) {
+				expiresAt := t.RefreshTokenExpiresAt
+				if t.RefreshToken == "" {
+					expiresAt = t.AccessTokenExpiresAt
+				}
+				if now.After(expiresAt) {
 					delete(s.tokens, id)
 					slog.Debug("expired in-memory Bungie tokens removed", observability.ID("membership", id))
 				}

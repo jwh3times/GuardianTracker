@@ -1,0 +1,31 @@
+{
+  "typescript.preferences.includePackageJsonAutoImports": "on",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "go.lintTool": "golangci-lint",
+  "go.lintFlags": ["--fast"],
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/tmp": true,
+    "**/.next": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/tmp": true,
+    "**/.next": true
+  },
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "[go]": {
+    "editor.defaultFormatter": "golang.go"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  }
+}

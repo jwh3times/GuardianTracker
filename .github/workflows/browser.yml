@@ -25,7 +25,6 @@ env:
   DATABASE_URL: postgres://guardian_app:guardian_dev_password@127.0.0.1:5534/guardian_tracker?sslmode=disable
   BUNGIE_API_KEY: e2e-api-key
   BUNGIE_CLIENT_ID: e2e-client
-  BUNGIE_CLIENT_SECRET: e2e-client-secret
   BUNGIE_API_BASE_URL: http://127.0.0.1:8090/Platform
   BUNGIE_AUTHORIZE_URL: http://127.0.0.1:8090/en/OAuth/Authorize
   BUNGIE_TOKEN_URL: http://127.0.0.1:8090/platform/app/oauth/token/

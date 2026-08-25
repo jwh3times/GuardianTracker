@@ -203,6 +203,40 @@ func TestPublicRoutesStayReachable(t *testing.T) {
 	}
 }
 
+func TestBungieReconnectRequiresJWTAndExactOrigin(t *testing.T) {
+	r := newTestRouter(t, auth.RoleStandard, true)
+	path := "/api/auth/bungie/reconnect"
+	token := accessToken(t)
+
+	request := func(bearer, origin string) int {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader("code=x&state=y"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if bearer != "" {
+			req.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	if got := request("", "https://app.example"); got != http.StatusUnauthorized {
+		t.Fatalf("reconnect without JWT = %d, want 401", got)
+	}
+	for _, origin := range []string{"", "https://evil.example", "https://app.example.evil"} {
+		if got := request(token, origin); got != http.StatusForbidden {
+			t.Errorf("reconnect with origin %q = %d, want 403", origin, got)
+		}
+	}
+	// The test router deliberately wires a nil issuer. Reaching its recovery
+	// path proves the exact allowlisted origin passed both security gates.
+	if got := request(token, "https://app.example"); got == http.StatusUnauthorized || got == http.StatusForbidden {
+		t.Fatalf("reconnect with valid JWT and exact origin was blocked: %d", got)
+	}
+}
+
 // TestFlagGatedRoutesEnforceTheirOwnFlag pins each flag-gated route to the flag
 // key it claims. RequireFlag fails open on a key it cannot resolve, so gating a
 // route on a mistyped or wrong key gates nothing at all — silently.

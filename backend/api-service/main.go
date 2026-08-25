@@ -90,14 +90,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Auth — the token repo is always wired; without a cipher there is nothing
-	// safe to persist, so that stays a real condition.
+	// Auth — token persistence is an all-or-nothing pair. NewStores(nil) exposes
+	// callable degraded adapters for ordinary request paths, but TokenStore's
+	// intentional memory-only mode is represented by a nil repo and nil cipher;
+	// passing the degraded token adapter would turn a valid no-Postgres reconnect
+	// into a false persistence failure.
 	jwtHelper := auth.NewJWTWithTTL(cfg.JWTSecret, cfg.JWTAccessTTL, cfg.JWTRefreshExpiryDays)
-	var tokenRepo auth.TokenRepo
-	if tokenCipher != nil {
-		tokenRepo = adapters.NewTokenRepo(stores.Tokens)
-	}
-	tokenStore := auth.NewTokenStore(ctx, cfg.BungieClientID, cfg.BungieClientSecret, cfg.BungieTokenURL, tokenRepo, tokenCipher)
+	tokenRepo, tokenCipher := tokenPersistenceDeps(pool != nil, adapters.NewTokenRepo(stores.Tokens), tokenCipher)
+	tokenStore := auth.NewTokenStore(ctx, cfg.BungieClientID, cfg.BungieTokenURL, tokenRepo, tokenCipher)
 
 	// Bungie API client
 	bungieClient := bungie.NewClient(cfg.BungieAPIKey, cfg.BungieAPIBaseURL, cfg.RateLimitRPS, cfg.RateLimitBurst)
@@ -218,7 +218,6 @@ func main() {
 		State:   auth.NewStateSigner(cfg.JWTSecret),
 		OAuth: auth.OAuthConfig{
 			ClientID:        cfg.BungieClientID,
-			ClientSecret:    cfg.BungieClientSecret,
 			TokenURL:        cfg.BungieTokenURL,
 			APIBaseURL:      cfg.BungieAPIBaseURL,
 			APIKey:          cfg.BungieAPIKey,
@@ -296,4 +295,15 @@ func main() {
 		slog.Warn("manifest provider close failed", observability.Err(err))
 	}
 	slog.Info("API service stopped")
+}
+
+// tokenPersistenceDeps selects the encrypted persistence pair for TokenStore.
+// Production validation requires both Postgres and encryption configuration;
+// development without a real pool deliberately uses TokenStore's memory-only
+// mode even though db.NewStores(nil) supplies callable degraded repositories.
+func tokenPersistenceDeps(databaseAvailable bool, repo auth.TokenRepo, cipher *auth.TokenCipher) (auth.TokenRepo, *auth.TokenCipher) {
+	if !databaseAvailable || cipher == nil {
+		return nil, nil
+	}
+	return repo, cipher
 }

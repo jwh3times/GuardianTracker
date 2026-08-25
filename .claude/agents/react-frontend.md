@@ -149,7 +149,8 @@ frontend/src/
   features/                    ← Feature slices; each owns its pages, feature-only components, helpers,
                                  and tests — all flat at the feature root (no pages/, components/kit/,
                                  or lib/ subfolders)
-    auth/                      ← Login.tsx (OAuth initiation), OAuthCallback.tsx (code exchange)
+    auth/                      ← Login.tsx (initial login + authenticated Bungie reconnect),
+                                   OAuthCallback.tsx (initial or reconnect code exchange)
     collections/               ← Collections.tsx (tree + grid/list + detail drawer via collectionsFullQuery;
                                    search deep-link ?item=<hash>; add/remove wishlist; the sidebar tree, node
                                    lookups, and the item join all come from lib/collectionsView.ts — this page
@@ -229,7 +230,11 @@ const { data } = useQuery({
 });
 ```
 
-**Never call `fetch()` directly** for API operations (except the OAuth callback flow which has no token yet). The `apiFetch` helper handles token injection, 401 refresh, and error shaping.
+**Never call `fetch()` directly** for authenticated API operations. The public
+OAuth starter and initial callback are the exceptions because no Guardian
+Tracker token exists yet; the authenticated reconnect branch uses `apiFetch`.
+The helper handles token injection, distinguishes Bungie reauthorization from
+Guardian Tracker session expiry, performs app-session refresh, and shapes errors.
 
 `ApiError` carries `.status` (HTTP status) and `.code` (backend machine-readable code). Use `errorState(error)` from `lib/errorState.ts` to map errors to UI copy — it branches on `PRIVACY_RESTRICTION`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`.
 
@@ -261,7 +266,7 @@ Auth state lives entirely in `AuthContext` (`contexts/AuthContext.tsx`):
 - Non-secret user snapshot stored in `localStorage` under `guardian_user`
 - Refresh token stored only in the host-only HttpOnly `guardian_refresh_token` cookie (30d, `SameSite=Lax`, `/api/auth`; `Secure` in production)
 - `useAuth()` returns `{ user, token, login, logout, logoutAll, isAuthenticated, isLoading }`; it never exposes the refresh token
-- `apiFetch` handles a 401 by sending an empty credentialed request to `/api/auth/refresh`; concurrent failures share one refresh call
+- `apiFetch` inspects a 401 before refreshing. `BUNGIE_REAUTH_REQUIRED` preserves the Guardian Tracker session and routes to `/reauthorize`; other 401s send an empty credentialed request to `/api/auth/refresh`, with concurrent failures sharing one refresh call
 - `login()` stores the access token/user only; the callback response has already set the refresh cookie
 - `logout()` / `logoutAll()` call the matching server endpoint, which expires the cookie, then clear access/user localStorage state
 
@@ -321,12 +326,22 @@ works today.
 
 ## OAuth callback flow
 
-`OAuthCallback.tsx` handles the redirect from Bungie at `/auth/callback?code=...&state=...`:
+`OAuthCallback.tsx` handles the redirect from Bungie at
+`/auth/callback?code=...&state=...` for initial login and authenticated reconnect:
 
 1. Reads `code` and `state` from URL params
-2. POSTs `{ code, state }` to `POST /api/auth/bungie/callback` with `credentials: "include"`
-3. On success: the API sets the refresh cookie; `AuthContext.login()` stores `{token,user}` and redirects to `/dashboard`
-4. On failure: shows error, redirects back to `/login` with an error param
+2. For initial login, POSTs `{ code, state }` to
+   `POST /api/auth/bungie/callback` with `credentials: "include"`; the API sets
+   the refresh cookie, `AuthContext.login()` stores `{token,user}`, and the
+   browser redirects to `/dashboard`.
+3. For reconnect, the non-secret intent and same-origin return path are held in
+   `sessionStorage`. The callback uses `apiFetch` to authenticated-POST the code
+   and state to `/api/auth/bungie/reconnect`, clears that intent after the 204,
+   and returns to the saved path without replacing the Guardian Tracker session.
+   If the app session disappeared while the browser was at Bungie, the callback
+   clears the reconnect intent and completes a normal login instead.
+4. On failure, shows the error and returns to `/reauthorize` for reconnect or
+   `/login` for initial login.
 
 ## Collections page features
 
@@ -400,7 +415,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 
 ## Known limitations / TODOs
 
-- `logout()` ends only the current session; other devices remain signed in. `logoutAll()` ends all sessions and evicts the Bungie token. If revocation cannot be observed immediately, the old access token expires within the configured lifetime (30 minutes by default) plus the 60-second cache window
+- `logout()` ends only the current Guardian Tracker session; other devices remain signed in and the membership-wide Bungie authorization is preserved. `logoutAll()` ends all sessions and evicts the Bungie authorization. If revocation cannot be observed immediately, the old access token expires within the configured lifetime (30 minutes by default) plus the 60-second cache window
 - Search index snapshots persist beside the manifest by version; pages can still show a "warming up" error state while a missing or new-version snapshot rebuilds (~30s)
 - Xûr location is optional — the backend resolves the authenticated vendor location to
   `The Tower` and omits the field when Bungie or manifest data is unavailable.

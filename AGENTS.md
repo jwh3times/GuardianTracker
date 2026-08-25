@@ -41,7 +41,7 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 
 ### Key directories
 
-- `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences repository), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency, sources, preferences), `config/`, `cache/`.
+- `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/reconnect/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences repository), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency, sources, preferences), `config/`, `cache/`.
 - `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `lib/`, `types/`.
 - `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
 - `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
@@ -66,15 +66,25 @@ invariants:
 
 ### Auth & token flow
 
-Bungie OAuth login with stateless, HMAC-signed CSRF `state`; on callback the API stores the Bungie
-account's OAuth tokens against the tracked Destiny membership, **AES-256-GCM encrypted** in Postgres
-with explicit current/previous key versions.
-It returns a short-lived access JWT for localStorage and sends the per-device rotating refresh JWT
-only in a host-only HttpOnly cookie scoped to `/api/auth`. Callback and refresh require an exact
-allowlisted browser origin; the cookie policy assumes the frontend and API are same-site. Refresh
-sessions retain Postgres-backed revocation and reuse detection. Role tiers (standard / beta / alpha / admin) and feature
-flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login. Security details and the
-credential-rotation runbook live in [SECURITY.md](./SECURITY.md).
+Bungie OAuth login uses a public client with stateless, HMAC-signed CSRF `state`.
+The API sends no Bungie client secret; Bungie returns an expiring access token
+without a refresh token. The access-only Bungie authorization is stored against
+the tracked Destiny membership, **AES-256-GCM encrypted** in Postgres with
+explicit current/previous key versions. When it expires, authenticated users
+reconnect the same Bungie membership through `POST /api/auth/bungie/reconnect`;
+that replaces only the Bungie authorization and does not mint or rotate a
+Guardian Tracker session.
+
+Guardian Tracker separately returns a short-lived access JWT for localStorage
+and sends its per-device rotating refresh JWT only in a host-only HttpOnly cookie
+scoped to `/api/auth`. The callback, reconnect, and refresh endpoints require an
+exact allowlisted browser origin; the cookie policy assumes the frontend and API
+are same-site. Refresh sessions retain Postgres-backed revocation and reuse
+detection. Single-device logout preserves the membership-wide Bungie
+authorization; logout-all evicts it. Role tiers (standard / beta / alpha / admin)
+and feature flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login.
+Security details and the credential-rotation runbook live in
+[SECURITY.md](./SECURITY.md).
 
 ## Running Services
 
@@ -139,6 +149,24 @@ To test Bungie OAuth, tunnel the frontend with ngrok. Add the ngrok URL to `CORS
 
 Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`.
 
+Public-only development requires no private workspace. Authorized maintainers
+can optionally restore the ignored `private/` directory as an independent Git
+repository with `./scripts/bootstrap-private-workspace.ps1 -PrivateFromPrompt`,
+or through 1Password with `-PrivateFromOnePassword` after creating the ignored
+machine-local `.private-workspace/repository.env.ref` file containing only
+`GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>`. Do not put the
+private repository location or real 1Password identifiers in public docs.
+
+When private restoration templates are available, run
+`./scripts/restore-private-secrets.ps1` before `./setup.ps1`; both helpers refuse
+to overwrite existing environment files, so `setup.ps1` must not create example
+copies first. The restore helper supports `-Target root,api,frontend,k8s` and
+writes only targets protected by committed ignore rules. Run
+`./scripts/workspace-status.ps1` for value-free public/private status and target
+protection checks. It redacts the private branch by default; ahead/behind values
+use local tracking refs without fetching. `-IncludePrivateBranch` opts into
+showing the private branch name.
+
 **Never commit real secrets. Use `.env` locally and keep generated/private files out of git.**
 
 Frontend tooling uses the exact Node.js 26 patch in the root `.nvmrc`.
@@ -148,7 +176,7 @@ scheduled LTS transition on October 28, 2026; this project intentionally accepts
 that short-term churn because Node is frontend development/build tooling and the
 deployed frontend runtime is nginx.
 
-### Required secrets
+### Required runtime values
 
 | Variable                                | Purpose                                                                                               |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -156,12 +184,11 @@ deployed frontend runtime is nginx.
 | `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                               |
 | `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                              |
 | `BUNGIE_API_KEY`                        | From <https://www.bungie.net/en/Application>                                                          |
-| `BUNGIE_CLIENT_ID`                      | Bungie app settings                                                                                   |
-| `BUNGIE_CLIENT_SECRET`                  | Bungie app settings                                                                                   |
+| `BUNGIE_CLIENT_ID`                      | Public Bungie OAuth client identifier; no client secret is used                                       |
 | `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                                                    |
 | `JWT_SECRET`                            | 32+ char random string (`openssl rand -base64 32`)                                                    |
 | `DATABASE_URL`                          | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
-| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie token encryption (`openssl rand -base64 32`)                            |
+| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie authorization encryption (`openssl rand -base64 32`)                    |
 | `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                           |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                             |
 | `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
@@ -171,10 +198,11 @@ deployed frontend runtime is nginx.
 ### Auth and security behavior to preserve
 
 - OAuth state is HMAC signed.
-- Bungie tokens are encrypted at rest with AES-256-GCM and exact current/previous key versions.
+- The access-only Bungie authorization is encrypted at rest with AES-256-GCM and exact current/previous key versions; expiry requires an authenticated reconnect of the same Bungie membership.
 - Access JWTs and the user snapshot are stored in localStorage; the rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
 - Refresh token revocation is backed by PostgreSQL.
-- Callback and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
+- Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
+- Single-device logout preserves Bungie authorization; logout-all evicts it.
 - Admin access is controlled by explicit membership ID configuration.
 
 See `SECURITY.md` for public security posture and reporting guidance.
@@ -197,7 +225,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, and PostgreSQL-image alignment policies. The Node policy keeps
    `.nvmrc`, both workflows, both frontend Dockerfiles, package engine metadata, and Node ambient
@@ -218,6 +246,11 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
    merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
    Bot-authored PRs are exempt; `/ship` backfills their entries.
+
+The workflow also runs **Test Workspace Portability (Windows)** as a non-required
+validation job. It executes the portability suite on `windows-latest` under both
+Windows PowerShell 5.1 and PowerShell 7; the five jobs above remain the protected
+branch's required checks.
 
 `.github/workflows/browser.yml` adds two advisory jobs: **Browser E2E + Axe**
 and **Browser Visual Regression**. They report failures normally (no
@@ -245,6 +278,9 @@ To change the gate, update the repository ruleset through GitHub UI or the GitHu
 Use the narrowest relevant test first, then run broader checks when the change crosses module boundaries.
 
 ```powershell
+# Windows workspace portability (from the repo root)
+npm run test:workspace-portability
+
 # Go (from backend/api-service/)
 go test ./...
 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
@@ -321,9 +357,11 @@ Rules:
 - When deleting or consolidating private docs, scrub references to the removed file.
 
 Public committed docs describe implemented behavior, local setup, durable decisions, security
-model, shipped changes, and gated future work. `private/` is gitignored and holds detailed
+model, shipped changes, and gated future work. `private/` is gitignored and, for authorized
+maintainers, can be an independent private documentation repository. It holds detailed
 implementation plans, deployment runbooks, private security reviews, raw Bungie/API research, and
-environment-specific operations notes. Do not move private operational detail into public docs.
+environment-specific operations notes. Public contributors do not need it. Do not move private
+operational detail into public docs or expose its remote location through the public repository.
 
 ## Agent Routing
 

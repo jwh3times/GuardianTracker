@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"strings"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -19,7 +18,6 @@ const (
 	DefaultClientID      = "e2e-client"
 	AuthorizationCode    = "e2e-auth-code"
 	AccessToken          = "e2e-bungie-access-token"
-	RefreshToken         = "e2e-bungie-refresh-token"
 )
 
 const (
@@ -48,7 +46,6 @@ type Server struct {
 
 	mu       sync.RWMutex
 	scenario Scenario
-	refresh  atomic.Uint64
 	handler  http.Handler
 }
 
@@ -146,26 +143,20 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 			writeOAuthError(w, "invalid_grant")
 			return
 		}
-		writeJSON(w, http.StatusOK, oauthTokens(AccessToken, RefreshToken))
+		writeJSON(w, http.StatusOK, oauthTokens(AccessToken))
 	case "refresh_token":
-		if !strings.HasPrefix(r.PostForm.Get("refresh_token"), RefreshToken) {
-			writeOAuthError(w, "invalid_grant")
-			return
-		}
-		sequence := s.refresh.Add(1)
-		writeJSON(w, http.StatusOK, oauthTokens(
-			fmt.Sprintf("%s-%d", AccessToken, sequence),
-			fmt.Sprintf("%s-%d", RefreshToken, sequence),
-		))
+		// The fixture models Guardian Tracker's public Bungie client. Public
+		// clients receive no refresh credential and cannot use this grant.
+		writeOAuthError(w, "unsupported_grant_type")
 	default:
 		writeOAuthError(w, "unsupported_grant_type")
 	}
 }
 
-func oauthTokens(access, refresh string) map[string]any {
+func oauthTokens(access string) map[string]any {
 	return map[string]any{
-		"access_token": access, "refresh_token": refresh, "token_type": "Bearer",
-		"expires_in": 3600, "refresh_expires_in": 7776000, "membership_id": MembershipID,
+		"access_token": access, "token_type": "Bearer",
+		"expires_in": 3600, "membership_id": MembershipID,
 	}
 }
 

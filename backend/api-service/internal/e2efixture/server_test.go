@@ -59,14 +59,11 @@ func TestOAuthTokenAndMembershipRoutes(t *testing.T) {
 	authTokens := postForm(t, server, "/platform/app/oauth/token/", url.Values{
 		"grant_type": {"authorization_code"}, "code": {AuthorizationCode}, "client_id": {DefaultClientID},
 	})
-	if authTokens["access_token"] != AccessToken || authTokens["refresh_token"] != RefreshToken || authTokens["membership_id"] != MembershipID {
+	if authTokens["access_token"] != AccessToken || authTokens["membership_id"] != MembershipID {
 		t.Fatalf("authorization tokens = %+v", authTokens)
 	}
-	refreshed := postForm(t, server, "/platform/app/oauth/token/", url.Values{
-		"grant_type": {"refresh_token"}, "refresh_token": {RefreshToken}, "client_id": {DefaultClientID},
-	})
-	if refreshed["access_token"] == AccessToken || !strings.HasPrefix(refreshed["refresh_token"].(string), RefreshToken+"-") {
-		t.Fatalf("refreshed tokens = %+v", refreshed)
+	if _, present := authTokens["refresh_token"]; present {
+		t.Fatalf("public-client response unexpectedly contains refresh_token: %+v", authTokens)
 	}
 
 	memberships := getBungie(t, server, "/Platform/User/GetMembershipsForCurrentUser/", true)

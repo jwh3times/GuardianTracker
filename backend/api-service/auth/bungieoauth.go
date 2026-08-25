@@ -26,21 +26,33 @@ const bungieDefaultRefreshTTL = 90 * 24 * time.Hour
 // the refresh-token exchange (keeping a Bungie session alive) are the same
 // request with a different grant_type and the same response parsing.
 type bungieOAuth struct {
-	clientID     string
-	clientSecret string
-	tokenURL     string
-	client       *http.Client
+	clientID string
+	tokenURL string
+	client   *http.Client
 }
 
-func newBungieOAuth(clientID, clientSecret, tokenURL string) *bungieOAuth {
+// oauthGrantError is the safe, typed failure returned when Bungie's token
+// endpoint rejects a grant. It deliberately carries no response body because
+// that endpoint also returns credentials on success and those must never cross
+// into logs. Callers can still distinguish a rejected credential (400/401)
+// from a transient transport or server failure.
+type oauthGrantError struct {
+	Grant      string
+	StatusCode int
+}
+
+func (e *oauthGrantError) Error() string {
+	return fmt.Sprintf("bungie %s grant failed with status %d", e.Grant, e.StatusCode)
+}
+
+func newBungieOAuth(clientID, tokenURL string) *bungieOAuth {
 	if tokenURL == "" {
 		tokenURL = bungieTokenURL
 	}
 	return &bungieOAuth{
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		tokenURL:     tokenURL,
-		client:       &http.Client{Timeout: 30 * time.Second},
+		clientID: clientID,
+		tokenURL: tokenURL,
+		client:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -69,9 +81,6 @@ func (o *bungieOAuth) refreshTokens(ctx context.Context, refreshToken string) (*
 // and application logs must not carry credentials.
 func (o *bungieOAuth) exchange(ctx context.Context, grant url.Values) (*BungieTokens, error) {
 	grant.Set("client_id", o.clientID)
-	if o.clientSecret != "" {
-		grant.Set("client_secret", o.clientSecret)
-	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.tokenURL, strings.NewReader(grant.Encode()))
 	if err != nil {
@@ -90,7 +99,7 @@ func (o *bungieOAuth) exchange(ctx context.Context, grant url.Values) (*BungieTo
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bungie %s grant failed with status %d", grant.Get("grant_type"), resp.StatusCode)
+		return nil, &oauthGrantError{Grant: grant.Get("grant_type"), StatusCode: resp.StatusCode}
 	}
 
 	var tr struct {
@@ -102,18 +111,28 @@ func (o *bungieOAuth) exchange(ctx context.Context, grant url.Values) (*BungieTo
 	if err := json.Unmarshal(body, &tr); err != nil {
 		return nil, fmt.Errorf("failed to parse token response: %w", err)
 	}
-
-	refreshTTL := time.Duration(tr.RefreshExpiresIn) * time.Second
-	if refreshTTL <= 0 {
-		refreshTTL = bungieDefaultRefreshTTL
+	if strings.TrimSpace(tr.AccessToken) == "" || tr.ExpiresIn <= 0 {
+		return nil, fmt.Errorf("bungie %s grant returned an unusable access token", grant.Get("grant_type"))
 	}
+
 	now := time.Now()
-	return &BungieTokens{
+	tokens := &BungieTokens{
 		AccessToken:           tr.AccessToken,
 		RefreshToken:          tr.RefreshToken,
 		AccessTokenExpiresAt:  now.Add(time.Duration(tr.ExpiresIn) * time.Second),
-		RefreshTokenExpiresAt: now.Add(refreshTTL),
-	}, nil
+		RefreshTokenExpiresAt: time.Time{},
+	}
+	// Public clients receive no refresh token. A zero refresh expiry preserves
+	// that absence through persistence instead of fabricating a 90-day lease.
+	// The fallback applies only when Bungie actually issued a refresh token.
+	if tr.RefreshToken != "" {
+		refreshTTL := time.Duration(tr.RefreshExpiresIn) * time.Second
+		if refreshTTL <= 0 {
+			refreshTTL = bungieDefaultRefreshTTL
+		}
+		tokens.RefreshTokenExpiresAt = now.Add(refreshTTL)
+	}
+	return tokens, nil
 }
 
 // primaryDestinyMembership fetches the Destiny memberships exposed by the

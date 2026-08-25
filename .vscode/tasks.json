@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Guardian Tracker: Setup Development Environment",
+			"type": "shell",
+			"command": "powershell.exe",
+			"args": [
+				"-ExecutionPolicy",
+				"Bypass",
+				"-File",
+				"setup.ps1"
+			],
+			"group": "build",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}

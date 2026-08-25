@@ -2,10 +2,10 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -81,6 +81,16 @@ func newBungieTokenServer(t *testing.T, calls *atomic.Int32) *httptest.Server {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		if got := r.PostForm.Get("client_id"); got != "client-id" {
+			t.Errorf("refresh-token client_id = %q, want client-id", got)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if _, present := r.PostForm["client_secret"]; present {
+			t.Error("refresh-token grant unexpectedly included client_secret")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 		n := calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"access_token":"new-access-%d","refresh_token":"new-refresh-%d","expires_in":3600,"refresh_expires_in":7776000}`, n, n)
@@ -101,7 +111,7 @@ func newTestStore(t *testing.T, repo TokenRepo, tokenURL string) (*TokenStore, *
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	s := NewTokenStore(ctx, "client-id", "client-secret", "", repo, cipher)
+	s := NewTokenStore(ctx, "client-id", "", repo, cipher)
 	if tokenURL != "" {
 		s.oauth.tokenURL = tokenURL
 	}
@@ -122,6 +132,14 @@ func expiredAccessTokens(membershipID string) *BungieTokens {
 	t := validTokens(membershipID)
 	t.AccessTokenExpiresAt = time.Now().Add(-1 * time.Minute)
 	return t
+}
+
+func publicClientTokens(membershipID string, expiresAt time.Time) *BungieTokens {
+	return &BungieTokens{
+		AccessToken:          "public-access",
+		AccessTokenExpiresAt: expiresAt,
+		MembershipID:         membershipID,
+	}
 }
 
 func TestTokenStore_StoreAndGet(t *testing.T) {
@@ -151,6 +169,41 @@ func TestTokenStore_MemoryOnlyDegradedMode(t *testing.T) {
 	}
 }
 
+func TestTokenStore_StoreConfirmedAllowsIntentionalMemoryOnlyMode(t *testing.T) {
+	s, _ := newTestStore(t, nil, "")
+	if err := s.StoreConfirmed("user-1", publicClientTokens("user-1", time.Now().Add(time.Hour))); err != nil {
+		t.Fatalf("StoreConfirmed: %v", err)
+	}
+	if got, err := s.GetValidToken("user-1"); err != nil || got != "public-access" {
+		t.Fatalf("GetValidToken = %q, %v; want public-access, nil", got, err)
+	}
+}
+
+func TestTokenStore_StoreConfirmedRejectsPersistenceFailureWithoutMemoryWrite(t *testing.T) {
+	repo := &fakeTokenRepo{failAll: true}
+	s, _ := newTestStore(t, repo, "")
+	tokens := publicClientTokens("user-1", time.Now().Add(time.Hour))
+
+	if err := s.StoreConfirmed("user-1", tokens); err == nil {
+		t.Fatal("StoreConfirmed succeeded despite configured persistence failure")
+	}
+	if _, present := s.tokens["user-1"]; present {
+		t.Fatal("failed confirmed store left a false-success token in memory")
+	}
+}
+
+func TestTokenStore_StoreConfirmedRejectsPartialPersistenceConfiguration(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	s := NewTokenStore(ctx, "client-id", "", &fakeTokenRepo{}, nil)
+	if err := s.StoreConfirmed("user-1", publicClientTokens("user-1", time.Now().Add(time.Hour))); err == nil {
+		t.Fatal("StoreConfirmed accepted repo without cipher")
+	}
+	if _, present := s.tokens["user-1"]; present {
+		t.Fatal("partial persistence configuration wrote memory")
+	}
+}
+
 func TestTokenStore_DBLoadOnMemoryMiss(t *testing.T) {
 	repo := &fakeTokenRepo{}
 	s1, cipher := newTestStore(t, repo, "")
@@ -160,7 +213,7 @@ func TestTokenStore_DBLoadOnMemoryMiss(t *testing.T) {
 	// tokens must be loaded and decrypted from the DB.
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	s2 := NewTokenStore(ctx, "client-id", "client-secret", "", repo, cipher)
+	s2 := NewTokenStore(ctx, "client-id", "", repo, cipher)
 
 	got, err := s2.GetValidToken("user-1")
 	if err != nil {
@@ -168,6 +221,46 @@ func TestTokenStore_DBLoadOnMemoryMiss(t *testing.T) {
 	}
 	if got != "access-1" {
 		t.Errorf("got token %q, want access-1", got)
+	}
+}
+
+func TestTokenStore_PublicClientTokenSurvivesPersistence(t *testing.T) {
+	repo := &fakeTokenRepo{}
+	s1, cipher := newTestStore(t, repo, "")
+	s1.Store("user-1", publicClientTokens("user-1", time.Now().Add(time.Hour)))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	s2 := NewTokenStore(ctx, "client-id", "", repo, cipher)
+	got, err := s2.GetValidToken("user-1")
+	if err != nil || got != "public-access" {
+		t.Fatalf("GetValidToken after restart = %q, %v; want public-access, nil", got, err)
+	}
+	if loaded := s2.tokens["user-1"]; loaded == nil || loaded.RefreshToken != "" || !loaded.RefreshTokenExpiresAt.IsZero() {
+		t.Fatalf("loaded public tokens = %+v; want no refresh credential", loaded)
+	}
+}
+
+func TestTokenStore_PublicClientExpiryRequiresReauthorizationWithoutRefresh(t *testing.T) {
+	var calls atomic.Int32
+	srv := newBungieTokenServer(t, &calls)
+	s, _ := newTestStore(t, nil, srv.URL)
+	s.Store("user-1", publicClientTokens("user-1", time.Now().Add(4*time.Minute)))
+
+	_, err := s.GetValidToken("user-1")
+	if !errors.Is(err, ErrBungieReauthorizationRequired) {
+		t.Fatalf("err = %v, want ErrBungieReauthorizationRequired", err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("refresh calls = %d, want 0 for a public client", calls.Load())
+	}
+}
+
+func TestTokenStore_DBLoadFailureIsTransientNotReauthorization(t *testing.T) {
+	s, _ := newTestStore(t, &fakeTokenRepo{failAll: true}, "")
+	_, err := s.GetValidToken("user-1")
+	if err == nil || errors.Is(err, ErrBungieReauthorizationRequired) {
+		t.Fatalf("err = %v, want transient load failure", err)
 	}
 }
 
@@ -266,15 +359,29 @@ func TestTokenStore_ExpiredRefreshTokenRequiresReauth(t *testing.T) {
 	s.Store("user-1", tok)
 
 	_, err := s.GetValidToken("user-1")
-	if err == nil || !strings.Contains(err.Error(), "re-authentication required") {
-		t.Fatalf("err = %v, want re-authentication required", err)
+	if !errors.Is(err, ErrBungieReauthorizationRequired) {
+		t.Fatalf("err = %v, want ErrBungieReauthorizationRequired", err)
+	}
+}
+
+func TestTokenStore_RejectedRefreshGrantRequiresReauthorization(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	t.Cleanup(srv.Close)
+	s, _ := newTestStore(t, nil, srv.URL)
+	s.Store("user-1", expiredAccessTokens("user-1"))
+
+	_, err := s.GetValidToken("user-1")
+	if !errors.Is(err, ErrBungieReauthorizationRequired) {
+		t.Fatalf("err = %v, want ErrBungieReauthorizationRequired", err)
 	}
 }
 
 func TestTokenStore_UnknownUser(t *testing.T) {
 	s, _ := newTestStore(t, &fakeTokenRepo{}, "")
-	if _, err := s.GetValidToken("nobody"); err == nil {
-		t.Fatal("expected error for unknown user")
+	if _, err := s.GetValidToken("nobody"); !errors.Is(err, ErrBungieReauthorizationRequired) {
+		t.Fatalf("err = %v, want ErrBungieReauthorizationRequired", err)
 	}
 }
 

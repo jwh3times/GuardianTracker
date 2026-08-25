@@ -72,6 +72,15 @@ var refreshFailures = map[auth.Reason]authFailure{
 	auth.ReasonSessionWrite:  {http.StatusInternalServerError, "Failed to refresh session", "", false},
 }
 
+var reconnectFailures = map[auth.Reason]authFailure{
+	auth.ReasonInvalidCode:        {http.StatusBadRequest, "Invalid authorization code", "reconnect.failure", false},
+	auth.ReasonInvalidState:       {http.StatusBadRequest, "Invalid or expired state. Please reconnect Bungie again.", "reconnect.failure", false},
+	auth.ReasonCodeExchange:       {http.StatusBadGateway, "Failed to reconnect Bungie", "reconnect.failure", false},
+	auth.ReasonMembershipFetch:    {http.StatusBadGateway, "Failed to retrieve Destiny membership", "reconnect.failure", false},
+	auth.ReasonMembershipMismatch: {http.StatusForbidden, "The authorized Bungie account does not match this session", "reconnect.failure", false},
+	auth.ReasonAuthorizationWrite: {http.StatusServiceUnavailable, "Failed to save Bungie authorization. Please try again.", "reconnect.failure", false},
+}
+
 // GetBungieAuthURL handles GET /api/auth/bungie
 func (h *AuthHandler) GetBungieAuthURL(c *gin.Context) {
 	authURL, state, err := h.issuer.AuthorizeURL()
@@ -100,6 +109,23 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 	})
 	h.setRefreshCookie(c, session)
 	c.JSON(http.StatusOK, sessionResponse(session))
+}
+
+// ReconnectBungie handles POST /api/auth/bungie/reconnect. The JWT middleware
+// supplies the membership that the newly authorized Bungie account must match.
+// Success replaces only the Bungie authorization; the Guardian refresh cookie
+// and refresh_sessions row remain untouched.
+func (h *AuthHandler) ReconnectBungie(c *gin.Context) {
+	err := h.issuer.Reconnect(c.Request.Context(), c.GetString("membership_id"), c.PostForm("code"), c.PostForm("state"))
+	if err != nil {
+		h.failSession(c, err, reconnectFailures)
+		return
+	}
+	h.logAudit(c, db.AuditEvent{
+		EventType:         "reconnect.success",
+		ActorMembershipID: c.GetString("membership_id"),
+	})
+	c.Status(http.StatusNoContent)
 }
 
 // RefreshToken handles POST /api/auth/refresh
