@@ -200,11 +200,14 @@ function Test-ResolvedStructure {
         [string]$Format
     )
 
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf) -or (Get-Item -LiteralPath $Path).Length -eq 0) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         return $false
     }
 
     $lines = [IO.File]::ReadAllLines($Path)
+    if ($lines.Count -eq 0) {
+        return $false
+    }
     if (@($lines | Where-Object { $_ -match 'op://|<vault>|<item>|<field>' }).Count -ne 0) {
         return $false
     }
