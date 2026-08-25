@@ -15,9 +15,10 @@ param(
 $ErrorActionPreference = "Stop"
 $DebugPreference = "SilentlyContinue"
 $VerbosePreference = "SilentlyContinue"
+$currentOperation = "initial validation"
 
 trap {
-    Write-Error "Secret restoration stopped because an unexpected local error occurred. No existing target was overwritten." -ErrorAction Continue
+    Write-Error "Secret restoration stopped because an unexpected local error occurred during $currentOperation. No existing target was overwritten." -ErrorAction Continue
     exit 1
 }
 
@@ -351,6 +352,7 @@ else {
 }
 
 $plans = @()
+$currentOperation = "restore planning"
 foreach ($definition in $selected) {
     $templatePath = Join-Path $root $definition.Template.Replace('/', [IO.Path]::DirectorySeparatorChar)
     $outputPath = Join-Path $root $definition.Output.Replace('/', [IO.Path]::DirectorySeparatorChar)
@@ -428,6 +430,7 @@ $completed = $false
 try {
     foreach ($plan in $plans) {
         $definition = $plan.Definition
+        $currentOperation = "1Password injection"
         $inject = Invoke-ToolCapture -Executable $OpExecutable -Arguments @(
             "inject",
             "--file-mode",
@@ -441,12 +444,14 @@ try {
             Stop-Safely "1Password could not restore $($definition.Output). No target file was installed."
         }
         $inject.Output = $null
+        $currentOperation = "restored structure validation"
         if (-not (Test-ResolvedStructure -Path $plan.TemporaryPath -RequiredKeys $definition.RequiredKeys -Format $definition.Format)) {
             Stop-Safely "The restored structure for $($definition.Output) failed validation. No target file was installed."
         }
     }
 
     foreach ($plan in $plans) {
+        $currentOperation = "validated target installation"
         [IO.File]::Move($plan.TemporaryPath, $plan.OutputPath)
         $installed += $plan.OutputPath
     }

@@ -630,7 +630,10 @@ test("bootstrap evaluates committed ignore negations before invoking 1Password",
     ]);
     assert.notEqual(result.status, 0);
     assert.equal(existsSync(fakeOp.markerPath), false);
-    assert.match(combinedOutput(result), /committed public ignore rules/);
+    assert.match(
+      combinedOutput(result),
+      /private repository reference file is not protected/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
