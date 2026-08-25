@@ -18,7 +18,9 @@ $VerbosePreference = "SilentlyContinue"
 $currentOperation = "initial validation"
 
 trap {
-    Write-Error "Secret restoration stopped because an unexpected local error occurred during $currentOperation. No existing target was overwritten." -ErrorAction Continue
+    $failureType = $_.Exception.GetType().Name
+    $failureLine = $_.InvocationInfo.ScriptLineNumber
+    Write-Error "Secret restoration stopped because an unexpected local error occurred during $currentOperation ($failureType at script line $failureLine). No existing target was overwritten." -ErrorAction Continue
     exit 1
 }
 
