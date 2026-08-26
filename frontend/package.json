@@ -10,7 +10,7 @@
     "msw": false
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query": "^5.102.0",
     "@tanstack/react-virtual": "^3.14.10",
     "clsx": "^2.1.1",
     "react": "^19.2.8",
