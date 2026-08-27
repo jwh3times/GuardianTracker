@@ -1419,7 +1419,12 @@ test("secret restoration requires its temporary plaintext path to be committed-i
 });
 
 test("public portability scripts contain no embedded private identifiers", () => {
-  for (const path of [bootstrapScript, statusScript, restoreScript]) {
+  for (const path of [
+    bootstrapScript,
+    statusScript,
+    restoreScript,
+    join(projectRoot, "scripts", "bootstrap-private.mjs"),
+  ]) {
     const contents = readFileSync(path, "utf8");
     assert.doesNotMatch(contents, /op:\/\/[A-Za-z0-9]/);
     assert.doesNotMatch(
