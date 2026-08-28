@@ -156,6 +156,8 @@ or through 1Password with `-PrivateFromOnePassword` after creating the ignored
 machine-local `.private-workspace/repository.env.ref` file containing only
 `GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>`. Do not put the
 private repository location or real 1Password identifiers in public docs.
+`npm run bootstrap:private` (from the repo root) is the Node equivalent for new
+git worktrees; it reuses the main checkout's reference file.
 
 When private restoration templates are available, run
 `./scripts/restore-private-secrets.ps1` before `./setup.ps1`; both helpers refuse

@@ -13,6 +13,31 @@ request.
 
 No unreleased changes.
 
+## [1.2.3] - 2026-08-27
+
+### Added
+
+- `npm run bootstrap:private` (root `scripts/bootstrap-private.mjs`) clones the
+  optional private companion repository into `private/` from any checkout or
+  `git worktree`, resolving its location through 1Password. It finds the
+  machine-local `.private-workspace/repository.env.ref` in the current checkout
+  or in the main checkout that owns the worktree, accepts `--op-reference` or a
+  credential-free `--url` override, refuses to clone over an existing
+  `private/`, and keeps the resolved location out of process arguments and
+  terminal output. The public-identifier policy test now covers the script.
+
+## [1.2.2] - 2026-08-26
+
+### Changed
+
+- Updated `@tanstack/react-query` from 5.101.4 to 5.102.0.
+
+## [1.2.1] - 2026-08-25
+
+### Changed
+
+- Updated `@testing-library/user-event` from 14.6.5 to 14.6.6.
+
 ## [1.2.0] - 2026-08-25
 
 ### Added
