@@ -12,73 +12,53 @@ This is a public repository. Keep production runbooks, incident notes,
 environment-specific commands, private security reviews, and raw research under
 gitignored `private/`; do not commit them to public docs.
 
-### CRITICAL: Rotate Credentials If Ever Committed
+### Responding to an Exposed Credential
 
-If you have previously committed credentials to this repository, you **must**:
+Treat a committed credential as an incident, even if it was deleted in a later
+commit:
 
-1. **Rotate ALL credentials immediately:**
-
-   - Bungie API Key: Generate a new key at <https://www.bungie.net/en/Application>
-   - JWT Secret: Generate a new 32+ character random string
-   - Database passwords: Change in your database and update configs
-
-2. **Remove credentials from git history:**
-
-   ```bash
-   # Option 1: BFG Repo Cleaner (recommended, much faster)
-   bfg --delete-files .env
-   bfg --replace-text passwords.txt  # File listing secrets to scrub
-
-   # Option 2: git filter-branch (slower)
-   git filter-branch --force --index-filter \
-     "git rm --cached --ignore-unmatch .env" \
-     --prune-empty --tag-name-filter cat -- --all
-   ```
-
-3. **Force push and notify all collaborators:**
-
-   ```bash
-   git push origin --force --all
-   git push origin --force --tags
-   ```
+1. Revoke or rotate the exposed value at its issuing system immediately. Include
+   every affected copy and dependent value: Bungie API keys, JWT signing keys,
+   database credentials, token-encryption keys, hosting credentials, and
+   1Password service-account credentials each have different revocation paths.
+2. Record the exposure window, affected refs, rotation, and validation in a
+   private incident record. Do not paste the exposed value into an issue,
+   command, chat, or replacement file.
+3. Remove the value from the current tree and add the narrowest preventive guard
+   that would catch a repeat.
+4. Decide whether history removal is still warranted after revocation. History
+   rewriting changes commit hashes, can break pull requests and clones, and can
+   be recontaminated by an old clone. Coordinate a freeze and follow GitHub's
+   current
+   [sensitive-data removal procedure](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
+   rather than running an unreviewed blanket force-push recipe.
+5. Verify the replacement credential, application behavior, secret scanning,
+   affected forks or caches, and collaborator cleanup before closing the incident.
 
 ---
 
-## Environment Variables
-
-### Secrets (Never Commit!)
+## Security-Relevant Configuration
 
 Guardian Tracker is a public Bungie OAuth client. `BUNGIE_CLIENT_ID` identifies
 the application but is not a secret. The authorization-code grant sends no
 Bungie client secret, and Bungie public clients issue no refresh token.
 
-| Variable                        | Description                                                           | Where to Get                                                 |
-| ------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `BUNGIE_API_KEY`                | Bungie API access key                                                 | [Bungie Applications](https://www.bungie.net/en/Application) |
-| `JWT_SECRET`                    | Token signing key (32+ chars); also derives the OAuth state HMAC key  | `openssl rand -base64 32`                                    |
-| `POSTGRES_PASSWORD`             | Database password                                                     | Generate a strong random password                            |
-| `DATABASE_URL`                  | Postgres connection string (contains credentials)                     | Compose your provider's connection string                    |
-| `TOKEN_ENCRYPTION_KEY`          | 32-byte base64 key — encrypts stored Bungie authorization             | `openssl rand -base64 32`                                    |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS` | (optional) previous encryption key, kept readable during key rotation | the key being rotated out                                    |
+The secret-bearing settings are `BUNGIE_API_KEY`, `JWT_SECRET`,
+`POSTGRES_PASSWORD`, `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, and the optional
+`TOKEN_ENCRYPTION_KEY_PREVIOUS`. Generate independent random values; never reuse
+development credentials in production. `JWT_SECRET` must be at least 32
+characters, and each token-encryption key is 32 random bytes encoded as base64.
 
 `GO_ENV` is required and accepts exactly `development` or `production`.
 Production refuses to start without Postgres and token encryption; explicit
 development may run with those protections disabled and emits one conspicuous
 warning describing every disabled protection.
 
-Encryption keys also have explicit positive `SMALLINT` versions:
-
-| Variable                                | Purpose                                                           |
-| --------------------------------------- | ----------------------------------------------------------------- |
-| `TOKEN_ENCRYPTION_KEY_VERSION`          | Current-key ciphertext version (`1` by default for existing rows) |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact version accepted for the optional previous key              |
-
-### Local Development
-
-```bash
-cp .env.example .env
-# Edit with development values — NEVER use production credentials locally
-```
+Encryption keys have explicit positive `SMALLINT` versions:
+`TOKEN_ENCRYPTION_KEY_VERSION` identifies the current key and
+`TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` must exactly identify the optional
+previous key. See [SETUP.md](./SETUP.md#2-create-environment-files) for the
+complete environment catalogue and local file setup.
 
 ### Minikube Validation
 
@@ -190,7 +170,7 @@ cross-site production topology must revisit the cookie policy and would require
 
 ## Production Security Checklist
 
-- [ ] All secrets rotated and removed from git history
+- [ ] Exposed secrets revoked or rotated; any required history cleanup coordinated and verified
 - [ ] `JWT_SECRET` is 32+ characters, randomly generated
 - [ ] `CORS_ALLOWED_ORIGINS` set to your production domain only
 - [ ] `GO_ENV=production` on the API service
@@ -200,6 +180,6 @@ cross-site production topology must revisit the cookie policy and would require
 - [ ] Database connections use SSL (`sslmode=require`)
 - [ ] Health endpoints (`/health`, `/ready`) expose no sensitive data; safe to expose by design on the API ingress
 - [ ] Logging does not include tokens, secrets, or full OAuth codes
-- [ ] Docker images built from pinned base image versions
+- [ ] Docker images built from reviewed digest-pinned base-image refs
 - [ ] Kubernetes secrets not stored in version control
 - [ ] `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` set (the service refuses to start in production without them); current key version verified (`1` when omitted)

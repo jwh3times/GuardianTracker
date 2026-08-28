@@ -42,6 +42,10 @@ Setup-EnvFile -Path "backend/api-service" -SourceFile ".env.example" -DestFile "
 Write-Host "Setting up Frontend..." -ForegroundColor Yellow
 Setup-EnvFile -Path "frontend" -SourceFile ".env.example" -DestFile ".env.local" -ServiceName "Frontend"
 
+# Minikube (ignored local Secret manifest)
+Write-Host "Setting up Minikube configuration..." -ForegroundColor Yellow
+Setup-EnvFile -Path "k8s" -SourceFile "api-service-secret.yaml.example" -DestFile "api-service-secret.yaml" -ServiceName "Minikube"
+
 Write-Host ""
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host "Environment setup complete!" -ForegroundColor Green
@@ -49,15 +53,16 @@ Write-Host ""
 Write-Host "NEXT STEPS:" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "1. Get Bungie API credentials at https://www.bungie.net/en/Application" -ForegroundColor White
-Write-Host "   Copy: API Key, Client ID, Client Secret" -ForegroundColor Cyan
+Write-Host "   Copy: API Key and Client ID (Guardian Tracker uses no client secret)" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "2. Fill in credentials in:" -ForegroundColor White
 Write-Host "   -> .env (root, used by docker-compose)" -ForegroundColor Cyan
 Write-Host "   -> backend/api-service/.env (for running the service individually)" -ForegroundColor Cyan
 Write-Host "   -> frontend/.env.local (VITE_API_URL etc.)" -ForegroundColor Cyan
+Write-Host "   -> k8s/api-service-secret.yaml (for Minikube validation)" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "3. Generate a secure JWT secret (minimum 32 characters):" -ForegroundColor White
-Write-Host "   openssl rand -base64 32" -ForegroundColor Cyan
+Write-Host "3. Generate independent JWT and token-encryption keys:" -ForegroundColor White
+Write-Host "   openssl rand -base64 32  # run once for each key" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "4. Start the full stack:" -ForegroundColor White
 Write-Host "   docker compose up --build" -ForegroundColor Cyan

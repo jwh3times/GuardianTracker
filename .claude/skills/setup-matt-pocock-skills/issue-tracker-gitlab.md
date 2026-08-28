@@ -1,3 +1,7 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+Source: .agents/skills/setup-matt-pocock-skills/issue-tracker-gitlab.md
+Regenerate: node scripts/sync-agent-configs.mjs -->
+
 # Issue tracker: GitLab
 
 Issues and specs for this repo live as GitLab issues. Use the [`glab`](https://gitlab.com/gitlab-org/cli) CLI for all operations.

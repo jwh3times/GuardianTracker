@@ -1,3 +1,7 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+Source: .agents/skills/setup-matt-pocock-skills/triage-labels.md
+Regenerate: node scripts/sync-agent-configs.mjs -->
+
 # Triage Labels
 
 The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.

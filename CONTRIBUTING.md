@@ -1,8 +1,8 @@
 # Contributing to Guardian Tracker
 
-Thanks for your interest in contributing! This guide covers how to get a local
-environment running, the conventions we follow, and what the CI gates expect so
-your pull request lands smoothly.
+Thanks for your interest in contributing! This guide covers contribution
+conventions and the CI contract. [SETUP.md](./SETUP.md) owns local installation,
+environment, ports, and runnable validation commands.
 
 By participating in this project you agree to abide by our
 [Code of Conduct](./CODE_OF_CONDUCT.md).
@@ -33,45 +33,20 @@ By participating in this project you agree to abide by our
 
 ## Development setup
 
-### Prerequisites
-
-- Docker Desktop (for Docker Compose or Minikube)
-- Go 1.26+ and the exact Node.js 26 patch listed in `.nvmrc` (for running
-  services individually). The frontend package accepts only Node 26; CI and the
-  frontend Dockerfiles use the exact `.nvmrc` patch, and npm rejects other Node
-  lines.
-- A [Bungie API application](https://www.bungie.net/en/Application) for OAuth
-  configuration (API key and public client ID; public clients have no client
-  secret or refresh token)
-
-### 1. Configure environment variables
+Follow [SETUP.md](./SETUP.md) for prerequisites and all development options. The
+recommended full-stack path is:
 
 ```powershell
-./setup.ps1   # copies every .env.example into place
+./setup.ps1   # creates missing local configuration from committed examples
 ```
-
-Then fill in the required `BUNGIE_*`, `JWT_SECRET`, and `TOKEN_ENCRYPTION_KEY`
-secrets. See [SETUP.md](./SETUP.md#2-create-environment-files) for the full
-table and [SECURITY.md](./SECURITY.md) for guidance on handling secrets.
-
-### 2. Run the stack
-
-The fastest path for full-stack work is Docker Compose:
 
 ```powershell
 docker compose up --build
 ```
 
-- Frontend: <http://localhost:5273>
-- API: <http://localhost:8081>
-
-For single-service work with hot reload, run services individually (Vite for the
-frontend, [Air](https://github.com/air-verse/air) for the API). See
-[SETUP.md](./SETUP.md) and [AGENTS.md](./AGENTS.md#running-services) for all
-three run options (Compose, Minikube, individual).
-
-> On first run the API service downloads the ~100MB Destiny 2 manifest. The
-> collections endpoint returns `503` until that completes.
+Use only an API key and public OAuth client ID from the Bungie application;
+Guardian Tracker does not use a client secret. See
+[SECURITY.md](./SECURITY.md#credential-management) for secret-handling policy.
 
 ## Project layout
 
@@ -152,46 +127,16 @@ gofmt -w .
 
 ## Tests & coverage
 
-```powershell
-# Frontend (from frontend/)
-npm test                # Vitest
-npm run type-check
-npm run lint
-
-# Go service (from backend/api-service/)
-go test ./...
-go vet ./...
-go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
-```
-
 Coverage thresholds are enforced in CI:
 
 - **Frontend**: lines ≥70%, branches ≥65% (Vitest).
 - **Go services**: statement coverage ≥60% (with the race detector).
 
-A plain `go test ./...` on a fresh Windows checkout reports lower coverage because
-the SQLite (cgo) and Postgres-integration tests self-skip. To reproduce CI's full
-coverage locally, use the helper script (it spins up a throwaway Postgres):
-
-```powershell
-cd backend/api-service
-./test-local.ps1          # all tests + total coverage
-./test-local.ps1 -Html    # also open the per-line HTML report
-```
-
-See [AGENTS.md → Full Go coverage locally](./AGENTS.md#full-go-coverage-locally-matches-ci)
-for the toolchain details (a C compiler is required for the cgo tests).
-
-For full-browser validation, start the isolated database and use the fake Bungie
-fixtures; never point automated tests at the live Bungie API:
-
-```powershell
-docker compose --profile e2e up -d --wait e2e-postgres
-$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
-cd frontend
-npm run e2e
-npm run e2e:visual
-```
+Run the relevant local commands from
+[SETUP.md → Tests and Checks](./SETUP.md#tests-and-checks). Browser tests have
+additional process-isolation and Linux-baseline requirements documented in
+[frontend/README.md → Browser Tests](./frontend/README.md#browser-tests); that
+guide is their canonical owner.
 
 ## CI gates
 

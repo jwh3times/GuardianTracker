@@ -1,141 +1,125 @@
-# Guardian Tracker - Kubernetes Deployment Scripts
+# Minikube Manifest Validation
 
-This directory contains scripts to start and stop the Guardian Tracker application on Minikube.
+This directory validates Guardian Tracker's Kubernetes manifests and container
+builds in local Minikube. It is not a production deployment template: the API
+runs with `GO_ENV: development`, without Postgres persistence, database-backed
+JWT revocation, or durable wishlist/preferences storage.
 
-> **Dev-validation environment only.** This stack runs with `GO_ENV: development` and has
-> **no Postgres**, so the api-service runs in degraded mode: in-memory Bungie token store,
-> no wishlist/preferences persistence, no JWT revocation. It exists to validate the
-> Kubernetes manifests and container builds — it is **not** a production deployment
-> template. No production runtime has been selected; production deployment planning
-> remains private and deferred.
+## Prerequisites
 
-## Quick Start
+- Minikube, kubectl, Docker Desktop, and Windows PowerShell or PowerShell 7
+- A Bungie API key and public OAuth client ID
+- An ignored `api-service-secret.yaml`, prepared as described below
 
-### Option 1: Using Batch Files (Easiest)
+## Prepare the Local Secret Manifest
 
-- **Start:** Double-click `startup.bat`
-- **Stop:** Double-click `shutdown.bat`
-
-### Option 2: Using PowerShell Scripts Directly
-
-- **Start:** `powershell.exe -ExecutionPolicy Bypass -File startup.ps1`
-- **Stop:** `powershell.exe -ExecutionPolicy Bypass -File shutdown.ps1`
-
-## What the Startup Script Does
-
-1. **Starts Minikube** (if not already running)
-2. **Builds Docker Images** for both services with fresh pinned base images
-   (`--pull --no-cache`):
-   - `guardian-tracker/api-service:latest`
-   - `guardian-tracker/frontend:v2`
-3. **Deploys Kubernetes manifests**
-4. **Activates rebuilt images** by restarting a Deployment whose pod template
-   stayed unchanged; newly created Deployments and pod-template changes already
-   have a rollout in progress and are not restarted again. Then it waits for
-   readiness.
-5. **Sets up port forwarding** (localhost:5273 → frontend)
-6. **Shows status** and provides next steps
-
-After startup completes:
-
-- Frontend available at: <http://localhost:5273>
-- All services running in Minikube cluster
-- Port forwarding active in background
-
-## What the Shutdown Script Does
-
-1. **Stops port forwarding** processes and jobs
-2. **Deletes Kubernetes resources** (pods, services, deployments)
-3. **Optionally removes Docker images** (saves disk space)
-4. **Optionally stops Minikube** (preserves cluster by default)
-5. **Shows final status**
-
-## Important Notes
-
-### OAuth Configuration
-
-- Remember to update your ngrok tunnel URL in `api-service-configmap.yaml` if needed
-- The current OAuth redirect URI must match your Bungie.net application settings
-
-### Prerequisites
-
-- Minikube installed and configured
-- kubectl installed and configured
-- Docker Desktop running
-- PowerShell execution policy allows script execution
-
-### Troubleshooting
-
-#### If startup fails
-
-1. Check if Minikube is running: `minikube status`
-2. Check if Docker is running: `docker version`
-3. Look for error messages in the script output
-4. Try running individual commands manually
-
-#### If port forwarding fails
-
-1. Check if port 5273 is already in use
-2. Kill existing kubectl processes: `Get-Process kubectl | Stop-Process`
-3. Restart the port forwarding manually: `kubectl port-forward service/frontend 5273:80`
-
-#### If OAuth doesn't work
-
-1. Update the ngrok tunnel URL in `api-service-configmap.yaml`
-2. Restart the api-service: `kubectl rollout restart deployment/api-service`
-3. Check that the redirect URI matches in your Bungie.net app settings
-
-### Manual Commands
+`startup.ps1` applies `api-service-secret.yaml`, but that file is deliberately
+gitignored. The root setup helper creates it without overwriting an existing
+file:
 
 ```powershell
-# Start Minikube
-minikube start
+cd ..
+./setup.ps1
+```
 
-# Point Docker at Minikube, then build fresh images (from the repository root)
+Alternatively, copy `api-service-secret.yaml.example` to
+`api-service-secret.yaml`. Replace all three placeholders before startup.
+Authorized maintainers may restore the `k8s` target with
+`scripts/restore-private-secrets.ps1` before running `setup.ps1`. The helpers
+preserve an existing file.
+
+`BUNGIE_CLIENT_ID` is a public identifier; Guardian Tracker does not use a Bungie
+client secret. Keep development credentials in this local manifest and never
+use production values in the Minikube validation stack.
+
+## Start and Stop
+
+From this directory:
+
+```powershell
+./startup.ps1
+./shutdown.ps1
+```
+
+The `.bat` wrappers run the same scripts for users who prefer Explorer or
+Windows Command Prompt. Startup:
+
+1. starts Minikube when needed;
+2. selects Minikube's Docker daemon and builds both application images with
+   `--pull --no-cache`;
+3. applies the config map, ignored local secret, deployments, services, PVC,
+   and frontend disruption budget;
+4. restarts only an existing deployment whose applied pod template did not
+   already trigger a rollout; and
+5. forwards <http://localhost:5273> to the frontend service.
+
+Shutdown removes the Kubernetes resources and port forwarding, then optionally
+removes the local images or stops Minikube.
+
+## OAuth Through ngrok
+
+Tunnel the forwarded frontend port:
+
+```powershell
+ngrok http 5273
+```
+
+For every new tunnel URL, update all three matching locations:
+
+1. the Bungie application callback URL;
+2. `AUTH_REDIRECT_URI` in `api-service-configmap.yaml`, including
+   `/auth/callback`; and
+3. `CORS_ALLOWED_ORIGINS` in `api-service-configmap.yaml`, using the origin only.
+
+Apply the changed config and restart the API:
+
+```powershell
+kubectl apply -f api-service-configmap.yaml
+kubectl rollout restart deployment/api-service
+kubectl rollout status deployment/api-service --timeout=300s
+```
+
+## Manual Validation
+
+The scripts are the canonical workflow. These commands are useful when isolating
+a failed step:
+
+```powershell
+minikube start
 & minikube docker-env --shell powershell | Invoke-Expression
+
+# Run these builds from the repository root.
 docker build --pull --no-cache -t guardian-tracker/api-service:latest backend/api-service/
 docker build --pull --no-cache -t guardian-tracker/frontend:v2 frontend/
 
-# Deploy services
 kubectl apply -f k8s/api-service-configmap.yaml
 kubectl apply -f k8s/api-service-secret.yaml
 kubectl apply -f k8s/api-service.yaml
 kubectl apply -f k8s/frontend.yaml
 
-# If applying these manifests did not change the pod template, consume the
-# rebuilt local tags. Skip restarts for new Deployments or pod-template changes.
-kubectl rollout restart deployment/api-service deployment/frontend
 kubectl rollout status deployment/api-service --timeout=300s
 kubectl rollout status deployment/frontend --timeout=300s
-
-# Port forward
 kubectl port-forward service/frontend 5273:80
-
-# Check status
-kubectl get pods
-kubectl get services
 ```
 
-### File Structure
+Both deployments use `imagePullPolicy: Never` because their images exist only
+inside Minikube's Docker daemon. After rebuilding a reused tag, restart an
+existing deployment only when applying the manifest did not already change its
+pod template.
 
-```text
-k8s/
-├── startup.ps1               # Main startup script
-├── startup.bat               # Batch wrapper for startup
-├── shutdown.ps1              # Main shutdown script
-├── shutdown.bat              # Batch wrapper for shutdown
-├── README.md                 # This file
-├── api-service-configmap.yaml
-├── api-service-secret.yaml
-└── api-service.yaml
-└── frontend.yaml
-```
+## Troubleshooting
 
-## Support
+- Missing-secret errors: confirm `api-service-secret.yaml` exists in this
+  directory and contains all three keys from the committed example.
+- Image pull or `ImagePullBackOff`: rerun `minikube docker-env` in the current
+  shell, rebuild, and confirm the deployment uses `imagePullPolicy: Never`.
+- Port-forward failure: check whether 5273 is already in use, then run
+  `kubectl port-forward service/frontend 5273:80` manually.
+- OAuth failure: confirm the tunnel origin and callback match both the config map
+  and Bungie application exactly, then restart the API deployment.
+- Pod failure: use `kubectl get pods`, `kubectl describe pod <name>`, and
+  `kubectl logs <name> --previous`.
 
-If you encounter issues:
-
-1. Check the script output for specific error messages
-2. Verify all prerequisites are installed and running
-3. Try running individual kubectl/docker commands manually
-4. Check Minikube logs: `minikube logs`
+The manifests and scripts are authoritative for topology and image tags. See
+[SETUP.md](../SETUP.md#5-validate-kubernetes-manifests) for the higher-level
+development options and port map.

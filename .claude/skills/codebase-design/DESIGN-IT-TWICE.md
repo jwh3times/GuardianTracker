@@ -1,3 +1,7 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+Source: .agents/skills/codebase-design/DESIGN-IT-TWICE.md
+Regenerate: node scripts/sync-agent-configs.mjs -->
+
 # Design It Twice
 
 When the user wants to explore alternative interfaces for a chosen deepening candidate, use this parallel sub-agent pattern. Based on "Design It Twice" (Ousterhout) — your first idea is unlikely to be the best.

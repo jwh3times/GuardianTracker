@@ -1,3 +1,7 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+Source: .agents/skills/writing-for-agents/SKILL-MECHANICS.md
+Regenerate: node scripts/sync-agent-configs.mjs -->
+
 # Skill mechanics
 
 The skill-specific branch of [`writing-for-agents`](SKILL.md): what changes when the document is a skill — frontmatter, the invocation choice, and router skills. Everything else about writing it is the universal reference in `SKILL.md`.

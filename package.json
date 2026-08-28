@@ -5,6 +5,7 @@
   "scripts": {
     "bootstrap:private": "node scripts/bootstrap-private.mjs",
     "sync:agents": "node scripts/sync-agent-configs.mjs",
+    "test:docs-links": "node --test scripts/documentation-links.test.mjs",
     "test:workspace-portability": "node --test scripts/workspace-portability.test.mjs"
   }
 }

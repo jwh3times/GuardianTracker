@@ -19,11 +19,6 @@ secrets, and incident notes belong under `private/`, which is gitignored.
 - The 1Password CLI only if you are an authorized maintainer restoring the
   optional private workspace or its local secret files.
 
-Node 26 remains the Current release line until its scheduled LTS transition on
-October 28, 2026. Guardian Tracker intentionally accepts that short-term Current
-line churn because Node is frontend development and build tooling; the deployed
-frontend runtime is nginx.
-
 ## 1. Get Bungie Credentials
 
 Create an application at <https://www.bungie.net/en/Application> and record:
@@ -50,84 +45,29 @@ to the Bungie application too, then update the local environment values to match
 Public-only contributors can skip this section. The application, tests, and
 normal `setup.ps1` flow do not require private access.
 
-Authorized maintainers can restore the ignored `private/` directory as an
-independent Git repository. The helper never registers a submodule and does not
-publish the private repository location in the public repository. To enter a
-credential-free GitHub clone URL at a secure prompt, run:
+Authorized maintainers can restore the ignored `private/` repository from a
+credential-free URL entered at a secure prompt:
 
 ```powershell
 ./scripts/bootstrap-private-workspace.ps1 -PrivateFromPrompt
 ```
 
-To obtain that location through 1Password instead, first create the ignored,
-machine-local `.private-workspace/repository.env.ref` file with this placeholder
-shape, replacing the placeholder only in your local file:
-
-```dotenv
-GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>
-```
-
-Then make the approved least-privilege 1Password service-account token available
-to the current process through the maintainer's secure delivery mechanism. Do not
-type the token into a command, save it in a profile or environment file, or print
-it. Verify the metadata-only `op vault list` command succeeds, then run:
+Or resolve the URL through the maintainer's machine-local 1Password reference:
 
 ```powershell
 ./scripts/bootstrap-private-workspace.ps1 -PrivateFromOnePassword
 ```
 
-Do not commit the reference file or put resolved credentials in it. The helper
-accepts only credential-free GitHub HTTPS or `ssh://git@github.com` repository
-locations. It also refuses to clone over an existing `private/` directory; an
-existing directory must be preserved and migrated deliberately.
-
-If the restored private repository contains the approved 1Password templates,
-restore plaintext local configuration before running `setup.ps1`:
+Restore approved local configuration before `setup.ps1`; both helpers preserve
+existing files:
 
 ```powershell
-# Restore all approved targets
 ./scripts/restore-private-secrets.ps1
-
-# Or restore selected targets: root, api, frontend, or k8s
-./scripts/restore-private-secrets.ps1 -Target root,frontend
+./setup.ps1
 ```
 
-The restoration helper writes only `.env`, `backend/api-service/.env`,
-`frontend/.env.local`, and `k8s/api-service-secret.yaml`. It verifies that each
-target is untracked and protected by a committed ignore rule, writes through a
-temporary file, validates the expected structure, and refuses to inspect or
-overwrite an existing target. Run it before `setup.ps1`: that script also leaves
-existing files untouched, so reversing the order would leave example-derived
-files in place instead of restoring them.
-
-Check both repositories and the plaintext-target protections without displaying
-secret contents:
-
-```powershell
-./scripts/workspace-status.ps1
-```
-
-Private branch names are redacted by default. The reported ahead/behind counts
-come only from local tracking refs—the command does not fetch—and can therefore
-be stale. Use `-IncludePrivateBranch` only when it is safe to show the private
-branch name in the current terminal or transcript.
-
-Running `./scripts/bootstrap-private-workspace.ps1` without a private switch is a
-public-only readiness check and does not install private content.
-
-For a new `git worktree` (or any checkout where PowerShell is inconvenient), the
-Node entry point performs the same 1Password-backed clone:
-
-```bash
-npm run bootstrap:private
-```
-
-It looks for `.private-workspace/repository.env.ref` in the current checkout and
-then in the main checkout that owns the worktree, so the machine-local reference
-file does not need to be copied into each worktree. `-- --op-reference op://...`
-or `-- --url <credential-free GitHub URL>` override the file. Like the PowerShell
-helper, it refuses to clone over an existing `private/` directory and never
-passes the resolved location through a process argument or the terminal.
+The complete value-free recovery, verification, worktree, and backup handoff is
+in [Maintainer Workspace Recovery](./docs/maintainers/workspace-recovery.md).
 
 ## 2. Create Environment Files
 
@@ -147,6 +87,7 @@ Or copy the templates manually:
 cp .env.example .env
 cp backend/api-service/.env.example backend/api-service/.env
 cp frontend/.env.example frontend/.env.local
+cp k8s/api-service-secret.yaml.example k8s/api-service-secret.yaml
 ```
 
 Fill in the required runtime values:
@@ -228,37 +169,11 @@ docker compose down -v
 
 ### Refreshing pinned container images
 
-The frontend Node builder/development image and the nginx, PostgreSQL, and API
-runtime images use patch-qualified tags pinned to multi-platform OCI index
-digests. This makes amd64 and arm64 builds reproducible. Dependabot advances the
-tag and digest together when a newer tagged release is available, but it may not
-report an upstream republish of the same tag. During an image refresh, compare
-the registry's reported `Digest` with the committed `@sha256` value before
-updating it:
-
-```powershell
-docker buildx imagetools inspect nginxinc/nginx-unprivileged:1.31.3-alpine3.24
-docker buildx imagetools inspect node:26.7.0-alpine3.24
-docker buildx imagetools inspect postgres:18.6-alpine3.24
-docker buildx imagetools inspect postgres:18.6
-docker buildx imagetools inspect alpine:3.24.1
-```
-
-The two PostgreSQL entries are the Compose (Alpine) and CI (Debian) variants of
-the same server release. Dependabot bumps the Compose services but not the
-`Test Go Services` service container in `.github/workflows/ci-cd.yml`, so both
-refs and every documented `postgres:<version>` mention move together.
-`scripts/postgres-pin-policy.test.mjs` enforces that in `format-check`; run it
-locally with `node --test scripts/postgres-pin-policy.test.mjs`.
-
-After pulling an image update, rebuild and recreate existing local containers so
-Docker does not keep serving an older cached layer or container:
-
-```powershell
-docker compose --profile test --profile e2e pull postgres test-postgres e2e-postgres
-docker compose build --pull --no-cache api-service frontend
-docker compose --profile test --profile e2e up -d --force-recreate --wait postgres test-postgres e2e-postgres api-service frontend
-```
+Image tags and reviewed digests are owned by the Dockerfiles, Compose file, and
+workflows. Dependabot and repository policy tests keep coupled declarations
+aligned; documentation intentionally does not cache their versions. Maintainers
+changing a pin should follow the authored Docker agent guide and run the
+repository policy suite before rebuilding with `--pull --no-cache`.
 
 ## 4. Run Individual Services
 
@@ -280,6 +195,13 @@ The Vite dev server runs on `:5273` and proxies API calls to `:8081`.
 
 The `k8s/` path is for local Minikube validation. It intentionally runs in
 development mode without production Postgres parity.
+
+Before the first startup, run `setup.ps1` or copy the committed value-free
+`k8s/api-service-secret.yaml.example` to the ignored
+`k8s/api-service-secret.yaml`, then replace its placeholders. Authorized
+maintainers can instead restore the `k8s` target through the private workspace
+workflow above. The startup script applies this file and cannot complete without
+it; see [k8s/README.md](./k8s/README.md#prepare-the-local-secret-manifest).
 
 ```powershell
 cd k8s
@@ -368,32 +290,18 @@ npm run format:check
 Browser quality gates:
 
 ```powershell
-# From the repository root
+docker compose stop frontend api-service
 docker compose --profile e2e up -d --wait e2e-postgres
 $env:E2E_FIXED_TIME="2026-07-18T18:00:00Z" # deterministic Saturday/Xur fixture
-
 cd frontend
-npm ci
-npx playwright install chromium
-npm run e2e          # functional journeys + axe + destructive auth last
-npm run e2e:visual   # local preview; CI owns canonical Linux comparison
-
-cd ..
-docker compose --profile e2e down -v
+npm run e2e
+npm run e2e:visual
 ```
 
-The Playwright configuration launches `go run ./cmd/fake-bungie` from
-`backend/api-service`, the real API, and Vite, then waits for fake health, API
-readiness, and the asynchronous search index. The fake generates its tiny
-SQLite manifest at runtime and provides loopback-only scenario controls; the
-suite never contacts the real Bungie API. Tests use one worker because Guardian
-Tracker user and scenario state are shared.
-
-`.github/workflows/browser.yml` publishes reports and failure evidence for 14
-days. Browser E2E + Axe and visual regression are advisory initially and do not
-hide failures with `continue-on-error`. After ten consecutive clean E2E/axe
-runs, add `Browser E2E + Axe` to branch protection. Keep `Browser Visual
-Regression` optional.
+The browser suite owns its fake Bungie service, API, and Vite processes. Stop any
+Compose frontend/API containers first so Playwright cannot silently reuse them.
+See [frontend/README.md](./frontend/README.md#browser-tests) for installation,
+cleanup, evidence, and Linux-only visual-baseline procedures.
 
 `./test-local.ps1` starts the test Postgres service on `:5533`, enables cgo for
 SQLite-backed manifest tests, and runs the Go coverage path that most closely
