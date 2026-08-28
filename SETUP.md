@@ -115,6 +115,20 @@ branch name in the current terminal or transcript.
 Running `./scripts/bootstrap-private-workspace.ps1` without a private switch is a
 public-only readiness check and does not install private content.
 
+For a new `git worktree` (or any checkout where PowerShell is inconvenient), the
+Node entry point performs the same 1Password-backed clone:
+
+```bash
+npm run bootstrap:private
+```
+
+It looks for `.private-workspace/repository.env.ref` in the current checkout and
+then in the main checkout that owns the worktree, so the machine-local reference
+file does not need to be copied into each worktree. `-- --op-reference op://...`
+or `-- --url <credential-free GitHub URL>` override the file. Like the PowerShell
+helper, it refuses to clone over an existing `private/` directory and never
+passes the resolved location through a process argument or the terminal.
+
 ## 2. Create Environment Files
 
 Run the helper from the repository root:
