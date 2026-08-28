@@ -53,15 +53,48 @@ function linkDestinations(markdown) {
   return destinations;
 }
 
+function withoutInlineHtml(value) {
+  let result = "";
+  let tagDepth = 0;
+  let quotedBy = null;
+
+  for (const character of value) {
+    if (tagDepth === 0) {
+      if (character === "<") tagDepth = 1;
+      else result += character;
+      continue;
+    }
+
+    if (quotedBy !== null) {
+      if (character === quotedBy) quotedBy = null;
+    } else if (character === '"' || character === "'") {
+      quotedBy = character;
+    } else if (character === "<") {
+      tagDepth += 1;
+    } else if (character === ">") {
+      tagDepth -= 1;
+    }
+  }
+
+  return result;
+}
+
 function slugify(heading) {
-  return heading
+  return withoutInlineHtml(heading)
     .trim()
     .toLowerCase()
-    .replace(/<[^>]*>/g, "")
     .replace(/[`*_~]/g, "")
     .replace(/[^\p{L}\p{N}\s-]/gu, "")
     .replace(/\s/g, "-");
 }
+
+test("slugify discards nested tag-like input as one construct", () => {
+  assert.equal(
+    slugify("<scr<script>ipt>Security</scr<script>ipt>"),
+    "security",
+  );
+  assert.equal(slugify('<span title="a > b">Security</span>'), "security");
+});
 
 function anchors(markdown) {
   const visibleMarkdown = withoutFencedCode(markdown);
