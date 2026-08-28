@@ -1,7 +1,5 @@
 # Roadmap
 
-**Updated:** 2026-07-13
-
 This public roadmap lists work that is not implemented yet. Completed work is
 tracked in [CHANGELOG.md](./CHANGELOG.md), and durable architecture decisions are
 tracked in [docs/adr](./docs/adr/README.md).
@@ -22,7 +20,7 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ## Product Backlog
 
-### 2. Deeper Character-Scoped Surfaces
+### Deeper Character-Scoped Surfaces
 
 **Status:** Not implemented
 **Gate:** Bungie response-shape verification
@@ -39,7 +37,7 @@ Expected shape:
 - character-scoped UI routes or panels
 - clear distinction between membership-wide collection data and per-character data
 
-### 3. God-Roll and Owned-Roll Insights
+### God-Roll and Owned-Roll Insights
 
 **Status:** Not implemented
 **Gate:** Bungie item-instance verification plus data-source decision
@@ -55,7 +53,7 @@ Decisions to settle:
   third-party wishlist format.
 - Licensing and freshness expectations for any external roll source.
 
-### 4. Notifications and Digests
+### Notifications and Digests
 
 **Status:** Not implemented
 **Gate:** Product and provider decision
@@ -70,7 +68,7 @@ Decisions to settle:
 - User preference model and unsubscribe flow.
 - Whether the app should run scheduled jobs before production deployment exists.
 
-### 5. Shareable Collection Progress
+### Shareable Collection Progress
 
 **Status:** Not implemented
 **Gate:** Security and privacy review
@@ -88,7 +86,7 @@ Expected shape:
 
 ## Operations Backlog
 
-### 7. Production Deployment Path
+### Production Deployment Path
 
 **Status:** Deferred
 **Gate:** Maintainer deployment decision
@@ -99,7 +97,7 @@ cloud resources, and deploying production infrastructure should be implemented
 only after the target hosting model is accepted. Environment-specific runbooks
 belong in `private/` until then.
 
-### 8. Metrics
+### Metrics
 
 **Status:** Not implemented
 **Gate:** Production observability decision
@@ -109,8 +107,3 @@ Structured request/access logging with request IDs and sanitized identifiers has
 shipped (see [docs/architecture.md](./docs/architecture.md#request-logging)).
 Metrics remain unimplemented; add them only after the production runtime and
 collector target are known.
-
-## Completed Work
-
-Completed work is intentionally not duplicated here. See [CHANGELOG.md](./CHANGELOG.md)
-for shipped changes.

@@ -1,3 +1,7 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+Source: .agents/skills/tdd/mocking.md
+Regenerate: node scripts/sync-agent-configs.mjs -->
+
 # When to Mock
 
 Mock at **system boundaries** only:

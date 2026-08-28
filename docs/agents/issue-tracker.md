@@ -2,10 +2,17 @@
 
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
+Use the host's configured GitHub CLI session. When an agent sandbox on Windows
+cannot reach the host Credential Manager, run authenticated `gh` operations in
+the approved host context. Never print `gh auth token`, copy it into the
+workspace, or place it in an environment variable.
+
 ## Conventions
 
-- **Create an issue**: `gh issue create --title "..." --body "..."`. Use a heredoc for multi-line bodies.
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
+- **Create an issue**: `gh issue create --title "..." --body "..."`. For
+  multi-line content, prefer `--body-file <path>`; it works across PowerShell and
+  POSIX shells without shell-specific heredoc syntax.
+- **Read an issue**: `gh issue view <number> --comments --json number,title,body,labels,comments` and use `--jq` only when a smaller projection is needed.
 - **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`

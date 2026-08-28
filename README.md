@@ -1,59 +1,40 @@
 # Guardian Tracker
 
 Guardian Tracker is a Destiny 2 companion app that helps players understand
-their collection gaps and decide what to chase next. Players sign in with Bungie
-OAuth; the app analyzes collections, wishlist items, weekly data, catalysts,
-crafting patterns, triumphs, seals, and cosmetics through a Go API and React
-frontend.
+their collection gaps and decide what to chase next. Players sign in with
+Bungie OAuth; a React frontend uses a Go API to combine account data, the
+Destiny manifest, live weekly data, and persisted Guardian Tracker preferences.
 
-## Core Features
+## Features
 
-- **Bungie OAuth login** with HMAC-signed CSRF state and Guardian Tracker JWTs.
-- **Collection analysis** for weapons, armor, exotics, and cosmetics, including
+- Collection analysis for weapons, armor, exotics, and cosmetics, including
   every collectible-attributed acquisition source and its source-specific
-  difficulty tier.
-- **Wishlist management** with priority, notes, acquisition sources, and live
-  availability surfacing.
-- **This Week** with milestones, Xur inventory and best-effort Tower location,
-  active-Guardian vendor context, class-aware armor labels, today actions, reset
-  timing, and recommendation ranking.
-- **Catalysts, crafting, triumphs, and seals** from Bungie records data.
-- **Cosmetics gallery** for emblems, shaders, ghosts, ships, sparrows, emotes,
-  ornaments, and finishers.
-- **Persisted onboarding tour** that introduces the Dashboard, This Week, and
-  Collections once per Guardian Tracker user.
-- **Global item search** over a manifest-derived index.
-- **Roles, feature flags, admin console, and audit log** for controlled rollout
-  and administration.
-
-## Tech Stack
-
-| Concern               | Choice                                                                             |
-| --------------------- | ---------------------------------------------------------------------------------- |
-| Frontend              | React 19, TypeScript, Vite, React Router, TanStack Query                           |
-| Backend               | Go, Gin                                                                            |
-| User data             | PostgreSQL                                                                         |
-| Manifest data         | Bungie manifest SQLite database                                                    |
-| Local runtime         | Docker Compose                                                                     |
-| Kubernetes validation | Minikube manifests under `k8s/`                                                    |
-| CI                    | GitHub Actions format, Staticcheck, test, coverage, browser, and Docker validation |
+  difficulty.
+- Wishlist management with priorities, notes, and live vendor availability.
+- A weekly planner with milestones, Xûr inventory, selected-character vendor
+  context, reset timing, and ranked recommendations.
+- Catalyst, crafting-pattern, triumph, and seal progress.
+- Manifest-backed global item search and a dedicated cosmetics gallery.
+- Persisted preferences and onboarding, controlled feature rollout, and an
+  admin console with an audit log.
 
 ## Architecture
 
 ```text
-Frontend (React/TS :5273)
-    -> API Service (Go/Gin :8081)
+React/TypeScript frontend :5273
+    -> Go/Gin API :8081
         -> Bungie API
-        -> Postgres user data
-        -> SQLite Destiny manifest
+        -> PostgreSQL user data
+        -> Destiny manifest (SQLite)
 ```
 
-See [docs/architecture.md](./docs/architecture.md) for the public architecture
-overview and [docs/adr](./docs/adr/README.md) for durable decisions.
+See [the architecture guide](./docs/architecture.md) for the implemented system
+and [the product principles](./docs/product.md) for the experience Guardian
+Tracker is intended to provide.
 
 ## Quick Start
 
-Detailed setup, ports, environment variables, and test commands live in
+The full setup, environment, port, and validation instructions live in
 [SETUP.md](./SETUP.md).
 
 ```powershell
@@ -61,113 +42,52 @@ Detailed setup, ports, environment variables, and test commands live in
 docker compose up --build
 ```
 
-Public-only contributors do not need access to any private workspace. Authorized
-maintainers restoring an existing development environment should follow the
-optional portability workflow in [SETUP.md](./SETUP.md#optional-restore-a-private-workspace)
+Open the frontend at <http://localhost:5273> and the API at
+<http://localhost:8081>. The first API startup downloads the Destiny manifest,
+so data surfaces may briefly show a warming state.
+
+Public contributors do not need the optional private workspace. Authorized
+maintainers restoring one should follow the
+[private-workspace procedure](./SETUP.md#optional-restore-a-private-workspace)
 before running `setup.ps1`.
 
-Open:
-
-- Frontend: <http://localhost:5273>
-- API: <http://localhost:8081>
-
-The first API startup downloads the Destiny 2 manifest, so some data surfaces can
-briefly show warming states.
-
-## Common Commands
-
-```powershell
-# Full local stack
-docker compose up --build
-
-# Backend tests
-cd backend/api-service
-go test ./...
-go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
-
-# Frontend tests
-cd frontend
-npm test
-
-# Frontend checks
-npm run type-check
-npm run lint
-npm run format:check
-```
-
-For CI-equivalent Go coverage with cgo and test Postgres, run:
-
-```powershell
-cd backend/api-service
-./test-local.ps1
-```
-
-Browser tests are hermetic: Playwright starts the test-only fake Bungie command,
-the real API, and Vite; the suite never calls Bungie.net. Start only its isolated
-database, set the deterministic fixture clock, then run the functional/axe or
-visual project:
-
-```powershell
-docker compose --profile e2e up -d --wait e2e-postgres
-$env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
-cd frontend
-npm run e2e
-npm run e2e:visual
-cd ..
-docker compose --profile e2e down -v
-```
-
-Every pull request requires Format Check, Test Frontend, Test Go Services,
-Build Docker Images, and Changelog Version. The Go job includes the pinned
-Staticcheck command above; see
-[CONTRIBUTING.md](./CONTRIBUTING.md#ci-gates) for the complete gate details.
-The separate Browser E2E + Axe and Browser Visual Regression jobs do not use
-`continue-on-error`, but remain non-required during stabilization. Promote E2E
-and axe after ten consecutive clean runs; visual regression remains optional.
-
-## Project Layout
+## Repository Layout
 
 ```text
 frontend/                 React + TypeScript SPA
 backend/api-service/      Go API service
-database/init/            Postgres bootstrap SQL
+database/init/            PostgreSQL bootstrap SQL
 k8s/                      Minikube validation manifests and scripts
-docs/                     Public architecture docs and ADRs
-private/                  Optional ignored, independent private-docs repository
-.github/workflows/        CI and version-release workflows
+docs/                     Public architecture, product, and decision records
+private/                  Optional ignored private-docs repository
 ```
 
 ## Documentation
 
-- [SETUP.md](./SETUP.md) - local setup, environment, ports, tests.
-- [CONTEXT.md](./CONTEXT.md) - project glossary; what each domain term means.
-- [docs/architecture.md](./docs/architecture.md) - implemented architecture.
-- [docs/README.md](./docs/README.md) - public/private documentation boundary.
-- [ROADMAP.md](./ROADMAP.md) - not-yet-implemented work and gates.
-- [CHANGELOG.md](./CHANGELOG.md) - shipped changes by version.
-- [SECURITY.md](./SECURITY.md) - security model, reporting, checklist.
-- [CONTRIBUTING.md](./CONTRIBUTING.md) - contribution workflow and CI gates.
-- [AGENTS.md](./AGENTS.md) - canonical AI agent operating guide (all tools).
-- [CLAUDE.md](./CLAUDE.md) - Claude Code specifics; imports AGENTS.md.
-- [docs/agents/](./docs/agents/) - per-repo configuration for third-party
-  engineering skills (issue tracker, triage labels, domain docs).
-- [frontend/README.md](./frontend/README.md) - frontend-specific guide.
-- [k8s/README.md](./k8s/README.md) - Minikube validation guide.
+Start with the [documentation map](./docs/README.md). The primary guides are:
 
-This is a public repository. Keep secrets, production runbooks, private security
-reviews, raw research dumps, and detailed implementation handoffs under
-`private/`, which is gitignored.
+- [SETUP.md](./SETUP.md) — local setup, environments, ports, and tests.
+- [CONTEXT.md](./CONTEXT.md) — canonical domain vocabulary.
+- [docs/architecture.md](./docs/architecture.md) — implemented architecture.
+- [docs/product.md](./docs/product.md) — durable product goals and principles.
+- [ROADMAP.md](./ROADMAP.md) — work that has not shipped.
+- [CHANGELOG.md](./CHANGELOG.md) — shipped changes by version.
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — contribution workflow and CI gates.
+- [SECURITY.md](./SECURITY.md) — security model and reporting process.
 
-## Contributing
+This is a public repository. Secrets, private security analysis, deployment
+runbooks, raw research dumps, and detailed handoffs belong in the ignored
+`private/` workspace.
 
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for workflow,
-formatting, tests, and PR expectations. Future work is tracked in
-[ROADMAP.md](./ROADMAP.md).
+## Contributing and Support
 
-By participating you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md). For
-support, see [SUPPORT.md](./SUPPORT.md). Report vulnerabilities privately per
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) before
+opening a pull request and [SUPPORT.md](./SUPPORT.md) when asking for help.
+Security vulnerabilities must use the private process in
 [SECURITY.md](./SECURITY.md).
+
+By participating, you agree to the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT License - see [LICENSE](./LICENSE).
+MIT License — see [LICENSE](./LICENSE).

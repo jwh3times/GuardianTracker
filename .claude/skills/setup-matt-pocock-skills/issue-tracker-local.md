@@ -1,3 +1,7 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+Source: .agents/skills/setup-matt-pocock-skills/issue-tracker-local.md
+Regenerate: node scripts/sync-agent-configs.mjs -->
+
 # Issue tracker: Local Markdown
 
 Issues and specs for this repo live as markdown files in `.scratch/`.

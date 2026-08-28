@@ -119,9 +119,9 @@ function* textFiles(directory) {
   }
 }
 
-// A version bump also touches SETUP.md's drift-check commands and the agent
-// guides. None of those are generated, so this sweep is what keeps a documented
-// reference from quietly describing a retired server.
+// A version bump also touches coupling guidance when a tag has been copied into
+// prose. This sweep prevents a documented reference from quietly describing a
+// retired server.
 test("no tracked file references a retired PostgreSQL image", () => {
   const allowed = new Set([
     composeRef,
@@ -148,13 +148,9 @@ test("no tracked file references a retired PostgreSQL image", () => {
   assert.deepEqual(failures, []);
 });
 
-test("SETUP.md documents a drift check for both pinned PostgreSQL images", () => {
+test("SETUP.md delegates PostgreSQL pins to their owning configuration", () => {
   const setup = read("SETUP.md");
-
-  for (const ref of [composeRef, ciRef]) {
-    assert.ok(
-      setup.includes(`docker buildx imagetools inspect ${ref.split("@")[0]}\n`),
-      `SETUP.md must document the drift check for ${ref.split("@")[0]}`,
-    );
-  }
+  assert.ok(setup.includes("Dockerfiles, Compose file, and\nworkflows"));
+  assert.ok(setup.includes("repository policy tests"));
+  assert.doesNotMatch(setup, /docker buildx imagetools inspect postgres:/);
 });

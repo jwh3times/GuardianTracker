@@ -1,58 +1,68 @@
 # Documentation Map
 
-Guardian Tracker is a public GitHub repository. The committed documentation must
-be safe for public readers and useful for contributors without exposing private
-operations detail.
+Guardian Tracker is a public repository. Its committed documentation must be
+safe for public readers and sufficient to build, test, review, and understand
+the project without access to a private workspace.
 
-## Public Docs
+## Sources of Truth
 
-These files are committed and maintained as public sources of truth:
+Each kind of information has one living owner:
 
-| File                                        | Audience                     | Purpose                                                                                               |
-| ------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------- |
-| [README.md](../README.md)                   | Contributors and evaluators  | Project overview, feature summary, quick commands, doc index                                          |
-| [SETUP.md](../SETUP.md)                     | Developers                   | Local setup, environment files, ports, tests                                                          |
-| [docs/architecture.md](./architecture.md)   | Developers and reviewers     | Runtime architecture, data flow, security posture                                                     |
-| [ROADMAP.md](../ROADMAP.md)                 | Contributors and maintainers | Not-yet-implemented work, gates, rough size                                                           |
-| [SECURITY.md](../SECURITY.md)               | Users and security reporters | Reporting process, implemented controls, production checklist                                         |
-| [CHANGELOG.md](../CHANGELOG.md)             | Users and maintainers        | Shipped changes by version                                                                            |
-| [docs/adr/](./adr/README.md)                | Maintainers                  | Durable decisions future work must preserve or supersede                                              |
-| [docs/agents/](./agents/)                   | AI coding agents             | Per-repo configuration for third-party engineering skills (issue tracker, triage labels, domain docs) |
-| [AGENTS.md](../AGENTS.md)                   | All AI coding agents         | Canonical, tool-neutral operating context and repo rules                                              |
-| [CLAUDE.md](../CLAUDE.md)                   | Claude Code                  | Imports AGENTS.md; adds Claude-only mechanics (subagents, skills)                                     |
-| [PRD.md](../PRD.md)                         | Product/design work          | Product intent and UX requirements, not implementation truth                                          |
-| [frontend/README.md](../frontend/README.md) | Frontend contributors        | React app structure, queries, scripts                                                                 |
-| [k8s/README.md](../k8s/README.md)           | Infrastructure contributors  | Minikube validation scripts                                                                           |
+| Owner                                                                         | Purpose                                                                           |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [README.md](../README.md)                                                     | Concise project overview and quick start                                          |
+| [SETUP.md](../SETUP.md)                                                       | Local setup, environment files, ports, runtime options, and test commands         |
+| [docs/maintainers/workspace-recovery.md](./maintainers/workspace-recovery.md) | Value-free entry point for authorized-maintainer workspace recovery               |
+| [CONTRIBUTING.md](../CONTRIBUTING.md)                                         | Contribution workflow, formatting, and CI expectations                            |
+| [CONTEXT.md](../CONTEXT.md)                                                   | Canonical domain vocabulary and seam names                                        |
+| [docs/product.md](./product.md)                                               | Durable product goals, users, and experience principles                           |
+| [docs/architecture.md](./architecture.md)                                     | Current implemented runtime architecture and data flow                            |
+| [docs/adr/](./adr/README.md)                                                  | Accepted decisions future work must preserve or supersede                         |
+| [ROADMAP.md](../ROADMAP.md)                                                   | Public work that has not shipped                                                  |
+| [CHANGELOG.md](../CHANGELOG.md)                                               | Current shipped changes, with older releases in [`docs/changelog/`](./changelog/) |
+| [SECURITY.md](../SECURITY.md)                                                 | Security model, reporting process, and production checklist                       |
+| [SUPPORT.md](../SUPPORT.md)                                                   | Public support and issue-reporting guidance                                       |
+| [frontend/README.md](../frontend/README.md)                                   | Frontend structure, scripts, and browser-test procedure                           |
+| [k8s/README.md](../k8s/README.md)                                             | Minikube validation procedure                                                     |
+| [AGENTS.md](../AGENTS.md)                                                     | Canonical, self-contained operating guide for coding agents                       |
+| [CLAUDE.md](../CLAUDE.md)                                                     | Thin AGENTS.md importer plus Claude Code-only mechanics                           |
+| [docs/agents/](./agents/)                                                     | Per-repository configuration for third-party engineering skills                   |
 
-## Private Docs
+Community policy is defined by the
+[Code of Conduct](../CODE_OF_CONDUCT.md), [support policy](../SUPPORT.md),
+[security policy](../SECURITY.md), and GitHub issue and pull-request templates.
 
-The `private/` directory is gitignored and may be restored by authorized
-maintainers as an independent private documentation repository. It is not a
-submodule, its remote location is not public configuration, and public-only
-contributors do not need it. Keep these categories there:
+## Public and Private Boundary
 
-- deployment runbooks and cloud resource names
-- production incident notes
-- private security reviews and exploit-level analysis
-- raw or derived Bungie API research dumps that are too large or too operational
-- detailed implementation handoff plans
-- credentials, secret-rotation records, and environment-specific commands
+The ignored `private/` directory may be restored by authorized maintainers as
+an independent documentation repository. It is not a submodule, its remote
+location is not public configuration, and public contributors do not need it.
 
-Public docs may reference that private notes exist, but they should not require
-private context to build, test, or understand the public code.
+Keep these categories private:
+
+- deployment runbooks, cloud resource names, and incident notes;
+- private security reviews and exploit-level analysis;
+- oversized or operational Bungie API and manifest research;
+- detailed implementation handoffs and audit evidence;
+- credential-handling and rotation runbooks, value-free rotation records, and
+  environment-specific commands.
+
+Never store credential values in documentation. Public docs may acknowledge
+that a private runbook exists, but must not depend on private context.
 
 ## Maintenance Rules
 
-- `README.md` stays concise and links to deeper docs.
-- `SETUP.md` owns local setup, ports, and commands.
-- `docs/architecture.md` describes implemented architecture only.
-- `ROADMAP.md` lists unimplemented work only. Completed work belongs in
-  `CHANGELOG.md`; durable choices belong in ADRs.
-- ADRs record accepted decisions. If a decision changes, add or supersede an ADR
-  instead of silently rewriting history.
-- Deep implementation plans should not be committed under `docs/`; keep them
-  under `private/`.
-- `docs/agents/` is per-repo configuration for third-party engineering skills
-  (`.agents/skills/`), not documentation of Guardian Tracker's own architecture
-  or behavior. It is scaffolded by the `setup-matt-pocock-skills` skill and
-  edited directly afterward, not derived from application code.
+- Link to the owning document instead of copying its commands, version pins,
+  backlog state, or implementation facts into secondary guides.
+- Keep `README.md` brief. It is an entry point, not a second setup guide.
+- Keep `docs/product.md` durable. Current behavior belongs in architecture or
+  feature docs; future work belongs in the roadmap.
+- Remove completed work from `ROADMAP.md` and record it in `CHANGELOG.md`.
+- Preserve accepted ADRs as history. Supersede a decision with a new ADR rather
+  than silently rewriting it.
+- Keep deep implementation plans and private operational detail out of
+  committed `docs/`.
+- `AGENTS.md` deliberately repeats the operating context agents need in one
+  self-contained file. Do not move that context into `CLAUDE.md`.
+- Edit `.claude/agents/` and `.agents/skills/`, then run the repository sync;
+  never hand-edit their generated mirrors.

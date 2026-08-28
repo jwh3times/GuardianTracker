@@ -117,7 +117,9 @@ docker compose down -v     # stop and wipe Postgres/manifest volumes
 ### Option B: Kubernetes (Minikube)
 
 ```powershell
+./setup.ps1     # first run: creates the ignored Secret without overwriting
 cd k8s
+# Fill api-service-secret.yaml placeholders before startup.
 ./startup.ps1
 ```
 
@@ -144,10 +146,12 @@ To test Bungie OAuth, tunnel the frontend with ngrok. Add the ngrok URL to `CORS
 ## Environment Setup
 
 ```powershell
-./setup.ps1     # copies all .env.example files at once
+./setup.ps1     # creates missing env files and the ignored Minikube Secret
 ```
 
-Or copy manually: root `.env`, `backend/api-service/.env`, `frontend/.env.local`.
+Or copy manually: root `.env`, `backend/api-service/.env`,
+`frontend/.env.local`, and `k8s/api-service-secret.yaml` from their committed
+example files.
 
 Public-only development requires no private workspace. Authorized maintainers
 can optionally restore the ignored `private/` directory as an independent Git
@@ -158,6 +162,10 @@ machine-local `.private-workspace/repository.env.ref` file containing only
 private repository location or real 1Password identifiers in public docs.
 `npm run bootstrap:private` (from the repo root) is the Node equivalent for new
 git worktrees; it reuses the main checkout's reference file.
+
+The complete value-free recovery, verification, worktree, and backup handoff is
+in `docs/maintainers/workspace-recovery.md`. The restored private repository's
+`README.md` is the sole index for its internal file layout.
 
 When private restoration templates are available, run
 `./scripts/restore-private-secrets.ps1` before `./setup.ps1`; both helpers refuse
@@ -227,15 +235,16 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/documentation-links.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
-   Go security-tool, Node-version, and PostgreSQL-image alignment policies. The Node policy keeps
+   Go security-tool, Node-version, PostgreSQL-image, workspace-portability, and local
+   documentation-link policies. The Node policy keeps
    `.nvmrc`, both workflows, both frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as
    the three Compose PostgreSQL services — Dependabot's `docker-compose` ecosystem does not see
    workflow service images — and fails on any retired `postgres:<version>` reference left behind
-   in a tracked file, including `SETUP.md`'s drift-check commands and the agent guides. The job also runs
+   in a tracked file. The job also runs
    `npm run sync:agents -- --check`, which fails if
    `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
    (generated from `.agents/skills/`) is out of sync with its source. Fix:
@@ -341,15 +350,15 @@ Public docs:
 - `AGENTS.md` - canonical, tool-neutral agent operating guide (this file)
 - `CLAUDE.md` - thin `@AGENTS.md` importer plus Claude Code-specific mechanics
 - `docs/agents/` - per-repo configuration for third-party engineering skills
-  (issue tracker, triage labels, domain docs); see `## Agent skills` above
+  (issue tracker, triage labels, domain docs); see `## Agent skills` below
+- `docs/maintainers/workspace-recovery.md` - value-free private-workspace and
+  machine-local configuration recovery runbook for authorized maintainers
 
 Private docs:
 
-- `private/IMPLEMENTATION_PLAN.md` - detailed private implementation planning
-- `private/archive.md` - shipped private history and durable decisions
-- `private/InfraTODO.md` - infrastructure maintenance and deployment notes
-- `private/security-limitations.md` - security constraints and limitations
-- `private/BungieAPI.md` - Bungie API research and protocol documentation
+- `private/README.md` - sole index for current plans, operations, residual
+  security risks, reference evidence, and retired work. Private paths may be
+  reorganized without duplicating that internal layout in this public guide.
 
 Rules:
 

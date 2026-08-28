@@ -1,3 +1,7 @@
+<!-- GENERATED FILE — DO NOT EDIT.
+Source: .agents/skills/setup-matt-pocock-skills/domain.md
+Regenerate: node scripts/sync-agent-configs.mjs -->
+
 # Domain Docs
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.

@@ -40,12 +40,13 @@ images will not be visible to the cluster.
 
 ## Manifests (k8s/)
 
-| File                         | Contents                                                                           |
-| ---------------------------- | ---------------------------------------------------------------------------------- |
-| `api-service-configmap.yaml` | `api-service-config` ConfigMap — non-sensitive env vars                            |
-| `api-service-secret.yaml`    | `api-service-secrets` Secret — placeholder values (replace before use)             |
-| `api-service.yaml`           | api-service Deployment + ClusterIP Service + PersistentVolumeClaim (manifest data) |
-| `frontend.yaml`              | frontend Deployment + NodePort Service + PodDisruptionBudget                       |
+| File                              | Contents                                                                           |
+| --------------------------------- | ---------------------------------------------------------------------------------- |
+| `api-service-configmap.yaml`      | `api-service-config` ConfigMap — non-sensitive env vars                            |
+| `api-service-secret.yaml.example` | Committed value-free template for the ignored local Secret                         |
+| `api-service-secret.yaml`         | Ignored machine-local `api-service-secrets` Secret                                 |
+| `api-service.yaml`                | api-service Deployment + ClusterIP Service + PersistentVolumeClaim (manifest data) |
+| `frontend.yaml`                   | frontend Deployment + NodePort Service + PodDisruptionBudget                       |
 
 ## ConfigMap — api-service-config
 
@@ -80,13 +81,13 @@ kubectl rollout restart deployment/api-service
 Runtime values for api-service are wired through the ignored, machine-local
 `api-service-secret.yaml`. `BUNGIE_CLIENT_ID` is a public identifier, but this
 Minikube validation setup keeps it in the same Kubernetes Secret for wiring
-convenience. Replace all placeholder values before deploying:
+convenience. Run the root `setup.ps1` or copy the committed example before the
+first startup, then replace all placeholders locally:
 
 ```powershell
-kubectl create secret generic api-service-secrets `
-  --from-literal=BUNGIE_API_KEY=<key> `
-  --from-literal=BUNGIE_CLIENT_ID=<id> `
-  --from-literal=JWT_SECRET=<32+char-random>
+cp k8s/api-service-secret.yaml.example k8s/api-service-secret.yaml
+# Edit the ignored local file, then apply it.
+kubectl apply -f k8s/api-service-secret.yaml
 ```
 
 | Secret key         | Purpose                                                      |
@@ -97,11 +98,10 @@ kubectl create secret generic api-service-secrets `
 
 Note: `DATABASE_URL` and `TOKEN_ENCRYPTION_KEY` are not in the Minikube secret because the stack runs in development mode without Postgres. Do not treat this omission or these manifests as production guidance.
 
-Update a secret in-place:
+After editing the ignored local Secret, apply it and restart the API:
 
 ```powershell
-kubectl create secret generic api-service-secrets --dry-run=client -o yaml `
-  --from-literal=KEY=value ... | kubectl apply -f -
+kubectl apply -f k8s/api-service-secret.yaml
 kubectl rollout restart deployment/api-service
 ```
 
@@ -161,22 +161,18 @@ kubectl apply -f .
 
 Bungie OAuth requires a public HTTPS redirect URI. For local development:
 
-1. Start ngrok: `ngrok http 3000`
+1. Start ngrok: `ngrok http 5273`
 2. Copy the HTTPS URL (e.g. `https://abc123.ngrok-free.app`)
 3. Update the Bungie app settings at https://www.bungie.net/en/Application
 4. Update `AUTH_REDIRECT_URI` in `k8s/api-service-configmap.yaml` to `https://abc123.ngrok-free.app/auth/callback`
-5. `kubectl apply -f k8s/api-service-configmap.yaml && kubectl rollout restart deployment/api-service`
+5. Apply the config map and restart the API with the commands in the ConfigMap
+   section above.
 
-## Base image versions
+## Base image pins
 
-| Role                     | Image                                           |
-| ------------------------ | ----------------------------------------------- |
-| Go builder               | `golang:1.26.6-alpine`                          |
-| Go runtime               | `alpine:3.24.1`                                 |
-| Node builder (frontend)  | `node:26.7.0-alpine3.24`                        |
-| nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.31.3-alpine3.24` |
-
-The two runtime images and the frontend Node builder are also pinned to
-multi-platform OCI index digests in their Dockerfiles. Use the
-drift-verification procedure in `SETUP.md` when refreshing those pins.
+Read exact base-image refs from the application Dockerfiles; do not cache their
+versions here. Runtime and frontend builder refs remain pinned to reviewed
+multi-platform OCI index digests. Use the drift-verification procedure in
+`SETUP.md` and the coupling rules in `docker-containers.md` when refreshing
+them.
 '''

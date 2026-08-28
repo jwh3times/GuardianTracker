@@ -27,9 +27,17 @@ person.
 Found something broken? Open an issue using the **Bug report** template and
 include reproduction steps, expected vs. actual behavior, the affected component
 (API, frontend, database, k8s), and the branch or commit you tested. Check the
-**Known Limitations** section of [AGENTS.md](AGENTS.md#known-limitations) first —
-a few behaviors (e.g. Xûr's location always "Unknown") are upstream API
-limitations, not bugs.
+known limitations below first.
+
+## Known limitations
+
+- Collections are membership-wide. The selected character scopes weekly vendor
+  inventory, today actions, availability ranking, and Xûr location, but not
+  collection ownership.
+- Xûr's location is best-effort and is omitted when Bungie's live vendor data
+  cannot be resolved through the manifest.
+- Raid and dungeon milestones carry a verified missing count. Other milestones
+  omit it because current reward definitions have no collectible-linked items.
 
 ## Requesting features
 

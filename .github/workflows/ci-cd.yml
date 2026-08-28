@@ -59,7 +59,7 @@ jobs:
       # sees the actionable "run the sync script" failure rather than a confusing
       # Prettier diff on a generated file.
       - name: Test repository policy scripts
-        run: node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs
+        run: node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/documentation-links.test.mjs
 
       - name: Check agent config sync (Codex agents + Claude skills)
         run: npm run sync:agents -- --check

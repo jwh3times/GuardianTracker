@@ -1,6 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -32,12 +38,17 @@ test("parseFrontmatter splits fields from body", () => {
 });
 
 test("parseFrontmatter keeps colons in a value", () => {
-  const { fields } = parseFrontmatter("---\nname: x\ndescription: Use for a: thing\n---\nb\n");
+  const { fields } = parseFrontmatter(
+    "---\nname: x\ndescription: Use for a: thing\n---\nb\n",
+  );
   assert.equal(fields.description, "Use for a: thing");
 });
 
 test("parseFrontmatter throws without a frontmatter block", () => {
-  assert.throws(() => parseFrontmatter("no frontmatter here\n"), /no YAML frontmatter/);
+  assert.throws(
+    () => parseFrontmatter("no frontmatter here\n"),
+    /no YAML frontmatter/,
+  );
 });
 
 test("tomlBasicString escapes quotes and backslashes", () => {
@@ -50,19 +61,29 @@ test("tomlMultilineString uses a literal delimiter so backslashes survive", () =
   const out = tomlMultilineString(body);
   assert.ok(out.startsWith("'''\n"), "expected a literal ''' string");
   assert.ok(out.endsWith("\n'''"));
-  assert.ok(out.includes(".\\startup.ps1"), "backslash must not be escaped or dropped");
+  assert.ok(
+    out.includes(".\\startup.ps1"),
+    "backslash must not be escaped or dropped",
+  );
   assert.ok(out.includes("grep `(GET)\\(` here"));
 });
 
 test("tomlMultilineString falls back to a basic string when the body contains '''", () => {
   const body = "here is ''' inside\nand a \\ backslash";
   const out = tomlMultilineString(body);
-  assert.ok(out.startsWith('"""\n'), "expected a basic \"\"\" string");
-  assert.ok(out.includes("and a \\\\ backslash"), "backslash must be escaped in basic form");
+  assert.ok(out.startsWith('"""\n'), 'expected a basic """ string');
+  assert.ok(
+    out.includes("and a \\\\ backslash"),
+    "backslash must be escaped in basic form",
+  );
 });
 
 test("renderAgentToml emits name and description and drops tools and model", () => {
-  const out = renderAgentToml(".claude/agents/demo.md", { name: "demo", description: "A demo." }, "\nBody.\n");
+  const out = renderAgentToml(
+    ".claude/agents/demo.md",
+    { name: "demo", description: "A demo." },
+    "\nBody.\n",
+  );
   assert.ok(out.includes('name = "demo"'));
   assert.ok(out.includes('description = "A demo."'));
   assert.ok(out.includes("developer_instructions = '''\nBody.\n'''"));
@@ -73,34 +94,55 @@ test("renderAgentToml emits name and description and drops tools and model", () 
 });
 
 test("renderAgentToml writes a provenance header naming the source", () => {
-  const out = renderAgentToml(".claude/agents/demo.md", { name: "demo", description: "d" }, "b");
+  const out = renderAgentToml(
+    ".claude/agents/demo.md",
+    { name: "demo", description: "d" },
+    "b",
+  );
   assert.ok(out.includes("# GENERATED FILE"));
   assert.ok(out.includes("# Source: .claude/agents/demo.md"));
   assert.ok(out.includes("# Regenerate: node scripts/sync-agent-configs.mjs"));
 });
 
 test("renderAgentToml throws when a required field is missing", () => {
-  assert.throws(() => renderAgentToml(".claude/agents/demo.md", { name: "demo" }, "b"), /description/);
+  assert.throws(
+    () => renderAgentToml(".claude/agents/demo.md", { name: "demo" }, "b"),
+    /description/,
+  );
 });
 
 test("renderAgentToml never rewrites CLAUDE.md or .claude/ in the body", () => {
-  const body = "Edit `.claude/agents/go-services.md`. `CLAUDE.md` is a thin importer.";
-  const out = renderAgentToml(".claude/agents/demo.md", { name: "demo", description: "d" }, body);
+  const body =
+    "Edit `.claude/agents/go-services.md`. `CLAUDE.md` is a thin importer.";
+  const out = renderAgentToml(
+    ".claude/agents/demo.md",
+    { name: "demo", description: "d" },
+    body,
+  );
   assert.ok(out.includes(".claude/agents/go-services.md"));
   assert.ok(out.includes("`CLAUDE.md` is a thin importer."));
-  assert.ok(!out.includes(".Codex/"), "the 2026-07-22 corruption must not reappear");
+  assert.ok(
+    !out.includes(".Codex/"),
+    "the 2026-07-22 corruption must not reappear",
+  );
 });
 
 test("renderSkillMarkdown injects provenance inside the frontmatter", () => {
-  const out = renderSkillMarkdown(".agents/skills/ship/SKILL.md", "---\nname: ship\ndescription: d\n---\n\nBody.\n");
+  const out = renderSkillMarkdown(
+    ".agents/skills/ship/SKILL.md",
+    "---\nname: ship\ndescription: d\n---\n\nBody.\n",
+  );
   assert.ok(out.startsWith("---\n# GENERATED FILE"));
   assert.ok(out.includes("# Source: .agents/skills/ship/SKILL.md"));
   assert.ok(out.includes("name: ship"));
   assert.ok(out.endsWith("\nBody.\n"));
 });
 
-test("renderSkillMarkdown copies a file without frontmatter verbatim", () => {
-  assert.equal(renderSkillMarkdown(".agents/skills/ship/notes.md", "plain\n"), "plain\n");
+test("renderSkillMarkdown adds provenance to Markdown without frontmatter", () => {
+  const out = renderSkillMarkdown(".agents/skills/ship/notes.md", "plain\n");
+  assert.ok(out.startsWith("<!-- GENERATED FILE"));
+  assert.ok(out.includes("Source: .agents/skills/ship/notes.md"));
+  assert.ok(out.endsWith("plain\n"));
 });
 
 function fixtureRoot() {
@@ -115,21 +157,44 @@ function fixtureRoot() {
     join(root, ".agents/skills/demo/SKILL.md"),
     "---\nname: demo\ndescription: Demo skill.\n---\n\nDemo body.\n",
   );
+  writeFileSync(
+    join(root, ".agents/skills/demo/notes.md"),
+    "Reference notes.\n",
+  );
   return root;
 }
 
 test("computeOutputs maps each source to its generated path", () => {
   const root = fixtureRoot();
   const outputs = computeOutputs(root);
-  assert.deepEqual([...outputs.keys()].sort(), [".claude/skills/demo/SKILL.md", ".codex/agents/alpha.toml"]);
-  assert.ok(outputs.get(".codex/agents/alpha.toml").includes("Run .\\startup.ps1"));
+  assert.deepEqual([...outputs.keys()].sort(), [
+    ".claude/skills/demo/SKILL.md",
+    ".claude/skills/demo/notes.md",
+    ".codex/agents/alpha.toml",
+  ]);
+  assert.ok(
+    outputs.get(".codex/agents/alpha.toml").includes("Run .\\startup.ps1"),
+  );
+  assert.ok(
+    outputs.get(".claude/skills/demo/notes.md").includes("<!-- GENERATED FILE"),
+  );
   rmSync(root, { recursive: true, force: true });
 });
 
 test("diff reports added, changed, and orphaned files", () => {
-  const outputs = new Map([["a", "1"], ["b", "2"]]);
-  const existing = new Map([["b", "CHANGED"], ["c", "3"]]);
-  assert.deepEqual(diff(outputs, existing), { added: ["a"], changed: ["b"], removed: ["c"] });
+  const outputs = new Map([
+    ["a", "1"],
+    ["b", "2"],
+  ]);
+  const existing = new Map([
+    ["b", "CHANGED"],
+    ["c", "3"],
+  ]);
+  assert.deepEqual(diff(outputs, existing), {
+    added: ["a"],
+    changed: ["b"],
+    removed: ["c"],
+  });
 });
 
 test("main writes the mirrors, then --check reports no drift", () => {
@@ -137,10 +202,13 @@ test("main writes the mirrors, then --check reports no drift", () => {
   assert.equal(main(["--root", root]), 0);
   const written = readFileSync(join(root, ".codex/agents/alpha.toml"), "utf8");
   assert.ok(written.includes("developer_instructions = '''"));
-  const skillWritten = readFileSync(join(root, ".claude/skills/demo/SKILL.md"), "utf8");
+  const skillWritten = readFileSync(
+    join(root, ".claude/skills/demo/SKILL.md"),
+    "utf8",
+  );
   assert.ok(skillWritten.includes("# GENERATED FILE"));
   assert.ok(skillWritten.includes("# Source: .agents/skills/demo/SKILL.md"));
-  assert.equal(computeExisting(root).size, 2);
+  assert.equal(computeExisting(root).size, 3);
   assert.equal(main(["--check", "--root", root]), 0);
   rmSync(root, { recursive: true, force: true });
 });

@@ -15,7 +15,7 @@ type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 /* ---------------- ITEM TILE ---------------- */
 /**
  * Renders the real Bungie item icon when an icon path is provided, with the
- * type glyph as the loading/error fallback (PRD §8.2 image-forward cards).
+ * type glyph as the loading/error fallback.
  */
 export function ItemTile({
   rarity,

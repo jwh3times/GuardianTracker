@@ -15,16 +15,17 @@ auth-service, bungie-service, and graphql-service Dockerfiles no longer exist.
 
 ### `backend/api-service/Dockerfile` — CGO enabled for SQLite
 
-Two-stage build:
+Two-stage build. Read the current base refs from the Dockerfile; do not copy
+their versions into agent docs.
 
-1. **`builder`** (`golang:1.26.6-alpine`):
+1. **`builder`** (Go on Alpine):
 
    - `RUN apk add --no-cache gcc musl-dev sqlite-dev` (required for CGO + SQLite)
    - `COPY go.mod go.sum ./` → `RUN go mod download`
    - `COPY . .`
    - `RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags='-w -s -extldflags "-static"' -o main .`
 
-2. **Runtime** (`alpine:3.24.1`, pinned to its multi-platform index digest):
+2. **Runtime** (digest-pinned Alpine):
    - `RUN apk --no-cache add ca-certificates sqlite-libs`
    - Create non-root user `appuser` (uid/gid 1000) in group `appgroup`
    - `RUN mkdir -p /app/data && chown -R appuser:appgroup /app`
@@ -35,15 +36,16 @@ Two-stage build:
 
 ### `frontend/Dockerfile` — Vite build + nginx
 
-Two-stage build:
+Two-stage build. The root `.nvmrc` and the Node policy test own the exact Node
+patch.
 
-1. **`builder`** (`node:26.7.0-alpine3.24`, pinned to its multi-platform index digest):
+1. **`builder`** (digest-pinned Node on Alpine):
 
    - `COPY package*.json ./` → `RUN npm ci`
    - `COPY . .`
    - `RUN npm run build` (Vite production build → `dist/`)
 
-2. **Runtime** (`nginxinc/nginx-unprivileged:1.31.3-alpine3.24`, pinned to its multi-platform index digest):
+2. **Runtime** (digest-pinned `nginxinc/nginx-unprivileged` on Alpine):
    - `COPY --from=builder /app/dist /usr/share/nginx/html`
    - `COPY nginx.conf /etc/nginx/conf.d/default.conf`
    - `EXPOSE 8080`
@@ -69,9 +71,9 @@ frontend/API bindings remain unchanged because local browsers and approved
 development tunnels use them. Compose requires an explicit `GO_ENV` value from
 the root environment file.
 
-`e2e-postgres` uses `postgres:18.6-alpine3.24`, pinned to its multi-platform
-index digest, with host port 5534, the `e2e` profile, and
-a read-only `database/init` bind mount. It intentionally has no database data
+`e2e-postgres` uses the same digest-pinned Alpine PostgreSQL ref as the other
+Compose database services, with host port 5534, the `e2e` profile, and a
+read-only `database/init` bind mount. It intentionally has no database data
 volume and `restart: "no"`; Playwright owns the other browser-test processes.
 
 ## Building for Minikube
@@ -122,31 +124,23 @@ Both Dockerfiles follow the same caching pattern:
 
 Never move `COPY . .` before the install step.
 
-## Base image versions
+## Pin maintenance
 
-| Role                     | Image                                           |
-| ------------------------ | ----------------------------------------------- |
-| Go builder               | `golang:1.26.6-alpine`                          |
-| Go runtime               | `alpine:3.24.1`                                 |
-| Node builder/dev         | `node:26.7.0-alpine3.24`                        |
-| Playwright Node donor    | `node:26.7.0-bookworm-slim`                     |
-| Playwright browser base  | `mcr.microsoft.com/playwright:v1.62.1-noble`    |
-| nginx runtime (frontend) | `nginxinc/nginx-unprivileged:1.31.3-alpine3.24` |
+The Dockerfiles, Compose file, workflow service declarations, `.nvmrc`, Go
+module, and frontend lockfile own exact versions. Inspect those sources before
+changing a pin; this guide owns only the coupling rules:
 
-The Go runtime, Node builder/development, Playwright Node donor/browser, and
-nginx runtime tags are also pinned to their multi-platform OCI index digests in
-the Dockerfiles. Dependabot advances tag and digest together for newer tagged
-releases; follow the digest-drift check in `SETUP.md` for same-tag republishes.
-
-When updating Go: the version must match the `go` directive in `go.mod`.
-When updating Node within the supported 26 line: change `.nvmrc`, all three
-frontend Dockerfiles, and their OCI digests together. Keep
-`package.json`/lockfile engine metadata and `@types/node` on Node 26, then run
-`node --test scripts/node-version-policy.test.mjs` from the repository root.
-When updating Playwright, update its Dockerfile tag and digest with
-`@playwright/test`; the same policy test rejects version drift.
-When updating PostgreSQL: bump all three Compose services, the `Test Go Services`
-service container in `.github/workflows/ci-cd.yml` (Debian variant, its own
-digest), and every documented reference — `SETUP.md`'s drift-check commands and
-the agent guides — together, then run
-`node --test scripts/postgres-pin-policy.test.mjs` from the repository root.
+- Keep the Go builder compatible with the `go` directive and `toolchain` in
+  `backend/api-service/go.mod`.
+- Keep `.nvmrc`, all frontend Dockerfiles, package engine metadata, Node ambient
+  types, and their OCI digests aligned. Run
+  `node --test scripts/node-version-policy.test.mjs`.
+- Keep the Playwright Dockerfile image aligned with the installed
+  `@playwright/test` version; the Node policy test checks both.
+- Keep all three Compose PostgreSQL services and the `Test Go Services` workflow
+  service on one server `major.minor`, using their appropriate Alpine/Debian
+  refs. Run `node --test scripts/postgres-pin-policy.test.mjs`.
+- When reviewing a same-tag republish, read the current tag from its owning
+  Dockerfile, Compose file, or workflow and inspect that tag with
+  `docker buildx imagetools inspect`. Tags that claim reproducibility remain
+  pinned to reviewed multi-platform OCI index digests.

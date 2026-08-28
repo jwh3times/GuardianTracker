@@ -11,8 +11,9 @@
 // load. Generated files are committed so a fresh clone works for both tools; CI
 // re-runs this with --check and fails on drift.
 //
-// Bodies are copied byte-for-byte. References to `CLAUDE.md` and `.claude/` inside a
-// body are deliberately NOT rewritten: they name the source files both tools edit.
+// Non-Markdown skill assets are copied byte-for-byte. Generated Markdown receives a
+// provenance comment. References to `CLAUDE.md` and `.claude/` inside a body are
+// deliberately NOT rewritten: they name the source files both tools edit.
 //
 // Never hand-edit a generated file (.codex/agents/**, .claude/skills/**) or a symlink
 // will look like the easy fix — it isn't. This repo has `git config core.symlinks`
@@ -26,7 +27,14 @@
 //   node scripts/sync-agent-configs.mjs           write the mirrors
 //   node scripts/sync-agent-configs.mjs --check   report drift, write nothing
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  existsSync,
+} from "node:fs";
 import { join, dirname, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -74,7 +82,8 @@ export function tomlMultilineString(body) {
 
 export function renderAgentToml(sourceRelPath, fields, body) {
   for (const key of ["name", "description"]) {
-    if (!fields[key]) throw new Error(`${sourceRelPath}: frontmatter is missing '${key}'`);
+    if (!fields[key])
+      throw new Error(`${sourceRelPath}: frontmatter is missing '${key}'`);
   }
   return (
     `# ${HEADER_LINE}\n` +
@@ -92,7 +101,14 @@ export function renderAgentToml(sourceRelPath, fields, body) {
 
 export function renderSkillMarkdown(sourceRelPath, text) {
   const match = FRONTMATTER.exec(text);
-  if (!match) return text;
+  if (!match) {
+    return (
+      `<!-- ${HEADER_LINE}\n` +
+      `Source: ${sourceRelPath}\n` +
+      `${REGEN_LINE} -->\n\n` +
+      text
+    );
+  }
   return (
     `---\n` +
     `# ${HEADER_LINE}\n` +
@@ -133,8 +149,13 @@ export function computeOutputs(root) {
       if (!abs.endsWith(".md")) continue;
       const rel = toPosix(relative(agentDir, abs)).replace(/\.md$/, "");
       const sourceRelPath = `${AGENT_SRC_DIR}/${rel}.md`;
-      const { fields, body } = parseFrontmatter(normalizeEol(readFileSync(abs, "utf8")));
-      outputs.set(`${AGENT_OUT_DIR}/${rel}.toml`, renderAgentToml(sourceRelPath, fields, body));
+      const { fields, body } = parseFrontmatter(
+        normalizeEol(readFileSync(abs, "utf8")),
+      );
+      outputs.set(
+        `${AGENT_OUT_DIR}/${rel}.toml`,
+        renderAgentToml(sourceRelPath, fields, body),
+      );
     }
   }
 
@@ -144,7 +165,9 @@ export function computeOutputs(root) {
       const rel = toPosix(relative(skillDir, abs));
       const sourceRelPath = `${SKILL_SRC_DIR}/${rel}`;
       const text = normalizeEol(readFileSync(abs, "utf8"));
-      const content = rel.endsWith("SKILL.md") ? renderSkillMarkdown(sourceRelPath, text) : text;
+      const content = rel.endsWith(".md")
+        ? renderSkillMarkdown(sourceRelPath, text)
+        : text;
       outputs.set(`${SKILL_OUT_DIR}/${rel}`, content);
     }
   }
@@ -158,7 +181,10 @@ export function computeExisting(root) {
     const abs = join(root, outDir);
     if (!existsSync(abs)) continue;
     for (const file of walk(abs)) {
-      existing.set(`${outDir}/${toPosix(relative(abs, file))}`, normalizeEol(readFileSync(file, "utf8")));
+      existing.set(
+        `${outDir}/${toPosix(relative(abs, file))}`,
+        normalizeEol(readFileSync(file, "utf8")),
+      );
     }
   }
   return existing;
@@ -173,7 +199,11 @@ export function diff(outputs, existing) {
     else if (existing.get(rel) !== content) changed.push(rel);
   }
   for (const rel of existing.keys()) if (!outputs.has(rel)) removed.push(rel);
-  return { added: added.sort(), changed: changed.sort(), removed: removed.sort() };
+  return {
+    added: added.sort(),
+    changed: changed.sort(),
+    removed: removed.sort(),
+  };
 }
 
 export function main(argv) {
@@ -187,10 +217,14 @@ export function main(argv) {
 
   if (check) {
     if (drifted === 0) {
-      console.log(`Agent config mirrors are in sync (${outputs.size} generated files).`);
+      console.log(
+        `Agent config mirrors are in sync (${outputs.size} generated files).`,
+      );
       return 0;
     }
-    console.error("Generated agent config mirrors are out of sync with their sources:");
+    console.error(
+      "Generated agent config mirrors are out of sync with their sources:",
+    );
     for (const rel of added) console.error(`  missing: ${rel}`);
     for (const rel of changed) console.error(`  stale:   ${rel}`);
     for (const rel of removed) console.error(`  orphan:  ${rel}`);
@@ -213,6 +247,9 @@ export function main(argv) {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   process.exit(main(process.argv.slice(2)));
 }

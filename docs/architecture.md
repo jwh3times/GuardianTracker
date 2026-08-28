@@ -3,7 +3,7 @@
 Guardian Tracker is a two-service Destiny 2 companion app. Players authenticate
 with Bungie OAuth, the API stores the access authorization encrypted, and the
 frontend renders collection, wishlist, weekly, and settings surfaces through
-same-origin REST calls to the API service.
+direct REST calls to the API service.
 
 ## Runtime Shape
 
@@ -210,7 +210,8 @@ audit trail.
 ## Local Infrastructure
 
 Docker Compose is the recommended full-stack development path. It starts the
-frontend, API service, Postgres, pgAdmin, and a test Postgres profile.
+frontend, API service, Postgres, pgAdmin, and profile-gated disposable test
+databases.
 Database and pgAdmin host ports are loopback-only; frontend and API bindings are
 unchanged.
 
@@ -243,6 +244,9 @@ See [SECURITY.md](../SECURITY.md) for the security guide and checklist.
   declared `govulncheck` v1.6.0 tool, race detector in CI, Postgres-backed
   integration tests.
 - Docker: CI builds production images for validation.
+
+See [frontend/README.md](../frontend/README.md#browser-tests) for the operational
+browser-test and visual-baseline procedure.
 
 CI pins every third-party GitHub Action to a reviewed release commit and checks
 the full-SHA plus release-comment policy in the format job. Dependabot manages

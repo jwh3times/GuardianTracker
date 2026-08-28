@@ -35,6 +35,10 @@ this split exists to eliminate.
 | `ROADMAP.md`                                  | Contributors/maintainers           | Not-yet-implemented public work, gates, likely size                                                                                 |
 | `CHANGELOG.md`                                | Users/maintainers                  | Shipped changes by version                                                                                                          |
 | `SECURITY.md`                                 | Security reporters/reviewers       | Reporting process, controls, security model, checklist                                                                              |
+| `CONTRIBUTING.md`                             | Contributors                       | Contribution workflow, formatting policy, CI gates                                                                                  |
+| `frontend/README.md`                          | Frontend contributors              | Frontend structure and canonical browser/visual-test procedure                                                                      |
+| `k8s/README.md`                               | Developers                         | Minikube manifest-validation workflow and troubleshooting                                                                           |
+| `docs/maintainers/workspace-recovery.md`      | Authorized maintainers             | Value-free private-workspace and machine-local configuration recovery                                                               |
 | `AGENTS.md`                                   | All AI coding agents               | Canonical operating context — architecture, env, CI, testing, agent routing, known limitations                                      |
 | `CLAUDE.md`                                   | Claude Code                        | Thin `@AGENTS.md` importer; Claude-only mechanics (subagents, skills). Rarely changes.                                              |
 | `.claude/agents/go-services.md`               | go-services subagent               | Go/Gin patterns, JWT/auth, Bungie OAuth, manifest flow, endpoints                                                                   |
@@ -56,16 +60,10 @@ this split exists to eliminate.
 - raw or oversized API research dumps
 - secret rotation records and environment-specific commands
 
-The docs-updater may update these private planning files only when explicitly
-asked or when the active task already changed them:
-
-| File                              | Audience           | What it covers                                |
-| --------------------------------- | ------------------ | --------------------------------------------- |
-| `private/IMPLEMENTATION_PLAN.md`  | Developer          | Detailed internal implementation planning     |
-| `private/archive.md`              | Developer          | Internal shipped-work archive                 |
-| `private/InfraTODO.md`            | Developer/operator | Private infrastructure decisions and runbooks |
-| `private/security-limitations.md` | Developer          | Private security limitations and follow-ups   |
-| `private/BungieAPI.md`            | Developer          | Raw Bungie API research notes                 |
+`private/README.md` is the sole index for the private repository's current
+layout. Read it before working there; do not cache private filenames in this
+public agent guide. Update private content only when explicitly asked or when
+the active task already changed it.
 
 Do not auto-copy private content into public docs. Public docs can say that a
 private runbook exists, but must not include private commands, secrets, resource
@@ -108,6 +106,9 @@ names, or exploit details.
 - `docs/architecture.md`: runtime/infrastructure summary
 - `.claude/agents/docker-containers.md` or `kubernetes-infrastructure.md`
 - `README.md`: only if quick start changes
+- `k8s/README.md`: when the Minikube workflow or prerequisites change
+- `docs/maintainers/workspace-recovery.md`: only when the public recovery
+  contract changes
 
 **CI workflow or branch-protection changed**
 
@@ -134,11 +135,14 @@ names, or exploit details.
 Before writing, verify against actual code. Prefer Read/Grep/Glob so the checks
 are portable and permission-free:
 
-- API endpoints: grep `(GET|POST|PUT|DELETE|PATCH)\(` in `backend/api-service/main.go`
+- API endpoints: grep `(GET|POST|PUT|DELETE|PATCH)\(` in
+  `backend/api-service/api/router.go`
 - JWT claims: grep `Claims\[|MapClaims|token_type` in `backend/api-service/auth/jwt.go`
 - Env vars: grep `Getenv|getEnv|getIntEnv` in `backend/api-service/config/config.go`
-- Docker base images: grep `^FROM` with glob `**/Dockerfile*`
-- K8s manifests: glob `k8s/*.yaml`
+- Docker base images: grep `^FROM` in the Dockerfiles; read Compose/workflow
+  `image:` values from their YAML rather than copying versions from docs
+- K8s topology: inspect tracked `k8s/*.yaml`, the startup/shutdown scripts, and
+  `k8s/api-service-secret.yaml.example`; never read the ignored local Secret
 - Frontend features: glob `frontend/src/features/**/*.tsx`
 - Frontend queries/helpers: grep `apiFetch|useQuery|useMutation` in `frontend/src`
 - Migrations: glob `backend/api-service/db/migrations/*.sql`
