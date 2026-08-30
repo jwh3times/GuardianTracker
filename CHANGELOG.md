@@ -12,6 +12,10 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [1.2.9] - 2026-08-30
+
 ### Fixed
 
 - Accepted whitespace-bearing 1Password secret references when their dotenv
