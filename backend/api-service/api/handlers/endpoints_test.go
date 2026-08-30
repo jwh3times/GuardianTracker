@@ -153,6 +153,9 @@ func TestSearchHandler_NotReadyKicksIndexBuild(t *testing.T) {
 	dbPath := searchManifestDB(t)
 	ms := bungie.NewManifestService(bungie.NewClient("k", "http://unused", 100, 100), dbPath, time.Hour)
 	svc := search.NewService(ms, dbPath)
+	// IsReady becomes true before the asynchronous build persists its snapshot.
+	// Drain the full build lifecycle before TempDir removes the manifest directory.
+	t.Cleanup(svc.CloseForSwap)
 	if svc.IsReady() {
 		t.Fatal("index should start unbuilt — nothing has called BuildIndex")
 	}

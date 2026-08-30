@@ -1,8 +1,9 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
+import { QueryClient } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
-import { API, server } from "../../test/testServer";
+import { API, sampleWeekly, server } from "../../test/testServer";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { Dashboard } from "./Dashboard";
 
@@ -44,6 +45,64 @@ describe("Dashboard page", () => {
   it("greets the current Guardian Tracker user", async () => {
     renderDashboard();
     expect(await screen.findByText(/^Welcome, /)).toBeInTheDocument();
+  });
+
+  it("omits the weekly reset countdown while weekly data is loading", async () => {
+    let weeklyRequested = false;
+    let releaseWeekly: ((response: Response) => void) | undefined;
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () => {
+        weeklyRequested = true;
+        return new Promise<Response>((resolve) => {
+          releaseWeekly = resolve;
+        });
+      }),
+    );
+
+    renderDashboard();
+    await waitFor(() => expect(weeklyRequested).toBe(true));
+
+    try {
+      expect(screen.queryByText("Weekly reset")).not.toBeInTheDocument();
+    } finally {
+      releaseWeekly?.(HttpResponse.json(sampleWeekly));
+    }
+
+    const resetLabel = await screen.findByText("Weekly reset");
+    expect(resetLabel.closest(".gt-chip--count")).toHaveTextContent(
+      /Weekly reset\s*2d 4h/,
+    );
+  });
+
+  it("shows the actual weekly reset countdown when weekly data loads", async () => {
+    renderDashboard();
+
+    const resetLabel = await screen.findByText("Weekly reset");
+    expect(resetLabel.closest(".gt-chip--count")).toHaveTextContent(
+      /Weekly reset\s*2d 4h/,
+    );
+  });
+
+  it("omits a cached weekly reset countdown when a refetch fails", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderWithProviders(<Dashboard />, { client });
+    expect(await screen.findByText("Weekly reset")).toBeInTheDocument();
+
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ["weekly", null] });
+    });
+
+    expect(
+      await screen.findAllByText(/couldn't load this week's data/i),
+    ).toHaveLength(2);
+    expect(screen.queryByText("Weekly reset")).not.toBeInTheDocument();
   });
 
   it("shows the privacy error state when collections is blocked", async () => {
@@ -88,6 +147,7 @@ describe("Dashboard page", () => {
       /couldn't load this week's data/i,
     );
     expect(degraded).toHaveLength(2);
+    expect(screen.queryByText("Weekly reset")).not.toBeInTheDocument();
     // Collections hero still renders real numbers:
     expect(await screen.findByText(/overall/i)).toBeInTheDocument();
   });

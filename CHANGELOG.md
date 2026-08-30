@@ -12,7 +12,10 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
-No unreleased changes.
+### Fixed
+
+- Omitted the Dashboard's weekly reset countdown while weekly data is loading
+  or unavailable instead of displaying a fabricated zero-minute reset.
 
 ## [1.2.7] - 2026-08-28
 

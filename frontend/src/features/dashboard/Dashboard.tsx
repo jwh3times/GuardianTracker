@@ -116,11 +116,13 @@ export function Dashboard() {
         title={displayName ? `Welcome, ${displayName}` : "Welcome"}
         sub="Your collection at a glance"
         right={
-          <CountdownChip
-            prefix="Weekly reset"
-            time={weeklyData?.resetIn ?? { d: 0, h: 0, m: 0 }}
-            icon="clock"
-          />
+          !weeklyFailed && weeklyData?.resetIn ? (
+            <CountdownChip
+              prefix="Weekly reset"
+              time={weeklyData.resetIn}
+              icon="clock"
+            />
+          ) : undefined
         }
       />
 
