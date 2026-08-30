@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -11,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { spawnSync } from "node:child_process";
 
 const projectRoot = join(import.meta.dirname, "..");
@@ -135,6 +136,52 @@ function createMarkerOp(root) {
   writeFileSync(path, `#!/bin/sh\n: > '${markerPath}'\nexit 23\n`);
   chmodSync(path, 0o700);
   return { path, markerPath };
+}
+
+function createInspectingOp(root) {
+  const privateConfig = join(root, ".private-workspace");
+  const executableDirectory = join(privateConfig, "fake-op-bin");
+  const markerPath = join(privateConfig, "op-env-file.marker");
+  mkdirSync(executableDirectory, { recursive: true });
+  if (process.platform === "win32") {
+    copyFileSync(process.execPath, join(executableDirectory, "op.exe"));
+    writeFileSync(
+      join(root, "run"),
+      [
+        'const { readFileSync, writeFileSync } = require("node:fs");',
+        `const markerPath = ${JSON.stringify(markerPath)};`,
+        "const args = process.argv.slice(2);",
+        'const envFileIndex = args.indexOf("--env-file");',
+        "if (envFileIndex < 0 || !args[envFileIndex + 1]) process.exit(24);",
+        'writeFileSync(markerPath, readFileSync(args[envFileIndex + 1], "utf8"));',
+        "process.exit(23);",
+        "",
+      ].join("\n"),
+    );
+  } else {
+    const implementationPath = join(executableDirectory, "inspect-op.mjs");
+    writeFileSync(
+      implementationPath,
+      [
+        'import { readFileSync, writeFileSync } from "node:fs";',
+        `const markerPath = ${JSON.stringify(markerPath)};`,
+        "const args = process.argv.slice(2);",
+        'if (args[0] === "--version") process.exit(0);',
+        'const envFileIndex = args.indexOf("--env-file");',
+        "if (envFileIndex < 0 || !args[envFileIndex + 1]) process.exit(24);",
+        'writeFileSync(markerPath, readFileSync(args[envFileIndex + 1], "utf8"));',
+        "process.exit(23);",
+        "",
+      ].join("\n"),
+    );
+    const executablePath = join(executableDirectory, "op");
+    writeFileSync(
+      executablePath,
+      `#!/bin/sh\nexec '${process.execPath.replaceAll("'", "'\\''")}' "\${0%/*}/inspect-op.mjs" "$@"\n`,
+    );
+    chmodSync(executablePath, 0o700);
+  }
+  return { executableDirectory, markerPath };
 }
 
 function createFakeGit(root) {
@@ -571,6 +618,113 @@ test("failed 1Password authorization is sanitized and changes no files", () => {
   }
 });
 
+test("bootstrap accepts a quoted whitespace-bearing 1Password reference", () => {
+  const root = makePublicFixture();
+  const referenceSentinel = "op://PRIVATE VAULT/PRIVATE ITEM/PRIVATE FIELD";
+  try {
+    mkdirSync(join(root, ".private-workspace"));
+    writeFileSync(
+      join(root, ".private-workspace", "repository.env.ref"),
+      `GUARDIAN_PRIVATE_REPOSITORY_URL="${referenceSentinel}"\n`,
+    );
+    const fakeOp = createMarkerOp(root);
+    const result = runPowerShell(bootstrapScript, root, [
+      "-PrivateFromOnePassword",
+      "-OpExecutable",
+      fakeOp.path,
+    ]);
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(fakeOp.markerPath), true);
+    assert.doesNotMatch(
+      combinedOutput(result),
+      /must contain exactly one approved variable mapping/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Node bootstrap quotes a whitespace-bearing 1Password reference", () => {
+  const root = makePublicFixture();
+  const referenceSentinel = "op://PRIVATE VAULT/PRIVATE ITEM/PRIVATE FIELD";
+  try {
+    mkdirSync(join(root, "scripts"));
+    writeFileSync(
+      join(root, "scripts", "bootstrap-private.mjs"),
+      readFileSync(join(projectRoot, "scripts", "bootstrap-private.mjs")),
+    );
+    const fakeOp = createInspectingOp(root);
+    const result = run(
+      process.execPath,
+      [
+        join(root, "scripts", "bootstrap-private.mjs"),
+        "--op-reference",
+        referenceSentinel,
+      ],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${fakeOp.executableDirectory}${delimiter}${process.env.PATH}`,
+        },
+      },
+    );
+    assert.ifError(result.error);
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(fakeOp.markerPath), true, combinedOutput(result));
+    assert.equal(
+      readFileSync(fakeOp.markerPath, "utf8"),
+      `GUARDIAN_PRIVATE_REPOSITORY_URL="${referenceSentinel}"\n`,
+    );
+    assert.doesNotMatch(
+      combinedOutput(result),
+      /--op-reference must be a single/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Node bootstrap accepts a quoted whitespace-bearing reference file", () => {
+  const root = makePublicFixture();
+  const referenceSentinel = "OP://PRIVATE VAULT/PRIVATE ITEM/PRIVATE FIELD";
+  try {
+    mkdirSync(join(root, "scripts"));
+    writeFileSync(
+      join(root, "scripts", "bootstrap-private.mjs"),
+      readFileSync(join(projectRoot, "scripts", "bootstrap-private.mjs")),
+    );
+    mkdirSync(join(root, ".private-workspace"));
+    const assignment = `GUARDIAN_PRIVATE_REPOSITORY_URL="${referenceSentinel}"\n`;
+    writeFileSync(
+      join(root, ".private-workspace", "repository.env.ref"),
+      assignment,
+    );
+    const fakeOp = createInspectingOp(root);
+    const result = run(
+      process.execPath,
+      [join(root, "scripts", "bootstrap-private.mjs")],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${fakeOp.executableDirectory}${delimiter}${process.env.PATH}`,
+        },
+      },
+    );
+    assert.ifError(result.error);
+    assert.notEqual(result.status, 0);
+    assert.equal(existsSync(fakeOp.markerPath), true, combinedOutput(result));
+    assert.equal(readFileSync(fakeOp.markerPath, "utf8"), assignment);
+    assert.doesNotMatch(
+      combinedOutput(result),
+      /reference file must contain exactly one approved variable mapping/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("bootstrap rejects extra 1Password environment mappings before authorization", () => {
   const root = makePublicFixture();
   const noisySentinel = "OP-MUST-NOT-RUN-EXTRA-MAPPING";
@@ -757,7 +911,7 @@ test("1Password mode forwards only the resolved URL into the internal bootstrap"
     mkdirSync(join(root, ".private-workspace"));
     writeFileSync(
       join(root, ".private-workspace", "repository.env.ref"),
-      "GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>\n",
+      'GUARDIAN_PRIVATE_REPOSITORY_URL="op://TEST VAULT/TEST ITEM/TEST FIELD"\n',
     );
     const fakeGit = createFakeGit(root);
     const fakeOp = createForwardingOp(root, repositoryUrl, fakeGit.path);

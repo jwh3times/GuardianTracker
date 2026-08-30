@@ -207,7 +207,31 @@ function Test-ReferenceFileStructure {
         if ($trimmed.Length -eq 0 -or $trimmed.StartsWith("#")) {
             continue
         }
-        if ($trimmed -notmatch '^GUARDIAN_PRIVATE_REPOSITORY_URL=op://\S+$') {
+        $assignmentPrefix = "GUARDIAN_PRIVATE_REPOSITORY_URL="
+        if (-not $trimmed.StartsWith($assignmentPrefix, [StringComparison]::Ordinal)) {
+            return $false
+        }
+        $reference = $trimmed.Substring($assignmentPrefix.Length)
+        if ($reference.StartsWith('"', [StringComparison]::Ordinal)) {
+            if ($reference.Length -lt 2 -or -not $reference.EndsWith('"', [StringComparison]::Ordinal)) {
+                return $false
+            }
+            $reference = $reference.Substring(1, $reference.Length - 2)
+            if ($reference.Contains('"')) {
+                return $false
+            }
+        }
+        elseif ($reference.Contains('"') -or $reference -match '\s') {
+            return $false
+        }
+        if (-not $reference.StartsWith('op://', [StringComparison]::OrdinalIgnoreCase)) {
+            return $false
+        }
+        $parts = @($reference.Substring('op://'.Length) -split '/')
+        if (
+            $parts.Count -notin @(3, 4) -or
+            @($parts | Where-Object { $_ -notmatch '^[A-Za-z0-9._ -]+$' -or $_ -notmatch '[A-Za-z0-9._-]' }).Count -ne 0
+        ) {
             return $false
         }
         $assignments++

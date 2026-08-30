@@ -24,6 +24,13 @@ To resolve it with 1Password, create the ignored machine-local file
 GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>
 ```
 
+If any reference segment contains whitespace, double-quote the complete value in
+the dotenv file:
+
+```dotenv
+GUARDIAN_PRIVATE_REPOSITORY_URL="op://<vault name>/<item name>/<field>"
+```
+
 Make the approved least-privilege 1Password service-account credential available
 to the current process through the maintainer's secure delivery mechanism. Do not
 put it in a command, profile, workspace file, or transcript. Confirm that
@@ -84,9 +91,16 @@ checkout and the main checkout for the machine-local reference file:
 npm run bootstrap:private
 ```
 
-Use `-- --op-reference op://...` or `-- --url <credential-free-GitHub-URL>` only
-when intentionally overriding the reference file. The resolved URL is not placed
-in process arguments or terminal output.
+Use the quoted shell form when intentionally overriding the reference file,
+especially when a reference segment contains whitespace:
+
+```powershell
+npm run bootstrap:private -- --op-reference "op://<vault name>/<item name>/<field>"
+```
+
+The alternative `-- --url <credential-free-GitHub-URL>` override accepts only a
+credential-free URL. The resolved URL is not placed in process arguments or
+terminal output.
 
 ## Recovery Boundaries
 

@@ -3,7 +3,7 @@
 // checkout or git worktree, resolving its location through 1Password.
 //
 //   npm run bootstrap:private                       # reference from .private-workspace/repository.env.ref
-//   npm run bootstrap:private -- --op-reference op://<vault>/<item>/<field>
+//   npm run bootstrap:private -- --op-reference "op://<vault>/<item>/<field>"
 //   npm run bootstrap:private -- --url https://github.com/<owner>/<repo>.git
 //
 // The reference file is looked up in this checkout first and then in the main
@@ -28,6 +28,8 @@ import { spawnSync } from "node:child_process";
 const VARIABLE = "GUARDIAN_PRIVATE_REPOSITORY_URL";
 const ALIAS = "guardian-private:";
 const REFERENCE_FILE = join(".private-workspace", "repository.env.ref");
+const REFERENCE_ASSIGNMENT = `${VARIABLE}=`;
+const REFERENCE_PART = /^[A-Za-z0-9._ -]+$/u;
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repositoryRoot = resolve(dirname(scriptPath), "..");
@@ -79,6 +81,30 @@ function isValidCloneUrl(value) {
   );
 }
 
+function isValidSecretReference(value) {
+  if (!/^op:\/\//iu.test(value ?? "")) return false;
+  const parts = value.slice("op://".length).split("/");
+  return (
+    [3, 4].includes(parts.length) &&
+    parts.every(
+      (part) => REFERENCE_PART.test(part) && /[A-Za-z0-9._-]/u.test(part),
+    )
+  );
+}
+
+function parseReferenceAssignment(line) {
+  if (!line.startsWith(REFERENCE_ASSIGNMENT)) return null;
+  let reference = line.slice(REFERENCE_ASSIGNMENT.length);
+  if (reference.startsWith('"')) {
+    if (reference.length < 2 || !reference.endsWith('"')) return null;
+    reference = reference.slice(1, -1);
+    if (reference.includes('"')) return null;
+  } else if (reference.includes('"') || /\s/u.test(reference)) {
+    return null;
+  }
+  return isValidSecretReference(reference) ? reference : null;
+}
+
 function parseArguments() {
   const options = { url: null, reference: null, internal: false };
   for (let index = 2; index < process.argv.length; index += 1) {
@@ -125,7 +151,7 @@ function isWellFormedReferenceFile(path) {
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
-    if (!new RegExp(`^${VARIABLE}=op://\\S+$`, "u").test(trimmed)) return false;
+    if (!parseReferenceAssignment(trimmed)) return false;
     assignments += 1;
   }
   return assignments === 1;
@@ -228,13 +254,15 @@ if (options.url) {
 let envFile = null;
 let temporaryEnvDirectory = null;
 if (options.reference) {
-  if (!/^op:\/\/\S+$/u.test(options.reference))
+  if (!isValidSecretReference(options.reference))
     fail(
       "--op-reference must be a single op://<vault>/<item>/<field> reference.",
     );
   temporaryEnvDirectory = mkdtempSync(join(tmpdir(), "guardian-private-ref-"));
   envFile = join(temporaryEnvDirectory, "repository.env.ref");
-  writeFileSync(envFile, `${VARIABLE}=${options.reference}\n`, { mode: 0o600 });
+  writeFileSync(envFile, `${VARIABLE}="${options.reference}"\n`, {
+    mode: 0o600,
+  });
 } else {
   envFile = findReferenceFile();
   if (!envFile) {
