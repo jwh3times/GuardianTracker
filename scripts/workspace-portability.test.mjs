@@ -145,10 +145,8 @@ function createAuthorizationFailingOp(root) {
   );
   mkdirSync(executableDirectory, { recursive: true });
   if (process.platform === "win32") {
-    writeFileSync(
-      join(executableDirectory, "op.cmd"),
-      '@if "%1"=="--version" exit /b 0\r\n@exit /b 23\r\n',
-    );
+    copyFileSync(process.execPath, join(executableDirectory, "op.exe"));
+    writeFileSync(join(root, "run"), "process.exit(23);\n");
   } else {
     const path = join(executableDirectory, "op");
     writeFileSync(
