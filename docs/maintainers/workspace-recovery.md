@@ -82,6 +82,31 @@ The restored private repository's `README.md` is the index for private plans,
 operations, risks, references, archives, and encrypted-backup procedure. Follow
 that private guidance for backup rotation; public docs remain value-free.
 
+## Synchronize Main Branches
+
+From the public repository root, synchronize both installed repositories:
+
+```powershell
+npm run sync:main
+```
+
+The helper first requires clean working trees in the public checkout and the
+optional independent `private/` repository. If either preflight fails, neither
+repository is switched or updated. It then fetches and prunes `origin`, switches
+each checkout to the fixed `main` branch, and fast-forwards from `origin/main`.
+A missing `private/` repository is reported and skipped.
+
+The helper exits nonzero when a repository is dirty, invalid, cannot fetch, or
+has diverged from `origin/main`. It preserves local work: it does not stash,
+discard commits, create merge commits, or rewrite history. Resolve the reported
+condition and run it again.
+
+To synchronize only the public repository:
+
+```powershell
+npm run sync:main -- --skip-private
+```
+
 ## New Git Worktrees
 
 The Node bootstrap entry point supports worktrees and searches both the current

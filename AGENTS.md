@@ -163,6 +163,14 @@ private repository location or real 1Password identifiers in public docs.
 `npm run bootstrap:private` (from the repo root) is the Node equivalent for new
 git worktrees; it reuses the main checkout's reference file.
 
+From the repo root, `npm run sync:main` preflights the public checkout and the
+optional independent `private/` repository for uncommitted changes, fetches and
+prunes `origin`, switches each checkout to `main`, and fast-forwards it from
+`origin/main`. A failed preflight prevents either repository from being changed;
+diverged history fails without a merge commit or history rewrite. A missing
+`private/` repository is skipped. Use `npm run sync:main -- --skip-private` to
+update only the public checkout.
+
 The complete value-free recovery, verification, worktree, and backup handoff is
 in `docs/maintainers/workspace-recovery.md`. The restored private repository's
 `README.md` is the sole index for its internal file layout.
@@ -235,10 +243,10 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/documentation-links.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/documentation-links.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
-   Go security-tool, Node-version, PostgreSQL-image, workspace-portability, and local
-   documentation-link policies. The Node policy keeps
+   Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
+   main-branch synchronization, and local documentation-link policies. The Node policy keeps
    `.nvmrc`, both workflows, both frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as

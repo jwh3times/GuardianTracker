@@ -12,7 +12,11 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
-No unreleased changes.
+### Added
+
+- Added `npm run sync:main` to safely move clean public and optional private
+  checkouts to `main` and fast-forward them from `origin/main`, with a
+  `--skip-private` option for public-only synchronization.
 
 ## [1.2.16] - 2026-09-02
 
