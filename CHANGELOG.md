@@ -12,7 +12,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
-No unreleased changes.
+### Fixed
+
+- Prevented in-flight Records enrichment loads from repopulating the shared
+  weapon-type, exotic-weapon, or catalyst-link caches after a Manifest swap;
+  raw per-membership Bungie profile records retain their existing cache
+  behavior.
 
 ## [1.2.15] - 2026-09-02
 

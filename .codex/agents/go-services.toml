@@ -96,7 +96,7 @@ backend/api-service/
                                            Publish installs only while it is current, Advance retires
                                            outstanding work and runs the owner's invalidation atomically.
                                            Advance's signature matches OnVersionChanged.
-                                           ITEMS IS THE FIRST ADOPTER. Records, Weekly, Collections and
+                                           Items and Records have adopted it. Weekly, Collections and
                                            Efficiency still invalidate without a fence and adopt it in
                                            their own refactor slices.
   services/manifeststate/load.go       ← Load/LoadIf: cache.Load semantics plus the fence. A value loaded
@@ -118,7 +118,8 @@ backend/api-service/
                                            aborted mid-scan if a swap starts
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; OnVersionChanged (ManifestObserver)
-                                           evicts its three manifest-derived cache keys
+                                           advances its owner-local publication and evicts its three
+                                           manifest-derived cache keys
   services/sources/sources.go          ← AcquisitionSource/DescribeAll plus the Destiny source-string
                                            vocabulary: Difficulty, IsRaidOrDungeon, ActionKind,
                                            MilestoneCategory — one faceted keyword table, not four
@@ -405,7 +406,7 @@ serves; it registers no routes itself.
 - `GetCatalysts / GetCrafting / GetSeals` return `([]T, time.Time, error)` — second value is `fetchedAt`
 - `Catalyst` struct has `Type` (weapon type), `Icon` (record icon), and `Effect` (catalyst-perk effect text) fields
 - `Effect` is resolved by `resolveCatalystEffect`: links the catalyst record to its weapon via `GetCatalystLinks()` objective-hash overlap first (unambiguous on both the weapon and record side), then a stripped-name match, then a catalyst-plug-name match, falling back to the record's own description and then `""`
-- `OnVersionChanged` (`bungie.ManifestObserver`) evicts its three manifest-derived cache keys (weapon types, exotic weapons, catalyst links) so stale labels don't outlive a swap; per-user `records:*` profile entries are untouched — they hold raw Bungie data, which a manifest swap does not invalidate
+- The three Manifest-derived projections (weapon types, exotic weapons, catalyst links) load through `manifeststate.LoadIf` under one owner-local publication. `OnVersionChanged` (`bungie.ManifestObserver`) advances that publication and evicts exactly those keys, so an in-flight old-generation load may finish for its caller but cannot repopulate the shared cache. Per-user `records:*` profile entries are untouched — they hold raw Bungie data, which a manifest swap does not invalidate
 - `InvalidateCache(membershipType, membershipId)` drops cached profile records (called by RefreshCollections)
 - `Triumph.Objectives []TriumphObjective` (`omitempty`) — per-objective drill-down built by `GetSeals`: excludes explicitly-hidden objectives (`RecordObjective.Visible *bool`; `nil` = absent = visible — a plain `bool` would decode Bungie's absent-field-means-visible default backwards), falls back to `Objective N` for a blank `progressDescription` (numbered over the objectives that survive visibility filtering), normalizes a zero `completionValue` to `Max=1`, and forces `Done=true`/`Cur==Max` on every objective when the parent record is redeemed regardless of stale objective payloads. The existing top-level `Triumph.Cur`/`Max` is unchanged for response compatibility.
 

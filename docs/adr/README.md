@@ -14,10 +14,10 @@ Each record's `Status` line states whether its decision is merely accepted or
 actually built:
 
 - **Accepted** — the decision holds and describes how the code works.
-- **Accepted — implementation sequenced in #172** — the decision holds, but the
-  code does not work this way yet. ADRs 0014–0021 are architecture decisions
-  whose implementation is sequenced slice by slice; read them as plans, not as
-  descriptions of current behavior.
+- **Accepted — implementation sequenced in #172** — the decision holds, but its
+  full implementation has not landed. ADRs 0014–0021 are architecture decisions
+  delivered slice by slice; consult the index and implementation notes for what
+  is current rather than treating every owner or phase as already built.
 - **Accepted — implemented in `vX.Y.Z`** — a sequenced decision whose
   implementation has landed.
 
@@ -43,7 +43,7 @@ other. See [ADR 0021](./0021-own-preferences-synchronization.md), the first one.
 | [0011](./0011-route-table-as-a-testable-composition-root.md)     | Route table as a testable composition root     | Current                                                                           |
 | [0012](./0012-session-issuance-owns-the-session-lifecycle.md)    | Session issuance owns the session lifecycle    | Current                                                                           |
 | [0013](./0013-own-the-application-cache-contract.md)             | Application cache ownership                    | Current                                                                           |
-| [0014](./0014-own-manifest-derived-publication.md)               | Manifest-derived publication ownership         | Sequenced; generation fence landed in `v1.0.14`, adoption continues               |
+| [0014](./0014-own-manifest-derived-publication.md)               | Manifest-derived publication ownership         | Sequenced; fence landed in `v1.0.14`; Items and Records adopted; others continue  |
 | [0015](./0015-own-item-acquisition-facts-in-items.md)            | Item acquisition facts owned by Items          | Sequenced; Items slice landed in `v1.0.15`, downstream adoption continues         |
 | [0016](./0016-own-acquisition-recommendation-outcomes.md)        | Acquisition recommendation outcomes            | Sequenced                                                                         |
 | [0017](./0017-own-the-browser-session-projection.md)             | Browser session projection                     | Sequenced                                                                         |

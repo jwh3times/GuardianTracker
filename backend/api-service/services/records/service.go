@@ -13,6 +13,7 @@ import (
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/manifeststate"
 )
 
 // Record state bit flags from the Bungie API.
@@ -125,16 +126,28 @@ type ManifestRepo interface {
 
 // Service handles catalysts, crafting, and seals data.
 type Service struct {
-	bungie   *bungie.Client
-	manifest ManifestRepo // may be nil in degraded mode
-	cache    cache.Cache
-	ttl      time.Duration
+	bungie      *bungie.Client
+	manifest    ManifestRepo // may be nil in degraded mode
+	cache       cache.Cache
+	ttl         time.Duration
+	publication *manifeststate.Publication
 }
 
 // NewService creates a new records Service.
 // manifest may be nil — all methods return empty slices gracefully when it is.
 func NewService(b *bungie.Client, m ManifestRepo, c cache.Cache, ttl time.Duration) *Service {
-	return &Service{bungie: b, manifest: m, cache: c, ttl: ttl}
+	s := &Service{bungie: b, manifest: m, cache: c, ttl: ttl}
+	s.publication = manifeststate.New(s.invalidateManifestProjections)
+	return s
+}
+
+func (s *Service) invalidateManifestProjections() {
+	if s.cache == nil {
+		return
+	}
+	s.cache.Delete(weaponTypesCacheKey)
+	s.cache.Delete(exoticWeaponsCacheKey)
+	s.cache.Delete(catalystLinksCacheKey)
 }
 
 // weaponTypesCacheKey is the cache key for the weapon name→type map. Evicted by
@@ -157,7 +170,7 @@ func recordHashKey(hash uint32) string {
 // used to enrich catalyst and crafting entries (B10). Failures return an empty
 // map (entries fall back to a generic type) and are not cached.
 func (s *Service) weaponTypesByName(ctx context.Context) map[string]string {
-	m, err := cache.LoadIf(ctx, s.cache, weaponTypesCacheKey, time.Hour,
+	m, err := manifeststate.LoadIf(ctx, s.publication, s.cache, weaponTypesCacheKey, time.Hour,
 		func() (map[string]string, error) { return s.manifest.GetWeaponTypesByName() }, cache.NonEmptyMap)
 	if err != nil || len(m) == 0 {
 		return map[string]string{}
@@ -170,7 +183,7 @@ func (s *Service) weaponTypesByName(ctx context.Context) map[string]string {
 // Failures return an empty map (entries fall back to a type glyph) and are not
 // cached.
 func (s *Service) exoticWeaponsByName(ctx context.Context) map[string]manifestrepo.ExoticWeapon {
-	m, err := cache.LoadIf(ctx, s.cache, exoticWeaponsCacheKey, time.Hour,
+	m, err := manifeststate.LoadIf(ctx, s.publication, s.cache, exoticWeaponsCacheKey, time.Hour,
 		func() (map[string]manifestrepo.ExoticWeapon, error) { return s.manifest.GetExoticWeaponsByName() }, cache.NonEmptyMap)
 	if err != nil || len(m) == 0 {
 		return map[string]manifestrepo.ExoticWeapon{}
@@ -225,7 +238,7 @@ const catalystLinksCacheKey = "manifest:catalystLinks"
 // return nil (every record then falls back to its own description) and are not
 // cached.
 func (s *Service) catalystLinks(ctx context.Context) []manifestrepo.CatalystLink {
-	links, err := cache.LoadIf(ctx, s.cache, catalystLinksCacheKey, time.Hour,
+	links, err := manifeststate.LoadIf(ctx, s.publication, s.cache, catalystLinksCacheKey, time.Hour,
 		func() ([]manifestrepo.CatalystLink, error) { return s.manifest.GetCatalystLinks() }, cache.NonEmptySlice)
 	if err != nil {
 		return nil
@@ -373,10 +386,7 @@ func (s *Service) InvalidateCache(membershipType int, membershipID string) {
 // The per-user `records:*` entries are deliberately left alone — they hold raw
 // Bungie profile data, which a manifest swap does not invalidate.
 func (s *Service) OnVersionChanged(version string) error {
-	s.cache.Delete(weaponTypesCacheKey)
-	s.cache.Delete(exoticWeaponsCacheKey)
-	s.cache.Delete(catalystLinksCacheKey)
-	return nil
+	return s.publication.Advance(version)
 }
 
 // getProfileRecords fetches and caches the profile records component (900) for a user.
