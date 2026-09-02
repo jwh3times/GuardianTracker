@@ -12,10 +12,40 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [1.2.14] - 2026-09-02
+
 ### Fixed
 
 - Removed the Node private-workspace bootstrap's temporary 1Password reference
   directory when the CLI is unavailable or authorization fails.
+
+## [1.2.13] - 2026-09-01
+
+### Changed
+
+- Refreshed the pinned nginx 1.31.4 frontend runtime image digest.
+
+## [1.2.12] - 2026-09-01
+
+### Changed
+
+- Updated local and container frontend tooling from Node.js 26.7.0 to 26.8.1.
+
+## [1.2.11] - 2026-09-01
+
+### Changed
+
+- Updated React Router from 8.3.0 to 8.3.1.
+
+## [1.2.10] - 2026-09-01
+
+### Changed
+
+- Updated `@tanstack/react-query` from 5.102.3 to 5.102.8,
+  `@testing-library/react` from 16.3.2 to 16.3.3, `@types/node` from 26.3.0 to
+  26.4.0, and `@vitejs/plugin-react` from 6.1.0 to 6.1.1.
 
 ## [1.2.9] - 2026-08-30
 
@@ -131,7 +161,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.7...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.14...HEAD
+[1.2.14]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.13...v1.2.14
+[1.2.13]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.12...v1.2.13
+[1.2.12]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.11...v1.2.12
+[1.2.11]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.10...v1.2.11
+[1.2.10]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.9...v1.2.10
+[1.2.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.8...v1.2.9
+[1.2.8]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.4...v1.2.5
