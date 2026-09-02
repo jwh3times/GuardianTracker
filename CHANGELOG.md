@@ -12,6 +12,10 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [1.2.16] - 2026-09-02
+
 ### Fixed
 
 - Prevented in-flight Records enrichment loads from repopulating the shared
@@ -173,7 +177,8 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.15...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.16...HEAD
+[1.2.16]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.15...v1.2.16
 [1.2.15]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.12...v1.2.13
