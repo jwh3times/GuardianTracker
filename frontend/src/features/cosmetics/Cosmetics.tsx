@@ -140,17 +140,17 @@ export function Cosmetics() {
           {owned}/{bucket.length} collected
         </span>
       </div>
-      {shown.length === 0 ? (
-        <p className="gt-cosmetic-empty">Nothing to show for this filter.</p>
-      ) : (
-        <CosmeticsGrid
-          items={shown}
-          onOpen={setSelected}
-          id="cosmetics-panel"
-          role="tabpanel"
-          aria-labelledby={activeTab ? `cosmetics-tab-${activeTab}` : undefined}
-        />
-      )}
+      <div
+        id="cosmetics-panel"
+        role="tabpanel"
+        aria-labelledby={activeTab ? `cosmetics-tab-${activeTab}` : undefined}
+      >
+        {shown.length === 0 ? (
+          <p className="gt-cosmetic-empty">Nothing to show for this filter.</p>
+        ) : (
+          <CosmeticsGrid items={shown} onOpen={setSelected} />
+        )}
+      </div>
       <CosmeticDetail item={selected} onClose={() => setSelected(null)} />
     </div>
   );
