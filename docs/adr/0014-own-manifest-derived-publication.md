@@ -3,6 +3,11 @@
 - Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-16
 
+Implementation is incremental: the shared fence landed in `v1.0.14`, and Items
+and Records now use owner-local publications. Weekly, Collections, and
+Efficiency adoption remains sequenced work, so this ADR is not yet fully
+implemented.
+
 ## Context
 
 Manifest observers invalidate reusable state after a successful Manifest swap, as

@@ -56,6 +56,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - A get-or-compute-and-cache call site against `cache.Cache` must go through `cache.Load`/`cache.LoadIf` (`cache/load.go`), not a hand-written get + type-assert + conditional `Set`. Flag new code that reintroduces that pattern — `Load`/`LoadIf` are what guarantee an error is never cached and a wrong-typed entry is a logged miss instead of a silent permanent one. Exceptions exist only where the TTL depends on the freshly loaded value or the cache-hit path transforms and re-stores (`weekly.getPublicWeekly`, `collections.getAnalysis`).
 - "Do not cache an empty result" belongs in `LoadIf`'s `storeIf` predicate (`cache.NonEmptyMap`/`cache.NonEmptySlice` for the common cases), not a follow-up `if len(x) > 0 { cache.Set(...) }` after the fact.
 - `services/items` caches manifest projections by item hash outside `cache.Cache` (`boundedCache` in `services/items/boundedcache.go`) because it is size-capped with no TTL. Flag a new manifest-hash-keyed cache in that package that duplicates the eviction logic instead of using `boundedCache`.
+- `services/records` routes its three fixed Manifest-derived projection keys through `manifeststate.LoadIf` and advances the owner-local publication when the Manifest changes. Flag a Records projection load that bypasses this fence; raw per-user `records:*` Bungie profile entries deliberately remain outside it.
 
 **Migrations**
 

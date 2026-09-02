@@ -112,9 +112,10 @@ only while that generation is still current; a request that loses the race still
 returns its own coherent result but leaves nothing behind for anyone else.
 Advancing the generation and running the owner's invalidation are one
 transition, so a loader cannot observe a moved generation over uncleared state.
-**Items is the first owner to hold a publication**; Records, Weekly,
-Collections, and Efficiency still invalidate without one and adopt the fence
-as each is reworked. See
+Items and Records hold owner-local publications. Records fences the three fixed
+Manifest-derived lookup tables used to enrich its projections while leaving raw
+per-membership Bungie profile records untouched. Weekly, Collections, and
+Efficiency still invalidate without a fence and adopt it as each is reworked. See
 [ADR 0014](./adr/0014-own-manifest-derived-publication.md).
 
 `services/items` owns the canonical, user-independent facts about an item — its
