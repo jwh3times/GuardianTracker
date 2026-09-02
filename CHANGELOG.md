@@ -12,7 +12,10 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
-No unreleased changes.
+### Fixed
+
+- Removed the Node private-workspace bootstrap's temporary 1Password reference
+  directory when the CLI is unavailable or authorization fails.
 
 ## [1.2.9] - 2026-08-30
 

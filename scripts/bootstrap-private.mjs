@@ -276,34 +276,36 @@ if (options.reference) {
     );
   }
 }
-if (
-  spawnSync("op", ["--version"], { encoding: "utf8", windowsHide: true })
-    .status !== 0
-) {
-  fail("1Password CLI is not available. Pass --url to clone without it.");
-}
-
+let failureMessage = null;
 try {
-  const run = spawnSync(
-    "op",
-    [
-      "run",
-      "--env-file",
-      envFile,
-      "--",
-      process.execPath,
-      scriptPath,
-      "--internal-clone-from-environment",
-    ],
-    { stdio: ["ignore", "inherit", "inherit"], windowsHide: true },
-  );
-  if (run.status !== 0 || !existsSync(join(privateRoot, ".git"))) {
-    fail(
-      "1Password authorization or private workspace setup failed. Existing workspace files were not changed.",
+  if (
+    spawnSync("op", ["--version"], { encoding: "utf8", windowsHide: true })
+      .status !== 0
+  ) {
+    failureMessage =
+      "1Password CLI is not available. Pass --url to clone without it.";
+  } else {
+    const run = spawnSync(
+      "op",
+      [
+        "run",
+        "--env-file",
+        envFile,
+        "--",
+        process.execPath,
+        scriptPath,
+        "--internal-clone-from-environment",
+      ],
+      { stdio: ["ignore", "inherit", "inherit"], windowsHide: true },
     );
+    if (run.status !== 0 || !existsSync(join(privateRoot, ".git"))) {
+      failureMessage =
+        "1Password authorization or private workspace setup failed. Existing workspace files were not changed.";
+    }
   }
 } finally {
   if (temporaryEnvDirectory)
     rmSync(temporaryEnvDirectory, { recursive: true, force: true });
 }
+if (failureMessage) fail(failureMessage);
 console.log("Private companion installed at private/ through 1Password.");
