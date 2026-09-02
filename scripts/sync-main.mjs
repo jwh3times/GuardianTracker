@@ -101,14 +101,6 @@ function gitFailure(label, operation, result, redactErrors = false) {
   };
 }
 
-function pathsEqual(left, right) {
-  const resolvedLeft = resolve(left);
-  const resolvedRight = resolve(right);
-  return process.platform === "win32"
-    ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
-    : resolvedLeft === resolvedRight;
-}
-
 export function preflightRepository(root, label, options = {}, git = runGit) {
   const { requireIndependentGitDirectory = false, redactErrors = false } =
     options;
@@ -129,16 +121,16 @@ export function preflightRepository(root, label, options = {}, git = runGit) {
     };
   }
 
-  const topLevel = git(root, ["rev-parse", "--show-toplevel"]);
-  if (topLevel.status !== 0) {
+  const rootPrefix = git(root, ["rev-parse", "--show-prefix"]);
+  if (rootPrefix.status !== 0) {
     return gitFailure(
       label,
       "repository validation failed",
-      topLevel,
+      rootPrefix,
       redactErrors,
     );
   }
-  if (!pathsEqual(topLevel.stdout.trim(), root)) {
+  if (rootPrefix.stdout.trim()) {
     return {
       label,
       status: "failed",

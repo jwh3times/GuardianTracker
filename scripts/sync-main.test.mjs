@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, test } from "node:test";
@@ -88,6 +88,20 @@ test("a missing repository is skipped", () => {
   assert.equal(result.status, "skipped");
   assert.match(result.detail, /no Git repository/u);
 });
+
+test(
+  "an equivalent Windows path alias is accepted as the repository root",
+  { skip: process.platform !== "win32" },
+  () => {
+    const { clone } = repositoryPair();
+    const alias = join(temporaryDirectory(), "clone-alias");
+    symlinkSync(clone, alias, "junction");
+
+    const result = syncRepository(alias, "public");
+
+    assert.equal(result.status, "current");
+  },
+);
 
 test("main fast-forwards from origin/main", () => {
   const { clone, origin } = repositoryPair();
