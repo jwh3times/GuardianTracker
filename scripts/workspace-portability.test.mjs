@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -117,6 +118,44 @@ function createFailingOp(root, sentinel) {
   writeFileSync(path, `#!/bin/sh\necho '${sentinel}' >&2\nexit 23\n`);
   chmodSync(path, 0o700);
   return path;
+}
+
+function createUnavailableOp(root) {
+  const executableDirectory = join(
+    root,
+    ".private-workspace",
+    "unavailable-op-bin",
+  );
+  mkdirSync(executableDirectory, { recursive: true });
+  if (process.platform === "win32") {
+    writeFileSync(join(executableDirectory, "op.cmd"), "@exit /b 23\r\n");
+  } else {
+    const path = join(executableDirectory, "op");
+    writeFileSync(path, "#!/bin/sh\nexit 23\n");
+    chmodSync(path, 0o700);
+  }
+  return executableDirectory;
+}
+
+function createAuthorizationFailingOp(root) {
+  const executableDirectory = join(
+    root,
+    ".private-workspace",
+    "authorization-failing-op-bin",
+  );
+  mkdirSync(executableDirectory, { recursive: true });
+  if (process.platform === "win32") {
+    copyFileSync(process.execPath, join(executableDirectory, "op.exe"));
+    writeFileSync(join(root, "run"), "process.exit(23);\n");
+  } else {
+    const path = join(executableDirectory, "op");
+    writeFileSync(
+      path,
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then exit 0; fi\nexit 23\n',
+    );
+    chmodSync(path, 0o700);
+  }
+  return executableDirectory;
 }
 
 function createMarkerOp(root) {
@@ -680,6 +719,85 @@ test("Node bootstrap quotes a whitespace-bearing 1Password reference", () => {
       combinedOutput(result),
       /--op-reference must be a single/,
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Node bootstrap removes its temporary reference after an unavailable 1Password CLI", () => {
+  const root = makePublicFixture();
+  const temporaryRoot = join(root, "temporary");
+  try {
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(temporaryRoot);
+    writeFileSync(
+      join(root, "scripts", "bootstrap-private.mjs"),
+      readFileSync(join(projectRoot, "scripts", "bootstrap-private.mjs")),
+    );
+    const executableDirectory = createUnavailableOp(root);
+    const result = run(
+      process.execPath,
+      [
+        join(root, "scripts", "bootstrap-private.mjs"),
+        "--op-reference",
+        "op://PRIVATE-VAULT/PRIVATE-ITEM/PRIVATE-FIELD",
+      ],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${executableDirectory}${delimiter}${process.env.PATH}`,
+          TEMP: temporaryRoot,
+          TMP: temporaryRoot,
+          TMPDIR: temporaryRoot,
+        },
+      },
+    );
+    assert.ifError(result.error);
+    assert.notEqual(result.status, 0);
+    assert.match(combinedOutput(result), /1Password CLI is not available/);
+    assert.deepEqual(readdirSync(temporaryRoot), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Node bootstrap removes its temporary reference after failed 1Password authorization", () => {
+  const root = makePublicFixture();
+  const temporaryRoot = join(root, "temporary");
+  try {
+    mkdirSync(join(root, "scripts"));
+    mkdirSync(temporaryRoot);
+    writeFileSync(
+      join(root, "scripts", "bootstrap-private.mjs"),
+      readFileSync(join(projectRoot, "scripts", "bootstrap-private.mjs")),
+    );
+    const executableDirectory = createAuthorizationFailingOp(root);
+    const result = run(
+      process.execPath,
+      [
+        join(root, "scripts", "bootstrap-private.mjs"),
+        "--op-reference",
+        "op://PRIVATE-VAULT/PRIVATE-ITEM/PRIVATE-FIELD",
+      ],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          PATH: `${executableDirectory}${delimiter}${process.env.PATH}`,
+          TEMP: temporaryRoot,
+          TMP: temporaryRoot,
+          TMPDIR: temporaryRoot,
+        },
+      },
+    );
+    assert.ifError(result.error);
+    assert.notEqual(result.status, 0);
+    assert.match(
+      combinedOutput(result),
+      /1Password authorization or private workspace setup failed/,
+    );
+    assert.deepEqual(readdirSync(temporaryRoot), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
