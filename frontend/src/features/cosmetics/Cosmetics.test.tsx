@@ -243,4 +243,23 @@ describe("Cosmetics", () => {
       "cosmetics-panel",
     );
   });
+
+  it("keeps the selected tab wired to its panel when a filter has no matches", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(cosmeticsData),
+      ),
+    );
+    renderCosmetics();
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Ornament" }));
+    fireEvent.click(screen.getByRole("button", { name: "Owned" }));
+
+    const tab = screen.getByRole("tab", { name: "Ornament", selected: true });
+    const panel = screen.getByRole("tabpanel");
+    expect(tab).toHaveAttribute("aria-controls", "cosmetics-panel");
+    expect(panel).toHaveAttribute("id", "cosmetics-panel");
+    expect(panel).toHaveAttribute("aria-labelledby", tab.id);
+    expect(panel).toHaveTextContent("Nothing to show for this filter.");
+  });
 });

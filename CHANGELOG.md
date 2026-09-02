@@ -12,7 +12,10 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
-No unreleased changes.
+### Fixed
+
+- Preserved the Cosmetics tabpanel and its accessible tab relationship when the
+  selected ownership filter has no matching items.
 
 ## [1.2.14] - 2026-09-02
 
