@@ -260,6 +260,12 @@ actually works today.
 
 ## Authentication
 
+`lib/browserSessionClient.ts` and `lib/browserSessionBrowser.ts` contain the E1
+framework-neutral session state machine and browser adapters, but production
+callers do not import them yet. Until the E2 composition cutover,
+`AuthContext`, `apiFetch`, and `OAuthCallback` remain the active browser-session
+owners described below; do not partially adopt the new client.
+
 Auth state lives entirely in `AuthContext` (`contexts/AuthContext.tsx`):
 
 - Access token stored in `localStorage` under `guardian_token` (JWT, 30-minute default expiry)
