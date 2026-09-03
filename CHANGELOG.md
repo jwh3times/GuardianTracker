@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.4] - 2026-09-03
+
+### Changed
+
+- Centralized weekly acquisition recommendation policy in a dedicated planner,
+  with typed canonical difficulty tiers and generation-safe Efficiency index
+  rebuilding that retains the previous complete recommendations during a
+  Manifest replacement.
+
 ## [1.3.3] - 2026-09-03
 
 ### Added

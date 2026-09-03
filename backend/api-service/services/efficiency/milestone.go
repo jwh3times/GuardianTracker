@@ -16,7 +16,7 @@ func (e *Engine) MissingForMilestone(milestoneName string, missing map[uint32]st
 	e.ensureIndex()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if len(e.buckets) == 0 || strings.TrimSpace(milestoneName) == "" {
+	if !e.ready || strings.TrimSpace(milestoneName) == "" {
 		return 0, false
 	}
 	name := strings.ToLower(milestoneName)
@@ -24,7 +24,7 @@ func (e *Engine) MissingForMilestone(milestoneName string, missing map[uint32]st
 	matched := false
 	countedItems := make(map[uint32]struct{})
 	for _, b := range e.buckets {
-		if b.Kind != "activity" || b.Label == "" || !sources.IsRaidOrDungeon(b.SourceString) {
+		if b.Kind != sources.KindActivity || b.Label == "" || !sources.IsRaidOrDungeon(b.SourceString) {
 			continue
 		}
 		if !strings.Contains(name, strings.ToLower(b.Label)) {

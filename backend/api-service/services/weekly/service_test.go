@@ -2,9 +2,11 @@ package weekly
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/recommendations"
 	"guardian-tracker/api-service/services/sources"
 )
 
@@ -122,6 +125,7 @@ func TestGetXurLocation_UsesCharacterVendorCache(t *testing.T) {
 		nil,
 		c,
 		nil,
+		recommendations.NewPlanner(nil),
 		fakeVersioner{"v-test"},
 	)
 
@@ -164,9 +168,22 @@ func TestCategoryFromMilestoneName_DelegatesToSources(t *testing.T) {
 	}
 }
 
+func TestRecommendedActionDifficultyWireUsesCanonicalTiers(t *testing.T) {
+	for _, tier := range []sources.DifficultyTier{sources.Easy, sources.Moderate, sources.Challenging, sources.Unrated} {
+		blob, err := json.Marshal(RecommendedAction{Diff: tier})
+		if err != nil {
+			t.Fatalf("Marshal(%q): %v", tier, err)
+		}
+		want := `"diff":"` + string(tier) + `"`
+		if !strings.Contains(string(blob), want) {
+			t.Errorf("wire for %q = %s, want %s", tier, blob, want)
+		}
+	}
+}
+
 func TestNewServiceWithClockUsesInjectedUTCClock(t *testing.T) {
 	fixed := time.Date(2026, 7, 11, 18, 30, 0, 0, time.FixedZone("EDT", -4*60*60))
-	s := NewServiceWithClock(nil, nil, nil, nil, cache.NewNoOpCache(), nil, fakeVersioner{"v-test"}, func() time.Time { return fixed })
+	s := NewServiceWithClock(nil, nil, nil, nil, cache.NewNoOpCache(), nil, recommendations.NewPlanner(nil), fakeVersioner{"v-test"}, func() time.Time { return fixed })
 	if got, want := s.nowUTC(), fixed.UTC(); !got.Equal(want) || got.Location() != time.UTC {
 		t.Fatalf("nowUTC() = %v, want %v", got, want)
 	}
@@ -175,55 +192,13 @@ func TestNewServiceWithClockUsesInjectedUTCClock(t *testing.T) {
 	}
 }
 
-func TestBuildRecommended_WishlistBeatsMissing(t *testing.T) {
-	s := &Service{}
-	pub := &publicWeeklyCache{
-		XurPresent: true,
-		XurItems: []xurItemEnriched{
-			{Hash: 1, Name: "Wishlisted Gun", Type: "Hand Cannon"},
-			{Hash: 2, Name: "Missing Gun", Type: "Auto Rifle"},
-			{Hash: 3, Name: "Owned Gun", Type: "Scout Rifle"},
-		},
-	}
-	missing := map[uint32]struct{}{1: {}, 2: {}}
-	wishlist := map[uint32]struct{}{1: {}}
-
-	actions := s.buildRecommended(pub, missing, wishlist)
-
-	if len(actions) != 2 {
-		t.Fatalf("len(actions) = %d, want 2 (owned item excluded)", len(actions))
-	}
-	if actions[0].Badge != "Wishlist" {
-		t.Errorf("wishlisted item badge = %q, want Wishlist (wishlist beats missing)", actions[0].Badge)
-	}
-	if actions[1].Badge != "Xur" {
-		t.Errorf("missing item badge = %q, want Xur", actions[1].Badge)
-	}
-}
-
-func TestBuildRecommended_CapAtFive(t *testing.T) {
-	s := &Service{}
-	pub := &publicWeeklyCache{XurPresent: true}
-	missing := map[uint32]struct{}{}
-	for i := uint32(1); i <= 10; i++ {
-		pub.XurItems = append(pub.XurItems, xurItemEnriched{Hash: i, Name: "Item"})
-		missing[i] = struct{}{}
-	}
-	actions := s.buildRecommended(pub, missing, map[uint32]struct{}{})
-	if len(actions) != 5 {
-		t.Errorf("len(actions) = %d, want cap of 5", len(actions))
-	}
-}
-
-func TestBuildRecommended_FallbackWhenNothingActionable(t *testing.T) {
-	s := &Service{}
-	actions := s.buildRecommended(&publicWeeklyCache{}, map[uint32]struct{}{}, map[uint32]struct{}{})
-	if len(actions) != 1 {
-		t.Fatalf("len(actions) = %d, want 1 fallback action", len(actions))
-	}
-	if actions[0].ID != "r-milestones" {
-		t.Errorf("fallback action id = %q", actions[0].ID)
-	}
+func TestNewServiceRequiresAcquisitionRecommender(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("NewServiceWithClock accepted a nil AcquisitionRecommender")
+		}
+	}()
+	NewServiceWithClock(nil, nil, nil, nil, cache.NewNoOpCache(), nil, nil, fakeVersioner{"v-test"}, time.Now)
 }
 
 func TestBuildTodayActions_CapAtSixAndXurBadges(t *testing.T) {
@@ -326,27 +301,6 @@ func TestXurItemHashesAt(t *testing.T) {
 	// Outside Xûr's window the lookup short-circuits to empty.
 	if got := s.xurItemHashesAt(context.Background(), wednesday); len(got) != 0 {
 		t.Errorf("expected empty set on a Wednesday, got %d entries", len(got))
-	}
-}
-
-func TestMapEngineActions(t *testing.T) {
-	s := &Service{}
-	actions := []efficiency.ScoredAction{
-		{ID: "eff-1", Text: "Run Vault of Glass", Why: "Fills 3 missing items", SourceString: `Source: "Vault of Glass" Raid`, Kind: "activity", MissingCount: 3, AvailableNow: false},
-		{ID: "eff-2", Text: "Visit Xûr", Why: "Fills 1 missing item — available now", SourceString: "Source: Xûr", Kind: "vendor", MissingCount: 1, AvailableNow: true, WishlistCount: 1},
-	}
-	got := s.mapEngineActions(actions)
-	if len(got) != 2 {
-		t.Fatalf("got %d, want 2", len(got))
-	}
-	if got[0].Text != "Run Vault of Glass" || got[0].Detail != "Fills 3 missing items" {
-		t.Errorf("action 0 = %+v", got[0])
-	}
-	if got[0].Diff != "Challenging" {
-		t.Errorf("VoG diff = %q, want Challenging", got[0].Diff)
-	}
-	if got[1].Badge != "Available now" {
-		t.Errorf("Xûr badge = %q, want 'Available now'", got[1].Badge)
 	}
 }
 

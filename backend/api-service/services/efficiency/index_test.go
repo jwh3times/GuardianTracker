@@ -52,3 +52,15 @@ func TestBuildIndexGroupsBySourceHash(t *testing.T) {
 		t.Errorf("Eververse bucket should exist and be excluded, got %+v", ev)
 	}
 }
+
+func TestBuildIndexPublishesCompleteEmptySnapshot(t *testing.T) {
+	e := NewEngine(fakeSource{}, fakeVersion{v: "v1"})
+	e.BuildIndex()
+	if !e.IsReady() {
+		t.Fatal("complete empty index must be ready, not cold")
+	}
+	result := e.Rank(RankInput{MissingItemHashes: map[uint32]struct{}{1: {}}})
+	if result.State != RankReady || result.Candidates == nil || len(result.Candidates) != 0 {
+		t.Fatalf("empty snapshot result = %+v", result)
+	}
+}

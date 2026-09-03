@@ -3,6 +3,7 @@ package efficiency
 import (
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/sources"
 )
 
 // BucketItem is one distinct item in a source bucket, with the rarity used for
@@ -18,8 +19,7 @@ type Bucket struct {
 	SourceHash   uint32
 	Label        string // cleaned, e.g. "Vault of Glass"
 	SourceString string // raw, for difficulty mapping by the caller
-	Kind         string // "activity" | "vendor" | "excluded"
-	Text         string // action label, e.g. "Run Vault of Glass"
+	Kind         sources.Kind
 	Items        []BucketItem
 }
 
@@ -32,13 +32,11 @@ func buildBuckets(rows []manifest.CollectibleWithItem) map[uint32]*Bucket {
 		b := buckets[col.SourceHash]
 		if b == nil {
 			label := cleanLabel(col.SourceString)
-			kind, text := classifyBucket(col.SourceHash, col.SourceString, label)
 			b = &Bucket{
 				SourceHash:   col.SourceHash,
 				Label:        label,
 				SourceString: col.SourceString,
-				Kind:         kind,
-				Text:         text,
+				Kind:         classifyBucket(col.SourceHash, col.SourceString),
 			}
 			buckets[col.SourceHash] = b
 			seenItems[col.SourceHash] = make(map[uint32]struct{})

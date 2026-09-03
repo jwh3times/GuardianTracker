@@ -31,6 +31,7 @@ import (
 	"guardian-tracker/api-service/services/items"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/preferences"
+	"guardian-tracker/api-service/services/recommendations"
 	"guardian-tracker/api-service/services/records"
 	"guardian-tracker/api-service/services/search"
 	"guardian-tracker/api-service/services/weekly"
@@ -119,6 +120,7 @@ func main() {
 
 	// Efficiency engine — ranks acquisition-source buckets by missing-item payoff; index built async
 	efficiencyEngine := efficiency.NewEngine(manifestProvider, manifestService)
+	recommendationPlanner := recommendations.NewPlanner(efficiencyEngine)
 
 	// Cache — created before the swap registrations below so observers can evict
 	// manifest-derived cache entries.
@@ -154,11 +156,11 @@ func main() {
 
 	// Weekly service
 	weeklyWishlist := adapters.NewWeeklyWishlist(stores.Wishlist)
-	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, manifestService)
+	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService)
 	if cfg.E2EFixedTime != nil {
 		fixedTime := *cfg.E2EFixedTime
 		weeklyService = weekly.NewServiceWithClock(
-			bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, manifestService,
+			bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService,
 			func() time.Time { return fixedTime },
 		)
 	}

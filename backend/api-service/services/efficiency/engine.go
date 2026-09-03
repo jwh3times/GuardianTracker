@@ -8,6 +8,7 @@ import (
 
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/manifeststate"
 )
 
 // collectibleSource provides the joined collectible+item rows for index building.
@@ -21,7 +22,7 @@ type versioner interface {
 	Version() string
 }
 
-// Engine holds the per-manifest-version source-bucket index and ranks actions.
+// Engine holds the per-manifest-version source-bucket index and ranks candidate facts.
 type Engine struct {
 	source  collectibleSource
 	version versioner
@@ -29,19 +30,26 @@ type Engine struct {
 	mu           sync.RWMutex
 	buckets      map[uint32]*Bucket
 	builtVersion string
-	building     bool
+	ready        bool
+	publication  *manifeststate.Publication
+	building     map[manifeststate.Attempt]struct{}
 }
 
 // NewEngine constructs an Engine. The index is empty until BuildIndex runs.
 func NewEngine(src collectibleSource, ver versioner) *Engine {
-	return &Engine{source: src, version: ver}
+	return &Engine{
+		source:      src,
+		version:     ver,
+		publication: manifeststate.New(nil),
+		building:    make(map[manifeststate.Attempt]struct{}),
+	}
 }
 
 // IsReady reports whether the index has been built at least once.
 func (e *Engine) IsReady() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return len(e.buckets) > 0
+	return e.ready
 }
 
 // ensureIndex kicks an async rebuild if the manifest version changed.
@@ -49,9 +57,9 @@ func (e *Engine) ensureIndex() {
 	if e.version == nil {
 		return
 	}
-	e.mu.RLock()
 	current := e.version.Version()
-	needsRebuild := current != "" && e.builtVersion != current && !e.building
+	e.mu.RLock()
+	needsRebuild := current != "" && e.builtVersion != current
 	e.mu.RUnlock()
 	if needsRebuild {
 		go e.BuildIndex()
@@ -65,33 +73,42 @@ func (e *Engine) ensureIndex() {
 // the swap. Rank and MissingForMilestone serve the previous index until it
 // lands, and ensureIndex re-kicks the build if this one loses a race.
 func (e *Engine) OnVersionChanged(version string) error {
+	if err := e.publication.Advance(version); err != nil {
+		return err
+	}
 	go e.BuildIndex()
 	return nil
 }
 
 // BuildIndex (re)builds the source-bucket index. Safe to call concurrently; a
-// concurrent call is a no-op while a build is already running. Mirrors search.BuildIndex.
+// concurrent call in the same generation is coalesced. A newer generation may
+// build while obsolete work finishes; its distinct Attempt keeps the old
+// cleanup from clearing the new generation's state.
 func (e *Engine) BuildIndex() {
-	e.mu.Lock()
-	if e.building {
-		e.mu.Unlock()
+	if e.source == nil || e.version == nil || e.publication == nil {
 		return
 	}
-	e.building = true
-	e.mu.Unlock()
-	defer func() {
-		e.mu.Lock()
-		e.building = false
-		e.mu.Unlock()
-	}()
-
-	if e.source == nil || e.version == nil {
-		return
-	}
+	attempt := e.publication.Begin()
 	version := e.version.Version()
 	if version == "" {
 		return
 	}
+
+	e.mu.Lock()
+	if e.building == nil {
+		e.building = make(map[manifeststate.Attempt]struct{})
+	}
+	if _, building := e.building[attempt]; building {
+		e.mu.Unlock()
+		return
+	}
+	e.building[attempt] = struct{}{}
+	e.mu.Unlock()
+	defer func() {
+		e.mu.Lock()
+		delete(e.building, attempt)
+		e.mu.Unlock()
+	}()
 	rows, err := e.source.GetAllCollectiblesWithItems()
 	if err != nil {
 		// A build racing a manifest swap gets ErrNotReady from the provider.
@@ -110,10 +127,15 @@ func (e *Engine) BuildIndex() {
 	}
 	buckets := buildBuckets(rows)
 
-	e.mu.Lock()
-	e.buckets = buckets
-	e.builtVersion = version
-	e.mu.Unlock()
+	if !attempt.Publish(func() {
+		e.mu.Lock()
+		e.buckets = buckets
+		e.builtVersion = version
+		e.ready = true
+		e.mu.Unlock()
+	}) {
+		return
+	}
 	slog.Info("efficiency index built",
 		slog.Int("source_bucket_count", len(buckets)),
 		slog.String("manifest_version", version),

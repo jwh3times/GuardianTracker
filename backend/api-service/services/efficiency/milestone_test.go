@@ -1,16 +1,20 @@
 package efficiency
 
-import "testing"
+import (
+	"testing"
+
+	"guardian-tracker/api-service/services/sources"
+)
 
 func raidEngine() *Engine {
 	return &Engine{buckets: map[uint32]*Bucket{
 		1: {SourceHash: 1, Label: "Vault of Glass", SourceString: "Vault of Glass Raid",
-			Kind: "activity", Items: []BucketItem{{ItemHash: 100}, {ItemHash: 101}, {ItemHash: 102}}},
+			Kind: sources.KindActivity, Items: []BucketItem{{ItemHash: 100}, {ItemHash: 101}, {ItemHash: 102}}},
 		2: {SourceHash: 2, Label: "Banshee-44", SourceString: "Banshee-44 gunsmith",
-			Kind: "vendor", Items: []BucketItem{{ItemHash: 200}}},
+			Kind: sources.KindVendor, Items: []BucketItem{{ItemHash: 200}}},
 		3: {SourceHash: 3, Label: "Vault of Glass", SourceString: "Vault of Glass Raid legacy attribution",
-			Kind: "activity", Items: []BucketItem{{ItemHash: 100}}},
-	}}
+			Kind: sources.KindActivity, Items: []BucketItem{{ItemHash: 100}}},
+	}, ready: true}
 }
 
 func TestMissingForMilestone(t *testing.T) {

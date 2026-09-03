@@ -1,72 +1,100 @@
 package efficiency
 
-import "testing"
+import (
+	"testing"
+
+	"guardian-tracker/api-service/services/sources"
+)
 
 func mkEngine(buckets map[uint32]*Bucket) *Engine {
-	return &Engine{buckets: buckets}
+	return &Engine{buckets: buckets, ready: true}
 }
 
-func TestRankOrdersByScoreAndFiltersEmpty(t *testing.T) {
+func TestRankDistinguishesColdFromReadyEmpty(t *testing.T) {
+	cold := (&Engine{}).Rank(RankInput{})
+	if cold.State != RankCold || cold.Candidates == nil || len(cold.Candidates) != 0 {
+		t.Fatalf("cold result = %+v, want cold with allocated empty candidates", cold)
+	}
+
+	ready := mkEngine(map[uint32]*Bucket{}).Rank(RankInput{})
+	if ready.State != RankReady || ready.Candidates == nil || len(ready.Candidates) != 0 {
+		t.Fatalf("ready result = %+v, want ready with allocated empty candidates", ready)
+	}
+}
+
+func TestRankReturnsOrderedFactsWithoutPresentationPolicy(t *testing.T) {
 	buckets := map[uint32]*Bucket{
-		1: {SourceHash: 1, Label: "Vault of Glass", Kind: "activity", Text: "Run Vault of Glass", Items: []BucketItem{
+		1: {SourceHash: 1, Label: "Vault of Glass", SourceString: "Vault of Glass raid", Kind: sources.KindActivity, Items: []BucketItem{
 			{ItemHash: 101, Rarity: "Legendary"},
 			{ItemHash: 102, Rarity: "Exotic"},
 		}},
-		2: {SourceHash: 2, Label: "Crucible", Kind: "activity", Text: "Run Crucible", Items: []BucketItem{
+		2: {SourceHash: 2, Label: "Crucible", SourceString: "Complete Crucible", Kind: sources.KindActivity, Items: []BucketItem{
 			{ItemHash: 201, Rarity: "Legendary"},
 		}},
-		3: {SourceHash: 3, Label: "Eververse", Kind: "excluded", Items: []BucketItem{
+		3: {SourceHash: 3, Label: "Eververse", SourceString: "Eververse", Kind: sources.KindExcluded, Items: []BucketItem{
 			{ItemHash: 301, Rarity: "Legendary"},
 		}},
 	}
-	e := mkEngine(buckets)
-	missing := map[uint32]struct{}{101: {}, 102: {}, 201: {}, 301: {}}
+	result := mkEngine(buckets).Rank(RankInput{
+		MissingItemHashes: map[uint32]struct{}{101: {}, 102: {}, 201: {}, 301: {}},
+	})
 
-	got := e.Rank(missing, nil, nil, nil)
-
-	if len(got) != 2 {
-		t.Fatalf("got %d actions, want 2 (excluded bucket dropped)", len(got))
+	if result.State != RankReady || len(result.Candidates) != 2 {
+		t.Fatalf("result = %+v, want two ready candidates", result)
 	}
-	if got[0].Label != "Vault of Glass" {
-		t.Errorf("top action = %q, want Vault of Glass (higher score)", got[0].Label)
+	got := result.Candidates[0]
+	if got.SourceHash != 1 || got.Label != "Vault of Glass" || got.SourceText != "Vault of Glass raid" || got.Kind != sources.KindActivity {
+		t.Errorf("top candidate identity = %+v", got)
 	}
-	if got[0].MissingCount != 2 {
-		t.Errorf("VoG missing count = %d, want 2", got[0].MissingCount)
-	}
-	if got[1].Label != "Crucible" {
-		t.Errorf("second action = %q, want Crucible", got[1].Label)
-	}
-	if got[0].Why != "Fills 2 missing items" {
-		t.Errorf("VoG why = %q, want \"Fills 2 missing items\"", got[0].Why)
+	if got.MissingCount != 2 || got.WishlistCount != 0 || got.AvailableNow || got.Featured {
+		t.Errorf("top candidate facts = %+v", got)
 	}
 }
 
-func TestRankWishlistAndVendorBoost(t *testing.T) {
+func TestRankWishlistAvailabilityFeaturedAndTieBreak(t *testing.T) {
 	buckets := map[uint32]*Bucket{
-		1: {SourceHash: 1, Label: "Trials", Kind: "activity", Text: "Run Trials", Items: []BucketItem{{ItemHash: 101, Rarity: "Legendary"}}},
-		2: {SourceHash: 2, Label: "Xûr", Kind: "vendor", Text: "Visit Xûr", Items: []BucketItem{{ItemHash: 201, Rarity: "Legendary"}}},
+		20: {SourceHash: 20, Label: "Trials", SourceString: "Trials", Kind: sources.KindActivity, Items: []BucketItem{{ItemHash: 101, Rarity: "Legendary"}}},
+		10: {SourceHash: 10, Label: "Xûr", SourceString: "Xûr", Kind: sources.KindVendor, Items: []BucketItem{{ItemHash: 201, Rarity: "Legendary"}}},
+		30: {SourceHash: 30, Label: "Vault of Glass", SourceString: "Vault of Glass raid", Kind: sources.KindActivity, Items: []BucketItem{{ItemHash: 301, Rarity: "Legendary"}}},
 	}
-	e := mkEngine(buckets)
-	missing := map[uint32]struct{}{101: {}, 201: {}}
-	wishlist := map[uint32]struct{}{101: {}}
-	liveVendors := map[uint32]string{201: "Xûr"}
+	result := mkEngine(buckets).Rank(RankInput{
+		MissingItemHashes:    map[uint32]struct{}{101: {}, 201: {}, 301: {}},
+		WishlistItemHashes:   map[uint32]struct{}{101: {}},
+		LiveAvailability:     map[uint32]string{201: "Xûr"},
+		ActiveMilestoneNames: []string{"Featured Vault of Glass"},
+	})
 
-	got := e.Rank(missing, wishlist, liveVendors, nil)
-	// 101: legendary(1) * wishlist(5) * base(1) = 5
-	// 201: legendary(1) * 1 * vendorNow(3) = 3
-	if got[0].Label != "Trials" {
-		t.Errorf("top = %q, want Trials (wishlist boost)", got[0].Label)
+	if got := result.Candidates[0]; got.SourceHash != 20 || got.WishlistCount != 1 {
+		t.Errorf("wishlist candidate = %+v, want source 20 first", got)
 	}
-	if !got[1].AvailableNow || got[1].WishlistCount != 0 {
-		t.Errorf("Xûr action availability/wishlist wrong: %+v", got[1])
+	if got := result.Candidates[1]; got.SourceHash != 10 || !got.AvailableNow {
+		t.Errorf("available candidate = %+v, want source 10 second", got)
 	}
-	if got[0].WishlistCount != 1 {
-		t.Errorf("Trials wishlist count = %d, want 1", got[0].WishlistCount)
+	if got := result.Candidates[2]; got.SourceHash != 30 || !got.Featured {
+		t.Errorf("featured candidate = %+v, want source 30 third", got)
 	}
-	if got[0].Why != "Fills 1 missing item, 1 on your wishlist" {
-		t.Errorf("Trials why = %q", got[0].Why)
+
+	tied := mkEngine(map[uint32]*Bucket{
+		2: {SourceHash: 2, Kind: sources.KindActivity, Items: []BucketItem{{ItemHash: 2, Rarity: "Legendary"}}},
+		1: {SourceHash: 1, Kind: sources.KindActivity, Items: []BucketItem{{ItemHash: 1, Rarity: "Legendary"}}},
+	}).Rank(RankInput{MissingItemHashes: map[uint32]struct{}{1: {}, 2: {}}})
+	if tied.Candidates[0].SourceHash != 1 || tied.Candidates[1].SourceHash != 2 {
+		t.Errorf("tie order = %+v, want ascending source hash", tied.Candidates)
 	}
-	if got[1].Why != "Fills 1 missing item — available now" {
-		t.Errorf("Xûr why = %q", got[1].Why)
+}
+
+func TestRankCapsAtSix(t *testing.T) {
+	buckets := make(map[uint32]*Bucket)
+	missing := make(map[uint32]struct{})
+	for hash := uint32(1); hash <= 8; hash++ {
+		buckets[hash] = &Bucket{SourceHash: hash, Kind: sources.KindActivity, Items: []BucketItem{{ItemHash: hash, Rarity: "Legendary"}}}
+		missing[hash] = struct{}{}
+	}
+	result := mkEngine(buckets).Rank(RankInput{MissingItemHashes: missing})
+	if len(result.Candidates) != 6 {
+		t.Fatalf("candidate count = %d, want 6", len(result.Candidates))
+	}
+	if result.Candidates[5].SourceHash != 6 {
+		t.Errorf("last candidate source = %d, want tie-break source 6", result.Candidates[5].SourceHash)
 	}
 }
