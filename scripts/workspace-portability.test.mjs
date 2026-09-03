@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -761,9 +762,10 @@ test("Node bootstrap removes its temporary reference after an unavailable 1Passw
       );
       assert.ifError(resolution.error);
       assert.equal(resolution.status, 0, combinedOutput(resolution));
+      const resolvedOp = resolution.stdout.trim().split(/\r?\n/, 1)[0];
       assert.equal(
-        resolution.stdout.trim().split(/\r?\n/, 1)[0].toLowerCase(),
-        fakeOp.executablePath.toLowerCase(),
+        realpathSync.native(resolvedOp).toLowerCase(),
+        realpathSync.native(fakeOp.executablePath).toLowerCase(),
       );
     }
     const result = run(
