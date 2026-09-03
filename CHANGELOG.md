@@ -14,6 +14,13 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.1] - 2026-09-02
+
+### Fixed
+
+- Made the Windows private-workspace portability test isolate its unavailable
+  1Password CLI fixture from a real `op.exe` installed later on the host PATH.
+
 ## [1.3.0] - 2026-09-02
 
 ### Added
@@ -185,7 +192,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.16...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.16...v1.3.0
 [1.2.16]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.15...v1.2.16
 [1.2.15]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.13...v1.2.14

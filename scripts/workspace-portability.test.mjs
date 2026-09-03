@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -127,14 +128,20 @@ function createUnavailableOp(root) {
     "unavailable-op-bin",
   );
   mkdirSync(executableDirectory, { recursive: true });
+  let executablePath;
   if (process.platform === "win32") {
-    writeFileSync(join(executableDirectory, "op.cmd"), "@exit /b 23\r\n");
+    const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
+    assert.ok(systemRoot, "Windows must expose SystemRoot or WINDIR");
+    executablePath = join(executableDirectory, "op.exe");
+    // A real PE file wins Windows' bare-executable lookup ahead of any host
+    // op.exe; where.exe returns nonzero for the bootstrap's --version probe.
+    copyFileSync(join(systemRoot, "System32", "where.exe"), executablePath);
   } else {
-    const path = join(executableDirectory, "op");
-    writeFileSync(path, "#!/bin/sh\nexit 23\n");
-    chmodSync(path, 0o700);
+    executablePath = join(executableDirectory, "op");
+    writeFileSync(executablePath, "#!/bin/sh\nexit 23\n");
+    chmodSync(executablePath, 0o700);
   }
-  return executableDirectory;
+  return { executableDirectory, executablePath };
 }
 
 function createAuthorizationFailingOp(root) {
@@ -734,7 +741,33 @@ test("Node bootstrap removes its temporary reference after an unavailable 1Passw
       join(root, "scripts", "bootstrap-private.mjs"),
       readFileSync(join(projectRoot, "scripts", "bootstrap-private.mjs")),
     );
-    const executableDirectory = createUnavailableOp(root);
+    const fakeOp = createUnavailableOp(root);
+    const testEnv = {
+      ...process.env,
+      PATH: `${fakeOp.executableDirectory}${delimiter}${process.env.PATH ?? ""}`,
+      TEMP: temporaryRoot,
+      TMP: temporaryRoot,
+      TMPDIR: temporaryRoot,
+    };
+    const fakeVersion = run(fakeOp.executablePath, ["--version"]);
+    assert.ifError(fakeVersion.error);
+    assert.notEqual(fakeVersion.status, 0);
+    if (process.platform === "win32") {
+      const systemRoot = process.env.SystemRoot ?? process.env.WINDIR;
+      assert.ok(systemRoot, "Windows must expose SystemRoot or WINDIR");
+      const resolution = run(
+        join(systemRoot, "System32", "where.exe"),
+        ["op"],
+        { env: testEnv },
+      );
+      assert.ifError(resolution.error);
+      assert.equal(resolution.status, 0, combinedOutput(resolution));
+      const resolvedOp = resolution.stdout.trim().split(/\r?\n/, 1)[0];
+      assert.equal(
+        realpathSync.native(resolvedOp).toLowerCase(),
+        realpathSync.native(fakeOp.executablePath).toLowerCase(),
+      );
+    }
     const result = run(
       process.execPath,
       [
@@ -744,13 +777,7 @@ test("Node bootstrap removes its temporary reference after an unavailable 1Passw
       ],
       {
         cwd: root,
-        env: {
-          ...process.env,
-          PATH: `${executableDirectory}${delimiter}${process.env.PATH}`,
-          TEMP: temporaryRoot,
-          TMP: temporaryRoot,
-          TMPDIR: temporaryRoot,
-        },
+        env: testEnv,
       },
     );
     assert.ifError(result.error);
