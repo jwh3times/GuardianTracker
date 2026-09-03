@@ -260,11 +260,10 @@ PostgreSQL services and the `Test Go Services` service container share one
 repository policy test enforces the alignment and rejects a retired
 `postgres:<version>` reference left in a tracked file.
 
-The browser workflow keeps functional/axe and visual jobs advisory during
-stabilization. E2E/axe becomes required only after ten consecutive clean runs;
-visual comparison remains optional and runs in the Playwright Noble image whose
-tag CI derives from the frontend lockfile, so the container's browsers always
-match the installed `@playwright/test`.
+The browser workflow makes functional/axe a required check after exceeding ten
+consecutive clean runs. Visual comparison remains advisory and runs in the
+Playwright Noble image whose tag CI derives from the frontend lockfile, so the
+container's browsers always match the installed `@playwright/test`.
 
 ## Related Decisions
 
