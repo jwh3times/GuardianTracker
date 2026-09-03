@@ -268,13 +268,13 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 
 The workflow also runs **Test Workspace Portability (Windows)** as a non-required
 validation job. It executes the portability suite on `windows-latest` under both
-Windows PowerShell 5.1 and PowerShell 7; the five jobs above remain the protected
-branch's required checks.
+Windows PowerShell 5.1 and PowerShell 7; the portability job is not a protected
+branch check.
 
-`.github/workflows/browser.yml` adds two advisory jobs: **Browser E2E + Axe**
-and **Browser Visual Regression**. They report failures normally (no
-`continue-on-error`) and retain reports/evidence for 14 days. Promote E2E + axe
-to required after ten consecutive clean runs; visual stays optional.
+`.github/workflows/browser.yml` adds **Browser E2E + Axe**, a required check
+promoted after exceeding ten consecutive clean runs, and the advisory **Browser
+Visual Regression** job. Both report failures normally (no `continue-on-error`)
+and retain reports/evidence for 14 days; visual stays optional.
 
 Every third-party workflow `uses:` entry is pinned to a reviewed 40-character
 release commit with a readable `# vX.Y.Z` comment. The `github-actions`
@@ -288,7 +288,7 @@ CodeQL runs on PRs via default setup; gated through the code-scanning merge rule
 
 ### Branch protection (`main`)
 
-Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`), code-scanning gate (errors+warnings / medium+), no bypass actors.
+Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`, `Browser E2E + Axe`), code-scanning gate (errors+warnings / medium+), no bypass actors. `Browser Visual Regression` remains optional.
 
 To change the gate, update the repository ruleset through GitHub UI or the GitHub API. Required check names must match CI job `name:` exactly.
 

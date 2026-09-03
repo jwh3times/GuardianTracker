@@ -14,6 +14,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.2] - 2026-09-02
+
+### Changed
+
+- Promoted the browser E2E and accessibility job to a required pull-request
+  check after its stabilization threshold, while keeping visual regression
+  advisory.
+
 ## [1.3.1] - 2026-09-02
 
 ### Fixed
@@ -192,7 +200,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.16...v1.3.0
 [1.2.16]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.15...v1.2.16
