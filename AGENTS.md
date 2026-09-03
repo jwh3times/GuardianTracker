@@ -41,7 +41,7 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 
 ### Key directories
 
-- `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/reconnect/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences repository), `services/` (bungie client, manifest, collections, records, weekly, search, items, characters, efficiency, sources, preferences), `config/`, `cache/`.
+- `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/reconnect/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences repository), `services/` (bungie client, manifest, collections, records, weekly, recommendations, search, items, characters, efficiency, sources, preferences), `config/`, `cache/`.
 - `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `lib/`, `types/`.
 - `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
 - `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
@@ -61,6 +61,11 @@ invariants:
 - Efficiency counts each item hash once per source bucket and once across a matched
   milestone's bucket union. Weekly recommendation difficulty remains scoped to its
   source/action.
+- Efficiency publishes ordered, capped ranked facts behind an explicit
+  cold/ready result and retains its previous complete index while a replacement
+  builds. Recommendations owns wording, emphasis, difficulty, and ranked-versus-
+  fallback selection; Weekly calls it once and only adapts the complete outcomes
+  to its response shape.
 - Farm-only classification retains the current representative-collectible behavior.
   Its multi-collectible semantics are unresolved and require a separate decision.
 

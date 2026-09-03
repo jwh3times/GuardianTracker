@@ -112,10 +112,12 @@ only while that generation is still current; a request that loses the race still
 returns its own coherent result but leaves nothing behind for anyone else.
 Advancing the generation and running the owner's invalidation are one
 transition, so a loader cannot observe a moved generation over uncleared state.
-Items and Records hold owner-local publications. Records fences the three fixed
+Items, Records, and Efficiency hold owner-local publications. Records fences the three fixed
 Manifest-derived lookup tables used to enrich its projections while leaving raw
-per-membership Bungie profile records untouched. Weekly, Collections, and
-Efficiency still invalidate without a fence and adopt it as each is reworked. See
+per-membership Bungie profile records untouched. Efficiency fences asynchronous
+source-bucket index builds: a stale build cannot publish after a swap, while the
+previous complete index remains available until the current generation succeeds.
+Weekly and Collections still invalidate without a fence and adopt it as each is reworked. See
 [ADR 0014](./adr/0014-own-manifest-derived-publication.md).
 
 `services/items` owns the canonical, user-independent facts about an item — its
@@ -147,9 +149,14 @@ shape. Difficulty sorting has been removed; legacy URL and persisted
 
 The efficiency index counts an item hash once within each source bucket, and a
 milestone missing count counts the union of item hashes across all matching buckets.
-Weekly recommendation difficulty remains attached to the recommended source/action,
-not promoted to the item. Farm-only classification retains its existing behavior and
-is not inferred across an item's full source union.
+It returns ordered, capped source-bucket facts with an explicit cold/ready state;
+internal scores do not cross that seam. `services/recommendations` turns those facts
+into complete player-facing outcomes and owns wording, explanation, emphasis,
+source/action-scoped difficulty, and Xûr or weekly-reset fallback selection. Weekly gathers
+the player and live facts, invokes that policy once, and performs field-for-field
+wire assembly. Farm-only classification retains its existing behavior and is not
+inferred across an item's full source union. See
+[ADR 0016](./adr/0016-own-acquisition-recommendation-outcomes.md).
 
 ## API Surface
 

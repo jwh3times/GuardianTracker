@@ -3,9 +3,16 @@
 - Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-17
 
+Implementation is incremental. The backend ownership slice is complete:
+Sources exposes a named difficulty tier, Efficiency publishes fenced ranked
+facts, Recommendations owns complete outcomes and fallbacks, and Weekly consumes
+the required `AcquisitionRecommender` without retaining recommendation policy.
+C2 now contains only the separate `MilestoneMissingCounter` rewire; C3 retains
+the frontend raw-type and tolerant-adapter work.
+
 ## Context
 
-Efficiency currently returns an implementation-shaped `ScoredAction` containing
+Before this decision, Efficiency returned an implementation-shaped `ScoredAction` containing
 bucket identity, raw source text, string action kind, counts, score, wording,
 and explanation. Weekly then reinterprets that result: it chooses the visible
 emphasis, classifies difficulty from the raw source again, and owns a separate
@@ -163,7 +170,8 @@ unchanged.
 
 ## Migration and test surface
 
-Implementation replaces rather than layers the existing split:
+Implementation replaces rather than layers the existing split. Steps 1–4 landed
+together so the backend never retained two recommendation-policy owners:
 
 1. Add the typed source difficulty, Recommendations outcome types, and the
    consumer-side `weekly.AcquisitionRecommender` interface.
@@ -223,8 +231,8 @@ Weekly; it does not merely rename or forward `ScoredAction`.
   order and is the sole owner of final ranked-versus-fallback selection, wording,
   explanation, action kind, source, difficulty, emphasis, and fallback policy.
 - Weekly becomes an assembler rather than a second recommendation implementation.
-- The verified backend/frontend tier drift is fixed through a typed backend
-  value, one canonical wire vocabulary, and one explicit frontend projection.
-- Existing recommendation and fallback behavior remains stable apart from the
-  corrected difficulty representation and badge styling.
+- The backend now emits one typed, canonical wire vocabulary. C3 completes the
+  frontend projection needed to fix the verified badge drift.
+- Existing recommendation and fallback behavior remains stable. C3 will correct
+  the frontend difficulty representation and badge styling.
 - Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.
