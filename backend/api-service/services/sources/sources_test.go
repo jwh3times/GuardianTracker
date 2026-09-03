@@ -78,7 +78,7 @@ func TestFacetsAgree_RaidDungeonMatchesTier(t *testing.T) {
 // entry must precede every Moderate one, and every Moderate every Easy.
 // "Grandmaster Nightfall" depends on this.
 func TestTableOrdering_TiersAreGrouped(t *testing.T) {
-	rank := map[string]int{Challenging: 0, Moderate: 1, Easy: 2}
+	rank := map[DifficultyTier]int{Challenging: 0, Moderate: 1, Easy: 2}
 	last := -1
 	for _, e := range difficultyTable {
 		r, ok := rank[e.tier]
@@ -93,7 +93,7 @@ func TestTableOrdering_TiersAreGrouped(t *testing.T) {
 }
 
 func TestNoDuplicateKeywords(t *testing.T) {
-	seen := map[string]string{}
+	seen := map[string]DifficultyTier{}
 	for _, e := range difficultyTable {
 		if prev, dup := seen[e.keyword]; dup {
 			t.Errorf("keyword %q listed twice (%s and %s)", e.keyword, prev, e.tier)
@@ -104,7 +104,8 @@ func TestNoDuplicateKeywords(t *testing.T) {
 
 func TestDifficulty(t *testing.T) {
 	cases := []struct {
-		name, source, want string
+		name, source string
+		want         DifficultyTier
 	}{
 		{"empty", "", Unrated},
 		{"unreacquirable short-circuits", "Random Perks: cannot be reacquired", Unrated},

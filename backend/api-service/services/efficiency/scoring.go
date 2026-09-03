@@ -1,39 +1,64 @@
 package efficiency
 
 import (
-	"fmt"
 	"sort"
 	"strings"
+
+	"guardian-tracker/api-service/services/sources"
 )
 
-// Scoring weights — all tunable in one place. No ML, no opaque scoring.
 const (
 	weightExotic    = 3.0
 	weightLegendary = 1.0
 	weightOther     = 0.5
 	wishlistBoost   = 5.0
 
-	multVendorNow = 3.0 // item buyable right now (time-sensitive)
-	multFeatured  = 1.5 // source matches an active milestone this week
+	multVendorNow = 3.0
+	multFeatured  = 1.5
 	multBase      = 1.0
 
-	maxActions = 6
+	maxCandidates = 6
 )
 
-// ScoredAction is one ranked recommendation produced by Rank.
-type ScoredAction struct {
-	ID            string
+// RankState distinguishes an unavailable index from a complete snapshot with
+// no matching candidates.
+type RankState string
+
+const (
+	RankCold  RankState = "cold"
+	RankReady RankState = "ready"
+)
+
+// RankInput contains the resolved player and weekly facts used for scoring.
+type RankInput struct {
+	MissingItemHashes    map[uint32]struct{}
+	WishlistItemHashes   map[uint32]struct{}
+	LiveAvailability     map[uint32]string
+	ActiveMilestoneNames []string
+}
+
+// RankedCandidate is a ranked source-bucket fact. Presentation policy and the
+// internal score deliberately do not cross this seam.
+type RankedCandidate struct {
 	SourceHash    uint32
 	Label         string
-	SourceString  string
-	Kind          string // "activity" | "vendor"
-	Text          string // "Run Vault of Glass"
-	Why           string // "Fills 12 missing items, 2 on your wishlist"
+	SourceText    string
+	Kind          sources.Kind
 	MissingCount  int
 	WishlistCount int
 	AvailableNow  bool
 	Featured      bool
-	Score         float64
+}
+
+// RankResult always carries an allocated Candidates slice.
+type RankResult struct {
+	State      RankState
+	Candidates []RankedCandidate
+}
+
+type scoredCandidate struct {
+	candidate RankedCandidate
+	score     float64
 }
 
 func rarityWeight(rarity string) float64 {
@@ -63,104 +88,84 @@ func labelIsFeatured(label string, activeMilestones []string) bool {
 	if l == "" {
 		return false
 	}
-	for _, m := range activeMilestones {
-		if strings.Contains(strings.ToLower(m), l) {
+	for _, milestone := range activeMilestones {
+		if strings.Contains(strings.ToLower(milestone), l) {
 			return true
 		}
 	}
 	return false
 }
 
-// Rank scores every recommendable bucket against the player's missing set and
-// returns the top actions, highest score first. Pure over the cached index; never
-// fetches. Returns nil when the index is empty (caller falls back).
-func (e *Engine) Rank(missing, wishlist map[uint32]struct{}, liveVendors map[uint32]string, activeMilestones []string) []ScoredAction {
+// Rank scores the current complete snapshot. It never waits for an index build:
+// cold means no snapshot has ever published, while an older complete snapshot
+// remains ready during replacement.
+func (e *Engine) Rank(input RankInput) RankResult {
 	e.ensureIndex()
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	if len(e.buckets) == 0 || len(missing) == 0 {
-		return nil
+
+	result := RankResult{State: RankCold, Candidates: make([]RankedCandidate, 0)}
+	if !e.ready {
+		return result
+	}
+	result.State = RankReady
+	if len(input.MissingItemHashes) == 0 {
+		return result
 	}
 
-	var actions []ScoredAction
-	for _, b := range e.buckets {
-		if b.Kind == "excluded" {
+	scored := make([]scoredCandidate, 0)
+	for _, bucket := range e.buckets {
+		if bucket.Kind == sources.KindExcluded {
 			continue
 		}
-		featured := labelIsFeatured(b.Label, activeMilestones)
 
-		var missingCount, wishlistCount int
-		var availableNow bool
-		// First pass: determine availability for the whole bucket's multiplier.
-		for _, it := range b.Items {
-			if _, ok := missing[it.ItemHash]; !ok {
+		candidate := RankedCandidate{
+			SourceHash: bucket.SourceHash,
+			Label:      bucket.Label,
+			SourceText: bucket.SourceString,
+			Kind:       bucket.Kind,
+			Featured:   labelIsFeatured(bucket.Label, input.ActiveMilestoneNames),
+		}
+		for _, item := range bucket.Items {
+			if _, missing := input.MissingItemHashes[item.ItemHash]; !missing {
 				continue
 			}
-			if liveVendors != nil {
-				if _, ok := liveVendors[it.ItemHash]; ok {
-					availableNow = true
-				}
+			if _, available := input.LiveAvailability[item.ItemHash]; available {
+				candidate.AvailableNow = true
 			}
 		}
-		mult := bucketMultiplier(availableNow, featured)
 
+		multiplier := bucketMultiplier(candidate.AvailableNow, candidate.Featured)
 		var score float64
-		for _, it := range b.Items {
-			if _, ok := missing[it.ItemHash]; !ok {
+		for _, item := range bucket.Items {
+			if _, missing := input.MissingItemHashes[item.ItemHash]; !missing {
 				continue
 			}
-			missingCount++
-			w := rarityWeight(it.Rarity)
-			if wishlist != nil {
-				if _, ok := wishlist[it.ItemHash]; ok {
-					w *= wishlistBoost
-					wishlistCount++
-				}
+			candidate.MissingCount++
+			weight := rarityWeight(item.Rarity)
+			if _, wished := input.WishlistItemHashes[item.ItemHash]; wished {
+				weight *= wishlistBoost
+				candidate.WishlistCount++
 			}
-			score += w * mult
+			score += weight * multiplier
 		}
-		if missingCount == 0 {
-			continue
+		if candidate.MissingCount != 0 {
+			scored = append(scored, scoredCandidate{candidate: candidate, score: score})
 		}
-		actions = append(actions, ScoredAction{
-			ID:            fmt.Sprintf("eff-%d", b.SourceHash),
-			SourceHash:    b.SourceHash,
-			Label:         b.Label,
-			SourceString:  b.SourceString,
-			Kind:          b.Kind,
-			Text:          b.Text,
-			Why:           buildWhy(missingCount, wishlistCount, availableNow),
-			MissingCount:  missingCount,
-			WishlistCount: wishlistCount,
-			AvailableNow:  availableNow,
-			Featured:      featured,
-			Score:         score,
-		})
 	}
 
-	sort.SliceStable(actions, func(i, j int) bool {
-		if actions[i].Score != actions[j].Score {
-			return actions[i].Score > actions[j].Score
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
 		}
-		return actions[i].SourceHash < actions[j].SourceHash // stable tiebreak
+		return scored[i].candidate.SourceHash < scored[j].candidate.SourceHash
 	})
-	if len(actions) > maxActions {
-		actions = actions[:maxActions]
+	if len(scored) > maxCandidates {
+		scored = scored[:maxCandidates]
 	}
-	return actions
-}
-
-func buildWhy(missingCount, wishlistCount int, availableNow bool) string {
-	plural := "s"
-	if missingCount == 1 {
-		plural = ""
+	result.Candidates = make([]RankedCandidate, len(scored))
+	for i := range scored {
+		result.Candidates[i] = scored[i].candidate
 	}
-	why := fmt.Sprintf("Fills %d missing item%s", missingCount, plural)
-	if wishlistCount > 0 {
-		why += fmt.Sprintf(", %d on your wishlist", wishlistCount)
-	}
-	if availableNow {
-		why += " — available now"
-	}
-	return why
+	return result
 }

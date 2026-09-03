@@ -14,16 +14,8 @@ func cleanLabel(sourceString string) string {
 	return strings.TrimSpace(strings.Trim(s, ". "))
 }
 
-// classifyBucket turns a source into an action kind plus the wording shown to
-// the player. Classifying the source is services/sources' job — it owns the
-// vocabulary; phrasing the action is ours.
-func classifyBucket(sourceHash uint32, sourceString, label string) (kind, text string) {
-	switch k := sources.ActionKind(sourceHash, sourceString); k {
-	case sources.KindVendor:
-		return string(k), "Visit " + label
-	case sources.KindActivity:
-		return string(k), "Run " + label
-	default:
-		return string(sources.KindExcluded), ""
-	}
+// classifyBucket delegates the source vocabulary to services/sources. Visible
+// action wording belongs to services/recommendations.
+func classifyBucket(sourceHash uint32, sourceString string) sources.Kind {
+	return sources.ActionKind(sourceHash, sourceString)
 }

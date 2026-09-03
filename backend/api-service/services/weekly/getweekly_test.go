@@ -9,6 +9,7 @@ import (
 
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/recommendations"
 )
 
 // richManifest is a configurable ManifestRepo for the public-weekly fetch paths.
@@ -44,7 +45,7 @@ func weeklyService(t *testing.T, body string, m ManifestRepo) *Service {
 	}))
 	t.Cleanup(srv.Close)
 	return NewService(bungie.NewClient("k", srv.URL, 100, 100), m, nil, nil,
-		cache.NewMemoryCache(time.Minute, 0), nil, fakeVersioner{"v-test"})
+		cache.NewMemoryCache(time.Minute, 0), nil, recommendations.NewPlanner(nil), fakeVersioner{"v-test"})
 }
 
 func TestFetchXurInventory_EnrichesFromManifest(t *testing.T) {
@@ -212,7 +213,8 @@ func TestGetWeekly_PublicPath(t *testing.T) {
 		nil, // collections — unused when bungieToken is empty
 		nil, // wishlist — nil-checked
 		cache.NewMemoryCache(time.Minute, 0),
-		nil, // efficiency engine — nil triggers fallback
+		nil, // efficiency engine — milestone counts remain unavailable
+		recommendations.NewPlanner(nil),
 		fakeVersioner{"v-test"},
 	)
 
@@ -229,7 +231,7 @@ func TestGetWeekly_PublicPath(t *testing.T) {
 	if res.ResetAt.IsZero() {
 		t.Error("ResetAt should be set")
 	}
-	// buildRecommended always returns at least the fallback action.
+	// The recommender always returns at least one fallback action.
 	if len(res.Recommended) == 0 {
 		t.Error("expected at least one recommended action (fallback)")
 	}

@@ -10,6 +10,8 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/recommendations"
+	"guardian-tracker/api-service/services/sources"
 )
 
 // These tests cover GetWeekly's composition — the ~120 lines that call the
@@ -73,6 +75,7 @@ type weeklyFixture struct {
 	missing          MissingItemReader
 	wishlist         WishlistReader
 	engine           *efficiency.Engine
+	recommender      AcquisitionRecommender
 	manifest         ManifestRepo
 }
 
@@ -84,9 +87,18 @@ func (f weeklyFixture) service(t *testing.T) *Service {
 	if missing == nil {
 		missing = &fakeMissingItems{hashes: map[uint32]struct{}{}}
 	}
+	recommender := f.recommender
+	if recommender == nil {
+		if f.engine == nil {
+			recommender = recommendations.NewPlanner(nil)
+		} else {
+			recommender = recommendations.NewPlanner(f.engine)
+		}
+	}
 	s := NewServiceWithClock(
 		nil, // bungie — every read below is served from the seeded cache
 		f.manifest, missing, f.wishlist, c, f.engine,
+		recommender,
 		fakeVersioner{"v-test"},
 		func() time.Time { return testWeeklyNow },
 	)
@@ -116,6 +128,18 @@ func (f weeklyFixture) service(t *testing.T) *Service {
 		c.Set(characterVendorsCacheKey(testMembershipType, testMembershipID, testCharacterID), f.characterVendors, time.Minute)
 	}
 	return s
+}
+
+type recordingRecommender struct {
+	input    recommendations.Input
+	outcomes []recommendations.Recommendation
+	calls    int
+}
+
+func (r *recordingRecommender) Recommend(input recommendations.Input) []recommendations.Recommendation {
+	r.calls++
+	r.input = input
+	return r.outcomes
 }
 
 func (f weeklyFixture) get(t *testing.T) *Weekly {
@@ -191,7 +215,7 @@ func TestGetWeekly_XurLocationReachesPayload(t *testing.T) {
 }
 
 // In TodayActions the precedence is the opposite way round from
-// buildRecommended: an item that is missing keeps the "missing" badge even when
+// recommendation fallbacks: an item that is missing keeps the "missing" badge even when
 // it is also wishlisted, and only a wishlisted-but-owned item reads "avail-now".
 // Both rules are real; neither was asserted through GetWeekly.
 func TestGetWeekly_TodayActionBadgePrecedence(t *testing.T) {
@@ -242,11 +266,51 @@ func TestGetWeekly_PrefersEngineRanking(t *testing.T) {
 		t.Fatal("no recommended actions")
 	}
 	if res.Recommended[0].ID != "eff-7" {
-		t.Errorf("Recommended[0].ID = %q, want the engine action eff-7 (fell back to buildRecommended)",
+		t.Errorf("Recommended[0].ID = %q, want the ranked action eff-7 (fell back unexpectedly)",
 			res.Recommended[0].ID)
 	}
 	if res.Recommended[0].Diff != "Challenging" {
 		t.Errorf("Diff = %q, want Challenging from the raid source string", res.Recommended[0].Diff)
+	}
+}
+
+func TestGetWeeklyCallsRecommenderOnceAndAssemblesVerbatim(t *testing.T) {
+	recommender := &recordingRecommender{outcomes: []recommendations.Recommendation{{
+		ID: "owned-1", Action: "Do the exact action", Explanation: "Because the owner said so",
+		Kind: recommendations.KindActivity, SourceText: "Grandmaster Nightfall",
+		Difficulty: sources.Challenging, Emphasis: recommendations.EmphasisAvailableNow, TimeEstimate: "17 min",
+	}}}
+	res := weeklyFixture{
+		pub: &publicWeeklyCache{
+			XurPresent:      true,
+			XurItems:        []xurItemEnriched{{Hash: 100, Name: "Xûr item", Type: "Weapon"}},
+			MilestoneHashes: []uint32{10},
+			MilestoneNames:  map[uint32]string{10: "Grandmaster Nightfall"},
+		},
+		missing:         &fakeMissingItems{hashes: map[uint32]struct{}{100: {}}},
+		wishlist:        fakeWishlist{userID: 7, items: []WishlistItem{{ItemHash: 200}}},
+		liveVendorItems: map[uint32]string{100: "Banshee-44"},
+		recommender:     recommender,
+	}.get(t)
+
+	if recommender.calls != 1 {
+		t.Fatalf("Recommend calls = %d, want 1", recommender.calls)
+	}
+	if _, ok := recommender.input.MissingItemHashes[100]; !ok {
+		t.Error("missing item facts did not reach recommender")
+	}
+	if _, ok := recommender.input.WishlistItemHashes[200]; !ok {
+		t.Error("wish-list facts did not reach recommender")
+	}
+	if recommender.input.LiveAvailability[100] != "Xûr" {
+		t.Errorf("live availability = %+v, want Xûr to win vendor tie", recommender.input.LiveAvailability)
+	}
+	if !recommender.input.XurPresent || len(recommender.input.XurItems) != 1 || recommender.input.XurItems[0].Hash != 100 {
+		t.Errorf("Xûr facts = %+v", recommender.input)
+	}
+	want := RecommendedAction{ID: "owned-1", Text: "Do the exact action", Detail: "Because the owner said so", Badge: "Available now", Diff: sources.Challenging, Time: "17 min"}
+	if len(res.Recommended) != 1 || res.Recommended[0] != want {
+		t.Fatalf("wire recommendations = %+v, want %+v", res.Recommended, want)
 	}
 }
 
@@ -310,8 +374,8 @@ func TestGetWeekly_MissingItemErrorDegradesToEmptySet(t *testing.T) {
 	if res.Xur.Items[0].Missing {
 		t.Error("item stamped Missing despite the missing set being unavailable")
 	}
-	// An empty missing set makes efficiency.Rank return nothing, so assembly
-	// falls back to the legacy heuristic. Any non-empty fallback set would rank
+	// An empty missing set makes Efficiency return no candidates, so the planner
+	// selects the weekly fallback. Any non-empty fallback set would rank
 	// the seeded raid bucket and surface eff-7 instead.
 	if len(res.Recommended) == 0 || res.Recommended[0].ID != "r-milestones" {
 		t.Errorf("Recommended[0] = %+v, want the r-milestones fallback — the degraded missing set is not empty",
