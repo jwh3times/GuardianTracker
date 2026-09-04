@@ -105,10 +105,13 @@ the same membership, the request reuses that token instead of rotating the
 cookie again. Callback, refresh, and logout cookie mutations use the same
 origin-wide lifecycle coordination so establishment and ending cannot race.
 
-Web Locks are required for authenticated refresh. If they are unavailable, the
-client preserves the existing projection and rejects `request` with a typed,
-non-destructive client error whose code is `REFRESH_UNAVAILABLE`. There is no
-unsafe same-tab-only fallback.
+Web Locks are required for callback establishment and authenticated refresh. If
+they are unavailable, `completeAuthorization` rejects with the typed
+`AUTHORIZATION_UNAVAILABLE` outcome before making the credentialed callback
+request. The client preserves an existing projection and rejects an attempted
+refresh with the typed, non-destructive `REFRESH_UNAVAILABLE` outcome. Logout
+still durably ends the local projection but skips the unsafe remote cookie
+mutation. There is no same-tab-only coordination fallback.
 
 Only refresh `401` definitively ends the captured session. Network failures,
 `429`, and `5xx` responses are retryable failures which preserve the projection;
@@ -242,6 +245,8 @@ client owns only the browser projection and transport orchestration.
   configuration failures remain visible without destroying it.
 - Identity-bound frontend data is cleared at membership boundaries even before
   query-key ownership is redesigned.
-- Authenticated refresh requires Web Locks; unsupported browsers retain their
-  projection but must reauthenticate when the access token expires.
+- Callback establishment and authenticated refresh require Web Locks;
+  unsupported browsers cannot establish or renew a session and must use a
+  compatible browser. Logout remains locally final without attempting an
+  uncoordinated cookie mutation.
 - Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.

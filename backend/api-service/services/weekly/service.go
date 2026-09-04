@@ -13,6 +13,7 @@ import (
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/efficiency"
+	"guardian-tracker/api-service/services/recommendations"
 	"guardian-tracker/api-service/services/sources"
 )
 
@@ -71,13 +72,13 @@ type Milestone struct {
 
 // RecommendedAction is one suggested action for the player this week.
 type RecommendedAction struct {
-	ID     string `json:"id"`
-	Text   string `json:"text"`
-	Detail string `json:"detail"`
-	Badge  string `json:"badge"`
-	Done   bool   `json:"done"`
-	Diff   string `json:"diff"`
-	Time   string `json:"time"`
+	ID     string                 `json:"id"`
+	Text   string                 `json:"text"`
+	Detail string                 `json:"detail"`
+	Badge  string                 `json:"badge"`
+	Done   bool                   `json:"done"`
+	Diff   sources.DifficultyTier `json:"diff"`
+	Time   string                 `json:"time"`
 }
 
 // TodayAction is one actionable item for the "Do This Today" dashboard panel.
@@ -155,6 +156,7 @@ type Service struct {
 	wishlist    WishlistReader
 	cache       cache.Cache
 	efficiency  *efficiency.Engine
+	recommender AcquisitionRecommender
 	version     versioner
 	now         func() time.Time
 }
@@ -209,21 +211,30 @@ type WishlistReader interface {
 	List(ctx context.Context, userID int64) ([]WishlistItem, error)
 }
 
+// AcquisitionRecommender owns complete recommendation policy. It is required;
+// Weekly resolves facts, calls it once, and adapts outcomes verbatim.
+type AcquisitionRecommender interface {
+	Recommend(input recommendations.Input) []recommendations.Recommendation
+}
+
 // WishlistItem mirrors db.WishlistItem (subset we need).
 type WishlistItem struct {
 	ItemHash uint32
 }
 
 // NewService creates a new weekly recommendations service.
-func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner) *Service {
-	return NewServiceWithClock(b, m, c, w, appCache, eng, v, time.Now)
+func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner) *Service {
+	return NewServiceWithClock(b, m, c, w, appCache, eng, recommender, v, time.Now)
 }
 
 // NewServiceWithClock creates a weekly service with an injected clock. The
 // production constructor above always uses time.Now; the alternate constructor
 // exists so hermetic browser tests can keep Xur in a deterministic weekend
 // window without changing production behavior.
-func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, v versioner, now func() time.Time) *Service {
+func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner, now func() time.Time) *Service {
+	if recommender == nil {
+		panic("weekly: acquisition recommender is required")
+	}
 	if now == nil {
 		now = time.Now
 	}
@@ -234,6 +245,7 @@ func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, 
 		wishlist:    w,
 		cache:       appCache,
 		efficiency:  eng,
+		recommender: recommender,
 		version:     v,
 		now:         now,
 	}
@@ -421,7 +433,26 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 	// Assemble weekly milestones (for This Week page), with per-raid missing counts.
 	milestones := buildMilestones(pub, s.efficiency, missingHashes)
 
-	recommended := s.rankRecommended(ctx, membershipType, membershipID, characterID, bungieToken, pub, missingHashes, wishlistHashes)
+	liveAvailability := make(map[uint32]string)
+	if bungieToken != "" {
+		liveAvailability = s.liveVendorItemHashesAtCharacter(ctx, membershipType, membershipID, characterID, bungieToken, s.nowUTC())
+	}
+	activeMilestones := make([]string, 0, len(pub.MilestoneNames))
+	for _, name := range pub.MilestoneNames {
+		activeMilestones = append(activeMilestones, name)
+	}
+	xurItems := make([]recommendations.XurItem, len(pub.XurItems))
+	for i, item := range pub.XurItems {
+		xurItems[i] = recommendations.XurItem{Hash: item.Hash, Name: item.Name, Type: item.Type}
+	}
+	recommended := assembleRecommendations(s.recommender.Recommend(recommendations.Input{
+		MissingItemHashes:    missingHashes,
+		WishlistItemHashes:   wishlistHashes,
+		LiveAvailability:     liveAvailability,
+		ActiveMilestoneNames: activeMilestones,
+		XurPresent:           pub.XurPresent,
+		XurItems:             xurItems,
+	}))
 	todayActions := s.buildTodayActions(pub, dailyVendors, missingHashes, wishlistHashes, now, dailyResetIn, resetIn)
 
 	fetchedAt := pub.FetchedAt
@@ -582,96 +613,19 @@ func (s *Service) buildTodayActions(pub *publicWeeklyCache, vendors []dailyVendo
 	return actions
 }
 
-// mapEngineActions converts ranked engine actions into the wire RecommendedAction.
-// Reuses existing fields (no new wire shape): Detail = the "why", Badge = availability/
-// source, Diff = difficulty from the source string.
-func (s *Service) mapEngineActions(actions []efficiency.ScoredAction) []RecommendedAction {
-	out := make([]RecommendedAction, 0, len(actions))
-	for _, a := range actions {
-		badge := "Activity"
-		if a.Kind == "vendor" {
-			badge = "Vendor"
-		}
-		switch {
-		case a.AvailableNow:
-			badge = "Available now"
-		case a.WishlistCount > 0:
-			badge = "Wishlist"
-		}
-		out = append(out, RecommendedAction{
-			ID:     a.ID,
-			Text:   a.Text,
-			Detail: a.Why,
-			Badge:  badge,
+func assembleRecommendations(outcomes []recommendations.Recommendation) []RecommendedAction {
+	actions := make([]RecommendedAction, len(outcomes))
+	for i, outcome := range outcomes {
+		actions[i] = RecommendedAction{
+			ID:     outcome.ID,
+			Text:   outcome.Action,
+			Detail: outcome.Explanation,
+			Badge:  string(outcome.Emphasis),
 			Done:   false,
-			Diff:   sources.Difficulty(a.SourceString),
-			Time:   "",
-		})
-	}
-	return out
-}
-
-// rankRecommended runs the efficiency engine; falls back to the legacy Xûr-only
-// heuristic when the engine is unavailable or has nothing to suggest (cold index,
-// private profile, no missing set). Best-effort — never fails the weekly request.
-func (s *Service) rankRecommended(ctx context.Context, membershipType int, membershipID, characterID, bungieToken string, pub *publicWeeklyCache, missing, wishlist map[uint32]struct{}) []RecommendedAction {
-	if s.efficiency != nil && bungieToken != "" {
-		liveVendors := s.liveVendorItemHashesAtCharacter(ctx, membershipType, membershipID, characterID, bungieToken, s.nowUTC())
-		activeMilestones := make([]string, 0, len(pub.MilestoneNames))
-		for _, name := range pub.MilestoneNames {
-			activeMilestones = append(activeMilestones, name)
-		}
-		if actions := s.efficiency.Rank(missing, wishlist, liveVendors, activeMilestones); len(actions) > 0 {
-			return s.mapEngineActions(actions)
+			Diff:   outcome.Difficulty,
+			Time:   outcome.TimeEstimate,
 		}
 	}
-	return s.buildRecommended(pub, missing, wishlist)
-}
-
-func (s *Service) buildRecommended(pub *publicWeeklyCache, missing, wishlist map[uint32]struct{}) []RecommendedAction {
-	var actions []RecommendedAction
-
-	if pub.XurPresent {
-		for i, xi := range pub.XurItems {
-			if len(actions) >= 5 {
-				break
-			}
-			if _, inWishlist := wishlist[xi.Hash]; inWishlist {
-				actions = append(actions, RecommendedAction{
-					ID:     fmt.Sprintf("r-wl-%d", i),
-					Text:   fmt.Sprintf("Buy %s from Xûr", xi.Name),
-					Detail: fmt.Sprintf("%s — on your wishlist and available now", xi.Type),
-					Badge:  "Wishlist",
-					Done:   false,
-					Diff:   "easy",
-					Time:   "5 min",
-				})
-			} else if _, isMissing := missing[xi.Hash]; isMissing {
-				actions = append(actions, RecommendedAction{
-					ID:     fmt.Sprintf("r-xur-%d", i),
-					Text:   fmt.Sprintf("Buy %s from Xûr", xi.Name),
-					Detail: fmt.Sprintf("%s — missing from your collection", xi.Type),
-					Badge:  "Xur",
-					Done:   false,
-					Diff:   "easy",
-					Time:   "5 min",
-				})
-			}
-		}
-	}
-
-	if len(actions) == 0 {
-		actions = append(actions, RecommendedAction{
-			ID:     "r-milestones",
-			Text:   "Complete weekly milestones before reset",
-			Detail: "Earn pinnacle gear and XP before Tuesday 17:00 UTC",
-			Badge:  "Weekly",
-			Done:   false,
-			Diff:   "moderate",
-			Time:   "2-3 hrs",
-		})
-	}
-
 	return actions
 }
 

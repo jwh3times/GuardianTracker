@@ -19,22 +19,26 @@ import (
 	"strings"
 )
 
+// DifficultyTier is the canonical acquisition difficulty vocabulary. Its
+// string values are also the public JSON representation.
+type DifficultyTier string
+
 // Difficulty tiers. Every non-Unrated result is a positive keyword match;
 // anything unmatched is honestly Unrated rather than a misleading default.
 const (
-	Challenging = "Challenging"
-	Moderate    = "Moderate"
-	Easy        = "Easy"
-	Unrated     = "Unrated"
+	Challenging DifficultyTier = "Challenging"
+	Moderate    DifficultyTier = "Moderate"
+	Easy        DifficultyTier = "Easy"
+	Unrated     DifficultyTier = "Unrated"
 )
 
 // AcquisitionSource is one canonical provenance attribution contributed by a
 // collectible linked to an item. Difficulty and RaidDungeon describe this
 // source only; an item with several sources has no aggregate difficulty.
 type AcquisitionSource struct {
-	Text        string `json:"text"`
-	Difficulty  string `json:"difficulty"`
-	RaidDungeon bool   `json:"raidDungeon"`
+	Text        string         `json:"text"`
+	Difficulty  DifficultyTier `json:"difficulty"`
+	RaidDungeon bool           `json:"raidDungeon"`
 }
 
 // Describe canonicalizes and classifies one source attribution.
@@ -89,7 +93,7 @@ const (
 // while failing the raid/dungeon test in another.
 type entry struct {
 	keyword string
-	tier    string
+	tier    DifficultyTier
 	// raidDungeon marks loot that drops from a named raid or dungeon. The
 	// per-milestone missing-count join is restricted to these, so a milestone
 	// name cannot loosely match a short or generic bucket label.
@@ -200,7 +204,7 @@ func IsUnreacquirable(source string) bool {
 }
 
 // Difficulty infers an acquisition-difficulty estimate from a source string.
-func Difficulty(source string) string {
+func Difficulty(source string) DifficultyTier {
 	s := strings.ToLower(strings.TrimSpace(source))
 	if s == "" || strings.Contains(s, unreacquirable) {
 		return Unrated

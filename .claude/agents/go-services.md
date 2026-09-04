@@ -1,6 +1,6 @@
 ---
 name: go-services
-description: Use for any work in backend/api-service — Gin handlers, JWT auth, Bungie OAuth flow, CSRF state, DB-backed encrypted token store, manifest download, collections analysis, records, weekly, search, roles, feature flags, admin, and Go tests.
+description: Use for any work in backend/api-service — Gin handlers, JWT auth, Bungie OAuth flow, CSRF state, DB-backed encrypted token store, manifest download, collections analysis, records, weekly, recommendations, search, roles, feature flags, admin, and Go tests.
 tools: Read, Write, Edit, Bash, Glob, Grep
 model: sonnet
 ---
@@ -93,15 +93,20 @@ backend/api-service/
                                            Publish installs only while it is current, Advance retires
                                            outstanding work and runs the owner's invalidation atomically.
                                            Advance's signature matches OnVersionChanged.
-                                           Items and Records have adopted it. Weekly, Collections and
-                                           Efficiency still invalidate without a fence and adopt it in
+                                           Items, Records, and Efficiency have adopted it. Weekly and
+                                           Collections still invalidate without a fence and adopt it in
                                            their own refactor slices.
   services/manifeststate/load.go       ← Load/LoadIf: cache.Load semantics plus the fence. A value loaded
                                            under a retired generation is returned to its caller but not
                                            cached. Nil cache = load every time; nil publication = error.
-  services/weekly/service.go           ← Weekly recommendations; Xûr inventory + XurItemHashes();
-                                           milestone data; reset time math; ManifestRepo interface;
-                                           bungie.ManifestObserver
+  services/efficiency/                 ← Manifest-derived source-bucket index, publication-fenced async
+                                           builds, explicit cold/ready ranked facts, and milestone missing
+                                           counts; score and build coordination remain internal
+  services/recommendations/planner.go  ← Pure acquisition recommendation policy over resolved facts:
+                                           wording, explanation, difficulty, emphasis, and Xûr/weekly fallbacks
+  services/weekly/service.go           ← Weekly response assembly; required AcquisitionRecommender;
+                                           Xûr inventory + XurItemHashes(); milestone data; reset time math;
+                                           ManifestRepo interface; bungie.ManifestObserver
   services/weekly/availability.go      ← LiveVendorItemHashes: best-effort all-rotating-vendor item
                                            availability (Xûr, Banshee-44, Ada-1, ritual vendors) for wishlist
   services/preferences/service.go      ← Preferences owner: framed/personalized defaults, card-style
@@ -416,7 +421,9 @@ instead of the four parallel keyword lists that used to live separately in
 step, so shipping a new dungeon meant editing three files, and forgetting one
 made a milestone's missing-count badge silently not appear.
 
-- `Difficulty(source)` — `Challenging`/`Moderate`/`Easy`/`Unrated`; stops at the
+- `DifficultyTier` — named backend and JSON vocabulary with
+  `Challenging`/`Moderate`/`Easy`/`Unrated` values.
+- `Difficulty(source)` — returns `DifficultyTier`; stops at the
   first table hit, so "Grandmaster Nightfall" scores Challenging before the
   Moderate "nightfall" rule.
 - `IsRaidOrDungeon(source)` — scans the whole table rather than stopping at the
@@ -470,8 +477,23 @@ made a milestone's missing-count badge silently not appear.
   `*collections.Service`; `weekly` does not import `services/collections` at all.
   Required, never nil-guarded — a reader degrading to an empty set would silently
   render as a complete collection.
-- Ranked weekly recommendation `Diff` is classified from that action's source string;
-  it remains source/action-scoped and is not an aggregate item difficulty.
+- `AcquisitionRecommender` is the required consumer-side interface satisfied by
+  `*recommendations.Planner`. `GetWeekly` gathers missing-item, wish-list,
+  live-availability, milestone, and Xûr facts, calls `Recommend` once, and adapts
+  each complete outcome field-for-field. Weekly owns no recommendation wording,
+  emphasis, difficulty classification, ranking interpretation, or fallback policy.
+- `services/recommendations` is pure policy with no Bungie, Manifest, Postgres,
+  cache, or I/O dependency. It preserves Efficiency order, owns ranked action
+  wording and emphasis precedence, and selects the ordered Xûr or generic weekly
+  fallback when ranking yields no action.
+- Efficiency `Rank` returns an allocated candidate slice and explicit `cold` or
+  `ready` state. It applies score ordering, the source-hash tie-break, and the
+  six-candidate cap internally. Its owner-local Manifest publication prevents an
+  obsolete async build from replacing current state while preserving the prior
+  complete index during a rebuild.
+- Weekly still depends on concrete `*efficiency.Engine` for
+  `MissingForMilestone`; replacing that dependency with the narrow
+  `MilestoneMissingCounter` seam is the remaining C2 slice.
 
 ## Go patterns
 

@@ -14,6 +14,25 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.4] - 2026-09-03
+
+### Changed
+
+- Centralized weekly acquisition recommendation policy in a dedicated planner,
+  with typed canonical difficulty tiers and generation-safe Efficiency index
+  rebuilding that retains the previous complete recommendations during a
+  Manifest replacement.
+
+## [1.3.3] - 2026-09-03
+
+### Added
+
+- Added the framework-neutral browser-session client foundation with atomic
+  token/user projection storage, legacy-state migration, stale-work fencing,
+  cross-tab adoption, Web Locks lifecycle coordination, and production browser
+  adapters; application callers remain on the existing auth path until the
+  follow-up cutover.
+
 ## [1.3.2] - 2026-09-02
 
 ### Changed
@@ -200,7 +219,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.2...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.3...HEAD
+[1.3.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.2.16...v1.3.0
