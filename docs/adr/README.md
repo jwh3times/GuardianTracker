@@ -18,8 +18,9 @@ actually built:
   full implementation has not landed. ADRs 0014–0021 are architecture decisions
   delivered slice by slice; consult the index and implementation notes for what
   is current rather than treating every owner or phase as already built.
-- **Accepted — implemented in `vX.Y.Z`** — a sequenced decision whose
-  implementation has landed.
+- **Accepted — implemented in `vX.Y.Z`** — the decision's implementation has
+  landed, whether delivered immediately or, for ADRs 0014–0021, after being
+  sequenced.
 
 A record may also carry a **Supersedes in part** or **Superseded in part by**
 line. Supersession here is narrow and bidirectional: it names the exact statement

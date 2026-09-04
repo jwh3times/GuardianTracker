@@ -369,21 +369,25 @@ Public docs:
 
 Private docs:
 
-- `private/README.md` - sole index for current plans, operations, residual
+- `private/README.md` - sole index for operations, residual
   security risks, reference evidence, and retired work. Private paths may be
   reorganized without duplicating that internal layout in this public guide.
 
 Rules:
 
 - Keep public docs factual and safe for a public repository.
-- Keep implementation plans, private audits, exploratory notes, and sensitive operational details in `private/`.
+- Keep private audits, exploratory notes, and sensitive operational details in
+  `private/`. Execution sequencing and slice order are **not** private documents —
+  they live on the board (see [Work Tracking](#work-tracking) and
+  [ADR 0022](./docs/adr/0022-github-owns-task-status.md)). Do not recreate a
+  private status file.
 - Archive shipped private planning content instead of leaving duplicate active plans.
 - When deleting or consolidating private docs, scrub references to the removed file.
 
 Public committed docs describe implemented behavior, local setup, durable decisions, security
 model, shipped changes, and gated future work. `private/` is gitignored and, for authorized
-maintainers, can be an independent private documentation repository. It holds detailed
-implementation plans, deployment runbooks, private security reviews, raw Bungie/API research, and
+maintainers, can be an independent private documentation repository. It holds
+deployment runbooks, private security reviews, raw Bungie/API research, and
 environment-specific operations notes. Public contributors do not need it. Do not move private
 operational detail into public docs or expose its remote location through the public repository.
 

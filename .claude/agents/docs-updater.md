@@ -54,11 +54,14 @@ this split exists to eliminate.
 
 `private/` is gitignored. Keep these categories there:
 
-- detailed implementation handoff plans
 - production deployment runbooks and cloud resource names
 - private security reviews and exploit-level analysis
 - raw or oversized API research dumps
 - secret rotation records and environment-specific commands
+
+Detailed implementation handoffs live on GitHub Issues and the Project board,
+not under `private/` — see [ADR 0022](../../docs/adr/0022-github-owns-task-status.md)
+and AGENTS.md's Work Tracking section.
 
 `private/README.md` is the sole index for the private repository's current
 layout. Read it before working there; do not cache private filenames in this

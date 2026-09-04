@@ -27,7 +27,9 @@ By participating in this project you agree to abide by our
   (use the provided templates).
 - **Improve documentation** — fixes to `README.md`, `SETUP.md`, `docs/`, this
   guide, or inline comments are always welcome. Keep private runbooks, security
-  reviews, raw research, and implementation handoffs under gitignored `private/`.
+  reviews, and raw research under gitignored `private/`. Detailed
+  implementation handoffs live on GitHub Issues and the Project board instead
+  (see `AGENTS.md`'s Work Tracking section).
 - **Submit code** — pick up an open issue or propose a change. For anything large,
   open an issue first so we can align on the approach before you invest time.
 
