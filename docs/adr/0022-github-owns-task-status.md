@@ -19,9 +19,10 @@ evidence is in the repository's own history:
 
 - `IMPLEMENTATION_PLAN.md` carried a `Reviewed:` date and a `Verified baseline:`
   commit, both of which had to be hand-updated to stay true.
-- `private/evidence/2026-09-02-next-priority-work.md` ranked five priorities;
-  four of them shipped within two days, leaving a document that still read as
-  current guidance.
+- A dated next-priority assessment ranked five work items; four of them shipped
+  within two days, leaving a document that still read as current guidance. It has
+  since been deleted — every item in it was shipped, resolved, or owned by
+  another record.
 - The plan's own `E4`–`E14` row listed twelve items for eleven slots, an
   ambiguity that survived because no mechanism forced it to reconcile against
   [ADR 0020](./0020-own-frontend-data-access.md)'s eleven named resources.
