@@ -43,12 +43,16 @@ Keep these categories private:
 - deployment runbooks, cloud resource names, and incident notes;
 - private security reviews and exploit-level analysis;
 - oversized or operational Bungie API and manifest research;
-- detailed implementation handoffs and audit evidence;
+- audit evidence and retired planning content;
 - credential-handling and rotation runbooks, value-free rotation records, and
   environment-specific commands.
 
 Never store credential values in documentation. Public docs may acknowledge
 that a private runbook exists, but must not depend on private context.
+
+Detailed implementation handoffs live on GitHub Issues and the Project board,
+not under `private/` — see [ADR 0022](./adr/0022-github-owns-task-status.md)
+and the [Work Tracking](../AGENTS.md#work-tracking) section of `AGENTS.md`.
 
 ## Maintenance Rules
 

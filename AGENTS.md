@@ -369,23 +369,72 @@ Public docs:
 
 Private docs:
 
-- `private/README.md` - sole index for current plans, operations, residual
+- `private/README.md` - sole index for operations, residual
   security risks, reference evidence, and retired work. Private paths may be
   reorganized without duplicating that internal layout in this public guide.
 
 Rules:
 
 - Keep public docs factual and safe for a public repository.
-- Keep implementation plans, private audits, exploratory notes, and sensitive operational details in `private/`.
+- Keep private audits, exploratory notes, and sensitive operational details in
+  `private/`. Execution sequencing and slice order are **not** private documents —
+  they live on the board (see [Work Tracking](#work-tracking) and
+  [ADR 0022](./docs/adr/0022-github-owns-task-status.md)). Do not recreate a
+  private status file.
 - Archive shipped private planning content instead of leaving duplicate active plans.
 - When deleting or consolidating private docs, scrub references to the removed file.
 
 Public committed docs describe implemented behavior, local setup, durable decisions, security
 model, shipped changes, and gated future work. `private/` is gitignored and, for authorized
-maintainers, can be an independent private documentation repository. It holds detailed
-implementation plans, deployment runbooks, private security reviews, raw Bungie/API research, and
+maintainers, can be an independent private documentation repository. It holds
+deployment runbooks, private security reviews, raw Bungie/API research, and
 environment-specific operations notes. Public contributors do not need it. Do not move private
 operational detail into public docs or expose its remote location through the public repository.
+
+## Work Tracking
+
+Task status lives on GitHub, not in this repository's files. See
+[ADR 0022](./docs/adr/0022-github-owns-task-status.md).
+
+- **Board:** the private user-level Project `Guardian Tracker`
+  (<https://github.com/users/jwh3times/projects/4>), linked to both the public
+  repository and the private companion. Fields: `Chain`, `Order`, `Blocked By`,
+  `Gate`, `ADR`, `Status`.
+- **Issues go in the public repository by default.** File in the private
+  companion only when the body would need a credential, a real
+  provider/cost/account identifier, or exploitable security detail.
+- **Unclaimed work is a project draft item, not an issue.** An issue is created
+  when a slice is claimed, so the open-issue list reads as live status. Convert
+  the draft, then wire native `blocked_by` edges — drafts have no number, so
+  their ordering is carried by the `Blocked By` field.
+- **The ready frontier is computed, not asserted:** open items with no open
+  blocker and no assignee.
+- Record point-in-time findings as comments on the issue they informed. Do not
+  create standing status documents; that is the drift ADR 0022 removes.
+
+### Rules for every architecture-deepening slice
+
+The remaining slices sequenced by ADRs 0014–0021 are behavior-preserving
+ownership migrations. For each one:
+
+- Land the replacement, the deletion of the old path, tests, and affected
+  documentation in **one green PR**. Avoid dual owners and cleanup-only
+  follow-ups.
+- Follow the controlling ADR's migration and acceptance steps. When its final
+  slice ships, update the ADR and the index status to "implemented in `vX.Y.Z`".
+- Preserve ADR 0003's verify-first rule for Manifest assumptions and ADR 0008's
+  HttpOnly same-site refresh-cookie design.
+- Preserve the participant/observer split, Item acquisition-facts ownership,
+  typed Collections outcomes, explicit Wish list tombstones, and Preferences'
+  atomic membership-keyed synchronization contract.
+- Do not decide farm-only multi-collectible semantics, collapse source-string and
+  milestone-name vocabularies, or assume deterministic Efficiency buckets
+  without separate real-Manifest evidence.
+- Keep roadmap features out of these migrations.
+
+A slice is ready only when its dependencies are complete, its replacement and
+deletion boundaries are explicit, its load-bearing external facts have current
+evidence, and its tests exercise the new seam rather than duplicating its data.
 
 ## Agent Routing
 
@@ -430,7 +479,9 @@ are dropped in the generated TOML rather than translated.
 
 ### Issue tracker
 
-Issues live in GitHub Issues (`jwh3times/GuardianTracker`), managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live in GitHub Issues (`jwh3times/GuardianTracker`), managed via the `gh`
+CLI. See `docs/agents/issue-tracker.md` for `gh` conventions and
+[Work Tracking](#work-tracking) for what belongs on the board.
 
 ### Triage labels
 

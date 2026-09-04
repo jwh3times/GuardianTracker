@@ -20,6 +20,32 @@ workspace, or place it in an environment variable.
 
 Infer the repo from `git remote -v` — `gh` does this automatically when run inside a clone.
 
+## Project board
+
+Task status lives on the private user-level Project `Guardian Tracker`
+(project number **4**, owner `jwh3times`), linked to both this repository and the
+private companion. See [ADR 0022](../adr/0022-github-owns-task-status.md).
+
+- **List items**: `gh project item-list 4 --owner jwh3times --format json`
+- **Read fields**: `gh project field-list 4 --owner jwh3times --format json --jq '.fields[] | "\(.name) | \(.id)"'`
+- **Add a draft**: `gh project item-create 4 --owner jwh3times --title "..." --body-file <path>`
+- **Add an existing issue**: `gh project item-add 4 --owner jwh3times --url <issue-url>`
+- **Set a field**: `gh project item-edit --id <item-id> --project-id <project-id> --field-id <field-id> --text "..."` (or `--number`, or `--single-select-option-id`)
+
+Fields: `Chain` (single-select), `Order` (number), `Blocked By` (text), `Gate`
+(text), `ADR` (text), `Status` (single-select).
+
+**Drafts versus issues.** Unclaimed work is a draft item; an issue is created
+when the work is claimed, which keeps the open-issue list readable as live
+status. A draft has no repository or number, so **native dependencies cannot
+attach to it** — carry the order in the `Blocked By` field and wire real
+`blocked_by` edges after converting the draft to an issue.
+
+**Which repository.** File public by default. Use the private companion
+(`jwh3times/GuardianTracker-private`) only when the body would need a
+credential, a real provider/cost/account identifier, or exploitable security
+detail.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

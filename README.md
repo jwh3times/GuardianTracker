@@ -76,8 +76,9 @@ Start with the [documentation map](./docs/README.md). The primary guides are:
 - [SECURITY.md](./SECURITY.md) — security model and reporting process.
 
 This is a public repository. Secrets, private security analysis, deployment
-runbooks, raw research dumps, and detailed handoffs belong in the ignored
-`private/` workspace.
+runbooks, and raw research dumps belong in the ignored `private/` workspace.
+Detailed implementation handoffs live on GitHub Issues and the linked Project
+board instead.
 
 ## Contributing and Support
 
