@@ -14,6 +14,20 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.7] - 2026-09-04
+
+### Fixed
+
+- Made the efficiency engine's generation-fencing test deterministic. It failed
+  intermittently under full-suite load and on CI, where it could block an
+  unrelated merge. The manifest generation fence itself was correct and is
+  unchanged: the test's fixture keyed its rows on a call counter, so a
+  legitimate second rebuild of the same generation received a later
+  generation's data and resembled a stale publish. The fixture now returns the
+  rows belonging to the installed manifest version, and it stops accepting new
+  builds before releasing the obsolete one, so the assertion reflects the
+  fence's verdict rather than the order the Go scheduler happened to pick.
+
 ## [1.3.6] - 2026-09-04
 
 ### Added
@@ -260,7 +274,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.6...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.7...HEAD
+[1.3.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.6...v1.3.7
 [1.3.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.4...v1.3.5
 [1.3.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.3...v1.3.4

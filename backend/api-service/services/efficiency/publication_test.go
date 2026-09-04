@@ -2,6 +2,8 @@ package efficiency
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -223,39 +225,76 @@ func (v *mutableVersion) set(value string) {
 }
 
 type generationSource struct {
+	version   *mutableVersion
 	mu        sync.Mutex
 	calls     int
 	v2Started chan struct{}
 	releaseV2 chan struct{}
 	v3Built   chan struct{}
+	v2Once    sync.Once
+	v3Once    sync.Once
+	sealed    bool
 }
 
+// seal makes every subsequent call fail. The test uses it to freeze the set of
+// builds that can still publish, so the final index reflects the fence's
+// verdict on the released v2 build and nothing else. Without it a legitimate
+// rebuild landing after v2 would overwrite the evidence and the test would pass
+// even with the fence disabled.
+func (s *generationSource) seal() {
+	s.mu.Lock()
+	s.sealed = true
+	s.mu.Unlock()
+}
+
+// GetAllCollectiblesWithItems returns the rows belonging to the manifest
+// version installed when the call is made, exactly as a real manifest-backed
+// source does.
+//
+// It deliberately does not key rows on a call counter. The engine may rebuild
+// the same generation more than once — a Rank during a version change kicks
+// ensureIndex, and whether that goroutine coalesces with the in-flight build or
+// runs after it depends on scheduling. Counter-keyed rows made the fixture hand
+// a legitimate second v3 build a fourth generation's data, which then published
+// under the current generation and looked exactly like a fence failure. See
+// issue #231.
+//
+// The gates are sync.Once because a version may legitimately be built twice;
+// closing a closed channel would panic.
 func (s *generationSource) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
 	s.mu.Lock()
 	s.calls++
-	call := s.calls
+	sealed := s.sealed
 	s.mu.Unlock()
-	if call == 2 {
-		close(s.v2Started)
+	if sealed {
+		return nil, errors.New("generationSource: sealed")
+	}
+
+	version := s.version.Version()
+	switch version {
+	case "v2":
+		s.v2Once.Do(func() { close(s.v2Started) })
 		<-s.releaseV2
+	case "v3":
+		s.v3Once.Do(func() { close(s.v3Built) })
 	}
-	if call == 3 {
-		close(s.v3Built)
+	return generationRows(generationOf(version)), nil
+}
+
+// generationOf maps the test's "vN" manifest versions to the generation number
+// generationRows keys on.
+func generationOf(version string) int {
+	n, err := strconv.Atoi(strings.TrimPrefix(version, "v"))
+	if err != nil {
+		panic("generationSource: unexpected manifest version " + version)
 	}
-	return []manifest.CollectibleWithItem{{
-		Collectible: bungie.CollectibleDefinition{
-			Hash:         uint32(call),
-			ItemHash:     uint32(100 + call),
-			SourceHash:   uint32(call),
-			SourceString: "Vault of Glass raid",
-		},
-		Item: item(100+call, 5),
-	}}, nil
+	return n
 }
 
 func TestBuildIndexFencesOldGenerationAndAllowsNewBuild(t *testing.T) {
 	versions := &mutableVersion{v: "v1"}
 	source := &generationSource{
+		version:   versions,
 		v2Started: make(chan struct{}),
 		releaseV2: make(chan struct{}),
 		v3Built:   make(chan struct{}),
@@ -302,6 +341,7 @@ func TestBuildIndexFencesOldGenerationAndAllowsNewBuild(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
+	source.seal()
 	close(source.releaseV2)
 	deadline = time.Now().Add(time.Second)
 	for {
