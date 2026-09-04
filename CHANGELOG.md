@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.5] - 2026-09-03
+
+### Changed
+
+- Routed every batched Manifest hash lookup through the existing signed-id
+  helper and added its inverse for reading ids back, resolving the code-scanning
+  finding that a user-supplied item hash reached a narrowing integer conversion.
+  The signed-id encoding is unchanged, so Manifest lookups behave identically for
+  every hash, including those above 2^31 that the Manifest stores as negative
+  ids.
+
 ## [1.3.4] - 2026-09-03
 
 ### Changed

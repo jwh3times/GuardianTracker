@@ -3,6 +3,7 @@ package manifest
 import (
 	"database/sql"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,6 +64,9 @@ func writeFixtureDB(t *testing.T, path string) {
 		500: `{"hash":500,"displayProperties":{"name":"Test Ornament"},"itemType":19,"itemSubType":21,"inventory":{"tierType":5}}`,
 		// Cosmetic (finisher, itemType 29)
 		600: `{"hash":600,"displayProperties":{"name":"Test Finisher"},"itemType":29,"inventory":{"tierType":5}}`,
+		// Hash above 2^31: the manifest stores its id negative (two's complement).
+		4000000000: `{"hash":4000000000,"displayProperties":{"name":"Wrapped Hash Weapon"},
+			"itemType":3,"itemSubType":9,"inventory":{"tierType":5}}`,
 	}
 	for hash, blob := range items {
 		if _, err := db.Exec(`INSERT INTO DestinyInventoryItemDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -421,5 +425,66 @@ func TestProvider_LazyOpenAndSwap(t *testing.T) {
 	}
 	if _, err := p.GetItemsByHashes([]uint32{200}); err != nil {
 		t.Fatalf("query after swap: %v", err)
+	}
+}
+
+// TestHashDBKeyRoundTrip pins the manifest id encoding: hashToDBKey must agree
+// with the two's-complement int32 the manifest writes, and dbKeyToHash must
+// invert it. Needs no sqlite, so it runs without cgo.
+func TestHashDBKeyRoundTrip(t *testing.T) {
+	cases := []struct {
+		name string
+		hash uint32
+		key  int64
+	}{
+		{"zero", 0, 0},
+		{"small", 1234, 1234},
+		{"max positive", math.MaxInt32, math.MaxInt32},
+		{"first wrapped", 1 << 31, -1 << 31},
+		{"max uint32", math.MaxUint32, -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := hashToDBKey(tc.hash); got != tc.key {
+				t.Errorf("hashToDBKey(%d) = %d, want %d", tc.hash, got, tc.key)
+			}
+			if got := dbKeyToHash(tc.key); got != tc.hash {
+				t.Errorf("dbKeyToHash(%d) = %d, want %d", tc.key, got, tc.hash)
+			}
+		})
+	}
+}
+
+// TestGetItemsByHashesWrappedID covers a hash above 2^31, whose manifest id is
+// stored negative. The fixture writes it with the raw int32 narrowing the real
+// manifest uses, so this asserts the repository's hashToDBKey/dbKeyToHash pair
+// agrees with that encoding rather than merely with itself.
+func TestGetItemsByHashesWrappedID(t *testing.T) {
+	requireSQLite(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "manifest.sqlite")
+	writeFixtureDB(t, path)
+
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer db.Close()
+	r := &Repository{db: db}
+
+	const wrapped uint32 = 4000000000
+	defs, err := r.GetItemsByHashes([]uint32{wrapped, 100})
+	if err != nil {
+		t.Fatalf("GetItemsByHashes: %v", err)
+	}
+	def, ok := defs[wrapped]
+	if !ok {
+		t.Fatalf("hash %d missing from result (keys: %v)", wrapped, defs)
+	}
+	if got := def.DisplayProperties.Name; got != "Wrapped Hash Weapon" {
+		t.Errorf("name = %q, want %q", got, "Wrapped Hash Weapon")
+	}
+	if _, ok := defs[100]; !ok {
+		t.Errorf("unwrapped hash 100 missing from same batch")
 	}
 }
