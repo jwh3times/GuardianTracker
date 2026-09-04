@@ -2,6 +2,11 @@
 
 **Status:** Accepted
 **Date:** 2026-07-08
+**Superseded in part by:** [ADR 0022](./0022-github-owns-task-status.md) —
+detailed implementation handoffs now live as GitHub project items rather than
+under `private/`; see its
+[Supersession](./0022-github-owns-task-status.md#supersession) section. Every
+other part of this record stands.
 
 ## Context
 

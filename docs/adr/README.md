@@ -24,7 +24,8 @@ actually built:
 A record may also carry a **Supersedes in part** or **Superseded in part by**
 line. Supersession here is narrow and bidirectional: it names the exact statement
 that changed rather than reissuing the record, and both records link to each
-other. See [ADR 0021](./0021-own-preferences-synchronization.md), the first one.
+other. See [ADR 0021](./0021-own-preferences-synchronization.md), the first one, and
+[ADR 0022](./0022-github-owns-task-status.md).
 
 ## Index
 
@@ -51,3 +52,4 @@ other. See [ADR 0021](./0021-own-preferences-synchronization.md), the first one.
 | [0019](./0019-own-wish-list-and-preferences.md)                  | Wish list and Preferences ownership            | Sequenced; Preferences backend slice landed in `v1.1.0`                                       |
 | [0020](./0020-own-frontend-data-access.md)                       | Frontend data access                           | Sequenced                                                                                     |
 | [0021](./0021-own-preferences-synchronization.md)                | Preferences synchronization                    | Sequenced; backend semantics landed in `v1.1.0`, frontend synchronization remains             |
+| [0022](./0022-github-owns-task-status.md)                        | GitHub owns task status                        | Current                                                                                       |
