@@ -47,7 +47,7 @@ session reads a stale copy of it somewhere.
 | The item is…                                                                  | Home                                                                                                                                                                                                          |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A durable cross-session fact — how the user works, a constraint, a gotcha     | Memory (step 4)                                                                                                                                                                                               |
-| Execution sequencing, gates, slice order, "what's next"                       | `private/IMPLEMENTATION_PLAN.md` (step 3)                                                                                                                                                                     |
+| Execution sequencing, gates, slice order, "what's next"                       | The GitHub Project board (step 4) — see [ADR 0022](../../../docs/adr/0022-github-owns-task-status.md). **Never** a `private/` status file.                                                                    |
 | Work that shipped, or an audit now retired                                    | `private/archive.md` (step 3)                                                                                                                                                                                 |
 | A deferred production-infrastructure decision                                 | `private/InfraTODO.md` (step 3)                                                                                                                                                                               |
 | A residual security risk accepted for now                                     | `private/security-limitations.md` (step 3)                                                                                                                                                                    |
@@ -64,10 +64,12 @@ merged PR — is already recorded. Skip it.
 memory the next session reads. `private/README.md` is its index and classifies
 every file as **living**, **reference snapshot**, or **historical evidence**.
 
-- **`IMPLEMENTATION_PLAN.md`** — the active queue and the precedence rule. Advance
-  it: mark slices done, record which gate opened or closed, correct sequencing the
-  session proved wrong. It holds precedence over the ADRs, which are accepted
-  _plans_ rather than descriptions of current behavior.
+- **No status file.** Execution sequencing, slice order, and "what's next" live on
+  the GitHub Project board, not here — that is [ADR
+  0022](../../../docs/adr/0022-github-owns-task-status.md). Do not recreate
+  `IMPLEMENTATION_PLAN.md` or any successor to it. Advance the board in step 4
+  instead: move items, update `Blocked By`, and convert a draft to an issue when it
+  is claimed.
 - **`archive.md`** — retire completed work out of the plan into it. Its sections are
   Durable Decisions, Shipped Timeline, Shipped Baseline by Domain, Detailed Shipped
   Entries, Retired Audits; put the entry under the one that fits and keep the
@@ -94,8 +96,16 @@ Confirm `gh auth status`, then for this session:
   the issue stands alone without this transcript.
 - **New work discovered** → open an issue. This repo creates an issue per
   implementation slice **as the slice becomes ready**, not up front — so open one
-  for work that is ready, and record merely-possible work in the plan instead.
+  for work that is ready, and add merely-possible work to the
+  [Project board](https://github.com/users/jwh3times/projects/4) as a **draft
+  item**, which converts to an issue when it is claimed.
 - **Underspecified** → apply the triage label rather than leaving it bare.
+
+**Board.** Reflect the session on the Project board: set `Status`, correct
+`Blocked By` where the session proved sequencing wrong, and convert a claimed draft
+to an issue. The ready frontier is _computed_ — open items with no open blocker and
+no assignee — so keeping `Blocked By` honest is what makes "what's next" answerable
+without a status document.
 
 **Memory.** One fact per file in the per-project memory directory (its absolute path
 is in the memory section of your system prompt), with `name`, `description`, and

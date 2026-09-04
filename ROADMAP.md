@@ -4,7 +4,8 @@ This public roadmap lists work that is not implemented yet. Completed work is
 tracked in [CHANGELOG.md](./CHANGELOG.md), and durable architecture decisions are
 tracked in [docs/adr](./docs/adr/README.md).
 
-Detailed implementation handoff plans, private security analysis, deployment
+Detailed implementation handoffs live on GitHub Issues and the Project board
+(see `AGENTS.md`'s Work Tracking section). Private security analysis, deployment
 runbooks, and environment-specific operations notes belong under `private/`.
 
 ## How to Use This Roadmap

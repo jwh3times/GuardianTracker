@@ -14,6 +14,50 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.7] - 2026-09-04
+
+### Fixed
+
+- Made the efficiency engine's generation-fencing test deterministic. It failed
+  intermittently under full-suite load and on CI, where it could block an
+  unrelated merge. The manifest generation fence itself was correct and is
+  unchanged: the test's fixture keyed its rows on a call counter, so a
+  legitimate second rebuild of the same generation received a later
+  generation's data and resembled a stale publish. The fixture now returns the
+  rows belonging to the installed manifest version, and it stops accepting new
+  builds before releasing the obsolete one, so the assertion reflects the
+  fence's verdict rather than the order the Go scheduler happened to pick.
+
+## [1.3.6] - 2026-09-04
+
+### Added
+
+- Recorded ADR 0022: task status lives on GitHub Issues and a linked project
+  board, while interface contracts and agent operating context stay in the
+  repository. The dividing line is whether the content changes when a pull
+  request merges. It supersedes exactly one statement in ADR 0001 —
+  implementation handoffs no longer belong under `private/` — and ADR 0001 now
+  links back to it.
+- Added a `Work Tracking` section to `AGENTS.md` covering the board, the
+  public-repository-by-default rule for filing issues, the draft-versus-issue
+  convention that keeps the open-issue list readable as live status, and the
+  rules every architecture-deepening slice must satisfy. Those slice rules were
+  previously reachable only from a private planning file.
+- Documented `gh project` command forms in `docs/agents/issue-tracker.md`,
+  including that a draft item cannot carry a native issue dependency and must
+  record its order in the `Blocked By` field until it is converted.
+
+### Changed
+
+- The `end-session` skill now advances the project board rather than a private
+  status document, so closing a session no longer recreates the file this
+  release retires.
+
+### Fixed
+
+- Restored the missing `1.3.4` and `1.3.5` changelog comparison links and
+  corrected the `Unreleased` comparison base, which still pointed at `v1.3.3`.
+
 ## [1.3.5] - 2026-09-03
 
 ### Changed
@@ -230,7 +274,11 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.3...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.7...HEAD
+[1.3.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.6...v1.3.7
+[1.3.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.5...v1.3.6
+[1.3.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.4...v1.3.5
+[1.3.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.3...v1.3.4
 [1.3.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.2...v1.3.3
 [1.3.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.0...v1.3.1
