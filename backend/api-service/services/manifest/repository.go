@@ -74,6 +74,17 @@ func hashToDBKey(hash uint32) int64 {
 	return int64(hash)
 }
 
+// dbKeyToHash is the exact inverse of hashToDBKey: it maps a signed manifest id
+// back to the unsigned Bungie hash it encodes. Scanning the id column into an
+// int64 and undoing the two's-complement wrap here keeps the round trip free of
+// a narrowing conversion in either direction.
+func dbKeyToHash(key int64) uint32 {
+	if key < 0 {
+		return uint32(key + (1 << 32))
+	}
+	return uint32(key)
+}
+
 func (r *Repository) GetCollectibleDefinition(hash uint32) (*bungie.CollectibleDefinition, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -317,7 +328,7 @@ func (r *Repository) getItemsByHashesLocked(hashes []uint32) (map[uint32]*bungie
 	args := make([]any, len(hashes))
 	for i, h := range hashes {
 		placeholders[i] = "?"
-		args[i] = int32(h) // SQLite stores hashes as signed int32
+		args[i] = hashToDBKey(h)
 	}
 	q := "SELECT id, json FROM DestinyInventoryItemDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := r.db.Query(q, args...)
@@ -328,7 +339,7 @@ func (r *Repository) getItemsByHashesLocked(hashes []uint32) (map[uint32]*bungie
 
 	out := make(map[uint32]*bungie.InventoryItemDefinition)
 	for rows.Next() {
-		var dbID int32
+		var dbID int64
 		var blob string
 		if err := rows.Scan(&dbID, &blob); err != nil {
 			return nil, fmt.Errorf("GetItemsByHashes scan: %w", err)
@@ -337,7 +348,7 @@ func (r *Repository) getItemsByHashesLocked(hashes []uint32) (map[uint32]*bungie
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
 			continue
 		}
-		out[uint32(dbID)] = &def
+		out[dbKeyToHash(dbID)] = &def
 	}
 	return out, rows.Err()
 }
@@ -359,7 +370,7 @@ func (r *Repository) GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungi
 		args := make([]any, len(chunk))
 		for j, h := range chunk {
 			placeholders[j] = "?"
-			args[j] = int32(h)
+			args[j] = hashToDBKey(h)
 		}
 		q := "SELECT json FROM DestinyMilestoneDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 		rows, err := r.db.Query(q, args...)
@@ -572,7 +583,7 @@ func (r *Repository) GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie
 		args := make([]any, len(chunk))
 		for j, h := range chunk {
 			placeholders[j] = "?"
-			args[j] = int32(h)
+			args[j] = hashToDBKey(h)
 		}
 		q := "SELECT json FROM DestinyActivityDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 		rows, err := r.db.Query(q, args...)
@@ -618,7 +629,7 @@ func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32
 		args := make([]any, len(chunk))
 		for j, h := range chunk {
 			placeholders[j] = "?"
-			args[j] = int32(h)
+			args[j] = hashToDBKey(h)
 		}
 		q := "SELECT json FROM DestinyActivityModifierDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 		rows, err := r.db.Query(q, args...)

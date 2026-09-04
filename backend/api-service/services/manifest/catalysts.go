@@ -345,7 +345,7 @@ func (r *Repository) getSandboxPerksLocked(hashes []uint32) (map[uint32]*sandbox
 	args := make([]any, len(hashes))
 	for i, h := range hashes {
 		placeholders[i] = "?"
-		args[i] = int32(h)
+		args[i] = hashToDBKey(h)
 	}
 	q := "SELECT id, json FROM DestinySandboxPerkDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := r.db.Query(q, args...)
@@ -354,7 +354,7 @@ func (r *Repository) getSandboxPerksLocked(hashes []uint32) (map[uint32]*sandbox
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var dbID int32
+		var dbID int64
 		var blob string
 		if err := rows.Scan(&dbID, &blob); err != nil {
 			return nil, fmt.Errorf("getSandboxPerks scan: %w", err)
@@ -363,7 +363,7 @@ func (r *Repository) getSandboxPerksLocked(hashes []uint32) (map[uint32]*sandbox
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
 			continue
 		}
-		out[uint32(dbID)] = &def
+		out[dbKeyToHash(dbID)] = &def
 	}
 	return out, rows.Err()
 }

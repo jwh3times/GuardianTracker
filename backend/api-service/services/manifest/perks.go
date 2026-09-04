@@ -376,7 +376,7 @@ func (r *Repository) getPlugSetsLocked(hashes []uint32) (map[uint32]*plugSetDef,
 	args := make([]any, len(hashes))
 	for i, h := range hashes {
 		placeholders[i] = "?"
-		args[i] = int32(h)
+		args[i] = hashToDBKey(h)
 	}
 	q := "SELECT id, json FROM DestinyPlugSetDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := r.db.Query(q, args...)
@@ -385,7 +385,7 @@ func (r *Repository) getPlugSetsLocked(hashes []uint32) (map[uint32]*plugSetDef,
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var dbID int32
+		var dbID int64
 		var blob string
 		if err := rows.Scan(&dbID, &blob); err != nil {
 			return nil, fmt.Errorf("getPlugSets scan: %w", err)
@@ -394,7 +394,7 @@ func (r *Repository) getPlugSetsLocked(hashes []uint32) (map[uint32]*plugSetDef,
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
 			continue
 		}
-		out[uint32(dbID)] = &def
+		out[dbKeyToHash(dbID)] = &def
 	}
 	return out, rows.Err()
 }
@@ -409,7 +409,7 @@ func (r *Repository) getPlugItemsLocked(hashes []uint32) (map[uint32]*plugItemDe
 	args := make([]any, len(hashes))
 	for i, h := range hashes {
 		placeholders[i] = "?"
-		args[i] = int32(h)
+		args[i] = hashToDBKey(h)
 	}
 	q := "SELECT id, json FROM DestinyInventoryItemDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
 	rows, err := r.db.Query(q, args...)
@@ -418,7 +418,7 @@ func (r *Repository) getPlugItemsLocked(hashes []uint32) (map[uint32]*plugItemDe
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var dbID int32
+		var dbID int64
 		var blob string
 		if err := rows.Scan(&dbID, &blob); err != nil {
 			return nil, fmt.Errorf("getPlugItems scan: %w", err)
@@ -427,7 +427,7 @@ func (r *Repository) getPlugItemsLocked(hashes []uint32) (map[uint32]*plugItemDe
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
 			continue
 		}
-		out[uint32(dbID)] = &def
+		out[dbKeyToHash(dbID)] = &def
 	}
 	return out, rows.Err()
 }
