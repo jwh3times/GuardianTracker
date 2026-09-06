@@ -145,6 +145,12 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	h.logAudit(c, db.AuditEvent{
+		EventType:         "refresh.success",
+		Outcome:           "success",
+		ActorMembershipID: session.Membership.MembershipID,
+		SessionID:         session.SessionID,
+	})
 	h.setRefreshCookie(c, session)
 	c.JSON(http.StatusOK, sessionResponse(session))
 }
@@ -280,7 +286,8 @@ func (h *AuthHandler) writeRefreshCookie(c *gin.Context, value string, expires t
 	})
 }
 
-// logAudit writes one event best-effort: it never blocks or fails the request.
+// logAudit writes one event synchronously, best-effort: audit errors do not
+// change the HTTP outcome.
 // IP and User-Agent are taken from the request; the caller sets the rest.
 func (h *AuthHandler) logAudit(c *gin.Context, ev db.AuditEvent) {
 	if h.audit == nil {

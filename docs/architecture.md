@@ -121,7 +121,11 @@ changing token version or sessions. Bootstrap admin upserts also evict the local
 cache after success. Other replicas retain the normal 60-second cache window;
 the database guard still protects self-service updates during that interval.
 Admin role and flag mutations also commit their audit events transactionally;
-authentication/session audit writes remain best effort.
+authentication/session audit writes remain best effort. After successful session
+refresh, the handler emits `refresh.success` using the verified membership and
+session identifiers, with request IP/User-Agent supplied by the audit helper.
+It includes no credential values; audit persistence failure leaves the successful
+refresh response and replacement cookie intact. The admin audit table labels this event "Session refreshed".
 
 Feature flags control frontend visibility and rollout state. Server-side
 authorization remains the boundary for protected API surfaces.

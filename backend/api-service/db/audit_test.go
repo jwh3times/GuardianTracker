@@ -197,3 +197,35 @@ func TestAuditStore_ListFiltersAndPaginates(t *testing.T) {
 		t.Errorf("pagination overlap: page1 last id %d, page2 first id %d", page1[1].ID, page2[0].ID)
 	}
 }
+
+func TestAuditStore_PersistsRefreshSuccessWithoutCredentials(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	membershipID, _ := createTestUser(t, pool)
+	audit := NewAuditStore(pool)
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM audit_log WHERE actor_membership_id=$1`, membershipID)
+	})
+	event := AuditEvent{
+		EventType: "refresh.success", Outcome: "success", ActorMembershipID: membershipID,
+		SessionID: "fixture-session", IP: "127.0.0.1", UserAgent: "fixture-agent",
+	}
+	if err := audit.Log(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	var sessionID, outcome, details string
+	var actorUserID *int64
+	if err := pool.QueryRow(ctx, `SELECT session_id, outcome, details::text, actor_user_id FROM audit_log WHERE event_type='refresh.success' AND actor_membership_id=$1`, membershipID).Scan(&sessionID, &outcome, &details, &actorUserID); err != nil {
+		t.Fatal(err)
+	}
+	if sessionID != event.SessionID || outcome != "success" || details != "{}" || actorUserID != nil {
+		t.Fatalf("refresh persistence: session=%s outcome=%s details=%s actorUserID=%v", sessionID, outcome, details, actorUserID)
+	}
+	entries, _, err := audit.List(ctx, AuditFilter{EventType: "refresh.", Actor: membershipID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].EventType != "refresh.success" || entries[0].ActorMembershipID != membershipID || len(entries[0].Details) != 0 {
+		t.Fatalf("refresh audit feed=%+v", entries)
+	}
+}

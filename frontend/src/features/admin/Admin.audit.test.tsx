@@ -99,6 +99,40 @@ describe("Admin Audit panel", () => {
     expect(requestedType).toBe("logout.");
   });
 
+  it("Sessions requests the refresh family and identifies successful session refreshes", async () => {
+    let requestedType: string | null = null;
+    server.use(
+      http.get(`${API}/api/admin/audit`, ({ request }) => {
+        const type = new URL(request.url).searchParams.get("type");
+        if (type !== "refresh.")
+          return HttpResponse.json({ entries: [], nextCursor: "" });
+        requestedType = type;
+        return HttpResponse.json({
+          entries: [
+            {
+              id: "refresh-1",
+              eventType: "refresh.success",
+              outcome: "success",
+              actor: {
+                membershipId: "mid-refreshed",
+                displayName: "",
+              },
+              details: {},
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          nextCursor: "",
+        });
+      }),
+    );
+    renderAdmin();
+    fireEvent.click(screen.getByText(/Audit Log/i));
+    fireEvent.click(await screen.findByText("Sessions"));
+    expect(await screen.findByText("Session refreshed")).toBeInTheDocument();
+    expect(screen.getByText("mid-refreshed")).toBeInTheDocument();
+    expect(requestedType).toBe("refresh.");
+  });
+
   it("refetches when the Flags filter chip is clicked", async () => {
     renderAdmin();
     fireEvent.click(screen.getByText(/Audit Log/i));
