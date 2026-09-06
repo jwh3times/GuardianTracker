@@ -158,6 +158,7 @@ cross-site production topology must revisit the cookie policy and would require
 
 ### CI supply-chain controls
 
+- **Docker build context isolation**: both application contexts use recursive `.dockerignore` rules to exclude local environment variants, keys/certificates, database files, logs, caches, and generated artifacts. The runtime `data/` directory is excluded at each context root; nested source modules named `data` remain build inputs. The value-free `.env.example` at each context root is explicitly retained. `Build Docker Images` verifies the policies with synthetic fixtures and a real Docker `FROM scratch` / `COPY` probe before building application images; the probe never reads local environment files. Runtime secrets enter through runtime configuration, not image build inputs.
 - **Immutable workflow dependencies**: every third-party GitHub Action is pinned to a reviewed 40-character release commit with a readable release-version comment. A repository policy test rejects moving tags or missing comments.
 - **Automated pin maintenance**: the `github-actions` Dependabot ecosystem advances action SHAs and release comments together.
 - **Reproducible Go vulnerability scan**: `govulncheck` is declared in the backend Go module at v1.6.0 and CI invokes it with `go tool`, allowing Go-module Dependabot updates without an unbounded `@latest` install.

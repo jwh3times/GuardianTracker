@@ -121,6 +121,19 @@ and onboarding state. For an authenticated user it loads and writes
 fallback when the API is unavailable. Settings exposes the card and
 personalization controls.
 
+## Container build inputs
+
+The frontend `.dockerignore` excludes local environment variants, credentials,
+certificates, caches, generated bundles, and browser reports/auth state at every
+directory depth. The root `.env.example` is retained as a value-free template.
+Local `.env` files therefore do not configure the nginx image. `VITE_*` settings
+are public build-time configuration; the current Dockerfile builds with source
+defaults and does not inject settings from nginx's runtime environment.
+
+From the repository root, `npm run test:docker-context` checks both application
+contexts using synthetic files and Docker's actual `COPY` behavior. It requires
+Docker with Buildx and a running builder; no local credentials are read.
+
 ## Scripts
 
 ```bash

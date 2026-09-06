@@ -268,7 +268,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    unformatted content and drifts again on the next format pass.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, declared `govulncheck` tool v1.6.0 via `go tool govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
-4. **build-docker-images** — build validation only (no push configured)
+4. **build-docker-images** — `npm run test:docker-context` verifies both application `.dockerignore` policies with synthetic fixtures and a real Docker scratch `COPY` probe, then validates application image builds (no push configured). The probe reads only the ignore policies from the workspace, never local environment files.
 5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
    merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
    Bot-authored PRs are exempt; `/ship` backfills their entries.
@@ -306,6 +306,9 @@ Use the narrowest relevant test first, then run broader checks when the change c
 ```powershell
 # Windows workspace portability (from the repo root)
 npm run test:workspace-portability
+
+# Docker context isolation (repo root; Docker Buildx + running builder required)
+npm run test:docker-context
 
 # Go (from backend/api-service/)
 go test ./...

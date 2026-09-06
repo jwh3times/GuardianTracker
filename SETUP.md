@@ -149,6 +149,16 @@ The checked-in example sets `GO_ENV=development` explicitly. Compose refuses to
 render the API service when `GO_ENV` is missing, preventing an accidental
 implicit degraded-mode startup.
 
+Application `.dockerignore` policies exclude local environment variants, keys,
+certificates, database files, logs, caches, and build/test artifacts recursively.
+The runtime `data/` directory is excluded only at the context root, preserving
+nested source modules named `data`.
+Each context retains only its root `.env.example` template from the environment
+file family. Compose passes API settings through its runtime `environment`
+configuration. Local frontend environment files do not configure the built nginx
+image; Vite configuration is public build-time input, and the current Dockerfile
+uses the checked-in source defaults.
+
 Open:
 
 - Frontend: <http://localhost:5273>
@@ -271,6 +281,18 @@ npm run test:workspace-portability
 
 This exercises the bootstrap, secret-restoration, and status helpers with local
 fixtures. CI runs the same suite on Windows PowerShell 5.1 and PowerShell 7.
+
+Docker build context isolation (repository root; requires Docker with Buildx and
+a running builder):
+
+```powershell
+npm run test:docker-context
+```
+
+This copies the two ignore policies into temporary synthetic contexts and checks
+Docker's actual `COPY` result for excluded artifacts and retained build inputs.
+It neither reads local environment files nor builds application images. The
+`Build Docker Images` CI job runs it before application builds.
 
 Backend:
 
