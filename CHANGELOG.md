@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.13] - 2026-09-06
+
+### Security
+
+- Require PostgreSQL server identity verification in production guidance using
+  `verify-full`, the intended hostname, and a trusted CA configuration. Document
+  runtime certificate mounting and staging verification while retaining local
+  development defaults.
+- Add a real pgx TLS regression proving trusted matching certificates succeed
+  and untrusted or wrong-host certificates fail before authentication traffic.
+
 ## [1.3.12] - 2026-09-06
 
 ### Security
@@ -340,7 +351,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.12...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.13...HEAD
+[1.3.13]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.12...v1.3.13
 [1.3.12]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.11...v1.3.12
 [1.3.11]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.10...v1.3.11
 [1.3.10]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.9...v1.3.10

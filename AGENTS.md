@@ -202,22 +202,22 @@ deployed frontend runtime is nginx.
 
 ### Required runtime values
 
-| Variable                                | Purpose                                                                                               |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `GO_ENV`                                | Required; exactly `development` or `production`                                                       |
-| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                               |
-| `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                              |
-| `BUNGIE_API_KEY`                        | From <https://www.bungie.net/en/Application>                                                          |
-| `BUNGIE_CLIENT_ID`                      | Public Bungie OAuth client identifier; no client secret is used                                       |
-| `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                                                    |
-| `JWT_SECRET`                            | 32+ char random string (`openssl rand -base64 32`)                                                    |
-| `DATABASE_URL`                          | Postgres connection string (`postgres://guardian_app:...@host:5532/guardian_tracker?sslmode=disable`) |
-| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie authorization encryption (`openssl rand -base64 32`)                    |
-| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                           |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                             |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                           |
-| `CORS_ALLOWED_ORIGINS`                  | Exact browser origins allowed to call the API                                                         |
-| `ADMIN_MEMBERSHIP_IDS`                  | (optional) comma-separated Bungie membership IDs pinned to admin role at login                        |
+| Variable                                | Purpose                                                                                                                                            |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GO_ENV`                                | Required; exactly `development` or `production`                                                                                                    |
+| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                                                                            |
+| `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                                                                           |
+| `BUNGIE_API_KEY`                        | From <https://www.bungie.net/en/Application>                                                                                                       |
+| `BUNGIE_CLIENT_ID`                      | Public Bungie OAuth client identifier; no client secret is used                                                                                    |
+| `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                                                                                                 |
+| `JWT_SECRET`                            | 32+ char random string (`openssl rand -base64 32`)                                                                                                 |
+| `DATABASE_URL`                          | Postgres connection string (local development uses `sslmode=disable`; production guidance: [PostgreSQL TLS](./SETUP.md#production-postgresql-tls)) |
+| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie authorization encryption (`openssl rand -base64 32`)                                                                 |
+| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                                                                        |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                                                                          |
+| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                                                                        |
+| `CORS_ALLOWED_ORIGINS`                  | Exact browser origins allowed to call the API                                                                                                      |
+| `ADMIN_MEMBERSHIP_IDS`                  | (optional) comma-separated Bungie membership IDs pinned to admin role at login                                                                     |
 
 ### Auth and security behavior to preserve
 
