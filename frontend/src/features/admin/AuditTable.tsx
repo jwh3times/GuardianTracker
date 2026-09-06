@@ -8,6 +8,7 @@ const EVENT_LABEL: Record<string, string> = {
   "login.failure": "Login failed",
   "logout.session": "Logout",
   "logout.all": "Logout (all devices)",
+  "refresh.success": "Session refreshed",
   "refresh.reuse": "Token reuse",
   "refresh.failure": "Refresh failed",
   "role.change.admin": "Role change (admin)",

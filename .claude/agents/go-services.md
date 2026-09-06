@@ -361,7 +361,7 @@ with no database configured); the `sid` JWT claim holds the session ID:
 
 ## Audit logging (`db/audit.go`)
 
-Events persisted to `audit_log`: login, logout, logout-all, refresh failure, refresh reuse, session termination, self opt-in role changes, admin role changes, feature-flag changes. Role/flag changes are written in the mutation's transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). Client IP (validated via `TRUSTED_PROXIES`) and User-Agent are retained for `AUDIT_RETENTION_DAYS` (default 180) days; an hourly pruner removes older rows.
+Events persisted to `audit_log`: login, logout, logout-all, refresh success/failure, refresh reuse, session termination, self opt-in role changes, admin role changes, feature-flag changes. Role/flag changes are written in the mutation's transaction (atomic); auth/session events are best-effort (a DB outage can drop an event). `refresh.success` is emitted after `SessionIssuer.Refresh` succeeds, using its verified membership/session IDs and explicit success outcome; the handler helper adds request IP/User-Agent. Keep access/refresh tokens and cookies out of the event. Audit persistence failure must not prevent the successful response or rotated cookie. Client IP (validated via `TRUSTED_PROXIES`) and User-Agent are retained for `AUDIT_RETENTION_DAYS` (default 180) days; an hourly pruner removes older rows.
 
 ## Route table (`api/router.go`)
 
