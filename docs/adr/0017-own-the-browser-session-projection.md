@@ -1,6 +1,6 @@
 # ADR 0017: Own the Browser Session Projection
 
-- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Accepted — state machine, browser adapters, and production caller cutover implemented; identity-bound QueryClient/provider cleanup remains sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
 - Date: 2026-08-17
 
 ## Context

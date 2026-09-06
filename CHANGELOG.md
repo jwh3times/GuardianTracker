@@ -14,6 +14,31 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.9] - 2026-09-05
+
+### Changed
+
+- Routed login, authenticated requests, refresh, and logout through one browser
+  session client. React now observes its atomic access-token/user projection;
+  valid legacy storage migrates automatically. Login completion and refresh
+  require Web Locks support for coordination across tabs.
+
+### Fixed
+
+- Coordinated concurrent tab refreshes so requests share one cookie rotation and
+  replacement token. Kept request retries and reconnect navigation bound to the
+  initiating session, and preserved local logout finality.
+- Removed duplicate profile reads and auth storage/event handling from the
+  frontend. Identity-bound query-cache cleanup remains a separate follow-up.
+
+## [1.3.8] - 2026-09-04
+
+### Changed
+
+- Updated the API builder image from Go 1.27.0-alpine to 1.27.1-alpine and the
+  frontend runtime from nginx-unprivileged 1.31.4-alpine3.24 to
+  1.31.5-alpine3.24.
+
 ## [1.3.7] - 2026-09-04
 
 ### Fixed
@@ -274,7 +299,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.7...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.9...HEAD
+[1.3.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.8...v1.3.9
+[1.3.8]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.7...v1.3.8
 [1.3.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.6...v1.3.7
 [1.3.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.4...v1.3.5
