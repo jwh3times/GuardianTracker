@@ -27,9 +27,13 @@ const (
 
 // ErrLastAdmin is returned when a role change would leave the system with no admins.
 // ErrUserNotFound is returned when a targeted user row does not exist.
+// ErrAdminOptIn refuses self-service mutation of a current admin.
+// ErrRoleNotAllowed refuses a self-service target outside standard/beta/alpha.
 var (
-	ErrLastAdmin    = errors.New("db: cannot remove the last admin")
-	ErrUserNotFound = errors.New("db: user not found")
+	ErrLastAdmin      = errors.New("db: cannot remove the last admin")
+	ErrUserNotFound   = errors.New("db: user not found")
+	ErrAdminOptIn     = errors.New("db: admin cannot use self-service role opt-in")
+	ErrRoleNotAllowed = errors.New("db: self-service role must be standard, beta, or alpha")
 )
 
 // User represents a Guardian Tracker user record.
@@ -259,19 +263,49 @@ func (s *UserStore) DeleteUserSessions(ctx context.Context, membershipID string)
 	return err
 }
 
-// SetRole sets a user's role by membership ID (self opt-in path). The token
-// version is intentionally left untouched so opt-in does not log the user out;
-// the caller evicts the revocation cache entry so the change takes effect on the
-// next request. Returns ErrUserNotFound when no row matches.
-func (s *UserStore) SetRole(ctx context.Context, membershipID string, role int16) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE users SET role = $2 WHERE membership_id = $1`, membershipID, role)
+// SetSelfRole applies self-service tier opt-in only while the user is currently
+// non-admin. The row lock serializes this decision with promotion, and the
+// conditional UPDATE enforces it at the write. The role.optin event uses the
+// authoritative old role and commits in the same transaction. Token version
+// stays unchanged; the caller evicts its local role cache after success.
+func (s *UserStore) SetSelfRole(ctx context.Context, membershipID string, role int16, ip, userAgent string) error {
+	if role < roleStandard || role >= roleAdmin {
+		return ErrRoleNotAllowed
+	}
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after a successful commit
+
+	var userID int64
+	var oldRole int16
+	err = tx.QueryRow(ctx, `SELECT id, role FROM users WHERE membership_id = $1 FOR UPDATE`, membershipID).Scan(&userID, &oldRole)
+	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrUserNotFound
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+	if oldRole == roleAdmin {
+		return ErrAdminOptIn
+	}
+
+	tag, err := tx.Exec(ctx, `UPDATE users SET role = $2 WHERE membership_id = $1 AND role <> $3`, membershipID, role, roleAdmin)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrAdminOptIn
+	}
+	if err := insertAudit(ctx, tx, AuditEvent{
+		EventType: "role.optin", ActorUserID: &userID, ActorMembershipID: membershipID,
+		IP: ip, UserAgent: userAgent,
+		Details: map[string]any{"oldRole": oldRole, "newRole": role},
+	}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // CountAdmins returns the number of users currently holding the admin role.

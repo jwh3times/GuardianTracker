@@ -210,6 +210,11 @@ func (s *SessionIssuer) Login(ctx context.Context, code, state, browserNonce, us
 			observability.ID("membership", membership.MembershipID), observability.Err(err))
 	} else {
 		tokenVersion, role, appUserID = tv, int(r), &id
+		if forceAdmin {
+			// Bootstrap promotion must retire a previously cached non-admin role.
+			// Other replicas still enforce self opt-in against the current DB row.
+			s.cache.Delete(authInfoCacheKey(membership.MembershipID))
+		}
 	}
 
 	s.tokens.Store(membership.MembershipID, bungieTokens)

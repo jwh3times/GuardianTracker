@@ -15,7 +15,7 @@ import (
 
 // roleSelfStore is the self opt-in slice of db.UserStore.
 type roleSelfStore interface {
-	SetRole(ctx context.Context, membershipID string, role int16) error
+	SetSelfRole(ctx context.Context, membershipID string, role int16, ip, userAgent string) error
 }
 
 // flagLister is the read slice of db.FlagStore.
@@ -28,11 +28,10 @@ type UserHandler struct {
 	users    roleSelfStore
 	resolver *FlagResolver
 	cache    cache.Cache // for evicting tver: entries
-	audit    AuditLogger // nil = best-effort (no-op)
 }
 
-func NewUserHandler(users roleSelfStore, flags flagLister, c cache.Cache, audit AuditLogger) *UserHandler {
-	return &UserHandler{users: users, resolver: NewFlagResolver(flags, c), cache: c, audit: audit}
+func NewUserHandler(users roleSelfStore, flags flagLister, c cache.Cache) *UserHandler {
+	return &UserHandler{users: users, resolver: NewFlagResolver(flags, c), cache: c}
 }
 
 // SetRole handles PUT /api/account/role — self-service tier opt-in.
@@ -56,7 +55,15 @@ func (h *UserHandler) SetRole(c *gin.Context) {
 		return
 	}
 	membershipID := c.GetString("membership_id")
-	if err := h.users.SetRole(c.Request.Context(), membershipID, int16(role)); err != nil {
+	if err := h.users.SetSelfRole(c.Request.Context(), membershipID, int16(role), c.ClientIP(), c.Request.UserAgent()); err != nil {
+		if errors.Is(err, db.ErrAdminOptIn) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admins manage roles in the console. Switching tiers here would drop your admin access.", "code": "ADMIN_OPT_IN"})
+			return
+		}
+		if errors.Is(err, db.ErrRoleNotAllowed) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You can only switch between standard, beta, and alpha.", "code": "ROLE_NOT_ALLOWED"})
+			return
+		}
 		if errors.Is(err, db.ErrUserNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
@@ -68,16 +75,6 @@ func (h *UserHandler) SetRole(c *gin.Context) {
 	// next request — no token_version bump, so the session is preserved.
 	if h.cache != nil {
 		h.cache.Delete("tver:" + membershipID)
-	}
-	if h.audit != nil {
-		oldRole := c.GetInt("role")
-		_ = h.audit.Log(c.Request.Context(), db.AuditEvent{
-			EventType:         "role.optin",
-			ActorMembershipID: membershipID,
-			IP:                c.ClientIP(),
-			UserAgent:         c.Request.UserAgent(),
-			Details:           map[string]any{"oldRole": oldRole, "newRole": int(role)},
-		})
 	}
 	c.JSON(http.StatusOK, gin.H{"role": auth.RoleName(role)})
 }

@@ -252,7 +252,7 @@ func main() {
 			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
 			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, weeklyService, tokenStore),
 			Preferences: handlers.NewPreferencesHandler(preferencesService),
-			User:        handlers.NewUserHandler(stores.Users, stores.Flags, appCache, auditLogger),
+			User:        handlers.NewUserHandler(stores.Users, stores.Flags, appCache),
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),
 			Audit:       handlers.NewAuditHandler(stores.Audit),
 			Characters:  handlers.NewCharactersHandler(charactersService, tokenStore),

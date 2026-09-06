@@ -110,7 +110,18 @@ than trusting the JWT role hint.
 
 Roles are `standard`, `beta`, `alpha`, and `admin`. Admin users can manage user
 roles and feature flags through the admin console. Last-admin demotion is blocked
-transactionally. Role and flag mutations write audit events.
+transactionally. Self-service opt-in uses `UserStore.SetSelfRole`: it locks the
+current user row, refuses admin callers even if request middleware had a stale
+role, and commits the role update and `role.optin` event in one transaction.
+The event's prior role comes from that locked row. Audit failure rolls back the
+update; admin refusal maps to `403 ADMIN_OPT_IN`.
+
+Successful self-service changes evict the local authorization cache without
+changing token version or sessions. Bootstrap admin upserts also evict the local
+cache after success. Other replicas retain the normal 60-second cache window;
+the database guard still protects self-service updates during that interval.
+Admin role and flag mutations also commit their audit events transactionally;
+authentication/session audit writes remain best effort.
 
 Feature flags control frontend visibility and rollout state. Server-side
 authorization remains the boundary for protected API surfaces.

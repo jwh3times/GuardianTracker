@@ -836,3 +836,41 @@ func TestOAuth_RejectsBrowserMismatchBeforeExchange(t *testing.T) {
 		t.Fatal("invalid binding reached Bungie exchange")
 	}
 }
+
+func TestLogin_BootstrapPromotionRetiresLocalRoleCache(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("upsert_failed=%t", failed), func(t *testing.T) {
+			store := newStubStore()
+			store.role = RoleStandard
+			issuer := newIssuer(t, store, newFakeBungie(t), testMembership)
+			shared := cache.NewMemoryCache(time.Minute, 0)
+			issuer.cache = shared
+			revoker := NewRevocationChecker(store, shared)
+			role, err := revoker.Resolve(context.Background(), testMembership, store.version, "")
+			if err != nil || role != RoleStandard {
+				t.Fatalf("prime standard role: %d %v", role, err)
+			}
+			store.upsertRole = RoleAdmin
+			if failed {
+				store.upsertErr = errors.New("upsert failed")
+			} else {
+				store.role = RoleAdmin
+			}
+			if _, err := login(t, issuer, "code"); err != nil {
+				t.Fatal(err)
+			}
+			_, cached := shared.Get(authInfoCacheKey(testMembership))
+			if cached != failed {
+				t.Fatalf("post-bootstrap cached=%t, want %t", cached, failed)
+			}
+			role, err = revoker.Resolve(context.Background(), testMembership, store.version, "")
+			want := RoleAdmin
+			if failed {
+				want = RoleStandard
+			}
+			if err != nil || role != want {
+				t.Fatalf("post-bootstrap cached role=%d want=%d err=%v", role, want, err)
+			}
+		})
+	}
+}
