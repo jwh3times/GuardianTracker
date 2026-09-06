@@ -1,6 +1,6 @@
 # ADR 0017: Own the Browser Session Projection
 
-- Status: Implemented — release pending
+- Status: Implemented in `v1.3.10`
 - Date: 2026-08-17
 
 ## Context
