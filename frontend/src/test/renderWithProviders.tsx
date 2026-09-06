@@ -60,10 +60,8 @@ export function renderWithProviders(
   const body = authed ? <AuthedProviders>{ui}</AuthedProviders> : ui;
 
   return render(
-    <AppProviders client={queryClient}>
-      <MemoryRouter initialEntries={entries} initialIndex={initialIndex}>
-        {body}
-      </MemoryRouter>
-    </AppProviders>,
+    <MemoryRouter initialEntries={entries} initialIndex={initialIndex}>
+      <AppProviders client={queryClient}>{body}</AppProviders>
+    </MemoryRouter>,
   );
 }

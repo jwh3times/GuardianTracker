@@ -1,6 +1,7 @@
+import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React from "react";
 import { useNavigate } from "react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, DataFreshnessChip } from "../../components/primitives";
 import { PageHead, Panel } from "../../components/composite";
 import { Icon } from "../../components/Icon";
@@ -89,7 +90,7 @@ export function Settings() {
   // Self-service early-access opt-in (standard / beta / alpha). The server keeps
   // the session (no token churn) and the new tier propagates on the next request;
   // we refresh resolved flags so gated nav/pages update immediately.
-  const roleMutation = useMutation({
+  const roleMutation = useIdentityMutation({
     mutationFn: (tier: Tier) =>
       apiFetch<APIRoleResponse>("/api/account/role", {
         method: "PUT",
@@ -106,7 +107,7 @@ export function Settings() {
       ),
   });
 
-  const refreshMutation = useMutation({
+  const refreshMutation = useIdentityMutation({
     mutationFn: () =>
       apiFetch<APICacheRefreshResponse>(
         `/api/collections/${user!.membershipType}/${user!.membershipId}/refresh`,

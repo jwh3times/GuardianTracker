@@ -71,8 +71,18 @@ client and performs no JWT decoding or hydration profile request. `apiFetch`
 delegates credential attachment and refresh to that same client and adapts REST
 responses/errors; initial OAuth completion also delegates to the client. Bungie
 reauthorization retains its separate route and authenticated reconnect request.
-QueryClient identity cleanup and membership-scoped provider resets remain pending
-under [ADR 0017](./adr/0017-own-the-browser-session-projection.md).
+Application composition observes the browser session through
+`lib/applicationIdentity.ts`. Becoming anonymous or changing the Destiny
+membership type/ID cancels and clears the departing QueryClient, supplies a fresh
+client, and remounts the keyed provider subtree. This resets preferences,
+onboarding, flags, character state, and page-local drafts; same-membership refresh
+retains the client and mounted state. Identity boundaries also best-effort clear
+the global `gt_done:` weekly checklist storage so completion marks do not carry
+into another account. `useIdentityMutation` fences mutation starts
+and callbacks from a departed identity, while late cache work remains isolated
+in the retired client. Preferences also guard asynchronous completion and reset
+the global local preference snapshot at identity boundaries. See
+[ADR 0017](./adr/0017-own-the-browser-session-projection.md).
 
 Without a configured database, login still succeeds without a session row; a
 session write failure with a database configured still fails the login, since

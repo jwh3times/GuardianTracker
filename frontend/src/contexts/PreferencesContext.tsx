@@ -49,11 +49,16 @@ function load(): Preferences {
   }
 }
 
-export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
+const alwaysCurrent = () => true;
+export const PreferencesProvider: React.FC<{
+  children: ReactNode;
+  resetLocal?: boolean;
+  isCurrent?: () => boolean;
+}> = ({ children, resetLocal = false, isCurrent = alwaysCurrent }) => {
   const { isAuthenticated, user } = useAuth();
-  const [prefs, setPrefs] = useState<Preferences>(load);
+  const [prefs, setPrefs] = useState<Preferences>(() =>
+    resetLocal ? DEFAULTS : load(),
+  );
   const [onboardedAt, setOnboardedAt] = useState<string | null | undefined>(
     undefined,
   );
@@ -62,12 +67,13 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   useEffect(() => {
+    if (!isCurrent()) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
     } catch {
       /* ignore persistence failures */
     }
-  }, [prefs]);
+  }, [prefs, isCurrent]);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.membershipId) {
@@ -75,14 +81,17 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
     }
 
     let cancelled = false;
-    const membershipId = user.membershipId;
+    const membershipId = JSON.stringify([
+      user.membershipType,
+      user.membershipId,
+    ]);
     apiFetch<{
       cardStyle: "framed" | "compact";
       personalize: boolean;
       onboardedAt: string | null;
     }>("/api/preferences")
       .then((remote) => {
-        if (cancelled) return;
+        if (cancelled || !isCurrent()) return;
         setPrefs({
           cardStyle: remote.cardStyle,
           personalize: remote.personalize ? "normal" : "off",
@@ -93,37 +102,40 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
         // API unavailable — keep localStorage value
       })
       .finally(() => {
-        if (!cancelled) setSyncedMembershipId(membershipId);
+        if (!cancelled && isCurrent()) setSyncedMembershipId(membershipId);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, user?.membershipId]);
+  }, [isAuthenticated, user?.membershipId, user?.membershipType, isCurrent]);
 
-  const setCardStyle = useCallback((cardStyle: CardStyle) => {
-    setPrefs((p) => {
-      const next = { ...p, cardStyle };
+  const setCardStyle = useCallback(
+    (cardStyle: CardStyle) => {
+      if (!isCurrent()) return;
+      setPrefs((p) => ({ ...p, cardStyle }));
       apiFetch("/api/preferences", {
         method: "PUT",
         body: JSON.stringify({ cardStyle }),
-      }).catch(() => {}); // silent
-      return next;
-    });
-  }, []);
+      }).catch(() => {});
+    },
+    [isCurrent],
+  );
 
-  const setPersonalize = useCallback((personalize: Personalize) => {
-    setPrefs((p) => {
-      const next = { ...p, personalize };
+  const setPersonalize = useCallback(
+    (personalize: Personalize) => {
+      if (!isCurrent()) return;
+      setPrefs((p) => ({ ...p, personalize }));
       apiFetch("/api/preferences", {
         method: "PUT",
         body: JSON.stringify({ personalize: personalize === "normal" }),
-      }).catch(() => {}); // silent
-      return next;
-    });
-  }, []);
+      }).catch(() => {});
+    },
+    [isCurrent],
+  );
 
   const completeOnboarding = useCallback(async () => {
+    if (!isCurrent()) return;
     const remote = await apiFetch<{
       cardStyle: "framed" | "compact";
       personalize: boolean;
@@ -132,12 +144,14 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({
       method: "PUT",
       body: JSON.stringify({ onboardingComplete: true }),
     });
-    setOnboardedAt(remote.onboardedAt);
-  }, []);
+    if (isCurrent()) setOnboardedAt(remote.onboardedAt);
+  }, [isCurrent]);
 
   const preferencesReady =
     !isAuthenticated ||
-    (!!user?.membershipId && syncedMembershipId === user.membershipId);
+    (!!user?.membershipId &&
+      syncedMembershipId ===
+        JSON.stringify([user.membershipType, user.membershipId]));
 
   return (
     <PreferencesContext.Provider

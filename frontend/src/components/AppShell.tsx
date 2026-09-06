@@ -1,3 +1,4 @@
+import { useToast } from "./Toast";
 import React, { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -269,6 +270,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout: authLogout } = useAuth();
+  const { showToast } = useToast();
   const { flagState, accessible, isAdmin } = useFlags();
   const [mobileNav, setMobileNav] = useState(false);
   const closeMobileNav = () => setMobileNav(false);
@@ -293,8 +295,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   const handleSignOut = () => {
-    authLogout();
-    navigate("/login");
+    void authLogout()
+      .then(() => navigate("/login"))
+      .catch(() =>
+        showToast("Could not save sign-out. Please try again.", "error"),
+      );
   };
 
   return (

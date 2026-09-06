@@ -99,8 +99,15 @@ Sign-in completion and refresh require Web Locks. When coordination is unavailab
 those operations fail without changing the shared refresh cookie; local logout
 still persists. JavaScript never reads or writes the refresh credential. An
 expired Bungie authorization redirects to `/reauthorize` without ending the
-Guardian Tracker session. QueryClient identity cleanup and membership-scoped
-provider resets remain a separate migration under ADR 0017.
+Guardian Tracker session.
+
+On logout or a Destiny membership change, application composition cancels and
+clears the old query cache, replaces its QueryClient, and remounts the provider
+subtree. Preferences, onboarding, flags, character state, and page drafts reset
+before the next identity uses them. Stored weekly checklist marks are also cleared
+on logout or account switch. Same-membership refresh retains that state.
+Authenticated mutations use `useIdentityMutation` so work delayed past an identity
+change cannot start a request or apply its old completion callbacks.
 
 ## Preferences
 

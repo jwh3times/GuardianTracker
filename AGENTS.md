@@ -223,6 +223,7 @@ deployed frontend runtime is nginx.
 - OAuth state is HMAC signed.
 - The access-only Bungie authorization is encrypted at rest with AES-256-GCM and exact current/previous key versions; expiry requires an authenticated reconnect of the same Bungie membership.
 - The shared browser session client atomically persists access JWT/user state in the versioned `guardian_browser_session` localStorage envelope and owns authenticated transport. Web Locks coordinate callback, refresh, and logout across tabs; callback completion and refresh require them. `AuthProvider` only subscribes to the public user/authenticated snapshot. The rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
+- Application composition observes membership type/ID boundaries, cancels and clears the old QueryClient, replaces it, and remounts identity-bound providers. Same-membership refresh retains caches and mounted state. Authenticated mutations use `useIdentityMutation` to fence work from a departed identity.
 - Refresh token revocation is backed by PostgreSQL.
 - Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
 - Single-device logout preserves Bungie authorization; logout-all evicts it.

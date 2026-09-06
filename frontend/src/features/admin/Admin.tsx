@@ -1,3 +1,4 @@
+import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuditTable } from "./AuditTable";
@@ -51,7 +52,7 @@ export function Admin() {
   const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
   const flags = flagsQuery.data ?? [];
 
-  const roleMutation = useMutation({
+  const roleMutation = useIdentityMutation({
     mutationFn: ({ id, role }: { id: string; role: Role }) =>
       apiFetch(`/api/admin/users/${id}/role`, {
         method: "PUT",
@@ -68,7 +69,7 @@ export function Admin() {
       ),
   });
 
-  const flagMutation = useMutation({
+  const flagMutation = useIdentityMutation({
     mutationFn: ({
       key,
       patch,
