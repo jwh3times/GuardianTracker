@@ -1,5 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
-import type { AuthTokenResponse } from "../types/api";
+import {
+  browserSessionClient,
+  BROWSER_SESSION_API_URL,
+} from "./browserSessionBrowser";
+import { BrowserSessionError } from "./browserSessionClient";
 import {
   currentReturnPath,
   markBungieReconnect,
@@ -7,7 +11,7 @@ import {
 
 /** Base URL of the Go API service. Exported so pre-auth flows (e.g. the OAuth
  *  callback) that can't use apiFetch still derive the host from one place. */
-export const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8081";
+export const API_URL = BROWSER_SESSION_API_URL;
 
 if (import.meta.env.DEV) {
   console.log("API URL:", API_URL);
@@ -30,12 +34,6 @@ export class ApiError extends Error {
   }
 }
 
-type RefreshResult =
-  { ok: true; token: string } | { ok: false; transient: boolean };
-
-// Single in-flight refresh — concurrent 401s share one refresh call.
-let refreshPromise: Promise<RefreshResult> | null = null;
-
 interface APIErrorBody {
   error?: string;
   code?: string;
@@ -49,14 +47,18 @@ async function responseErrorBody(res: Response): Promise<APIErrorBody> {
 async function redirectForBungieReconnect(res: Response): Promise<void> {
   if (res.status !== 401) return;
 
+  const snapshot = browserSessionClient.getSnapshot();
   const errorBody = await responseErrorBody(res.clone());
   if (errorBody.code !== "BUNGIE_REAUTH_REQUIRED") return;
+  // Parsing yields; a response must not route a projection adopted meanwhile.
+  if (browserSessionClient.getSnapshot() !== snapshot) {
+    throw new ApiError("The browser session changed", 401, "SESSION_CHANGED");
+  }
 
   // Bungie's public-client authorization expired; the Guardian Tracker app
   // session is still valid. Preserve it and route through the dedicated
   // reconnect flow instead of rotating or clearing the app's refresh session.
   markBungieReconnect(currentReturnPath());
-  window.location.href = "/reauthorize";
   throw new ApiError(
     errorBody.error || "Bungie authorization expired",
     res.status,
@@ -65,82 +67,26 @@ async function redirectForBungieReconnect(res: Response): Promise<void> {
   );
 }
 
-async function doRefresh(): Promise<RefreshResult> {
-  try {
-    const res = await fetch(`${API_URL}/api/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    if (res.ok) {
-      const data = (await res.json()) as AuthTokenResponse;
-      localStorage.setItem("guardian_token", data.token);
-      localStorage.removeItem("guardian_refresh_token");
-      localStorage.setItem("guardian_user", JSON.stringify(data.user));
-      window.dispatchEvent(new Event("guardian_token_refreshed"));
-      return { ok: true, token: data.token };
-    }
-    // 401/403 → the refresh session is gone: definitive logout.
-    // 429 / 5xx → server busy or down: transient, keep the session.
-    return { ok: false, transient: res.status === 429 || res.status >= 500 };
-  } catch {
-    // Network error → transient (don't destroy a session on a blip).
-    return { ok: false, transient: true };
-  }
-}
-
 export async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const token = localStorage.getItem("guardian_token");
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...(init?.headers as Record<string, string> | undefined),
-  };
-
-  let res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    credentials: "include",
-    headers,
-  });
-
-  await redirectForBungieReconnect(res);
-
-  if (res.status === 401) {
-    if (!refreshPromise) {
-      refreshPromise = doRefresh().finally(() => {
-        refreshPromise = null;
-      });
+  const headers = new Headers(init?.headers);
+  if (!headers.has("Content-Type"))
+    headers.set("Content-Type", "application/json");
+  let res: Response;
+  try {
+    res = await browserSessionClient.request(`${API_URL}${path}`, {
+      ...init,
+      headers,
+    });
+  } catch (error) {
+    if (error instanceof BrowserSessionError) {
+      throw new ApiError(error.message, error.status ?? 503, error.code);
     }
-    const result = await refreshPromise;
-
-    if (result.ok) {
-      res = await fetch(`${API_URL}${path}`, {
-        ...init,
-        credentials: "include",
-        headers: { ...headers, Authorization: `Bearer ${result.token}` },
-      });
-      await redirectForBungieReconnect(res);
-    } else if (result.transient) {
-      // Refresh temporarily unavailable (rate-limited / server error). Keep the
-      // session and surface a retryable error so callers show "try again," not logout.
-      throw new ApiError(
-        "Session refresh temporarily unavailable",
-        503,
-        "REFRESH_UNAVAILABLE",
-      );
-    } else {
-      // Definitive auth failure — clear the session and send to login.
-      localStorage.removeItem("guardian_token");
-      localStorage.removeItem("guardian_refresh_token");
-      localStorage.removeItem("guardian_user");
-      window.location.href = "/login";
-      throw new ApiError("Session expired", 401, "SESSION_EXPIRED");
-    }
+    throw error;
   }
+  await redirectForBungieReconnect(res);
 
   if (!res.ok) {
     const errorBody = await responseErrorBody(res);

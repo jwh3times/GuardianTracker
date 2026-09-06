@@ -78,19 +78,29 @@ authorization; they do not replace it.
 
 ## Authentication
 
-1. The login page requests a Bungie authorization URL from the API.
+1. The login page begins authorization through the shared browser session client.
 2. Bungie returns the browser to `/auth/callback` with an authorization code and
-   signed state.
-3. The callback exchanges those values with the API.
-4. The frontend stores the short-lived access JWT and user snapshot in
-   localStorage. The API sets the rotating refresh JWT in a host-only HttpOnly
-   cookie.
-5. `apiFetch` includes credentials, attaches the access JWT, and coalesces
-   concurrent refresh attempts after a 401.
+   signed state; the callback delegates completion to that client.
+3. The client stores the access JWT and user snapshot together in the versioned
+   `guardian_browser_session` localStorage envelope. The API sets the rotating
+   refresh JWT in a host-only HttpOnly cookie.
+4. `apiFetch` delegates authenticated requests to the same client, then adapts
+   response bodies and errors. The client coordinates callback, refresh, and
+   logout across same-origin tabs using Web Locks.
 
-JavaScript never reads or writes the refresh credential. An expired Bungie
-authorization uses the authenticated reconnect flow without rotating the
-Guardian Tracker session.
+`AuthProvider` subscribes to the client's public snapshot with
+`useSyncExternalStore`; it neither decodes JWTs nor fetches a profile during
+hydration. `useAuth()` exposes the user, authenticated state, and both logout
+scopes, without exposing an access token. Existing valid access-token/user pairs
+migrate once from the old separate storage keys; the client then removes those
+keys. A logout persists an anonymous envelope before best-effort server cleanup.
+
+Sign-in completion and refresh require Web Locks. When coordination is unavailable,
+those operations fail without changing the shared refresh cookie; local logout
+still persists. JavaScript never reads or writes the refresh credential. An
+expired Bungie authorization redirects to `/reauthorize` without ending the
+Guardian Tracker session. QueryClient identity cleanup and membership-scoped
+provider resets remain a separate migration under ADR 0017.
 
 ## Preferences
 

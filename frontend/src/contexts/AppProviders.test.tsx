@@ -1,3 +1,4 @@
+import { browserSessionClient } from "../lib/browserSessionBrowser";
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, fireEvent, renderHook } from "@testing-library/react";
 import { useLocation, useNavigate } from "react-router";
@@ -80,7 +81,7 @@ describe("provider contract", () => {
 
     localStorage.clear();
     renderWithProviders(<div>y</div>);
-    expect(localStorage.getItem("guardian_token")).toBe("test-token");
+    expect(browserSessionClient.getSnapshot().status).toBe("authenticated");
   });
 });
 

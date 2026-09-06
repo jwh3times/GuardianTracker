@@ -58,6 +58,22 @@ cookie scoped to `/api/auth`. Reused refresh tokens revoke the affected session.
 Single-device logout preserves the membership-wide Bungie authorization.
 Sign-out-everywhere bumps the user's token version, removes every Guardian
 Tracker session, and evicts the Bungie authorization.
+The production browser session client owns the access-token/user projection in
+one versioned `guardian_browser_session` localStorage envelope, including durable
+anonymous logout state. Its browser adapters supply persistence, the API transport,
+and an origin-wide Web Lock for callback, refresh, and logout. Valid legacy
+access-token/user pairs migrate once when no envelope exists; legacy keys are then
+removed. Sign-in completion and refresh require Web Locks; local logout can still
+persist when coordination is unavailable, with server cleanup best effort.
+
+`AuthProvider` is a declarative `useSyncExternalStore` projection of the shared
+client and performs no JWT decoding or hydration profile request. `apiFetch`
+delegates credential attachment and refresh to that same client and adapts REST
+responses/errors; initial OAuth completion also delegates to the client. Bungie
+reauthorization retains its separate route and authenticated reconnect request.
+QueryClient identity cleanup and membership-scoped provider resets remain pending
+under [ADR 0017](./adr/0017-own-the-browser-session-projection.md).
+
 Without a configured database, login still succeeds without a session row; a
 session write failure with a database configured still fails the login, since
 the access token is checked against that row on every request.

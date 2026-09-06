@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom";
-import { afterAll, afterEach, beforeAll } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { server } from "./testServer";
 
 // Node 22+ defines an experimental global `localStorage` that is undefined
@@ -51,3 +51,51 @@ afterEach(() => {
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
+
+// Each test gets a real client with deterministic origin-wide coordination.
+// Production remains one eagerly hydrated singleton; test fixtures may seed storage
+// before their first render/request without leaking a prior test's projection.
+vi.mock("../lib/browserSessionBrowser", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../lib/browserSessionBrowser")>();
+  const { createBrowserSessionClient } =
+    await import("../lib/browserSessionClient");
+  let client: ReturnType<typeof createBrowserSessionClient> | undefined;
+  let tail: Promise<unknown> = Promise.resolve();
+  beforeEach(() => {
+    client = undefined;
+    tail = Promise.resolve();
+  });
+  const getClient = () =>
+    (client ??= createBrowserSessionClient({
+      persistence: new actual.LocalStorageBrowserSessionPersistence(
+        localStorage,
+        window,
+      ),
+      transport: new actual.FetchBrowserSessionAuthTransport(
+        actual.BROWSER_SESSION_API_URL,
+        (...args) => fetch(...args),
+      ),
+      coordinator: {
+        runExclusive: (work) => {
+          const next = tail.then(work);
+          tail = next.catch(() => {});
+          return next;
+        },
+      },
+    }));
+  return {
+    ...actual,
+    browserSessionClient: {
+      getSnapshot: () => getClient().getSnapshot(),
+      subscribe: (listener: () => void) => getClient().subscribe(listener),
+      beginAuthorization: () => getClient().beginAuthorization(),
+      completeAuthorization: (
+        input: import("../lib/browserSessionClient").AuthorizationCompletion,
+      ) => getClient().completeAuthorization(input),
+      request: (input: RequestInfo | URL, init?: RequestInit) =>
+        getClient().request(input, init),
+      end: (scope: "current" | "all") => getClient().end(scope),
+    },
+  };
+});

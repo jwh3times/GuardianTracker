@@ -4,6 +4,7 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
+import { browserSessionClient } from "../lib/browserSessionBrowser";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { CharacterProvider, useCharacters } from "./CharacterContext";
 
@@ -12,88 +13,53 @@ beforeEach(() => {
 });
 
 describe("AuthContext", () => {
-  it("hydrates synchronously and removes a legacy refresh token", () => {
+  it("projects the hydrated client without exposing credentials or mutators", () => {
     localStorage.setItem("guardian_token", "tok");
-    localStorage.setItem("guardian_refresh_token", "ref");
     localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
-
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-
     expect(result.current.isAuthenticated).toBe(true);
-    expect(result.current.user?.displayName).toBe("TestGuardian");
-    expect(result.current.isLoading).toBe(false);
-    expect(localStorage.getItem("guardian_refresh_token")).toBeNull();
+    expect(result.current.user).toEqual(sampleUser);
+    expect(result.current).not.toHaveProperty("token");
+    expect(result.current).not.toHaveProperty("login");
+    expect(result.current).not.toHaveProperty("isLoading");
   });
 
-  it("is unauthenticated with no stored tokens", () => {
+  it("projects anonymous state synchronously", () => {
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     expect(result.current.isAuthenticated).toBe(false);
+    expect(result.current.user).toBeNull();
   });
 
-  it("login persists only the access session; logout clears it", async () => {
-    let credentials: RequestCredentials | undefined;
+  it("observes establishment and both logout scopes through the client", async () => {
+    const scopes: string[] = [];
     server.use(
-      http.post(`${API}/api/auth/logout`, ({ request }) => {
-        credentials = request.credentials;
-        return new HttpResponse(null, { status: 204 });
-      }),
-    );
-    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-
-    act(() => result.current.login("t1", sampleUser));
-    expect(localStorage.getItem("guardian_token")).toBe("t1");
-    expect(localStorage.getItem("guardian_refresh_token")).toBeNull();
-    expect(result.current.isAuthenticated).toBe(true);
-
-    act(() => result.current.logout());
-    expect(localStorage.getItem("guardian_token")).toBeNull();
-    expect(result.current.isAuthenticated).toBe(false);
-    await waitFor(() => expect(credentials).toBe("include"));
-  });
-
-  it("stays logged out when an expired access token refreshes during logout", async () => {
-    localStorage.setItem("guardian_token", "expired");
-    localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
-    let logoutCalls = 0;
-    server.use(
-      http.post(`${API}/api/auth/logout`, () => {
-        logoutCalls++;
-        return logoutCalls === 1
-          ? HttpResponse.json({ error: "expired" }, { status: 401 })
-          : new HttpResponse(null, { status: 204 });
-      }),
-      http.post(`${API}/api/auth/refresh`, () =>
-        HttpResponse.json({ token: "fresh", user: sampleUser }),
+      http.post(`${API}/api/auth/bungie/callback`, () =>
+        HttpResponse.json({ token: "new", user: sampleUser }),
       ),
-    );
-    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-
-    act(() => result.current.logout());
-
-    expect(result.current.isAuthenticated).toBe(false);
-    await waitFor(() => expect(logoutCalls).toBe(2));
-    await waitFor(() =>
-      expect(localStorage.getItem("guardian_token")).toBeNull(),
-    );
-    expect(localStorage.getItem("guardian_user")).toBeNull();
-  });
-
-  it("logout-all clears local auth and sends the cookie-backed request", async () => {
-    let credentials: RequestCredentials | undefined;
-    server.use(
-      http.post(`${API}/api/auth/logout/all`, ({ request }) => {
-        credentials = request.credentials;
+      http.post(`${API}/api/auth/logout`, () => {
+        scopes.push("current");
+        return new HttpResponse(null, { status: 204 });
+      }),
+      http.post(`${API}/api/auth/logout/all`, () => {
+        scopes.push("all");
         return new HttpResponse(null, { status: 204 });
       }),
     );
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
-    act(() => result.current.login("token", sampleUser));
-
-    act(() => result.current.logoutAll());
-
-    expect(result.current.isAuthenticated).toBe(false);
-    expect(localStorage.getItem("guardian_token")).toBeNull();
-    await waitFor(() => expect(credentials).toBe("include"));
+    for (const scope of ["current", "all"] as const) {
+      await act(() =>
+        browserSessionClient.completeAuthorization({
+          code: scope,
+          state: "state",
+        }),
+      );
+      expect(result.current.isAuthenticated).toBe(true);
+      await act(() =>
+        scope === "all" ? result.current.logoutAll() : result.current.logout(),
+      );
+      expect(result.current.isAuthenticated).toBe(false);
+    }
+    expect(scopes).toEqual(["current", "all"]);
   });
 });
 

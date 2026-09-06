@@ -31,7 +31,8 @@ export type BrowserSessionErrorCode =
   | "INVALID_SESSION_RESPONSE"
   | "PERSISTENCE_UNAVAILABLE"
   | "REFRESH_UNAVAILABLE"
-  | "SESSION_EXPIRED";
+  | "SESSION_EXPIRED"
+  | "SESSION_CHANGED";
 
 export class BrowserSessionError extends Error {
   public readonly cause: unknown;
@@ -470,11 +471,29 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     init?: RequestInit,
   ): Promise<Response> {
     const captured = this.envelope;
+    this.adoptPersisted();
+    if (
+      this.envelope.lineage !== captured.lineage ||
+      this.pendingEnds > 0 ||
+      (captured.projection.status === "authenticated" &&
+        this.envelope.projection.status === "authenticated" &&
+        !sameMembership(
+          captured.projection.user,
+          this.envelope.projection.user,
+        ))
+    ) {
+      throw new BrowserSessionError(
+        "SESSION_CHANGED",
+        "The browser session changed before the request",
+        401,
+      );
+    }
     const generation = this.generation;
     const nextInput = replayableInput(input);
     const accessToken =
-      this.pendingEnds === 0 && captured.projection.status === "authenticated"
-        ? captured.projection.accessToken
+      this.pendingEnds === 0 &&
+      this.envelope.projection.status === "authenticated"
+        ? this.envelope.projection.accessToken
         : undefined;
 
     const response = await this.dependencies.transport.request(
@@ -482,10 +501,12 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
       init,
       accessToken,
     );
+    const requiresBungieReconnect = await isBungieReauthorization(response);
+    this.assertRequestAuthority(captured);
     if (
       response.status !== 401 ||
       captured.projection.status === "anonymous" ||
-      (await isBungieReauthorization(response))
+      requiresBungieReconnect
     ) {
       return response;
     }
@@ -569,6 +590,14 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
           refreshResponse.status,
         );
       }
+      if (!sameMembership(capturedUser, replacement.user)) {
+        this.endGeneration(generation);
+        throw new BrowserSessionError(
+          "SESSION_CHANGED",
+          "The refreshed session belongs to another membership",
+          401,
+        );
+      }
       const refreshedGeneration = this.publish(
         {
           status: "authenticated",
@@ -583,7 +612,10 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
         init,
         replacement.token,
       );
-      if (retried.status === 401 && !(await isBungieReauthorization(retried))) {
+      const retryRequiresBungieReconnect =
+        await isBungieReauthorization(retried);
+      this.assertRequestAuthority(captured);
+      if (retried.status === 401 && !retryRequiresBungieReconnect) {
         this.endGeneration(refreshedGeneration);
         throw new BrowserSessionError(
           "SESSION_EXPIRED",
@@ -656,7 +688,12 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
         const replacement = replacementFrom(
           await responseJson(refreshResponse),
         );
-        if (!replacement) return;
+        if (
+          !replacement ||
+          captured.status !== "authenticated" ||
+          !sameMembership(captured.user, replacement.user)
+        )
+          return;
         await this.dependencies.transport.end(scope, replacement.token);
       } catch {
         // Logout is locally final. Remote cleanup is deliberately best effort.
@@ -849,6 +886,7 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
   ): Promise<Response> {
     const projection = this.envelope.projection;
     if (
+      this.pendingEnds > 0 ||
       this.envelope.revision <= originalRevision ||
       this.envelope.lineage !== originalLineage ||
       projection.status !== "authenticated" ||
@@ -858,16 +896,37 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     }
 
     const generation = this.generation;
+    const captured = this.envelope;
     const response = await this.dependencies.transport.request(
       nextInput(),
       init,
       projection.accessToken,
     );
-    if (response.status === 401 && !(await isBungieReauthorization(response))) {
+    const requiresBungieReconnect = await isBungieReauthorization(response);
+    this.assertRequestAuthority(captured);
+    if (response.status === 401 && !requiresBungieReconnect) {
       this.endGeneration(generation);
       throw new BrowserSessionError("SESSION_EXPIRED", "Session expired", 401);
     }
     return response;
+  }
+
+  private assertRequestAuthority(captured: ProjectionEnvelope): void {
+    this.adoptPersisted();
+    const current = this.envelope;
+    if (
+      this.pendingEnds > 0 ||
+      current.lineage !== captured.lineage ||
+      (captured.projection.status === "authenticated" &&
+        current.projection.status === "authenticated" &&
+        !sameMembership(captured.projection.user, current.projection.user))
+    ) {
+      throw new BrowserSessionError(
+        "SESSION_CHANGED",
+        "The browser session changed before the request completed",
+        401,
+      );
+    }
   }
 
   private assertGeneration(generation: number): void {

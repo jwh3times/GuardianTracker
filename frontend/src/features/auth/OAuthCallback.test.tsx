@@ -1,3 +1,4 @@
+import { browserSessionClient } from "../../lib/browserSessionBrowser";
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -128,7 +129,7 @@ describe("OAuthCallback", () => {
     expect(normalCallbackPosts).toBe(0);
     expect(qc.getQueryState(collectionsKey)?.isInvalidated).toBe(true);
     expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
-    expect(localStorage.getItem("guardian_token")).toBe("test-token");
+    expect(browserSessionClient.getSnapshot().status).toBe("authenticated");
   });
 
   it("falls back to normal login when the Guardian Tracker session is gone", async () => {
@@ -173,6 +174,6 @@ describe("OAuthCallback", () => {
     expect(normalCallbackPosts).toBe(1);
     expect(reconnectPosts).toBe(0);
     expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
-    expect(localStorage.getItem("guardian_token")).toBe("new-login");
+    expect(browserSessionClient.getSnapshot().status).toBe("authenticated");
   });
 });

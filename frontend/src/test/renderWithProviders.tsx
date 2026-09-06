@@ -3,7 +3,7 @@ import { render, type RenderResult } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { QueryClient } from "@tanstack/react-query";
 import { AppProviders, AuthedProviders } from "../contexts/AppProviders";
-import { sampleUser } from "./testServer";
+import { seedBrowserSession } from "./browserSession";
 
 export interface RenderWithProvidersOptions {
   /** Sugar for `initialEntries: [route]`. Ignored when initialEntries is given. */
@@ -44,8 +44,7 @@ export function renderWithProviders(
   }: RenderWithProvidersOptions = {},
 ): RenderResult {
   if (authed) {
-    localStorage.setItem("guardian_token", "test-token");
-    localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
+    seedBrowserSession();
   }
 
   const queryClient =

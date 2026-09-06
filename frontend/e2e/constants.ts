@@ -5,8 +5,7 @@ export const FAKE_URL = process.env.E2E_FAKE_URL ?? "http://127.0.0.1:8090";
 
 export const AUTH_STATE_PATH = "playwright/.auth/user.json";
 export const REFRESH_COOKIE_NAME = "guardian_refresh_token";
-export const ACCESS_TOKEN_KEY = "guardian_token";
-export const USER_KEY = "guardian_user";
+export const BROWSER_SESSION_KEY = "guardian_browser_session";
 export const LEGACY_REFRESH_KEY = "guardian_refresh_token";
 
 export const FIXTURES = {

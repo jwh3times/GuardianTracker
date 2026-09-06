@@ -1,5 +1,9 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useSyncExternalStore } from "react";
 import { Routes, Route, Navigate, Outlet, useNavigate } from "react-router";
+import {
+  hasBungieReconnectIntent,
+  subscribeBungieReconnect,
+} from "./lib/bungieReauthorization";
 import { useAuth } from "./contexts/AuthContext";
 import { useFlags } from "./contexts/FlagsContext";
 import { AppProviders, AuthedProviders } from "./contexts/AppProviders";
@@ -76,14 +80,17 @@ const PageLoader: React.FC = () => (
 );
 
 const ProtectedLayout: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  if (isLoading) {
-    return <PageLoader />;
-  }
+  const reconnect = useSyncExternalStore(
+    subscribeBungieReconnect,
+    hasBungieReconnectIntent,
+  );
   if (!isAuthenticated) {
     return <Navigate to="/login" />;
   }
+
+  if (reconnect) return <Navigate to="/reauthorize" replace />;
 
   return (
     <AuthedProviders>
@@ -139,11 +146,7 @@ const FlaggedRoute: React.FC<{
 };
 
 const AppContent: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return <PageLoader />;
-  }
+  const { isAuthenticated } = useAuth();
 
   return (
     <Suspense fallback={<PageLoader />}>

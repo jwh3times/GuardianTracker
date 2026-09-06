@@ -1,3 +1,8 @@
+const listeners = new Set<() => void>();
+export function subscribeBungieReconnect(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
 const RECONNECT_INTENT_KEY = "guardian_bungie_reconnect";
 const RECONNECT_RETURN_TO_KEY = "guardian_bungie_reconnect_return_to";
 
@@ -31,6 +36,7 @@ export function markBungieReconnect(returnTo = FALLBACK_RETURN_TO): void {
   if (!sessionStorage.getItem(RECONNECT_RETURN_TO_KEY)) {
     sessionStorage.setItem(RECONNECT_RETURN_TO_KEY, safeReturnPath(returnTo));
   }
+  for (const listener of listeners) listener();
 }
 
 export function hasBungieReconnectIntent(): boolean {
@@ -44,4 +50,5 @@ export function bungieReconnectReturnTo(): string {
 export function clearBungieReconnect(): void {
   sessionStorage.removeItem(RECONNECT_INTENT_KEY);
   sessionStorage.removeItem(RECONNECT_RETURN_TO_KEY);
+  for (const listener of listeners) listener();
 }

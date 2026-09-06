@@ -31,11 +31,7 @@ import { toGTItemView } from "../../lib/adapters";
 import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
 import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
-import type {
-  CurrentUserResponse,
-  APICacheRefreshResponse,
-  WishListItem,
-} from "../../types/api";
+import type { APICacheRefreshResponse, WishListItem } from "../../types/api";
 
 const RARITY_RANK: Record<Rarity, number> = {
   exotic: 0,
@@ -87,14 +83,8 @@ export function Collections() {
   const [searchParams] = useSearchParams();
   const itemParam = searchParams.get("item");
 
-  const { data: currentUserData } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: () => apiFetch<CurrentUserResponse>("/api/auth/profile"),
-  });
-
-  const membershipType =
-    currentUserData?.user.membershipType ?? user?.membershipType;
-  const membershipId = currentUserData?.user.membershipId ?? user?.membershipId;
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
 
   // The collections browser always loads the full dataset (collected + missing)
   // and filters the display client-side via `missingOnly`. Using one stable
