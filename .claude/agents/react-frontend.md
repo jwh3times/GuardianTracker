@@ -68,7 +68,7 @@ frontend/src/
                                    it would swallow render errors, including the "hook throws
                                    outside its provider" test assertions). Compose these; don't
                                    nest providers inline in App.tsx or a test.
-    AuthContext.tsx             ← Auth state, localStorage persistence, token refresh;
+    AuthContext.tsx             ← Declarative browser-session snapshot subscription;
                                    logout (this device) + logoutAll (everywhere)
     PreferencesContext.tsx      ← Card style + "for you" badge prefs; Guardian Tracker user-backed onboarding completion
     CharacterContext.tsx        ← Characters query + persisted active-character pick; scopes weekly vendors
@@ -230,11 +230,10 @@ const { data } = useQuery({
 });
 ```
 
-**Never call `fetch()` directly** for authenticated API operations. The public
-OAuth starter and initial callback are the exceptions because no Guardian
-Tracker token exists yet; the authenticated reconnect branch uses `apiFetch`.
-The helper handles token injection, distinguishes Bungie reauthorization from
-Guardian Tracker session expiry, performs app-session refresh, and shapes errors.
+Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
+The OAuth starter and initial callback delegate to the shared browser session
+client. Its browser transport owns `fetch`, credential attachment, and refresh;
+`apiFetch` shapes REST responses/errors and routes Bungie reauthorization.
 
 `ApiError` carries `.status` (HTTP status) and `.code` (backend machine-readable code). Use `errorState(error)` from `lib/errorState.ts` to map errors to UI copy — it branches on `PRIVACY_RESTRICTION`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`.
 
@@ -260,27 +259,25 @@ actually works today.
 
 ## Authentication
 
-`lib/browserSessionClient.ts` and `lib/browserSessionBrowser.ts` contain the E1
-framework-neutral session state machine and browser adapters, but production
-callers do not import them yet. Until the E2 composition cutover,
-`AuthContext`, `apiFetch`, and `OAuthCallback` remain the active browser-session
-owners described below; do not partially adopt the new client.
+`lib/browserSessionClient.ts` owns the browser session projection; the singleton
+in `lib/browserSessionBrowser.ts` composes localStorage persistence, the API fetch
+transport, and origin-wide Web Locks. Production callers share this instance.
 
-Auth state lives entirely in `AuthContext` (`contexts/AuthContext.tsx`):
+- Access JWT and user snapshot are committed together in the versioned `guardian_browser_session` envelope. Valid legacy `guardian_token`/`guardian_user` pairs migrate once when no envelope exists, then the legacy keys are removed.
+- Refresh tokens remain only in the host-only HttpOnly `guardian_refresh_token` cookie (30d, `SameSite=Lax`, `/api/auth`; `Secure` in production).
+- `AuthProvider` subscribes with `useSyncExternalStore`; `useAuth()` returns `{ user, logout, logoutAll, isAuthenticated }`. Hydration performs no profile request or JWT decoding.
+- Login and initial OAuth callback delegate to `beginAuthorization()` / `completeAuthorization()`; the callback page owns navigation.
+- `apiFetch` delegates credential attachment and refresh to the client, then shapes REST responses/errors and Bungie reconnect routing. `BUNGIE_REAUTH_REQUIRED` preserves the app session.
+- Web Locks serialize callback, refresh, and logout across tabs. Without them, callback completion and refresh fail; logout still persists anonymous state, with remote cleanup best effort.
+- Logout durably publishes an anonymous envelope before best-effort server cleanup. Storage events adopt newer session projections across tabs.
 
-- Access token stored in `localStorage` under `guardian_token` (JWT, 30-minute default expiry)
-- Non-secret user snapshot stored in `localStorage` under `guardian_user`
-- Refresh token stored only in the host-only HttpOnly `guardian_refresh_token` cookie (30d, `SameSite=Lax`, `/api/auth`; `Secure` in production)
-- `useAuth()` returns `{ user, token, login, logout, logoutAll, isAuthenticated, isLoading }`; it never exposes the refresh token
-- `apiFetch` inspects a 401 before refreshing. `BUNGIE_REAUTH_REQUIRED` preserves the Guardian Tracker session and routes to `/reauthorize`; other 401s send an empty credentialed request to `/api/auth/refresh`, with concurrent failures sharing one refresh call
-- `login()` stores the access token/user only; the callback response has already set the refresh cookie
-- `logout()` / `logoutAll()` call the matching server endpoint, which expires the cookie, then clear access/user localStorage state
+Read rendered auth state through `useAuth()` and make authenticated REST calls
+through `apiFetch`. Keep credentials, persistence, and refresh inside the browser
+session client/adapters; pages and hooks neither decode JWTs nor access credential
+storage. JavaScript must never read the refresh cookie.
 
-**Never read `guardian_token` directly from localStorage in pages or components.** Always go through `useAuth()` or `apiFetch`. The legacy `guardian_refresh_token` localStorage key must stay absent; JavaScript must never try to read the refresh cookie.
-
-**Never decode the JWT outside of `AuthContext`.** JWT claim parsing (displayName, membershipId, etc.) belongs only in `AuthContext`.
-
-**Never put token refresh logic in page components or custom hooks.** It belongs in `AuthContext`.
+QueryClient identity cleanup and membership-scoped provider resets remain a
+separate pending migration under ADR 0017.
 
 ## Roles and feature flags
 
@@ -336,10 +333,10 @@ works today.
 `/auth/callback?code=...&state=...` for initial login and authenticated reconnect:
 
 1. Reads `code` and `state` from URL params
-2. For initial login, POSTs `{ code, state }` to
-   `POST /api/auth/bungie/callback` with `credentials: "include"`; the API sets
-   the refresh cookie, `AuthContext.login()` stores `{token,user}`, and the
-   browser redirects to `/dashboard`.
+2. For initial login, delegates `{ code, state }` to the shared client's
+   `completeAuthorization()`. Its transport posts to `/api/auth/bungie/callback`
+   with credentials; the API sets the refresh cookie, the client commits the
+   access-token/user envelope, and the page redirects to `/dashboard`.
 3. For reconnect, the non-secret intent and same-origin return path are held in
    `sessionStorage`. The callback uses `apiFetch` to authenticated-POST the code
    and state to `/api/auth/bungie/reconnect`, clears that intent after the 204,
@@ -409,7 +406,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Framework: Vitest + React Testing Library
 - Setup file: `src/test/setup.ts` (MSW server + fixtures in `src/test/testServer.ts`)
 - Tests are colocated with the code they cover: lib tests in `lib/`, component tests in `components/`, and each feature's page tests inside `features/<feature>/`
-- `renderWithProviders` (`src/test/renderWithProviders.tsx`) is the standard way to render a page under test — it mounts `ui` inside `AppProviders` + `MemoryRouter`, and, when `authed` (default `true`), also wraps `AuthedProviders` and seeds `guardian_token`/`guardian_user` in localStorage. Options: `route`, `initialEntries`, `initialIndex`, `authed`, `client` (a fresh retry-disabled `QueryClient` by default). Pass a `<Routes>` element as `ui` when a test needs real route matching. Three test files deliberately keep their own hand-rolled tower instead of `renderWithProviders`: `contexts/contexts.test.tsx` (tests the contexts directly), `features/auth/OAuthCallback.test.tsx` (needs `StrictMode` mounted as a double-invoke regression guard), and `lib/units.test.tsx` (renders providers in isolation). Reach for `renderWithProviders` for any new page test rather than hand-rolling a tower.
+- `renderWithProviders` (`src/test/renderWithProviders.tsx`) is the standard way to render a page under test — it mounts `ui` inside `AppProviders` + `MemoryRouter`, and, when `authed` (default `true`), also wraps `AuthedProviders` and seeds the atomic browser-session envelope with `seedBrowserSession` (`src/test/browserSession.ts`). Options: `route`, `initialEntries`, `initialIndex`, `authed`, `client` (a fresh retry-disabled `QueryClient` by default). Pass a `<Routes>` element as `ui` when a test needs real route matching. Three test files deliberately keep their own hand-rolled tower instead of `renderWithProviders`: `contexts/contexts.test.tsx` (tests the contexts directly), `features/auth/OAuthCallback.test.tsx` (needs `StrictMode` mounted as a double-invoke regression guard), and `lib/units.test.tsx` (renders providers in isolation). Reach for `renderWithProviders` for any new page test rather than hand-rolling a tower.
 - Run: `npm test` (from `frontend/`)
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests
 - Mock `AuthContext` when testing pages that call `useAuth()`

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Brand } from "../../components/Brand";
 import { Button } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
-import type { AuthURLResponse } from "../../types/api";
+import { browserSessionClient } from "../../lib/browserSessionBrowser";
 import {
   currentReturnPath,
   markBungieReconnect,
@@ -16,9 +16,6 @@ export function Login({ mode = "login" }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const AUTH_SERVICE_URL =
-    import.meta.env.VITE_API_URL || "http://localhost:8081";
-
   const handleBungieLogin = async () => {
     try {
       setLoading(true);
@@ -28,12 +25,7 @@ export function Login({ mode = "login" }: LoginProps) {
         markBungieReconnect(currentReturnPath());
       }
 
-      const response = await fetch(`${AUTH_SERVICE_URL}/api/auth/bungie`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = (await response.json()) as AuthURLResponse;
+      const data = await browserSessionClient.beginAuthorization();
       if (data.authUrl) {
         window.location.href = data.authUrl;
       } else {

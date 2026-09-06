@@ -166,19 +166,19 @@ token.
 
 ### Browser credential exposure
 
-Only `guardian_token` (short-lived access JWT) and the non-secret user snapshot are stored in localStorage. The refresh credential is HttpOnly.
+The `guardian_browser_session` localStorage envelope contains the short-lived access JWT and non-secret user snapshot. The refresh credential is HttpOnly.
 
 - Audit: check all React pages for `dangerouslySetInnerHTML` usage or unsanitized user-controlled content rendered as HTML — XSS could read the access token and act within its lifetime, but must not be able to read the refresh token
 - Check for `eval()`, `innerHTML`, or template-injected content in any component
-- Test: if any XSS vector is found, confirm it can read `localStorage.getItem('guardian_token')`
+- Test: if any XSS vector is found, confirm it can read `localStorage.getItem('guardian_browser_session')`
 - Test: confirm `localStorage.getItem('guardian_refresh_token')` is absent and `document.cookie` cannot expose the HttpOnly cookie
 
 ### Client-side auth claims
 
-`AuthContext` decodes JWT claims (displayName, membershipId) client-side without verifying the signature.
+`AuthContext` projects the browser session client snapshot without decoding JWTs. The persisted user snapshot is browser-controlled display state; the server independently validates the access JWT.
 
-- Test: manually edit `guardian_token` in localStorage (change `displayName` claim) — frontend may show wrong name, but API must reject the tampered token on protected requests
-- Confirm: no API call or access-control decision relies solely on a locally decoded claim. The API validates the JWT independently.
+- Test: manually edit the envelope's user display name or access token — frontend may show wrong name, but API must reject the tampered token on protected requests
+- Confirm: no API call or access-control decision relies solely on browser-controlled user state. The API validates the JWT independently.
 
 ## Infrastructure checks
 

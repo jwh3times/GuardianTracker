@@ -1,268 +1,98 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { http, HttpResponse } from "msw";
-import { API, server } from "../test/testServer";
-import { apiFetch, ApiError } from "./api";
+import { apiFetch, ApiError, API_URL } from "./api";
+import { browserSessionClient } from "./browserSessionBrowser";
+import { sampleUser } from "../test/testServer";
+import { BrowserSessionError } from "./browserSessionClient";
 
-// MSW lifecycle (listen/resetHandlers/close) is global — see test/setup.ts.
-// Only the "refresh handling" suite below uses MSW; the "apiFetch" suite
-// above stubs global fetch directly and is unaffected.
-
-function jsonResponse(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
-
-describe("apiFetch", () => {
-  const fetchMock = vi.fn();
-
+describe("apiFetch response adapter", () => {
   beforeEach(() => {
-    localStorage.clear();
     sessionStorage.clear();
-    fetchMock.mockReset();
-    vi.stubGlobal("fetch", fetchMock);
-    // jsdom throws on real navigation; stub location for the redirect path.
-    vi.stubGlobal("location", {
-      href: "",
-      pathname: "/collections",
-      search: "?node=10",
-      hash: "",
-    });
   });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("sends the bearer token and parses JSON", async () => {
-    localStorage.setItem("guardian_token", "tok-1");
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { hello: "world" }));
-
-    const out = await apiFetch<{ hello: string }>("/api/thing");
-
-    expect(out.hello).toBe("world");
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${API}/api/thing`);
-    expect((init.headers as Record<string, string>).Authorization).toBe(
-      "Bearer tok-1",
+  afterEach(() => vi.restoreAllMocks());
+  it("delegates transport and parses JSON", async () => {
+    const request = vi
+      .spyOn(browserSessionClient, "request")
+      .mockResolvedValue(Response.json({ hello: "world" }));
+    await expect(
+      apiFetch("/api/thing", { method: "POST", body: "{}" }),
+    ).resolves.toEqual({ hello: "world" });
+    expect(request).toHaveBeenCalledWith(
+      `${API_URL}/api/thing`,
+      expect.objectContaining({ method: "POST", body: "{}" }),
     );
-    expect(init.credentials).toBe("include");
-  });
-
-  it("throws ApiError carrying status and backend code", async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(403, {
-        error: "profile is private",
-        code: "PRIVACY_RESTRICTION",
-      }),
-    );
-
-    const err = await apiFetch("/api/thing").catch((e) => e);
-
-    expect(err).toBeInstanceOf(ApiError);
-    expect((err as ApiError).status).toBe(403);
-    expect((err as ApiError).code).toBe("PRIVACY_RESTRICTION");
-    expect((err as ApiError).message).toBe("profile is private");
-  });
-
-  it("refreshes once on 401 and retries with the new token", async () => {
-    localStorage.setItem("guardian_token", "stale");
-
-    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.endsWith("/api/auth/refresh")) {
-        return jsonResponse(200, {
-          token: "fresh",
-          user: {
-            id: "u",
-            displayName: "G",
-            membershipId: "u",
-            membershipType: 3,
-          },
-        });
-      }
-      const auth = (init?.headers as Record<string, string>)?.Authorization;
-      return auth === "Bearer fresh"
-        ? jsonResponse(200, { ok: true })
-        : jsonResponse(401, { error: "expired" });
-    });
-
-    const out = await apiFetch<{ ok: boolean }>("/api/thing");
-
-    expect(out.ok).toBe(true);
-    expect(localStorage.getItem("guardian_token")).toBe("fresh");
-    expect(localStorage.getItem("guardian_refresh_token")).toBeNull();
-    const refreshCall = fetchMock.mock.calls.find(([url]) =>
-      String(url).endsWith("/api/auth/refresh"),
-    );
-    expect(refreshCall).toBeDefined();
-    expect(refreshCall?.[1]?.credentials).toBe("include");
-    expect(refreshCall?.[1]?.body).toBe("{}");
-  });
-
-  it("routes a Bungie reauthorization 401 without refreshing or clearing the app session", async () => {
-    localStorage.setItem("guardian_token", "still-valid");
-    localStorage.setItem("guardian_user", '{"membershipId":"1"}');
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(401, {
-        error: "Reconnect Bungie",
-        code: "BUNGIE_REAUTH_REQUIRED",
-      }),
-    );
-
-    let error: unknown;
-    try {
-      await apiFetch("/api/thing");
-    } catch (caught) {
-      error = caught;
-    }
-
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).code).toBe("BUNGIE_REAUTH_REQUIRED");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(
-      fetchMock.mock.calls.some(([url]) =>
-        String(url).endsWith("/api/auth/refresh"),
-      ),
-    ).toBe(false);
-    expect(localStorage.getItem("guardian_token")).toBe("still-valid");
-    expect(localStorage.getItem("guardian_user")).not.toBeNull();
-    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBe("1");
-    expect(sessionStorage.getItem("guardian_bungie_reconnect_return_to")).toBe(
-      "/collections?node=10",
-    );
-    expect(window.location.href).toBe("/reauthorize");
+      new Headers(request.mock.calls[0][1]?.headers).get("Content-Type"),
+    ).toBe("application/json");
   });
-
-  it("shares one in-flight refresh across concurrent 401s", async () => {
-    localStorage.setItem("guardian_token", "stale");
-
-    let refreshCalls = 0;
-    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
-      if (url.endsWith("/api/auth/refresh")) {
-        refreshCalls++;
-        await new Promise((r) => setTimeout(r, 10));
-        return jsonResponse(200, {
-          token: "fresh",
-          user: {
-            id: "u",
-            displayName: "G",
-            membershipId: "u",
-            membershipType: 3,
-          },
-        });
-      }
-      const auth = (init?.headers as Record<string, string>)?.Authorization;
-      return auth === "Bearer fresh"
-        ? jsonResponse(200, { ok: true })
-        : jsonResponse(401, { error: "expired" });
-    });
-
-    await Promise.all([
-      apiFetch("/api/a"),
-      apiFetch("/api/b"),
-      apiFetch("/api/c"),
-    ]);
-
-    expect(refreshCalls).toBe(1);
-  });
-
-  it("clears storage and redirects when the refresh fails", async () => {
-    localStorage.setItem("guardian_token", "stale");
-    localStorage.setItem("guardian_refresh_token", "dead");
-    localStorage.setItem("guardian_user", "{}");
-
-    fetchMock.mockImplementation(async (url: string) =>
-      url.endsWith("/api/auth/refresh")
-        ? jsonResponse(401, { error: "revoked" })
-        : jsonResponse(401, { error: "expired" }),
-    );
-
-    await expect(apiFetch("/api/thing")).rejects.toThrow("Session expired");
-    expect(localStorage.getItem("guardian_token")).toBeNull();
-    expect(localStorage.getItem("guardian_user")).toBeNull();
-    expect(window.location.href).toBe("/login");
-  });
-
-  it("returns undefined for empty bodies (204)", async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
-    const out = await apiFetch<void>("/api/thing", { method: "DELETE" });
-    expect(out).toBeUndefined();
-  });
-});
-
-describe("apiFetch refresh handling", () => {
-  beforeEach(() => {
-    localStorage.setItem("guardian_token", "expired");
-    localStorage.setItem(
-      "guardian_user",
-      JSON.stringify({ membershipId: "1" }),
-    );
-  });
-  afterEach(() => localStorage.clear());
-
-  it("keeps the session and throws a retryable error when refresh is rate-limited (429)", async () => {
-    server.use(
-      http.get(`${API}/api/thing`, () =>
-        HttpResponse.json({ error: "nope" }, { status: 401 }),
-      ),
-      http.post(`${API}/api/auth/refresh`, () =>
-        HttpResponse.json({ error: "slow down" }, { status: 429 }),
-      ),
-    );
-    await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
-    // Session NOT destroyed on a transient failure.
-    expect(localStorage.getItem("guardian_token")).toBe("expired");
-    expect(localStorage.getItem("guardian_user")).not.toBeNull();
-  });
-
-  it("keeps the session when refresh hits a 5xx", async () => {
-    server.use(
-      http.get(`${API}/api/thing`, () =>
-        HttpResponse.json({ error: "nope" }, { status: 401 }),
-      ),
-      http.post(`${API}/api/auth/refresh`, () =>
-        HttpResponse.json({ error: "boom" }, { status: 503 }),
-      ),
-    );
-    await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
-    expect(localStorage.getItem("guardian_token")).toBe("expired");
-  });
-
-  it("clears the session on a definitive 401 from the refresh endpoint", async () => {
-    localStorage.setItem("guardian_refresh_token", "legacy-token");
-    server.use(
-      http.get(`${API}/api/thing`, () =>
-        HttpResponse.json({ error: "nope" }, { status: 401 }),
-      ),
-      http.post(`${API}/api/auth/refresh`, () =>
-        HttpResponse.json({ error: "revoked" }, { status: 401 }),
-      ),
-    );
-    await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
-    // Definitive auth failure — session cleared.
-    expect(localStorage.getItem("guardian_token")).toBeNull();
-    expect(localStorage.getItem("guardian_refresh_token")).toBeNull();
-  });
-
-  it("retries the original request after a successful refresh", async () => {
-    let served = false;
-    server.use(
-      http.get(`${API}/api/thing`, () => {
-        if (!served) {
-          served = true;
-          return HttpResponse.json({ error: "nope" }, { status: 401 });
-        }
-        return HttpResponse.json({ ok: true });
+  it("preserves caller headers and returns undefined for an empty response", async () => {
+    const request = vi
+      .spyOn(browserSessionClient, "request")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(
+      apiFetch("/api/thing", {
+        headers: new Headers({ "Content-Type": "text/plain" }),
       }),
-      http.post(`${API}/api/auth/refresh`, () =>
-        HttpResponse.json({
-          token: "fresh",
-          user: { membershipId: "1" },
-        }),
+    ).resolves.toBeUndefined();
+    expect(
+      new Headers(request.mock.calls[0][1]?.headers).get("Content-Type"),
+    ).toBe("text/plain");
+  });
+  it("retains backend error classification and retry timing", async () => {
+    vi.spyOn(browserSessionClient, "request").mockResolvedValue(
+      Response.json(
+        { error: "Private", code: "PRIVACY_RESTRICTION", retryAfter: 3 },
+        { status: 403 },
       ),
     );
-    await expect(apiFetch("/api/thing")).resolves.toEqual({ ok: true });
-    expect(localStorage.getItem("guardian_token")).toBe("fresh");
+    await expect(apiFetch("/api/thing")).rejects.toMatchObject({
+      name: "ApiError",
+      message: "Private",
+      status: 403,
+      code: "PRIVACY_RESTRICTION",
+      retryAfter: 3,
+    });
+  });
+  it("maps typed session failures without owning logout or refresh", async () => {
+    vi.spyOn(browserSessionClient, "request").mockRejectedValue(
+      new BrowserSessionError("SESSION_EXPIRED", "Session expired", 401),
+    );
+    await expect(apiFetch("/api/thing")).rejects.toMatchObject({
+      status: 401,
+      code: "SESSION_EXPIRED",
+    });
+  });
+  it("reports reconnect intent for UI routing", async () => {
+    vi.spyOn(browserSessionClient, "request").mockResolvedValue(
+      Response.json(
+        { error: "Reconnect Bungie", code: "BUNGIE_REAUTH_REQUIRED" },
+        { status: 401 },
+      ),
+    );
+    await expect(apiFetch("/api/thing")).rejects.toBeInstanceOf(ApiError);
+    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBe("1");
+  });
+  it("does not mark reconnect for a projection adopted while the error body parses", async () => {
+    let finishParsing!: (body: unknown) => void;
+    const pendingBody = new Promise<unknown>((resolve) => {
+      finishParsing = resolve;
+    });
+    const response = new Response(null, { status: 401 });
+    const parsed = new Response(null, { status: 401 });
+    vi.spyOn(parsed, "json").mockReturnValue(pendingBody);
+    vi.spyOn(response, "clone").mockReturnValue(parsed);
+    vi.spyOn(browserSessionClient, "request").mockResolvedValue(response);
+    const original = { status: "authenticated" as const, user: sampleUser };
+    const snapshot = vi
+      .spyOn(browserSessionClient, "getSnapshot")
+      .mockReturnValue(original);
+    const request = apiFetch("/api/thing");
+    await vi.waitFor(() => expect(parsed.json).toHaveBeenCalled());
+    snapshot.mockReturnValue({ status: "anonymous" });
+    finishParsing({
+      error: "Reconnect Bungie",
+      code: "BUNGIE_REAUTH_REQUIRED",
+    });
+    await expect(request).rejects.toMatchObject({ code: "SESSION_CHANGED" });
+    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
   });
 });

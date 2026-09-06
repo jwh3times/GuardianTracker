@@ -21,7 +21,7 @@ import { errorState } from "../../lib/errorState";
 import { collectionsQuery } from "../../lib/queries";
 import { toWishlistEntry } from "../../lib/adapters";
 import type { SummaryCategory, TodayAction, Weekly } from "../../types/design";
-import type { CurrentUserResponse, WishListItem } from "../../types/api";
+import type { WishListItem } from "../../types/api";
 
 function formatDuration(
   d: import("../../types/design").Duration | undefined,
@@ -56,14 +56,8 @@ export function Dashboard() {
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
 
-  const { data: currentUserData } = useQuery({
-    queryKey: ["currentUser"],
-    queryFn: () => apiFetch<CurrentUserResponse>("/api/auth/profile"),
-  });
-
-  const membershipType =
-    currentUserData?.user.membershipType ?? user?.membershipType;
-  const membershipId = currentUserData?.user.membershipId ?? user?.membershipId;
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
 
   // Shares the "missing" collections cache entry with Settings and the
   // Collections page (one fetch across all three) via the shared query helper.
@@ -98,7 +92,7 @@ export function Dashboard() {
     enabled: !!user,
   });
 
-  const displayName = currentUserData?.user.displayName || user?.displayName;
+  const displayName = user?.displayName;
 
   // Normalize wishlist rows through the adapter so rarity/availability handling
   // stays in one place (lib/adapters) rather than reading raw API fields here.

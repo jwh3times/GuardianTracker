@@ -1,12 +1,11 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import {
-  ACCESS_TOKEN_KEY,
+  BROWSER_SESSION_KEY,
   API_URL,
   FAKE_URL,
   FIXTURES,
   LEGACY_REFRESH_KEY,
   REFRESH_COOKIE_NAME,
-  USER_KEY,
 } from "./constants";
 
 export type WeeklyScenario = "normal" | "empty";
@@ -60,14 +59,23 @@ export async function completeOnboarding(page: Page) {
 
 export async function readBrowserAuth(page: Page) {
   return page.evaluate(
-    ({ accessTokenKey, userKey, legacyRefreshKey }) => ({
-      token: localStorage.getItem(accessTokenKey),
-      user: localStorage.getItem(userKey),
-      legacyRefresh: localStorage.getItem(legacyRefreshKey),
-    }),
+    ({ sessionKey, legacyRefreshKey }) => {
+      const envelope = JSON.parse(localStorage.getItem(sessionKey) ?? "null");
+      const projection = envelope?.projection;
+      return {
+        token:
+          projection?.status === "authenticated"
+            ? projection.accessToken
+            : null,
+        user:
+          projection?.status === "authenticated"
+            ? JSON.stringify(projection.user)
+            : null,
+        legacyRefresh: localStorage.getItem(legacyRefreshKey),
+      };
+    },
     {
-      accessTokenKey: ACCESS_TOKEN_KEY,
-      userKey: USER_KEY,
+      sessionKey: BROWSER_SESSION_KEY,
       legacyRefreshKey: LEGACY_REFRESH_KEY,
     },
   );
@@ -96,10 +104,7 @@ export async function expectCookieBackedAuth(page: Page) {
 }
 
 export async function waitForSearchIndex(page: Page) {
-  const token = await page.evaluate(
-    (key) => localStorage.getItem(key),
-    ACCESS_TOKEN_KEY,
-  );
+  const { token } = await readBrowserAuth(page);
   expect(token).toBeTruthy();
 
   await expect

@@ -985,7 +985,9 @@ describe("BrowserSessionClient authenticated requests", () => {
     });
     delayed401.resolve(response(401));
 
-    await expect(staleRequest).resolves.toMatchObject({ status: 401 });
+    await expect(staleRequest).rejects.toMatchObject({
+      code: "SESSION_CHANGED",
+    });
     expect(transport.rotate).not.toHaveBeenCalled();
     expect(transport.send).toHaveBeenCalledTimes(1);
     expect(client.getSnapshot()).toEqual({
@@ -1360,12 +1362,10 @@ describe("BrowserSessionClient logout", () => {
       user: user(),
     });
 
-    await client.request("/api/while-ending");
-    expect(transport.send).toHaveBeenCalledWith(
-      "/api/while-ending",
-      undefined,
-      undefined,
-    );
+    await expect(client.request("/api/while-ending")).rejects.toMatchObject({
+      code: "SESSION_CHANGED",
+    });
+    expect(transport.send).not.toHaveBeenCalled();
 
     blocker.resolve();
     await occupied;
@@ -1435,4 +1435,103 @@ describe("BrowserSessionError", () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.code).toBe("REFRESH_UNAVAILABLE");
   });
+});
+
+describe("BrowserSessionClient membership fencing", () => {
+  it("does not replay a mutation using a different refresh membership", async () => {
+    const { client, transport } = setup(authenticatedPersistence());
+    transport.send.mockResolvedValue(response(401));
+    transport.rotate.mockResolvedValue(
+      replacementResponse("other-token", user("membership-2")),
+    );
+    await expect(
+      client.request("/api/wishlist", { method: "POST", body: "{}" }),
+    ).rejects.toMatchObject({ code: "SESSION_CHANGED" });
+    expect(transport.send).toHaveBeenCalledTimes(1);
+    expect(client.getSnapshot()).toEqual({ status: "anonymous" });
+  });
+  it("does not log out a different refresh membership", async () => {
+    const { client, transport } = setup(authenticatedPersistence());
+    transport.logout.mockResolvedValue(response(401));
+    transport.rotate.mockResolvedValue(
+      replacementResponse("other-token", user("membership-2")),
+    );
+    await client.end("all");
+    expect(transport.logout).toHaveBeenCalledTimes(1);
+    expect(transport.logout).toHaveBeenCalledWith("all", "token-1");
+    expect(client.getSnapshot()).toEqual({ status: "anonymous" });
+  });
+  it("rejects work from the old projection when a storage event has not arrived", async () => {
+    const { client, transport, persistence } = setup(
+      authenticatedPersistence(),
+    );
+    persistence.raw = envelope(
+      5,
+      {
+        status: "authenticated",
+        accessToken: "other-token",
+        user: user("membership-2"),
+      },
+      "new-lineage",
+    );
+    await expect(
+      client.request("/api/wishlist", { method: "POST" }),
+    ).rejects.toMatchObject({ code: "SESSION_CHANGED" });
+    expect(transport.send).not.toHaveBeenCalled();
+    expect(client.getSnapshot()).toEqual({
+      status: "authenticated",
+      user: user("membership-2"),
+    });
+  });
+});
+
+it("does not return a late reconnect response from an ended identity", async () => {
+  const { client, transport, persistence } = setup(authenticatedPersistence());
+  const pending = deferred<Response>();
+  transport.send.mockReturnValue(pending.promise);
+  const request = client.request("/api/collections");
+  persistence.externalWrite(
+    envelope(
+      5,
+      {
+        status: "authenticated",
+        accessToken: "other-token",
+        user: user("membership-2"),
+      },
+      "new-lineage",
+    ),
+  );
+  pending.resolve(response(401, { code: "BUNGIE_REAUTH_REQUIRED" }));
+  await expect(request).rejects.toMatchObject({ code: "SESSION_CHANGED" });
+  expect(transport.rotate).not.toHaveBeenCalled();
+  expect(client.getSnapshot()).toEqual({
+    status: "authenticated",
+    user: user("membership-2"),
+  });
+});
+
+it("does not clear a newer persisted membership after a delayed retry 401", async () => {
+  const { client, transport, persistence } = setup(authenticatedPersistence());
+  const retry = deferred<Response>();
+  transport.send
+    .mockResolvedValueOnce(response(401))
+    .mockReturnValueOnce(retry.promise);
+  const request = client.request("/api/thing");
+  await vi.waitFor(() => expect(transport.send).toHaveBeenCalledTimes(2));
+  persistence.raw = envelope(
+    6,
+    {
+      status: "authenticated",
+      accessToken: "other-token",
+      user: user("membership-2"),
+    },
+    "new-lineage",
+  );
+  retry.resolve(response(401));
+  await expect(request).rejects.toMatchObject({ code: "SESSION_CHANGED" });
+  expect(client.getSnapshot()).toEqual({
+    status: "authenticated",
+    user: user("membership-2"),
+  });
+  expect(persistence.raw).toContain("other-token");
 });

@@ -111,20 +111,20 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Data fetching**
 
-- All data fetching must use `useQuery` / `useMutation` from `@tanstack/react-query` with `apiFetch` from `lib/api.ts`. Flag direct `fetch()` calls from page/component files except the public OAuth starter and initial callback. The authenticated reconnect branch in `OAuthCallback.tsx` must use `apiFetch`.
+- All data fetching must use `useQuery` / `useMutation` from `@tanstack/react-query` with `apiFetch` from `lib/api.ts`. Flag direct `fetch()` calls from page/component files; the OAuth starter and initial callback delegate to the shared browser session client. The authenticated reconnect branch in `OAuthCallback.tsx` must use `apiFetch`.
 - Flag any component that manually constructs an `Authorization` header — `apiFetch` handles token injection.
 - Do not reference Apollo Client (`@apollo/client`) — it is not in this project.
 
 **Auth state**
 
-- Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads `guardian_token` directly from localStorage or references the legacy `guardian_refresh_token` localStorage key.
-- Flag JWT decode operations outside of `AuthContext`.
-- Flag token refresh logic in page components or custom hooks — it belongs in `AuthContext`.
-- `apiFetch` must inspect a 401 response before attempting Guardian Tracker session refresh. Flag code that sends `BUNGIE_REAUTH_REQUIRED` through `/api/auth/refresh`, clears app auth state, or treats it as logout; it means only the access-only Bungie authorization expired.
+- Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads credential storage directly or references the legacy `guardian_refresh_token` localStorage key.
+- Flag JWT decoding in pages, hooks, or `AuthContext`; user identity comes from the browser session client snapshot.
+- Flag token refresh logic in page components or custom hooks — it belongs in the browser session client.
+- The browser session client must inspect a 401 response before attempting Guardian Tracker session refresh. Flag code that sends `BUNGIE_REAUTH_REQUIRED` through `/api/auth/refresh`, clears app auth state, or treats it as logout; it means only the access-only Bungie authorization expired.
 
 **Token storage**
 
-- The access token is stored in localStorage under `guardian_token`; the refresh token is server-set only as the host-only HttpOnly `guardian_refresh_token` cookie. Flag JavaScript that reads/writes a refresh token, callback/refresh requests without `credentials: "include"`, refresh bodies containing a token, or refresh-token fields in response types.
+- The access token and user snapshot are atomically stored in the versioned `guardian_browser_session` localStorage envelope; the refresh token is server-set only as the host-only HttpOnly `guardian_refresh_token` cookie. Flag JavaScript that reads/writes a refresh token, callback/refresh requests without `credentials: "include"`, refresh bodies containing a token, or refresh-token fields in response types.
 
 **Protected routes**
 

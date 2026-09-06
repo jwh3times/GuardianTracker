@@ -1,3 +1,4 @@
+import { seedBrowserSession } from "../test/browserSession";
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
@@ -289,13 +290,11 @@ describe("AuthContext refresh & recovery", () => {
     spy.mockRestore();
   });
 
-  it("syncs state when a token-refreshed event fires", async () => {
+  it("adopts a newer browser projection", async () => {
     const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
     expect(result.current.isAuthenticated).toBe(false);
     act(() => {
-      localStorage.setItem("guardian_token", "evt-tok");
-      localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
-      window.dispatchEvent(new Event("guardian_token_refreshed"));
+      seedBrowserSession();
     });
     await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
   });

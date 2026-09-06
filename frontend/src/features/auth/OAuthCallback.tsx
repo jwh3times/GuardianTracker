@@ -4,19 +4,19 @@ import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../../contexts/AuthContext";
 import { Brand } from "../../components/Brand";
 import { Icon } from "../../components/Icon";
-import { API_URL, apiFetch } from "../../lib/api";
+import { apiFetch } from "../../lib/api";
 import {
   bungieReconnectReturnTo,
   clearBungieReconnect,
   hasBungieReconnectIntent,
 } from "../../lib/bungieReauthorization";
-import type { AuthTokenResponse } from "../../types/api";
+import { browserSessionClient } from "../../lib/browserSessionBrowser";
 
 export const OAuthCallback: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [error, setError] = useState<string | null>(null);
   // The auth code is single-use; React StrictMode double-invokes effects in dev,
   // so guard against submitting it twice.
@@ -79,28 +79,10 @@ export const OAuthCallback: React.FC = () => {
           return;
         }
 
-        const response = await fetch(`${API_URL}/api/auth/bungie/callback`, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: formBody,
+        await browserSessionClient.completeAuthorization({
+          code,
+          state: returnedState ?? "",
         });
-
-        if (!response.ok) {
-          const errorData = (await response.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(
-            errorData.error || `Authentication failed (${response.status})`,
-          );
-        }
-
-        const data = (await response.json()) as AuthTokenResponse;
-        if ((data as { error?: string }).error) {
-          throw new Error((data as { error?: string }).error);
-        }
-
-        login(data.token, data.user);
         void navigate("/dashboard");
       } catch (err) {
         console.error("Error during OAuth callback:", err);
@@ -115,7 +97,7 @@ export const OAuthCallback: React.FC = () => {
     };
 
     void handleCallback();
-  }, [searchParams, navigate, isAuthenticated, login, queryClient]);
+  }, [searchParams, navigate, isAuthenticated, queryClient]);
 
   return (
     <div className="gt-login">

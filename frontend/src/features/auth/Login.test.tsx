@@ -1,3 +1,4 @@
+import { browserSessionClient } from "../../lib/browserSessionBrowser";
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
@@ -62,7 +63,9 @@ describe("Login page", () => {
       screen.getByRole("button", { name: /Sign in with Bungie/ }),
     );
     expect(
-      await screen.findByText(/No authorization URL received/),
+      await screen.findByText(
+        /Authorization setup returned an invalid response/,
+      ),
     ).toBeInTheDocument();
   });
 
@@ -86,6 +89,6 @@ describe("Login page", () => {
       await screen.findByText("Redirecting to Bungie.net…"),
     ).toBeInTheDocument();
     expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBe("1");
-    expect(localStorage.getItem("guardian_token")).toBe("test-token");
+    expect(browserSessionClient.getSnapshot().status).toBe("authenticated");
   });
 });

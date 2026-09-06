@@ -123,13 +123,19 @@ export function Settings() {
   });
 
   const handleSignOut = () => {
-    authLogout();
-    navigate("/login");
+    void authLogout()
+      .then(() => navigate("/login"))
+      .catch(() =>
+        showToast("Could not save sign-out. Please try again.", "error"),
+      );
   };
 
   const handleSignOutAll = () => {
-    authLogoutAll();
-    navigate("/login");
+    void authLogoutAll()
+      .then(() => navigate("/login"))
+      .catch(() =>
+        showToast("Could not save sign-out. Please try again.", "error"),
+      );
   };
 
   const platform =

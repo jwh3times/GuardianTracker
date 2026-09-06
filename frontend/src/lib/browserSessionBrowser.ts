@@ -221,9 +221,10 @@ const browserCoordinator = new WebLocksBrowserSessionCoordinator(
 );
 const browserTransport = new FetchBrowserSessionAuthTransport(
   BROWSER_SESSION_API_URL,
+  (...args) => fetch(...args),
 );
 
-/** E1 defines the production instance; E2 will activate it at the composition root. */
+/** Shared by React projection and the REST response adapter. */
 export const browserSessionClient = createBrowserSessionClient({
   transport: browserTransport,
   persistence: browserPersistence,
