@@ -1,3 +1,4 @@
+import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -62,7 +63,7 @@ export function WishList() {
     [rawItems],
   );
 
-  const deleteMutation = useMutation({
+  const deleteMutation = useIdentityMutation({
     mutationFn: (id: string) =>
       apiFetch<void>(`/api/wishlist/${id}`, { method: "DELETE" }),
     onMutate: async (id: string) => {
@@ -83,7 +84,7 @@ export function WishList() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
   });
 
-  const updateMutation = useMutation({
+  const updateMutation = useIdentityMutation({
     mutationFn: ({ id, priority }: { id: string; priority: string }) =>
       apiFetch<WishListItem>(`/api/wishlist/${id}`, {
         method: "PUT",
@@ -107,7 +108,7 @@ export function WishList() {
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
   });
 
-  const notesMutation = useMutation({
+  const notesMutation = useIdentityMutation({
     mutationFn: ({ id, notes }: { id: string; notes: string }) =>
       apiFetch<WishListItem>(`/api/wishlist/${id}`, {
         method: "PUT",
@@ -165,7 +166,7 @@ export function WishList() {
     setSelected(new Set());
   };
 
-  const bulkMutation = useMutation({
+  const bulkMutation = useIdentityMutation({
     mutationFn: (vars: {
       action: "delete" | "set_priority";
       ids: string[];

@@ -14,6 +14,25 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.10] - 2026-09-06
+
+### Fixed
+
+- Clear and replace account-bound query caches and reset provider state on logout
+  or membership changes. Late query responses, optimistic rollback, and delayed
+  mutations cannot restore the departing account's data or act for its replacement.
+- Reset local preferences, reconnect intent, and weekly checklist marks at account
+  boundaries while preserving collection filters and membership-specific character
+  choices. Same-membership token refresh retains caches, checklist marks, and
+  unsaved editor state.
+- Handle application-shell sign-out failures consistently with Settings.
+
+### Changed
+
+- Completed ADR 0017's browser session projection with identity cleanup at
+  application composition and regression coverage for cross-tab account changes,
+  logout, delayed work, and application remounts.
+
 ## [1.3.9] - 2026-09-05
 
 ### Changed
@@ -299,7 +318,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.9...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.10...HEAD
+[1.3.10]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.9...v1.3.10
 [1.3.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.8...v1.3.9
 [1.3.8]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.7...v1.3.8
 [1.3.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.6...v1.3.7

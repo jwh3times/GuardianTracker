@@ -108,13 +108,14 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Data fetching**
 
-- All data fetching must use `useQuery` / `useMutation` from `@tanstack/react-query` with `apiFetch` from `lib/api.ts`. Flag direct `fetch()` calls from page/component files; the OAuth starter and initial callback delegate to the shared browser session client. The authenticated reconnect branch in `OAuthCallback.tsx` must use `apiFetch`.
+- Queries use `useQuery` from `@tanstack/react-query` with `apiFetch` from `lib/api.ts`; authenticated mutations use `useIdentityMutation` from `contexts/IdentityMutation.ts` to fence departed identity work. Flag direct `fetch()` calls from page/component files; the OAuth starter and initial callback delegate to the shared browser session client. The authenticated reconnect branch in `OAuthCallback.tsx` must use `apiFetch`.
 - Flag any component that manually constructs an `Authorization` header — `apiFetch` handles token injection.
 - Do not reference Apollo Client (`@apollo/client`) — it is not in this project.
 
 **Auth state**
 
 - Auth state must only be read via `useAuth()` from `contexts/AuthContext.tsx`. Flag any component that reads credential storage directly or references the legacy `guardian_refresh_token` localStorage key.
+- Preserve composition-owned QueryClient cancellation, clearing, and replacement plus keyed provider resets on logout or membership type/ID changes. Same-membership refresh must retain caches and state. Cache operations must use the active `useQueryClient()` result, not the initial client singleton.
 - Flag JWT decoding in pages, hooks, or `AuthContext`; user identity comes from the browser session client snapshot.
 - Flag token refresh logic in page components or custom hooks — it belongs in the browser session client.
 - The browser session client must inspect a 401 response before attempting Guardian Tracker session refresh. Flag code that sends `BUNGIE_REAUTH_REQUIRED` through `/api/auth/refresh`, clears app auth state, or treats it as logout; it means only the access-only Bungie authorization expired.

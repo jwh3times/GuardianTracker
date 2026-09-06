@@ -1,6 +1,6 @@
 # ADR 0017: Own the Browser Session Projection
 
-- Status: Accepted — state machine, browser adapters, and production caller cutover implemented; identity-bound QueryClient/provider cleanup remains sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Implemented in `v1.3.10`
 - Date: 2026-08-17
 
 ## Context
@@ -131,9 +131,13 @@ the departing cookie mutation to finish.
 
 The client reports projection transitions; it does not import React Query or
 feature contexts. A consumer registered at application composition cancels and
-clears the QueryClient and resets identity-bound provider state when the
+clears the departing QueryClient, supplies a fresh client, and remounts the keyed
+provider subtree when the
 projection becomes anonymous or its Destiny membership changes. A same-
-membership refresh retains those caches. The later data-access decision may
+membership refresh retains those caches and mounted state. Guarded mutations
+reject delayed starts and skip departed completion callbacks; late cache work
+remains isolated in the retired client. Preferences also guard asynchronous
+results and reset their local snapshot at the boundary. The later data-access decision may
 improve query-key ownership, but must preserve this boundary cleanup.
 
 ### Ports and adapters

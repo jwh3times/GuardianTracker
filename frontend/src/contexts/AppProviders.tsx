@@ -1,4 +1,7 @@
-import React from "react";
+import React, { useMemo, useSyncExternalStore } from "react";
+import { browserSessionClient } from "../lib/browserSessionBrowser";
+import { createApplicationIdentity } from "../lib/applicationIdentity";
+import { IdentityContext } from "./IdentityMutation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./AuthContext";
 import { PreferencesProvider } from "./PreferencesContext";
@@ -13,7 +16,8 @@ import { queryClient as defaultQueryClient } from "../lib/api";
  * The ordering is not arbitrary and the providers are not interchangeable:
  *
  * - `PreferencesProvider` reads `useAuth`, so it must sit inside `AuthProvider`.
- * - `AuthProvider` issues queries, so it must sit inside `QueryClientProvider`.
+ * - An identity boundary replaces the QueryClient and remounts the provider tree.
+ *   Same-membership refresh retains both; late mutation work stays with its old client.
  *
  * Deliberately NOT included:
  *
@@ -32,14 +36,27 @@ export function AppProviders({
   /** Defaults to the app singleton. Tests pass a fresh, retry-disabled client. */
   client?: QueryClient;
 }) {
+  const identities = useMemo(
+    () => createApplicationIdentity(browserSessionClient, client),
+    [client],
+  );
+  const scope = useSyncExternalStore(
+    identities.subscribe,
+    identities.getSnapshot,
+  );
   return (
-    <QueryClientProvider client={client}>
-      <AuthProvider>
-        <PreferencesProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </PreferencesProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <IdentityContext.Provider value={scope} key={scope.revision}>
+      <QueryClientProvider client={scope.client}>
+        <AuthProvider>
+          <PreferencesProvider
+            resetLocal={scope.revision > 0}
+            isCurrent={scope.isCurrent}
+          >
+            <ToastProvider>{children}</ToastProvider>
+          </PreferencesProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </IdentityContext.Provider>
   );
 }
 

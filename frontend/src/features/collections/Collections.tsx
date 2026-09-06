@@ -1,6 +1,7 @@
+import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CategoryTree,
   Dropdown,
@@ -126,7 +127,7 @@ export function Collections() {
       return next;
     });
 
-  const addWishlistMutation = useMutation({
+  const addWishlistMutation = useIdentityMutation({
     mutationFn: (item: GTItem) =>
       apiFetch("/api/wishlist", {
         method: "POST",
@@ -141,7 +142,7 @@ export function Collections() {
     onSettled: (_data, _err, item) => markPending(item.id, false),
   });
 
-  const removeWishlistMutation = useMutation({
+  const removeWishlistMutation = useIdentityMutation({
     mutationFn: ({ rowId }: { rowId: string; name: string; itemId: string }) =>
       apiFetch<void>(`/api/wishlist/${rowId}`, { method: "DELETE" }),
     onSuccess: (_data, { name }) => {
@@ -153,7 +154,7 @@ export function Collections() {
     onSettled: (_data, _err, { itemId }) => markPending(itemId, false),
   });
 
-  const refreshMutation = useMutation({
+  const refreshMutation = useIdentityMutation({
     mutationFn: () =>
       apiFetch<APICacheRefreshResponse>(
         `/api/collections/${membershipType}/${membershipId}/refresh`,

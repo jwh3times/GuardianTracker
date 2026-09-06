@@ -60,9 +60,10 @@ frontend/src/
   index.tsx                    ← Root: AuthProvider, PreferencesProvider; imports styles/*.css
   contexts/
     AppProviders.tsx             ← The single definition of the context tower. `AppProviders`
-                                   (QueryClientProvider > AuthProvider > PreferencesProvider >
+                                   (keyed IdentityContext > QueryClientProvider > AuthProvider > PreferencesProvider >
                                    ToastProvider; optional `client` prop, defaults to the
-                                   lib/api singleton) wraps the whole app in App.tsx.
+                                   lib/api initial client) wraps the whole app in App.tsx; identity boundaries
+                                   replace the client and remount this subtree.
                                    `AuthedProviders` (FlagsProvider > CharacterProvider) mounts
                                    only below ProtectedLayout's auth gate. Deliberately excludes
                                    the router (index.tsx owns BrowserRouter; tests use
@@ -221,7 +222,7 @@ Deleted files / paths (do not reference):
 
 ## Data fetching
 
-All data fetching uses **TanStack React Query** (`useQuery` / `useMutation`) with `apiFetch` from `lib/api.ts`. There is no Apollo Client.
+Data fetching uses **TanStack React Query** (`useQuery`) with `apiFetch` from `lib/api.ts`; authenticated mutations use `useIdentityMutation` from `contexts/IdentityMutation.ts`, which wraps React Query mutation lifecycle callbacks with the originating identity guard. There is no Apollo Client.
 
 ```typescript
 // apiFetch injects Authorization: Bearer <token> automatically and throws ApiError on non-2xx
@@ -256,7 +257,7 @@ per-feature pattern to one data-access module per resource under
 `src/data/<resource>.ts` — owning query identity, projection, and mutations,
 with React Query kept out of feature modules. Implementation is sequenced by the #172 handoff and has not
 landed yet, so `lib/queries.ts`, the per-feature `useQuery` /
-`useMutation` calls documented in this file, and the consumer-side `toCharacter`
+`useIdentityMutation` calls documented in this file, and the consumer-side `toCharacter`
 / `toWishlistEntry` projections in `lib/adapters.ts` remain how the code
 actually works today.
 
@@ -279,8 +280,15 @@ through `apiFetch`. Keep credentials, persistence, and refresh inside the browse
 session client/adapters; pages and hooks neither decode JWTs nor access credential
 storage. JavaScript must never read the refresh cookie.
 
-QueryClient identity cleanup and membership-scoped provider resets remain a
-separate pending migration under ADR 0017.
+`AppProviders` composes the `applicationIdentity` observer outside the keyed
+provider subtree. A transition to anonymous or a different Destiny membership
+type/ID cancels and clears the old QueryClient, creates a replacement, and
+remounts the subtree, resetting preferences, onboarding, flags, character state,
+and page drafts. Same-membership refresh retains caches and mounted state.
+`useIdentityMutation` guards delayed mutation starts and completion callbacks;
+late cache work remains isolated in the retired client. Use the current client
+from `useQueryClient()` for cache operations rather than importing the initial
+client singleton.
 
 ## Roles and feature flags
 
@@ -318,7 +326,10 @@ authenticated pages go inside this group — do not add inline auth checks or re
 
 `PreferencesContext` (`contexts/PreferencesContext.tsx`) holds card style, the
 "for you" badge preference, and Guardian Tracker user-backed onboarding
-completion, mirroring them into the global `guardian_prefs` localStorage key.
+completion, mirroring card style and personalization into the global
+`guardian_prefs` localStorage key. Composition resets this snapshot at identity
+boundaries; the new provider starts with defaults, and identity guards discard
+departed reads, onboarding results, and setter calls.
 
 [ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md) accepts
 replacing it with a framework-neutral preferences client at
