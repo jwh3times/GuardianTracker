@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.14] - 2026-09-06
+
+### Security
+
+- Refuse self-service role changes when the current database role is admin,
+  including requests that began before a concurrent promotion. Commit permitted
+  changes and their audit events together; audit failures roll back the change.
+- Clear the local role cache after successful bootstrap administrator promotion.
+  Self-service changes retain existing sessions and record the authoritative
+  previous role in the audit trail.
+
 ## [1.3.13] - 2026-09-06
 
 ### Security
@@ -351,7 +362,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.13...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.14...HEAD
+[1.3.14]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.13...v1.3.14
 [1.3.13]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.12...v1.3.13
 [1.3.12]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.11...v1.3.12
 [1.3.11]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.10...v1.3.11

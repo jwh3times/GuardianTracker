@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,9 +21,10 @@ import (
 // --- fakes (satisfy the account + admin store interfaces) ---
 
 type fakeRoleStore struct {
-	setRoleErr    error
-	lastSetRole   int16
-	setRoleCalled bool
+	setRoleErr                            error
+	lastSetRole                           int16
+	setRoleCalled                         bool
+	lastMembership, lastIP, lastUserAgent string
 
 	users      []db.AdminUser
 	change     *db.RoleChange
@@ -32,7 +34,8 @@ type fakeRoleStore struct {
 	lastNew    int16
 }
 
-func (f *fakeRoleStore) SetRole(_ context.Context, _ string, role int16) error {
+func (f *fakeRoleStore) SetSelfRole(_ context.Context, membershipID string, role int16, ip, userAgent string) error {
+	f.lastMembership, f.lastIP, f.lastUserAgent = membershipID, ip, userAgent
 	f.setRoleCalled = true
 	f.lastSetRole = role
 	return f.setRoleErr
@@ -84,7 +87,7 @@ func TestSetRole_OptInAllowedEvictsCache(t *testing.T) {
 	store := &fakeRoleStore{}
 	c := newCache()
 	c.Set("tver:member-1", 1, time.Minute)
-	h := NewUserHandler(store, nil, c, nil)
+	h := NewUserHandler(store, nil, c)
 	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -105,7 +108,7 @@ func TestSetRole_OptInAllowedEvictsCache(t *testing.T) {
 
 func TestSetRole_RejectsAdminTarget(t *testing.T) {
 	store := &fakeRoleStore{}
-	h := NewUserHandler(store, nil, newCache(), nil)
+	h := NewUserHandler(store, nil, newCache())
 	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -121,7 +124,7 @@ func TestSetRole_RejectsAdminTarget(t *testing.T) {
 
 func TestSetRole_AdminCallerRefused(t *testing.T) {
 	store := &fakeRoleStore{}
-	h := NewUserHandler(store, nil, newCache(), nil)
+	h := NewUserHandler(store, nil, newCache())
 	r := roleTestRouter("member-1", auth.RoleAdmin, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -137,7 +140,7 @@ func TestSetRole_AdminCallerRefused(t *testing.T) {
 
 func TestSetRole_DegradedMode503(t *testing.T) {
 	degraded := db.NewStores(nil)
-	h := NewUserHandler(degraded.Users, degraded.Flags, newCache(), nil)
+	h := NewUserHandler(degraded.Users, degraded.Flags, newCache())
 	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) {
 		e.PUT("/api/account/role", h.SetRole)
 	})
@@ -173,7 +176,7 @@ func TestGetFlags_TruthTable(t *testing.T) {
 		}},
 	}
 	for _, tc := range cases {
-		h := NewUserHandler(db.NewStores(nil).Users, &fakeFlagStore{list: flags}, newCache(), nil)
+		h := NewUserHandler(db.NewStores(nil).Users, &fakeFlagStore{list: flags}, newCache())
 		r := roleTestRouter("member-1", tc.role, func(e *gin.Engine) { e.GET("/api/flags", h.GetFlags) })
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/flags", nil))
@@ -350,5 +353,40 @@ func TestAdminUpdateFlag_NothingToUpdate400(t *testing.T) {
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/api/admin/flags/x", strings.NewReader(`{}`)))
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("empty patch: got %d, want 400", w.Code)
+	}
+}
+
+func TestSetRole_StaleNonAdminContextCannotOverrideStoreRefusal(t *testing.T) {
+	store := &fakeRoleStore{setRoleErr: db.ErrAdminOptIn}
+	c := newCache()
+	c.Set("tver:member-1", 1, time.Minute)
+	h := NewUserHandler(store, nil, c)
+	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) { e.PUT("/api/account/role", h.SetRole) })
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/api/account/role", strings.NewReader(`{"role":"beta"}`)))
+	if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "ADMIN_OPT_IN") {
+		t.Fatalf("stale-role response=%d %s", w.Code, w.Body.String())
+	}
+	if !store.setRoleCalled {
+		t.Fatal("test did not reach authoritative store check")
+	}
+	if _, ok := c.Get("tver:member-1"); !ok {
+		t.Fatal("refused mutation evicted cache as if committed")
+	}
+}
+
+func TestSetRole_FailedAtomicMutationDoesNotEvictCache(t *testing.T) {
+	store := &fakeRoleStore{setRoleErr: errors.New("audit transaction failed")}
+	c := newCache()
+	c.Set("tver:member-1", 1, time.Minute)
+	h := NewUserHandler(store, nil, c)
+	r := roleTestRouter("member-1", auth.RoleStandard, func(e *gin.Engine) { e.PUT("/api/account/role", h.SetRole) })
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/api/account/role", strings.NewReader(`{"role":"beta"}`)))
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("failed transaction response=%d", w.Code)
+	}
+	if _, ok := c.Get("tver:member-1"); !ok {
+		t.Fatal("failed transaction evicted cache")
 	}
 }

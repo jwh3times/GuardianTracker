@@ -73,7 +73,7 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 			Auth:        handlers.NewAuthHandler(nil, cfg, nil),
 			Wishlist:    handlers.NewWishlistHandler(nil, nil, nil, nil),
 			Preferences: handlers.NewPreferencesHandler(preferences.NewService(nil)),
-			User:        handlers.NewUserHandler(nil, nil, nil, nil),
+			User:        handlers.NewUserHandler(nil, nil, nil),
 			Admin:       handlers.NewAdminHandler(nil, nil, nil),
 			Audit:       handlers.NewAuditHandler(nil),
 			Characters:  handlers.NewCharactersHandler(nil, nil),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestUserStore_RoleCheckConstraint(t *testing.T) {
@@ -16,13 +17,13 @@ func TestUserStore_RoleCheckConstraint(t *testing.T) {
 	}
 }
 
-func TestUserStore_SetRoleAndGetAuthInfo(t *testing.T) {
+func TestUserStore_SetSelfRoleAndGetAuthInfo(t *testing.T) {
 	pool := testPool(t)
 	users := NewUserStore(pool)
 	ctx := context.Background()
 	mid, _ := createTestUser(t, pool)
 
-	if err := users.SetRole(ctx, mid, 2); err != nil { // alpha
+	if err := users.SetSelfRole(ctx, mid, 2, "", ""); err != nil { // alpha
 		t.Fatalf("SetRole: %v", err)
 	}
 	role, err := users.GetRole(ctx, mid)
@@ -52,9 +53,9 @@ func TestUserStore_GetAuthInfoMissingIsDefinitive(t *testing.T) {
 	}
 }
 
-func TestUserStore_SetRoleUnknownUser(t *testing.T) {
+func TestUserStore_SetSelfRoleUnknownUser(t *testing.T) {
 	pool := testPool(t)
-	if err := NewUserStore(pool).SetRole(context.Background(), "no-such-member", 1); !errors.Is(err, ErrUserNotFound) {
+	if err := NewUserStore(pool).SetSelfRole(context.Background(), "no-such-member", 1, "", ""); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("SetRole unknown user: got %v, want ErrUserNotFound", err)
 	}
 }
@@ -93,7 +94,7 @@ func TestUserStore_CountAdminsAndListUsers(t *testing.T) {
 		t.Fatalf("CountAdmins: %v", err)
 	}
 	mid, _ := createTestUser(t, pool)
-	if err := users.SetRole(ctx, mid, roleAdmin); err != nil {
+	if _, _, _, err := users.Upsert(ctx, mid, 3, "Test Guardian", true); err != nil {
 		t.Fatalf("SetRole admin: %v", err)
 	}
 	after, err := users.CountAdmins(ctx)
@@ -124,7 +125,7 @@ func TestUserStore_SetRoleByID_BumpsVersionAndAudits(t *testing.T) {
 	users := NewUserStore(pool)
 	ctx := context.Background()
 	actorMid, _ := createTestUser(t, pool)
-	if err := users.SetRole(ctx, actorMid, roleAdmin); err != nil {
+	if _, _, _, err := users.Upsert(ctx, actorMid, 3, "Test Guardian", true); err != nil {
 		t.Fatalf("promote actor: %v", err)
 	}
 	targetMid, targetID := createTestUser(t, pool)
@@ -175,7 +176,7 @@ func TestUserStore_SetRoleByID_LastAdminRefused(t *testing.T) {
 		t.Skip("environment already has admins; last-admin path is covered by the unit test")
 	}
 	adminMid, adminID := createTestUser(t, pool)
-	if err := users.SetRole(ctx, adminMid, roleAdmin); err != nil {
+	if _, _, _, err := users.Upsert(ctx, adminMid, 3, "Test Guardian", true); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	// Demoting the only admin must be refused.
@@ -188,5 +189,136 @@ func TestUserStore_SetRoleByID_NotFound(t *testing.T) {
 	pool := testPool(t)
 	if _, err := NewUserStore(pool).SetRoleByID(context.Background(), "", 999999999, 1); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("SetRoleByID unknown: got %v, want ErrUserNotFound", err)
+	}
+}
+
+func TestUserStore_SetSelfRoleAuditsAuthoritativeRole(t *testing.T) {
+	pool := testPool(t)
+	users := NewUserStore(pool)
+	ctx := context.Background()
+	mid, id := createTestUser(t, pool)
+	if _, err := pool.Exec(ctx, `UPDATE users SET role = 1 WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := users.SetSelfRole(ctx, mid, 2, "127.0.0.1", "fixture-agent"); err != nil {
+		t.Fatal(err)
+	}
+	var oldRole, newRole int
+	var actorID int64
+	var ip, userAgent string
+	err := pool.QueryRow(ctx, `SELECT actor_user_id, (details->>'oldRole')::int, (details->>'newRole')::int, host(ip), user_agent FROM audit_log WHERE actor_membership_id = $1 AND event_type = 'role.optin'`, mid).Scan(&actorID, &oldRole, &newRole, &ip, &userAgent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actorID != id || oldRole != 1 || newRole != 2 || ip != "127.0.0.1" || userAgent != "fixture-agent" {
+		t.Fatalf("audit = actor:%d roles:%d->%d ip:%s ua:%s", actorID, oldRole, newRole, ip, userAgent)
+	}
+	version, role, _, err := users.GetAuthInfo(ctx, mid)
+	if err != nil || version != 1 || role != 2 {
+		t.Fatalf("post-opt-in auth info: version=%d role=%d err=%v", version, role, err)
+	}
+}
+
+func TestUserStore_SetSelfRoleRollsBackWhenAuditFails(t *testing.T) {
+	pool := testPool(t)
+	mid, _ := createTestUser(t, pool)
+	users := NewUserStore(pool)
+	ctx := context.Background()
+	// An invalid fixture IP makes PostgreSQL reject the audit inet value after
+	// the role UPDATE. The mutation must roll back with that failed audit insert.
+	if err := users.SetSelfRole(ctx, mid, 2, "not-an-ip", "fixture-agent"); err == nil {
+		t.Fatal("expected audit insert failure")
+	}
+	version, role, _, err := users.GetAuthInfo(ctx, mid)
+	if err != nil || role != 0 || version != 1 {
+		t.Fatalf("audit failure changed auth info: role=%d version=%d err=%v", role, version, err)
+	}
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE actor_membership_id=$1 AND event_type='role.optin'`, mid).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("failed opt-in left %d audit rows", count)
+	}
+}
+
+func TestUserStore_SetSelfRoleRejectsAdminTargets(t *testing.T) {
+	pool := testPool(t)
+	mid, _ := createTestUser(t, pool)
+	for _, role := range []int16{-1, 3, 4} {
+		if err := NewUserStore(pool).SetSelfRole(context.Background(), mid, role, "", ""); !errors.Is(err, ErrRoleNotAllowed) {
+			t.Fatalf("target %d: got %v, want ErrRoleNotAllowed", role, err)
+		}
+	}
+}
+
+func TestUserStore_SetSelfRoleWaitsForPromotionAndPreservesAdmin(t *testing.T) {
+	pool := testPool(t)
+	users := NewUserStore(pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	mid, _ := createTestUser(t, pool)
+	before, err := users.CountAdmins(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	promotion, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer promotion.Rollback(context.Background())
+	// Model a bootstrap/admin promotion already holding the user row. The
+	// in-flight self request began under an earlier non-admin middleware role.
+	if _, err = promotion.Exec(ctx, `UPDATE users SET role = 3 WHERE membership_id = $1`, mid); err != nil {
+		t.Fatal(err)
+	}
+	promoterPID := promotion.Conn().PgConn().PID()
+	result := make(chan error, 1)
+	go func() { result <- users.SetSelfRole(ctx, mid, 0, "", "") }()
+	// Wait for PostgreSQL to confirm the actual lock interleaving; elapsed time
+	// alone is not proof that the self mutation reached the contested row.
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		var blocked bool
+		if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE $1::integer = ANY(pg_blocking_pids(pid)))`, promoterPID).Scan(&blocked); err != nil {
+			t.Fatal(err)
+		}
+		if blocked {
+			break
+		}
+		select {
+		case err := <-result:
+			t.Fatalf("self mutation did not wait for promotion: %v", err)
+		case <-ticker.C:
+		case <-ctx.Done():
+			t.Fatal("self mutation never reached promotion lock")
+		}
+	}
+	if err := promotion.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-result:
+		if !errors.Is(err, ErrAdminOptIn) {
+			t.Fatalf("got %v, want authoritative admin refusal", err)
+		}
+	case <-ctx.Done():
+		t.Fatal("self mutation did not finish after promotion")
+	}
+	role, err := users.GetRole(ctx, mid)
+	if err != nil || role != roleAdmin {
+		t.Fatalf("promoted admin was demoted: role=%d err=%v", role, err)
+	}
+	after, err := users.CountAdmins(ctx)
+	if err != nil || after != before+1 || after < 1 {
+		t.Fatalf("admin count=%d before=%d err=%v", after, before, err)
+	}
+	var auditCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE actor_membership_id=$1 AND event_type='role.optin'`, mid).Scan(&auditCount); err != nil {
+		t.Fatal(err)
+	}
+	if auditCount != 0 {
+		t.Fatalf("refused self mutation wrote %d success audits", auditCount)
 	}
 }

@@ -34,7 +34,7 @@ type UserRepo interface {
 	SessionExists(ctx context.Context, id string) (bool, error)
 	DeleteSession(ctx context.Context, id string) error
 	DeleteUserSessions(ctx context.Context, membershipID string) error
-	SetRole(ctx context.Context, membershipID string, role int16) error
+	SetSelfRole(ctx context.Context, membershipID string, role int16, ip, userAgent string) error
 	CountAdmins(ctx context.Context) (int, error)
 	ListUsers(ctx context.Context, q string, limit int) ([]AdminUser, error)
 	SetRoleByID(ctx context.Context, actorMembershipID string, targetUserID int64, newRole int16) (*RoleChange, error)
@@ -118,8 +118,10 @@ func (degradedUsers) SessionExists(context.Context, string) (bool, error) {
 }
 func (degradedUsers) DeleteSession(context.Context, string) error      { return ErrUnavailable }
 func (degradedUsers) DeleteUserSessions(context.Context, string) error { return ErrUnavailable }
-func (degradedUsers) SetRole(context.Context, string, int16) error     { return ErrUnavailable }
-func (degradedUsers) CountAdmins(context.Context) (int, error)         { return 0, ErrUnavailable }
+func (degradedUsers) SetSelfRole(context.Context, string, int16, string, string) error {
+	return ErrUnavailable
+}
+func (degradedUsers) CountAdmins(context.Context) (int, error) { return 0, ErrUnavailable }
 func (degradedUsers) ListUsers(context.Context, string, int) ([]AdminUser, error) {
 	return nil, ErrUnavailable
 }
