@@ -66,6 +66,28 @@ Playwright's stock image may carry an older Node line.
 
 The `nginx.conf` must serve `index.html` for all unknown paths so React Router works correctly.
 
+## Build context isolation
+
+Both application contexts have `.dockerignore` policies covering local environment
+variants, keys/certificates, database files, logs, caches, dependencies, and generated
+build/test artifacts recursively. Runtime `data/` is excluded at the context root
+only; preserve nested source modules such as `src/data`. Only the root `.env.example` is retained from
+the environment file family. Keep source, Go embedded migrations, frontend public
+assets, and build configuration available to `COPY`.
+
+Run `npm run test:docker-context` from the repository root after changing an
+ignore policy or build input layout. It requires Docker Buildx and a running
+builder. The test reads only the two ignore policies from the workspace, creates
+synthetic source and excluded-file fixtures, then exports a `FROM scratch` /
+`COPY . /context/` build to verify Docker's matcher. It neither reads actual local
+environment files nor needs to pull a base image. `Build Docker Images` runs this
+probe before application builds.
+
+Compose supplies API secrets through runtime `environment` configuration. Local
+frontend env files are excluded from image inputs; the current frontend
+Dockerfile uses source defaults, with no runtime nginx environment injection.
+Treat any deliberate Vite build configuration as public browser-visible input.
+
 ## Docker Compose host exposure
 
 The local `postgres`, `pgadmin`, profile-gated `test-postgres`, and profile-gated

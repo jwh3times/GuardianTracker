@@ -76,8 +76,8 @@ data
 Dockerfile*
 .dockerignore
 
-# Browser credentials and generated reports; e2e source fixtures stay available.
-**/playwright/.auth
-**/playwright-report
-**/test-results
-README.md
+# API runtime downloads and local hot-reload output.
+**/.e2e
+**/vendor
+.air.toml
+main
