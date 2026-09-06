@@ -178,11 +178,11 @@ func newIssuer(t *testing.T, store *stubSessionStore, bungie *fakeBungie, admins
 // AuthorizeURL is the one the callback presents.
 func login(t *testing.T, s *SessionIssuer, code string) (*Session, error) {
 	t.Helper()
-	_, state, err := s.AuthorizeURL()
+	_, state, nonce, err := s.AuthorizeURL()
 	if err != nil {
 		t.Fatalf("AuthorizeURL: %v", err)
 	}
-	return s.Login(context.Background(), code, state, "test-agent")
+	return s.Login(context.Background(), code, state, nonce, "test-agent")
 }
 
 func reasonOf(t *testing.T, err error) Reason {
@@ -378,7 +378,7 @@ func TestLogin_RejectsBadInputBeforeReachingBungie(t *testing.T) {
 	issuer := newIssuer(t, newStubStore(), bungie)
 	ctx := context.Background()
 
-	_, state, err := issuer.AuthorizeURL()
+	_, state, nonce, err := issuer.AuthorizeURL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +397,7 @@ func TestLogin_RejectsBadInputBeforeReachingBungie(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := issuer.Login(ctx, tc.code, tc.state, "ua")
+			_, err := issuer.Login(ctx, tc.code, tc.state, nonce, "ua")
 			if got := reasonOf(t, err); got != tc.want {
 				t.Errorf("reason = %q, want %q", got, tc.want)
 			}
@@ -410,7 +410,7 @@ func TestLogin_RejectsBadInputBeforeReachingBungie(t *testing.T) {
 
 func otherSignerState(t *testing.T) string {
 	t.Helper()
-	state, err := NewStateSigner("a-completely-different-secret-value!!!").Generate()
+	state, _, err := NewStateSigner("a-completely-different-secret-value!!!").Generate()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,12 +482,12 @@ func TestReconnect_ReplacesOnlyBungieAuthorization(t *testing.T) {
 	bungie := newFakeBungie(t)
 	issuer := newIssuer(t, store, bungie)
 	issuer.tokens.Store(testMembership, publicClientTokens(testMembership, time.Now().Add(-time.Hour)))
-	_, state, err := issuer.AuthorizeURL()
+	_, state, nonce, err := issuer.AuthorizeURL()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := issuer.Reconnect(context.Background(), testMembership, "new-code", state); err != nil {
+	if err := issuer.Reconnect(context.Background(), testMembership, "new-code", state, nonce); err != nil {
 		t.Fatalf("Reconnect: %v", err)
 	}
 	if store.upsertCalls != 0 || store.createCalls != 0 || store.rotateCalls != 0 {
@@ -504,12 +504,12 @@ func TestReconnect_RejectsDifferentBungieMembership(t *testing.T) {
 	bungie := newFakeBungie(t)
 	bungie.profileBody = `{"Response":{"destinyMemberships":[{"membershipType":3,"membershipId":"4611686018467260999","displayName":"OtherGuardian"}],"primaryMembershipId":"4611686018467260999"},"ErrorCode":1}`
 	issuer := newIssuer(t, store, bungie)
-	_, state, err := issuer.AuthorizeURL()
+	_, state, nonce, err := issuer.AuthorizeURL()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = issuer.Reconnect(context.Background(), testMembership, "new-code", state)
+	err = issuer.Reconnect(context.Background(), testMembership, "new-code", state, nonce)
 	if got := reasonOf(t, err); got != ReasonMembershipMismatch {
 		t.Fatalf("reason = %q, want %q", got, ReasonMembershipMismatch)
 	}
@@ -527,12 +527,12 @@ func TestReconnect_PersistenceFailureDoesNotReplaceAuthorization(t *testing.T) {
 	issuer := newIssuer(t, store, bungie)
 	failingTokens, _ := newTestStore(t, &fakeTokenRepo{failAll: true}, "")
 	issuer.tokens = failingTokens
-	_, state, err := issuer.AuthorizeURL()
+	_, state, nonce, err := issuer.AuthorizeURL()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = issuer.Reconnect(context.Background(), testMembership, "new-code", state)
+	err = issuer.Reconnect(context.Background(), testMembership, "new-code", state, nonce)
 	if got := reasonOf(t, err); got != ReasonAuthorizationWrite {
 		t.Fatalf("reason = %q, want %q", got, ReasonAuthorizationWrite)
 	}
@@ -801,5 +801,38 @@ func TestEndSession_WithoutPersistenceSucceeds(t *testing.T) {
 
 	if err := issuer.EndSession(context.Background(), "sess-1"); err != nil {
 		t.Errorf("EndSession without persistence = %v, want nil", err)
+	}
+}
+
+func TestOAuth_RejectsBrowserMismatchBeforeExchange(t *testing.T) {
+	bungie := newFakeBungie(t)
+	issuer := newIssuer(t, newStubStore(), bungie)
+	_, state, nonce, err := issuer.AuthorizeURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.Split(state, ".")
+	parts[1] = fmt.Sprint(time.Now().Add(-OAuthTransactionTTL - time.Minute).Unix())
+	payload := strings.Join(parts[:4], ".")
+	expired := payload + "." + issuer.state.sign(payload)
+	for _, tc := range []struct{ name, state, nonce string }{
+		{"missing", state, ""}, {"different", state, "another-browser"}, {"expired", expired, nonce},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := issuer.Login(context.Background(), "fresh-code", tc.state, tc.nonce, "ua")
+			if reasonOf(t, err) != ReasonInvalidState {
+				t.Fatal(err)
+			}
+			if OAuthTransactionConsumed(err) {
+				t.Fatal("invalid transaction consumed browser cookie")
+			}
+			err = issuer.Reconnect(context.Background(), testMembership, "fresh-code", tc.state, tc.nonce)
+			if reasonOf(t, err) != ReasonInvalidState {
+				t.Fatal(err)
+			}
+		})
+	}
+	if bungie.tokenHits != 0 {
+		t.Fatal("invalid binding reached Bungie exchange")
 	}
 }

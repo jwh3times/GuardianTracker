@@ -19,7 +19,7 @@ backend/api-service/
   config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
   auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
   auth/middleware.go                   ← JWT middleware for protected routes
-  auth/state.go                        ← Stateless HMAC-signed OAuth state (CSRF, multi-replica safe)
+  auth/state.go                        ← Stateless HMAC-signed, browser-cookie-bound OAuth state (multi-replica safe)
   auth/tokenstore.go                   ← DB-backed encrypted Bungie OAuth authorization store;
                                            public access-only leases + legacy CAS refresh compatibility
   auth/crypto.go                       ← AES-256-GCM cipher; exact current/previous key versions
@@ -205,9 +205,16 @@ authorization-code grant. The API does not configure or send a Bungie client
 secret, and Bungie public clients return no refresh token. `BUNGIE_API_KEY`
 separately authenticates Bungie Platform API requests.
 
-1. `GET /api/auth/bungie` — `SessionIssuer.AuthorizeURL()` generates the HMAC-signed state token via `auth.StateSigner` (derived from `JWT_SECRET`); handler returns `{ authUrl, state }`
+1. `GET /api/auth/bungie` — `SessionIssuer.AuthorizeURL()` generates HMAC-signed v2 state and an independent browser nonce via `auth.StateSigner` (derived from `JWT_SECRET`); the handler sets the 10-minute host-only HttpOnly transaction cookie and returns `{ authUrl, state }`
 2. User visits Bungie.net, authorizes, Bungie redirects to frontend `/auth/callback?code=...&state=...`
-3. Frontend credentialed-POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — exact Origin required; `SessionIssuer.Login()` verifies state with 10-min TTL via `StateSigner.Verify()` (not single-use; replay bounded by Bungie's single-use auth code), exchanges the code via `bungieOAuth`, stores the access-only Bungie authorization, mints the Guardian Tracker JWT pair, and creates a `refresh_sessions` row (skipped, not failed, when no database is configured); the handler sets the HttpOnly refresh cookie and returns `{token,user}`
+3. Frontend credentialed-POSTs `{ code, state }` to `POST /api/auth/bungie/callback` — exact Origin required; `SessionIssuer.Login()` verifies state and its SHA-256 transaction-cookie binding with 10-min TTL via `StateSigner.Verify()` (legacy state is rejected), exchanges the code via `bungieOAuth`, stores the access-only Bungie authorization, mints the Guardian Tracker JWT pair, and creates a `refresh_sessions` row (skipped, not failed, when no database is configured); the handler expires the transaction cookie, sets the HttpOnly refresh cookie, and returns `{token,user}`
+
+The transaction cookie is `__Host-guardian_oauth_transaction` with `Secure` in
+production and `guardian_oauth_transaction` in development; both use `Path=/`,
+HttpOnly, and `SameSite=Lax`. The latest start supersedes earlier browser flows.
+Valid transaction processing expires this cookie, including downstream errors;
+invalid code/state input preserves the pending cookie. Keep nonce/state out of
+logs and the transaction nonce out of response bodies.
 
 When the Bungie access authorization reaches its five-minute expiry buffer,
 `TokenStore.GetValidToken()` returns
@@ -215,7 +222,7 @@ When the Bungie access authorization reaches its five-minute expiry buffer,
 `401 BUNGIE_REAUTH_REQUIRED`; it does not treat the still-valid Guardian Tracker
 session as expired. The frontend preserves its return path, sends the user
 through the same authorization URL, then authenticated-POSTs `{ code, state }`
-to `/api/auth/bungie/reconnect`. `SessionIssuer.Reconnect()` verifies state,
+to `/api/auth/bungie/reconnect`. `SessionIssuer.Reconnect()` verifies state and transaction-cookie binding,
 resolves the authorized Destiny membership, requires it to match the access
 JWT's membership, and replaces only the Bungie authorization. Success is 204;
 it does not upsert the user, mint or rotate Guardian Tracker JWTs, create a

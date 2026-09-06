@@ -119,6 +119,7 @@ export class FetchBrowserSessionAuthTransport implements BrowserSessionAuthTrans
   async beginAuthorization(): Promise<AuthorizationStart> {
     const response = await this.fetchImplementation(
       `${this.baseUrl}/api/auth/bungie`,
+      { credentials: "include" },
     );
     if (!response.ok) {
       throw new BrowserSessionError(

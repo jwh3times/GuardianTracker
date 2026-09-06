@@ -301,6 +301,23 @@ async function isBungieReauthorization(response: Response): Promise<boolean> {
   return isRecord(body) && body.code === "BUNGIE_REAUTH_REQUIRED";
 }
 
+function isBungieReconnectRequest(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): boolean {
+  const request =
+    typeof Request !== "undefined" && input instanceof Request
+      ? input
+      : undefined;
+  if ((init?.method ?? request?.method ?? "GET").toUpperCase() !== "POST")
+    return false;
+  const url = new URL(
+    request?.url ?? String(input),
+    "https://guardian-tracker.invalid",
+  );
+  return url.pathname === "/api/auth/bungie/reconnect";
+}
+
 function replayableInput(input: RequestInfo | URL): () => RequestInfo | URL {
   if (typeof Request !== "undefined" && input instanceof Request) {
     const template = input.clone();
@@ -344,10 +361,30 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
 
   async beginAuthorization(): Promise<AuthorizationStart> {
     const generation = this.generation;
-    let start: AuthorizationStart;
-    try {
-      start = await this.dependencies.transport.beginAuthorization();
-    } catch (error) {
+    // Authorization setup now writes an HttpOnly transaction cookie, so it
+    // shares exclusion with every other lifecycle cookie mutation.
+    return this.runCoordinated("authorization", async () => {
+      this.adoptPersisted();
+      this.assertGeneration(generation);
+      let start: AuthorizationStart;
+      try {
+        start = await this.dependencies.transport.beginAuthorization();
+      } catch (error) {
+        this.adoptPersisted();
+        if (this.generation !== generation) {
+          throw new BrowserSessionError(
+            "AUTHORIZATION_OBSOLETE",
+            "The browser session changed while authorization was starting",
+          );
+        }
+        if (error instanceof BrowserSessionError) throw error;
+        throw new BrowserSessionError(
+          "AUTHORIZATION_FAILED",
+          "Could not start Bungie authorization",
+          undefined,
+          { cause: error },
+        );
+      }
       this.adoptPersisted();
       if (this.generation !== generation) {
         throw new BrowserSessionError(
@@ -355,22 +392,8 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
           "The browser session changed while authorization was starting",
         );
       }
-      if (error instanceof BrowserSessionError) throw error;
-      throw new BrowserSessionError(
-        "AUTHORIZATION_FAILED",
-        "Could not start Bungie authorization",
-        undefined,
-        { cause: error },
-      );
-    }
-    this.adoptPersisted();
-    if (this.generation !== generation) {
-      throw new BrowserSessionError(
-        "AUTHORIZATION_OBSOLETE",
-        "The browser session changed while authorization was starting",
-      );
-    }
-    return start;
+      return start;
+    });
   }
 
   completeAuthorization(input: AuthorizationCompletion): Promise<void> {
@@ -470,6 +493,23 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<Response> {
+    if (isBungieReconnectRequest(input, init)) {
+      const captured = this.envelope;
+      // Reconnect consumes the transaction cookie. Exclude a new start until
+      // its response arrives; any app-session refresh must reuse this lock.
+      return this.runCoordinated("authorization", () => {
+        this.assertRequestAuthority(captured);
+        return this.performRequest(input, init, true);
+      });
+    }
+    return this.performRequest(input, init);
+  }
+
+  private async performRequest(
+    input: RequestInfo | URL,
+    init?: RequestInit,
+    lifecycleLockHeld = false,
+  ): Promise<Response> {
     const captured = this.envelope;
     this.adoptPersisted();
     if (
@@ -512,7 +552,7 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     }
     const capturedUser = captured.projection.user;
 
-    return this.runCoordinated("refresh", async () => {
+    const refresh = async () => {
       this.adoptPersisted();
 
       if (this.generation !== generation) {
@@ -624,7 +664,10 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
         );
       }
       return retried;
-    });
+    };
+    return lifecycleLockHeld
+      ? refresh()
+      : this.runCoordinated("refresh", refresh);
   }
 
   async end(scope: "current" | "all"): Promise<void> {

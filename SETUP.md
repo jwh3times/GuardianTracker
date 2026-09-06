@@ -31,6 +31,11 @@ send a Bungie client secret. Bungie public clients receive an expiring access
 token and no refresh token; when it expires, the app asks the still-authenticated
 user to reconnect Bungie.
 
+Start and finish authorization in the same browser within ten minutes; completion
+may use another tab in that browser. The API stores the transaction in an
+HttpOnly cookie, so starting another login or reconnect replaces the previous
+pending flow. If a flow expires or was replaced, start again from the app.
+
 For local development, set the redirect URI to:
 
 ```text
