@@ -60,6 +60,24 @@ Encryption keys have explicit positive `SMALLINT` versions:
 previous key. See [SETUP.md](./SETUP.md#2-create-environment-files) for the
 complete environment catalogue and local file setup.
 
+### Production PostgreSQL Connections
+
+Production `DATABASE_URL` should use `sslmode=verify-full`, the intended database
+DNS hostname covered by the server certificate's DNS Subject Alternative Name,
+and an explicit `sslrootcert` pointing to a provider-approved trusted CA bundle.
+This verifies both the certificate chain and server hostname; `sslmode=require`
+is not the production identity-verification policy. See
+[PostgreSQL's SSL guidance](https://www.postgresql.org/docs/18/libpq-ssl.html)
+and [the setup example](./SETUP.md#production-postgresql-tls).
+
+The API passes the supplied DSN to pgx; it does not enforce `verify-full` at
+startup. Deployment configuration must supply and validate this policy. Mount
+the CA bundle read-only at a path readable by the API runtime user; certificate
+files are excluded from Docker build contexts. A provider-specific equivalent
+requires documented, validated server identity verification before deployment.
+The production provider remains unselected. Local Compose and disposable test
+databases retain development-only `sslmode=disable`.
+
 ### Minikube Validation
 
 The manifests under `k8s/` run only as a local development-validation stack.
@@ -180,7 +198,7 @@ cross-site production topology must revisit the cookie policy and would require
 - [ ] Current and previous encryption keys have the exact positive versions intended for their stored rows
 - [ ] Rate limiting enabled and tuned for expected traffic
 - [ ] TLS/HTTPS configured (terminate at load balancer or ingress)
-- [ ] Database connections use SSL (`sslmode=require`)
+- [ ] Production PostgreSQL verifies the intended server identity (`sslmode=verify-full`, matching DNS SAN, trusted CA), or a documented and validated provider-specific equivalent
 - [ ] Health endpoints (`/health`, `/ready`) expose no sensitive data; safe to expose by design on the API ingress
 - [ ] Logging does not include tokens, secrets, or full OAuth codes
 - [ ] Docker images built from reviewed digest-pinned base-image refs

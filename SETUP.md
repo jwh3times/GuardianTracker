@@ -137,6 +137,41 @@ They do not record query strings, request/response bodies, authorization
 headers, User-Agent values, or routine client IPs. Security audit rows remain a
 separate Postgres trail with the exact identifiers needed for forensics.
 
+### Production PostgreSQL TLS
+
+Local Compose and test connection strings use `sslmode=disable` for development.
+For a production database, use `verify-full` with the provider's intended DNS
+hostname and approved CA bundle. Value-free example:
+
+```text
+postgres://DB_USER:URL_ENCODED_PASSWORD@db.example:5432/DB_NAME?sslmode=verify-full&sslrootcert=/run/certs/postgres-ca.pem
+```
+
+Replace the placeholders, including `db.example`, with the selected provider's
+settings. The hostname must match a DNS Subject Alternative Name in the server
+certificate. Percent-encode credentials and any reserved characters in URI
+components, including the CA path query value when necessary. `sslrootcert` must
+be an absolute path inside the API runtime, not merely a path on the host. Mount
+the approved CA file read-only and ensure the API runtime user can read it;
+`.dockerignore` excludes local certificates from image build inputs.
+
+The API honors the supplied pgx DSN and does not enforce this TLS mode. Verify
+certificate trust and hostname matching before deployment; `sslmode=require`
+alone is insufficient for the production identity-verification policy. Any
+provider-specific equivalent must have documented, validated server identity
+verification. No production provider is selected by this guide. See
+[PostgreSQL's SSL guidance](https://www.postgresql.org/docs/18/libpq-ssl.html).
+
+Run the driver regression from `backend/api-service/`:
+
+```powershell
+go test ./db -run TestPostgresVerifyFullAuthenticatesServer
+```
+
+It uses ephemeral loopback TLS fixtures and does not validate a deployed
+provider. Before production, verify the actual endpoint, hostname, and trust
+chain in staging using the intended API runtime configuration.
+
 ## 3. Run the Full Stack
 
 Docker Compose is the default path for local development:
