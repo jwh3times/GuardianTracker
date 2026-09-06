@@ -83,18 +83,21 @@ var reconnectFailures = map[auth.Reason]authFailure{
 
 // GetBungieAuthURL handles GET /api/auth/bungie
 func (h *AuthHandler) GetBungieAuthURL(c *gin.Context) {
-	authURL, state, err := h.issuer.AuthorizeURL()
+	c.Header("Cache-Control", "no-store")
+	authURL, state, browserNonce, err := h.issuer.AuthorizeURL()
 	if err != nil {
 		observability.Logger(c.Request.Context()).ErrorContext(c.Request.Context(), "OAuth state generation failed", observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize authentication"})
 		return
 	}
+	h.writeOAuthCookie(c, browserNonce, time.Now().Add(auth.OAuthTransactionTTL), int(auth.OAuthTransactionTTL/time.Second))
 	c.JSON(http.StatusOK, gin.H{"authUrl": authURL, "state": state})
 }
 
 // BungieCallback handles POST /api/auth/bungie/callback
 func (h *AuthHandler) BungieCallback(c *gin.Context) {
-	session, err := h.issuer.Login(c.Request.Context(), c.PostForm("code"), c.PostForm("state"), c.Request.UserAgent())
+	session, err := h.issuer.Login(c.Request.Context(), c.PostForm("code"), c.PostForm("state"), h.oauthNonce(c), c.Request.UserAgent())
+	h.finishOAuth(c, err)
 	if err != nil {
 		h.failSession(c, err, loginFailures)
 		return
@@ -116,7 +119,8 @@ func (h *AuthHandler) BungieCallback(c *gin.Context) {
 // Success replaces only the Bungie authorization; the Guardian refresh cookie
 // and refresh_sessions row remain untouched.
 func (h *AuthHandler) ReconnectBungie(c *gin.Context) {
-	err := h.issuer.Reconnect(c.Request.Context(), c.GetString("membership_id"), c.PostForm("code"), c.PostForm("state"))
+	err := h.issuer.Reconnect(c.Request.Context(), c.GetString("membership_id"), c.PostForm("code"), c.PostForm("state"), h.oauthNonce(c))
+	h.finishOAuth(c, err)
 	if err != nil {
 		h.failSession(c, err, reconnectFailures)
 		return
@@ -288,4 +292,32 @@ func (h *AuthHandler) logAudit(c *gin.Context, ev db.AuditEvent) {
 		observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "audit event persistence failed",
 			"event_type", ev.EventType, observability.Err(err))
 	}
+}
+
+func (h *AuthHandler) oauthCookieName() string {
+	if h.cfg != nil && h.cfg.IsProduction() {
+		return "__Host-guardian_oauth_transaction"
+	}
+	return "guardian_oauth_transaction"
+}
+
+func (h *AuthHandler) oauthNonce(c *gin.Context) string {
+	cookie, err := c.Request.Cookie(h.oauthCookieName())
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+func (h *AuthHandler) finishOAuth(c *gin.Context, err error) {
+	if auth.OAuthTransactionConsumed(err) {
+		h.writeOAuthCookie(c, "", time.Unix(1, 0), -1)
+	}
+}
+
+func (h *AuthHandler) writeOAuthCookie(c *gin.Context, value string, expires time.Time, maxAge int) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name: h.oauthCookieName(), Value: value, Path: "/", Expires: expires.UTC(), MaxAge: maxAge,
+		HttpOnly: true, Secure: h.cfg != nil && h.cfg.IsProduction(), SameSite: http.SameSiteLaxMode,
+	})
 }

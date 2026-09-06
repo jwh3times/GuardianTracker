@@ -272,7 +272,7 @@ transport, and origin-wide Web Locks. Production callers share this instance.
 - `AuthProvider` subscribes with `useSyncExternalStore`; `useAuth()` returns `{ user, logout, logoutAll, isAuthenticated }`. Hydration performs no profile request or JWT decoding.
 - Login and initial OAuth callback delegate to `beginAuthorization()` / `completeAuthorization()`; the callback page owns navigation.
 - `apiFetch` delegates credential attachment and refresh to the client, then shapes REST responses/errors and Bungie reconnect routing. `BUNGIE_REAUTH_REQUIRED` preserves the app session.
-- Web Locks serialize callback, refresh, and logout across tabs. Without them, callback completion and refresh fail; logout still persists anonymous state, with remote cleanup best effort.
+- Web Locks serialize authorization start, callback, authenticated reconnect, refresh, and logout across tabs. Without them, authorization start, callback completion, authenticated reconnect, and refresh fail; logout still persists anonymous state, with remote cleanup best effort.
 - Logout durably publishes an anonymous envelope before best-effort server cleanup. Storage events adopt newer session projections across tabs.
 
 Read rendered auth state through `useAuth()` and make authenticated REST calls

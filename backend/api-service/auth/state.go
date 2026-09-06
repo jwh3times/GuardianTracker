@@ -11,17 +11,9 @@ import (
 	"time"
 )
 
-// StateSigner issues and verifies stateless HMAC-signed OAuth state parameters.
-//
-// Unlike the previous in-memory store, signed states survive restarts and work
-// with any number of replicas (B7) — there is no server-side state to lose.
-// The tradeoff: a state token is no longer strictly single-use; it is replayable
-// within its TTL. That is acceptable here because the Bungie authorization code
-// it accompanies is single-use, and the previous store was not browser-bound
-// either. Documented in SECURITY.md.
-//
-// Token format: "v1.<unix-ts>.<nonce>.<sig>" where nonce is 16 random bytes and
-// sig = HMAC-SHA256(key, "v1.<unix-ts>.<nonce>"), both base64url (no padding).
+// StateSigner binds stateless signed OAuth state to an independent browser cookie.
+// v2.<unix-ts>.<state-nonce>.<SHA256(cookie-nonce)>.<HMAC> survives replica changes
+// without accepting a transaction initiated in a different browser.
 type StateSigner struct {
 	key []byte
 }
@@ -41,25 +33,32 @@ func (s *StateSigner) sign(payload string) string {
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-// Generate returns a fresh signed state token.
-func (s *StateSigner) Generate() (string, error) {
-	nonce := make([]byte, 16)
+// Generate returns a fresh signed state and an independent browser nonce. The
+// nonce must be delivered only in the transaction cookie, never in JSON or URLs.
+func (s *StateSigner) Generate() (state, browserNonce string, err error) {
+	nonce := make([]byte, 64)
 	if _, err := rand.Read(nonce); err != nil {
-		return "", fmt.Errorf("state nonce: %w", err)
+		return "", "", fmt.Errorf("state nonce: %w", err)
 	}
-	payload := fmt.Sprintf("v1.%d.%s", time.Now().Unix(), base64.RawURLEncoding.EncodeToString(nonce))
-	return payload + "." + s.sign(payload), nil
+	browserNonce = base64.RawURLEncoding.EncodeToString(nonce[32:])
+	binding := sha256.Sum256([]byte(browserNonce))
+	payload := fmt.Sprintf("v2.%d.%s.%s", time.Now().Unix(), base64.RawURLEncoding.EncodeToString(nonce[:32]), base64.RawURLEncoding.EncodeToString(binding[:]))
+	return payload + "." + s.sign(payload), browserNonce, nil
 }
 
 // Verify checks the token's signature and that it was issued within ttl of now
 // (allowing 60s of clock skew into the future).
-func (s *StateSigner) Verify(state string, now time.Time, ttl time.Duration) bool {
+func (s *StateSigner) Verify(state, browserNonce string, now time.Time, ttl time.Duration) bool {
 	parts := strings.Split(state, ".")
-	if len(parts) != 4 || parts[0] != "v1" {
+	if len(parts) != 5 || parts[0] != "v2" || browserNonce == "" {
 		return false
 	}
-	payload := parts[0] + "." + parts[1] + "." + parts[2]
-	if !hmac.Equal([]byte(s.sign(payload)), []byte(parts[3])) {
+	binding := sha256.Sum256([]byte(browserNonce))
+	if !hmac.Equal([]byte(parts[3]), []byte(base64.RawURLEncoding.EncodeToString(binding[:]))) {
+		return false
+	}
+	payload := strings.Join(parts[:4], ".")
+	if !hmac.Equal([]byte(s.sign(payload)), []byte(parts[4])) {
 		return false
 	}
 	ts, err := strconv.ParseInt(parts[1], 10, 64)

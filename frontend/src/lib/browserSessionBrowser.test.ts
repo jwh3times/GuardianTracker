@@ -139,7 +139,9 @@ describe("FetchBrowserSessionAuthTransport", () => {
     });
     await transport.completeAuthorization({ code: "code-1", state: "state-1" });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, `${baseUrl}/api/auth/bungie`);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `${baseUrl}/api/auth/bungie`, {
+      credentials: "include",
+    });
     const callbackBody = bodyFromFetchCall(fetchMock.mock.calls[1]);
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,

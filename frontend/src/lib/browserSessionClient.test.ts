@@ -458,12 +458,53 @@ describe("BrowserSessionClient establishment and adoption", () => {
     const starting = client.beginAuthorization();
     await vi.waitFor(() => expect(transport.begin).toHaveBeenCalledOnce());
 
-    await client.end("current");
+    const ending = client.end("current");
     gate.reject(new TypeError("offline"));
 
     await expect(starting).rejects.toMatchObject({
       code: "AUTHORIZATION_OBSOLETE",
     });
+    await ending;
+  });
+
+  it("serializes authorization cookie setup across two clients sharing the lifecycle coordinator", async () => {
+    const persistence = new MemoryPersistence();
+    const { client, coordinator, transport } = setup(persistence);
+    const secondTransport = new ScriptedTransport();
+    const secondClient = createBrowserSessionClient({
+      persistence,
+      coordinator,
+      transport: secondTransport,
+    });
+    const gate = deferred<AuthorizationStart>();
+    transport.begin.mockReturnValue(gate.promise);
+    const first = client.beginAuthorization();
+    await vi.waitFor(() => expect(transport.begin).toHaveBeenCalledOnce());
+    const second = secondClient.beginAuthorization();
+    await Promise.resolve();
+    expect(secondTransport.begin).not.toHaveBeenCalled();
+    gate.resolve(transport.authorizationStart);
+    await Promise.all([first, second]);
+    expect(secondTransport.begin).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a queued start after a callback establishes a newer generation", async () => {
+    const { client, transport } = setup();
+    const gate = deferred<Response>();
+    transport.complete.mockReturnValue(gate.promise);
+    const completing = client.completeAuthorization({
+      code: "code",
+      state: "state",
+    });
+    await vi.waitFor(() => expect(transport.complete).toHaveBeenCalledOnce());
+    const starting = client.beginAuthorization();
+    expect(transport.begin).not.toHaveBeenCalled();
+    gate.resolve(replacementResponse("callback-token"));
+    await completing;
+    await expect(starting).rejects.toMatchObject({
+      code: "AUTHORIZATION_OBSOLETE",
+    });
+    expect(transport.begin).not.toHaveBeenCalled();
   });
 
   it("persists an authorization replacement before publishing it once", async () => {
@@ -527,6 +568,10 @@ describe("BrowserSessionClient establishment and adoption", () => {
       client.completeAuthorization({ code: "code", state: "state" }),
     ).rejects.toMatchObject({ code: "AUTHORIZATION_UNAVAILABLE" });
     expect(transport.complete).not.toHaveBeenCalled();
+    await expect(client.beginAuthorization()).rejects.toMatchObject({
+      code: "AUTHORIZATION_UNAVAILABLE",
+    });
+    expect(transport.begin).not.toHaveBeenCalled();
     expect(client.getSnapshot()).toEqual({ status: "anonymous" });
   });
 
@@ -1534,4 +1579,78 @@ it("does not clear a newer persisted membership after a delayed retry 401", asyn
     user: user("membership-2"),
   });
   expect(persistence.raw).toContain("other-token");
+});
+
+describe("Bungie reconnect transaction-cookie coordination", () => {
+  it("holds a new authorization start until reconnect finishes consuming its cookie", async () => {
+    const { client, transport } = setup(authenticatedPersistence());
+    const responseGate = deferred<Response>();
+    transport.send.mockReturnValue(responseGate.promise);
+    const reconnect = client.request("/api/auth/bungie/reconnect", {
+      method: "POST",
+    });
+    await vi.waitFor(() => expect(transport.send).toHaveBeenCalledOnce());
+    const start = client.beginAuthorization();
+    await Promise.resolve();
+    expect(transport.begin).not.toHaveBeenCalled();
+    responseGate.resolve(response(204));
+    await reconnect;
+    await start;
+    expect(transport.begin).toHaveBeenCalledOnce();
+  });
+
+  it("refreshes an expired app credential within the reconnect lock without reacquiring it", async () => {
+    const { client, transport, coordinator } = setup(
+      authenticatedPersistence(),
+    );
+    transport.send
+      .mockResolvedValueOnce(response(401))
+      .mockResolvedValueOnce(response(204));
+    await expect(
+      client.request(
+        new Request("https://api.example/api/auth/bungie/reconnect", {
+          method: "POST",
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 204 });
+    expect(transport.rotate).toHaveBeenCalledOnce();
+    expect(transport.send).toHaveBeenCalledTimes(2);
+    expect(transport.send.mock.calls[1][2]).toBe("refreshed-token");
+    expect(coordinator.entries).toBe(1);
+  });
+
+  it.each([
+    ["/api/auth/bungie/reconnect", "GET"],
+    ["/api/auth/bungie/reconnect-extra", "POST"],
+  ])("does not lock an ordinary %s %s request", async (url, method) => {
+    const { client, coordinator } = setup(authenticatedPersistence());
+    await client.request(url, { method });
+    expect(coordinator.entries).toBe(0);
+  });
+
+  it("does not send a queued reconnect for a replaced membership", async () => {
+    const { client, coordinator, persistence, transport } = setup(
+      authenticatedPersistence(),
+    );
+    const gate = deferred<void>();
+    const held = coordinator.runExclusive(() => gate.promise);
+    const reconnect = client.request("/api/auth/bungie/reconnect", {
+      method: "POST",
+    });
+    persistence.externalWrite(
+      envelope(
+        5,
+        {
+          status: "authenticated",
+          accessToken: "other-token",
+          user: user("other"),
+        },
+        "other-lineage",
+      ),
+    );
+    gate.resolve();
+    await held;
+    await expect(reconnect).rejects.toMatchObject({ code: "SESSION_CHANGED" });
+    expect(transport.send).not.toHaveBeenCalled();
+  });
 });

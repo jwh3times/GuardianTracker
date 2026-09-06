@@ -32,7 +32,15 @@ React/Vite frontend (:5273)
 
 ## Authentication and Sessions
 
-Bungie OAuth login uses a public client and a stateless HMAC-signed CSRF state.
+Bungie OAuth login uses a public client and stateless HMAC-signed v2 CSRF state
+bound to an independent browser transaction cookie. The credentialed
+`GET /api/auth/bungie` sets a 10-minute host-only HttpOnly `SameSite=Lax`,
+`Path=/` cookie (`__Host-guardian_oauth_transaction`, `Secure` in production;
+`guardian_oauth_transaction` in development). Callback and reconnect require
+the matching cookie and unexpired signed state before code exchange, with no
+legacy-state fallback. The latest start supersedes an earlier pending flow in
+the same browser; matching completion can occur across tabs. Processing valid
+transaction input expires the cookie, while invalid input leaves it intact.
 The authorization-code grant sends the public client ID without a client secret;
 Bungie public clients return an expiring access token without a refresh token.
 The API stores that access-only authorization AES-256-GCM encrypted in Postgres
@@ -61,9 +69,11 @@ Tracker session, and evicts the Bungie authorization.
 The production browser session client owns the access-token/user projection in
 one versioned `guardian_browser_session` localStorage envelope, including durable
 anonymous logout state. Its browser adapters supply persistence, the API transport,
-and an origin-wide Web Lock for callback, refresh, and logout. Valid legacy
+and an origin-wide Web Lock for authorization start, callback, authenticated
+reconnect, refresh, and logout. Valid legacy
 access-token/user pairs migrate once when no envelope exists; legacy keys are then
-removed. Sign-in completion and refresh require Web Locks; local logout can still
+removed. Authorization start, callback completion, authenticated reconnect, and
+refresh require Web Locks; local logout can still
 persist when coordination is unavailable, with server cleanup best effort.
 
 `AuthProvider` is a declarative `useSyncExternalStore` projection of the shared

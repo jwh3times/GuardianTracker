@@ -578,7 +578,7 @@ func TestReconnectBungie_PreservesGuardianSession(t *testing.T) {
 	})
 	audit := &fakeAudit{}
 	h := NewAuthHandler(issuer, cfg, audit)
-	_, state, err := issuer.AuthorizeURL()
+	_, state, nonce, err := issuer.AuthorizeURL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -592,6 +592,7 @@ func TestReconnectBungie_PreservesGuardianSession(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/reconnect", strings.NewReader(url.Values{
 		"code": {"reconnect-code"}, "state": {state},
 	}.Encode()))
+	req.AddCookie(&http.Cookie{Name: h.oauthCookieName(), Value: nonce})
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.ServeHTTP(w, req)
 
@@ -601,8 +602,10 @@ func TestReconnectBungie_PreservesGuardianSession(t *testing.T) {
 	if got := store.sessions["existing-session"]; got != "existing-jti" || len(store.sessions) != 1 {
 		t.Fatalf("Guardian sessions changed: %+v", store.sessions)
 	}
-	if len(w.Result().Cookies()) != 0 {
-		t.Fatalf("reconnect unexpectedly wrote a refresh cookie: %+v", w.Result().Cookies())
+	for _, cookie := range w.Result().Cookies() {
+		if cookie.Name == refreshCookieName {
+			t.Fatal("reconnect wrote refresh cookie")
+		}
 	}
 	if len(audit.events) != 1 {
 		t.Fatalf("audit events = %+v, want one reconnect.success", audit.events)

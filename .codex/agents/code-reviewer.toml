@@ -28,7 +28,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **CSRF state (auth handler)**
 
-- The state parameter in `POST /api/auth/bungie/callback` and authenticated `POST /api/auth/bungie/reconnect` is verified via `auth.StateSigner.Verify()`. This is not single-use by design (stateless HMAC). Do not add a single-use map — see the known limitations in AGENTS.md.
+- The state parameter in `POST /api/auth/bungie/callback` and authenticated `POST /api/auth/bungie/reconnect` is verified via `auth.StateSigner.Verify()`. Require the independent transaction-cookie binding and 10-minute TTL before code exchange; legacy state must remain rejected.
 - Flag any implementation that bypasses `StateSigner.Verify()` and uses a raw equality check or stores state in memory.
 
 **JWT token-type claim**
@@ -125,7 +125,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Token storage**
 
-- The access token and user snapshot are atomically stored in the versioned `guardian_browser_session` localStorage envelope; the refresh token is server-set only as the host-only HttpOnly `guardian_refresh_token` cookie. Flag JavaScript that reads/writes a refresh token, callback/refresh requests without `credentials: "include"`, refresh bodies containing a token, or refresh-token fields in response types.
+- The access token and user snapshot are atomically stored in the versioned `guardian_browser_session` localStorage envelope; the refresh token is server-set only as the host-only HttpOnly `guardian_refresh_token` cookie. Flag JavaScript that reads/writes a refresh token, authorization-start/callback/refresh requests without `credentials: "include"`, refresh bodies containing a token, or refresh-token fields in response types.
 
 **Protected routes**
 
@@ -180,7 +180,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - `GET /api/manifest/status` has no auth — public readiness endpoint.
 - `POST /api/auth/bungie/callback` and `POST /api/auth/refresh` have no access-JWT auth — callback uses the CSRF state, refresh uses the HttpOnly cookie as its own credential; both require an exact allowlisted `Origin`.
 - `POST /api/auth/bungie/reconnect` requires an access JWT, exact allowlisted `Origin`, valid OAuth state, and a Bungie membership matching the JWT. Flag reconnect code that mints or rotates Guardian Tracker JWTs, creates a refresh-session row, upserts the user, replaces the refresh cookie, or stores authorization for a different membership.
-- OAuth state is not single-use — this is the intentional stateless HMAC design.
+- OAuth validation remains stateless and browser-cookie-bound. Preserve conditional transaction-cookie expiry: valid transaction processing consumes it, while invalid code/state input leaves a pending flow intact.
 - `GET /api/admin/users`, `PUT /api/admin/users/:id/role`, `GET /api/admin/flags`, `PUT /api/admin/flags/:key`, `GET /api/admin/audit` — require admin role via `RequireAdmin`; the restriction itself is correct.
 - `PUT /api/account/role` — self-service role opt-in; deliberately rejects `admin` as a target role and rejects admin callers (`ADMIN_OPT_IN`).
 - `GET /api/flags` — JWT protected but no tier gate; returns resolved state for any authenticated caller.

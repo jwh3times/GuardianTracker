@@ -27,8 +27,8 @@ var ErrUnavailable = errors.New("auth: persistence not configured")
 // maxAuthCodeLen bounds the authorization code accepted from the callback form.
 const maxAuthCodeLen = 500
 
-// stateTTL is how long an issued OAuth state parameter stays valid.
-const stateTTL = 10 * time.Minute
+// OAuthTransactionTTL bounds both the signed state and browser transaction cookie.
+const OAuthTransactionTTL = 10 * time.Minute
 
 // Reason names why session issuance failed. It is also the audit reason string,
 // so the two cannot drift: an added failure mode has to be given a name here
@@ -173,12 +173,12 @@ func NewSessionIssuer(d SessionDeps) *SessionIssuer {
 }
 
 // AuthorizeURL returns the Bungie authorization URL to send the browser to,
-// along with the signed state it embeds. Generating and verifying that state
-// are one CSRF rule, so they have one owner.
-func (s *SessionIssuer) AuthorizeURL() (authURL, state string, err error) {
-	state, err = s.state.Generate()
+// along with signed state and the independent nonce for the browser cookie.
+// Generating and verifying that binding are one CSRF rule with one owner.
+func (s *SessionIssuer) AuthorizeURL() (authURL, state, browserNonce string, err error) {
+	state, browserNonce, err = s.state.Generate()
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	return fmt.Sprintf(
 		"%s?client_id=%s&response_type=code&redirect_uri=%s&state=%s",
@@ -186,14 +186,14 @@ func (s *SessionIssuer) AuthorizeURL() (authURL, state string, err error) {
 		s.oauth.ClientID,
 		url.QueryEscape(s.oauth.RedirectURI),
 		url.QueryEscape(state),
-	), state, nil
+	), state, browserNonce, nil
 }
 
 // Login turns an OAuth callback into a session: verify state, exchange the
 // code, resolve the primary Destiny membership, upsert the user, store the
 // Bungie tokens, mint the JWT pair, and record the session row they rotate against.
-func (s *SessionIssuer) Login(ctx context.Context, code, state, userAgent string) (*Session, error) {
-	bungieTokens, membership, err := s.exchangeAuthorization(ctx, code, state)
+func (s *SessionIssuer) Login(ctx context.Context, code, state, browserNonce, userAgent string) (*Session, error) {
+	bungieTokens, membership, err := s.exchangeAuthorization(ctx, code, state, browserNonce)
 	if err != nil {
 		return nil, err
 	}
@@ -232,8 +232,8 @@ func (s *SessionIssuer) Login(ctx context.Context, code, state, userAgent string
 // Guardian Tracker session. It deliberately does not mint Guardian JWTs,
 // create a refresh_sessions row, or change the user: public-client access-token
 // expiry is independent from the application's rotating browser session.
-func (s *SessionIssuer) Reconnect(ctx context.Context, authenticatedMembershipID, code, state string) error {
-	bungieTokens, membership, err := s.exchangeAuthorization(ctx, code, state)
+func (s *SessionIssuer) Reconnect(ctx context.Context, authenticatedMembershipID, code, state, browserNonce string) error {
+	bungieTokens, membership, err := s.exchangeAuthorization(ctx, code, state, browserNonce)
 	if err != nil {
 		if sessionErr, ok := AsSessionError(err); ok && sessionErr.MembershipID == "" {
 			sessionErr.MembershipID = authenticatedMembershipID
@@ -262,11 +262,11 @@ func (s *SessionIssuer) Reconnect(ctx context.Context, authenticatedMembershipID
 // code, and resolve the primary Destiny membership represented by the access
 // token. Callers decide whether to issue a new Guardian session or only replace
 // the Bungie authorization.
-func (s *SessionIssuer) exchangeAuthorization(ctx context.Context, code, state string) (*BungieTokens, *DestinyMembership, error) {
+func (s *SessionIssuer) exchangeAuthorization(ctx context.Context, code, state, browserNonce string) (*BungieTokens, *DestinyMembership, error) {
 	if code == "" || len(code) > maxAuthCodeLen {
 		return nil, nil, &SessionError{Reason: ReasonInvalidCode}
 	}
-	if state == "" || !s.state.Verify(state, time.Now(), stateTTL) {
+	if state == "" || !s.state.Verify(state, browserNonce, time.Now(), OAuthTransactionTTL) {
 		return nil, nil, &SessionError{Reason: ReasonInvalidState}
 	}
 
@@ -429,4 +429,23 @@ func ignoreUnavailable(err error) error {
 		return nil
 	}
 	return err
+}
+
+// OAuthTransactionConsumed reports whether callback validation passed. Only login
+// and reconnect adapters use this to expire their transaction cookie; invalid
+// input must not destroy a different pending browser transaction.
+func OAuthTransactionConsumed(err error) bool {
+	if err == nil {
+		return true
+	}
+	se, ok := AsSessionError(err)
+	if !ok {
+		return false
+	}
+	switch se.Reason {
+	case ReasonCodeExchange, ReasonMembershipFetch, ReasonMembershipMismatch, ReasonAuthorizationWrite, ReasonTokenMint, ReasonSessionWrite:
+		return true
+	default:
+		return false
+	}
 }

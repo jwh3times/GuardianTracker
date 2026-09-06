@@ -15,12 +15,16 @@ For each finding, report: **Affected surface**, **Attack scenario**, **Impact**,
 
 ### Bungie OAuth — CSRF state
 
-The state parameter is a stateless HMAC-SHA256-signed token (`v1.<ts>.<nonce>.<sig>`, key derived from `JWT_SECRET`). It is verified with a 10-minute TTL via `auth.StateSigner.Verify()`. It is NOT single-use — replay is bounded by the TTL and Bungie's single-use authorization code.
+The state parameter is stateless HMAC-SHA256-signed v2 state with a SHA-256
+binding to an independent HttpOnly browser transaction cookie. It is verified
+with a 10-minute TTL via `auth.StateSigner.Verify()`, with no old-state fallback.
+The production cookie uses the `__Host-` prefix and `Secure`; development uses
+`guardian_oauth_transaction`. Both are host-only, `SameSite=Lax`, and `Path=/`.
 
-- Test: submit a callback with a fabricated state (unknown nonce, wrong sig) — must return 400
-- Test: submit a callback after the 10-minute TTL — must return 400
-- Test: omit `state` entirely from the POST body — must return 400, not 500
-- Test: replay the same `state` a second time — should succeed (this is an intentional tradeoff; document as known limitation if concerned about the TTL window)
+- Test: missing, malformed, expired, legacy, or cookie-mismatched state returns 400 before code exchange for callback and reconnect.
+- Test: authorization start sets the transaction cookie without returning its nonce to JavaScript.
+- Test: a second start replaces the first browser transaction; matching completion works across tabs in the same browser.
+- Test: valid transaction processing expires its cookie, including downstream exchange failures; invalid input preserves a pending transaction.
 
 ### Bungie OAuth — authorization code exchange
 
@@ -29,7 +33,7 @@ exchanges it server-side; it never receives Bungie access tokens. Guardian
 Tracker is a public client: the grant sends the public client ID with no client
 secret, and Bungie returns no refresh token.
 
-- Test: POST to `/api/auth/bungie/callback` with an exact allowlisted `Origin`, a fabricated `code`, and valid `state` — must return a controlled error from Bungie exchange
+- Test: POST to `/api/auth/bungie/callback` with an exact allowlisted `Origin`, a fabricated `code`, valid `state`, and its matching transaction cookie — must return a controlled error from Bungie exchange
 - Test: inspect the authorization-code request — it must contain `client_id` and no `client_secret`
 - Test: POST with a replayed `code` (after it has already been exchanged) — Bungie's server must reject the second exchange; the api-service must surface that error correctly
 - Test: omit `Origin` or use an unlisted origin on callback — must be rejected before a cookie is issued
@@ -211,7 +215,7 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 
 ## Known intentional gaps (document, do not escalate as vulnerabilities)
 
-- OAuth state is replayable within its 10-minute TTL — stateless HMAC design cannot enforce one-time use; mitigated by Bungie's single-use authorization code
+- OAuth validation remains stateless across replicas; cookie consumption occurs in the browser response, while Bungie enforces single-use authorization codes.
 - Revocation fails open — a DB outage during the `token_version` check allows the request; closes when DB returns
 - If revocation cannot be observed immediately after logout, access tokens remain valid up to the configured lifetime (30m by default) plus the 60s revocation cache window
 - Per-device session reuse detection revokes only the replayed session — a stolen refresh token that is used _before_ the legitimate client rotates it would not be detected until a subsequent rotation attempt

@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.11] - 2026-09-06
+
+### Security
+
+- Bind OAuth login and reconnect completion to a short-lived HttpOnly browser
+  transaction cookie. Completion requires the matching signed state and cookie;
+  the latest sign-in attempt supersedes earlier pending attempts across tabs.
+- Coordinate authorization start and reconnect through the shared browser
+  lifecycle lock so concurrent responses cannot overwrite a newer transaction.
+  Both operations now require Web Locks support.
+
 ## [1.3.10] - 2026-09-06
 
 ### Fixed
@@ -318,7 +329,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.10...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.11...HEAD
+[1.3.11]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.10...v1.3.11
 [1.3.10]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.9...v1.3.10
 [1.3.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.8...v1.3.9
 [1.3.8]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.7...v1.3.8

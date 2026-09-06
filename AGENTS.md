@@ -71,7 +71,8 @@ invariants:
 
 ### Auth & token flow
 
-Bungie OAuth login uses a public client with stateless, HMAC-signed CSRF `state`.
+Bungie OAuth login uses a public client with stateless, HMAC-signed v2 CSRF
+`state` bound to an independent HttpOnly browser transaction cookie.
 The API sends no Bungie client secret; Bungie returns an expiring access token
 without a refresh token. The access-only Bungie authorization is stored against
 the tracked Destiny membership, **AES-256-GCM encrypted** in Postgres with
@@ -220,9 +221,9 @@ deployed frontend runtime is nginx.
 
 ### Auth and security behavior to preserve
 
-- OAuth state is HMAC signed.
+- Credentialed `GET /api/auth/bungie` creates a 10-minute host-only HttpOnly `SameSite=Lax`, `Path=/` transaction cookie (`__Host-guardian_oauth_transaction` with `Secure` in production; `guardian_oauth_transaction` in development). HMAC-signed v2 state binds its SHA-256 nonce digest; callback/reconnect verify both before code exchange, without legacy fallback. The latest start replaces prior pending browser flows. Valid transaction processing expires the cookie; invalid input preserves it.
 - The access-only Bungie authorization is encrypted at rest with AES-256-GCM and exact current/previous key versions; expiry requires an authenticated reconnect of the same Bungie membership.
-- The shared browser session client atomically persists access JWT/user state in the versioned `guardian_browser_session` localStorage envelope and owns authenticated transport. Web Locks coordinate callback, refresh, and logout across tabs; callback completion and refresh require them. `AuthProvider` only subscribes to the public user/authenticated snapshot. The rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
+- The shared browser session client atomically persists access JWT/user state in the versioned `guardian_browser_session` localStorage envelope and owns authenticated transport. Web Locks coordinate authorization start, callback, authenticated reconnect, refresh, and logout across tabs; all except local logout require them. `AuthProvider` only subscribes to the public user/authenticated snapshot. The rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
 - Application composition observes membership type/ID boundaries, cancels and clears the old QueryClient, replaces it, and remounts identity-bound providers. Same-membership refresh retains caches and mounted state. Authenticated mutations use `useIdentityMutation` to fence work from a departed identity.
 - Refresh token revocation is backed by PostgreSQL.
 - Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
