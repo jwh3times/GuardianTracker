@@ -14,6 +14,18 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.16] - 2026-09-06
+
+### Security
+
+- Capture private-workspace bootstrap diagnostics and report value-free failures,
+  cleaning temporary Git configuration and reference files on handled failures.
+- Validate tracked paths, committed ignore rules, and symlinks before cloning;
+  install through an ignored staging directory and preserve existing private
+  clones and their uncommitted files.
+- Remove tracing and injected Git routing controls from bootstrap child
+  environments. Clarify the limits of repository-URL privacy in process arguments.
+
 ## [1.3.15] - 2026-09-06
 
 ### Security
