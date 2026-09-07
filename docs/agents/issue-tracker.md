@@ -46,6 +46,14 @@ attach to it** — carry the order in the `Blocked By` field and wire real
 credential, a real provider/cost/account identifier, or exploitable security
 detail.
 
+## Required human follow-ups
+
+When completed agent work leaves any required human action, follow
+[Human follow-ups](human-followups.md) before reporting completion. These are
+private-companion issues on the shared project with `ready-for-human` labels and
+linked private-wiki procedures, even if not yet claimed. This exception takes
+precedence over the default repository and draft rules above.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

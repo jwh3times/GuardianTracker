@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 
 const script = join(import.meta.dirname, "bootstrap-private.mjs");
 const syntheticURL =
@@ -81,9 +82,10 @@ function fixture(t) {
 import cp from "node:child_process";
 import fs from "node:fs";
 import {syncBuiltinESMExports} from "node:module";
+import {join,relative} from "node:path";
 const spawn=cp.spawnSync;
 const root=${JSON.stringify(parent)};
-const loader=${JSON.stringify(loader)};
+const loader=${JSON.stringify(pathToFileURL(loader).href)};
 const log=${JSON.stringify(log)};
 const clone=${JSON.stringify(clone)};
 const url=${JSON.stringify(syntheticURL)};
@@ -98,7 +100,10 @@ cp.spawnSync=function(command,args,options={}){
   const child=args.slice(args.indexOf("--")+1);
   return spawn(child[0],["--import",loader,...child.slice(1)],{...options,env:{...env,${variable}:url,OP_FIXTURE_TOKEN:"synthetic-op-token"}});
  }
- return spawn(command,args,options);
+ const result=spawn(command,args,options);
+ if(env.FIXTURE_ALIAS && command==="git" && args.includes("--show-toplevel") && result.status===0)
+  result.stdout=join(env.FIXTURE_ALIAS,relative(join(root,"checkout"),args[1]))+"\\n";
+ return result;
 };
 if(process.env.FIXTURE_MODE==="cleanup-fail") {
  const remove=fs.rmSync;
@@ -128,7 +133,7 @@ for(const command of [["init"],["config","remote.origin.url","guardian-private:"
     spawnSync(
       process.execPath,
       [
-        ...(mock ? ["--import", loader] : []),
+        ...(mock ? ["--import", pathToFileURL(loader).href] : []),
         join(root, "scripts", "bootstrap-private.mjs"),
         ...args,
       ],
@@ -206,6 +211,17 @@ for (const mode of ["success", "git-fail", "origin-missing", "op-fail"]) {
     f.clean();
     assert.equal(existsSync(join(f.root, "private")), mode === "success");
     const calls = f.calls();
+    assert.equal(
+      calls.filter((call) => call.command === "op" && call.args[0] === "run")
+        .length,
+      1,
+    );
+    assert.equal(
+      calls.filter(
+        (call) => call.command === "git" && call.args.includes("clone"),
+      ).length,
+      mode === "op-fail" ? 0 : 1,
+    );
     for (const call of calls) {
       assert.equal(
         JSON.stringify(call.args).includes(syntheticURL),
@@ -396,7 +412,7 @@ test("fresh worktree uses its main checkout's protected reference", (t) => {
     process.execPath,
     [
       "--import",
-      join(f.parent, "loader.mjs"),
+      pathToFileURL(join(f.parent, "loader.mjs")).href,
       join(worktree, "scripts", "bootstrap-private.mjs"),
     ],
     {
@@ -446,4 +462,17 @@ test("an existing private clone and its uncommitted files are preserved without 
       .some((call) => call.command === "op" || call.args.includes("clone")),
     false,
   );
+});
+
+// Windows Git expands 8.3 temporary directory aliases. Exercise equivalent
+// filesystem aliases on every platform without changing any protected path.
+test("Git root validation accepts filesystem aliases for the same directory", (t) => {
+  const f = fixture(t);
+  const alias = join(f.parent, "checkout-alias");
+  symlinkSync(f.root, alias, "junction");
+  const result = f.run(["--url", syntheticURL], { FIXTURE_ALIAS: alias });
+  assert.equal(result.status, 0, result.stderr);
+  f.safe(result);
+  f.clean();
+  assert.ok(existsSync(join(f.root, "private", ".git")));
 });

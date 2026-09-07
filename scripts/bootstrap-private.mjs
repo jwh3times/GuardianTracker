@@ -21,6 +21,7 @@ import {
   renameSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -113,7 +114,10 @@ function assertRepository(root) {
   if (!metadata(join(root, ".git")))
     fail("Run this helper from a Guardian Tracker repository checkout.");
   const result = git(["-C", root, "rev-parse", "--show-toplevel"]);
-  if (result.status !== 0 || resolve(result.stdout.trim()) !== root)
+  if (
+    result.status !== 0 ||
+    realpathSync.native(result.stdout.trim()) !== realpathSync.native(root)
+  )
     fail("The public repository root could not be validated.");
 }
 
@@ -186,7 +190,10 @@ function validatePrivateClone(path) {
   )
     fail("The private workspace must contain an independent Git repository.");
   const result = git(["-C", path, "rev-parse", "--show-toplevel"]);
-  if (result.status !== 0 || resolve(result.stdout.trim()) !== path)
+  if (
+    result.status !== 0 ||
+    realpathSync.native(result.stdout.trim()) !== realpathSync.native(path)
+  )
     fail("The private repository root could not be validated.");
 }
 

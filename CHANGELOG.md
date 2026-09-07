@@ -14,7 +14,7 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
-## [1.3.16] - 2026-09-06
+## [1.3.16] - 2026-09-07
 
 ### Security
 
@@ -25,6 +25,18 @@ No unreleased changes.
   clones and their uncommitted files.
 - Remove tracing and injected Git routing controls from bootstrap child
   environments. Clarify the limits of repository-URL privacy in process arguments.
+
+### Changed
+
+- Require agent-completed work to record remaining human actions as private
+  follow-up issues on the project board, with linked step-by-step private-wiki
+  procedures and completion evidence. Apply the handoff contract during
+  documentation updates, shipping, session closeout, and wizard delivery.
+
+### Fixed
+
+- Accept equivalent filesystem paths when validating bootstrap repository roots
+  and use portable file URLs for the Windows regression harness.
 
 ## [1.3.15] - 2026-09-06
 

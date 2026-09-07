@@ -422,6 +422,17 @@ Task status lives on GitHub, not in this repository's files. See
 - Record point-in-time findings as comments on the issue they informed. Do not
   create standing status documents; that is the drift ADR 0022 removes.
 
+### Human follow-ups from completed work
+
+Before reporting completed agent work, create or update a private-companion
+follow-up issue for every required human action, add it to the shared project,
+label it `ready-for-human`, and publish linked step-by-step instructions in the
+private wiki. This overrides public-by-default and unclaimed-draft rules for
+these follow-ups. Read [the human-follow-up procedure](./docs/agents/human-followups.md)
+whenever completed work leaves a human action; it defines deduplication, evidence,
+privacy, and handoff completion. Engineering tasks the agent can perform remain
+agent work.
+
 ### Rules for every architecture-deepening slice
 
 The remaining slices sequenced by ADRs 0014–0021 are behavior-preserving
