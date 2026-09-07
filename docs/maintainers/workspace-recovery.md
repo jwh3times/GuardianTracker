@@ -124,8 +124,40 @@ npm run bootstrap:private -- --op-reference "op://<vault name>/<item name>/<fiel
 ```
 
 The alternative `-- --url <credential-free-GitHub-URL>` override accepts only a
-credential-free URL. The resolved URL is not placed in process arguments or
-terminal output.
+credential-free URL and intentionally places it in the caller's arguments and
+potential shell history. Prefer the reference flow when avoiding that exposure.
+In the reference flow, the Node helper keeps the resolved URL out of its direct
+`node`, `op`, and `git` command arguments. Git transport helpers can still receive
+the resolved URL in descendant process arguments; this is not a guarantee of
+process-wide URL invisibility. See [Git remote-helper invocation](https://git-scm.com/docs/gitremote-helpers#_invocation).
+
+### Node bootstrap safety and diagnostics
+
+These checks apply to `npm run bootstrap:private`, including its internal
+1Password child entry point. It validates the public checkout and refuses
+symlinked private/reference paths, public-tracked private content, and paths
+without protection in both the working and committed root `.gitignore`. The
+same reference-file checks apply when falling back to the main checkout.
+An existing independent `private/` clone is preserved; another existing target,
+including an empty directory, must be investigated before retrying.
+
+A new clone is prepared in an ignored staging directory and validated before
+being renamed to `private/`. The helper rechecks target protection and existence
+before publishing it. Handled failures unwind cleanup of helper-owned staging,
+reference, and temporary Git configuration files; existing workspace content is
+preserved. Keep the required ignore rules committed before running the helper.
+
+Git and 1Password child output is captured rather than forwarded. Failures show
+fixed, value-free messages instead of raw tool diagnostics or filesystem errors.
+Child environments remove tracing and injected Git redirection/configuration
+controls; Git children also drop `OP_*` variables and the resolved URL variable.
+Normal host credential-helper configuration remains available. These controls
+do not change the descendant-argument limitation above or the separate
+PowerShell helper's behavior.
+
+The Node regression cases run with synthetic Git/1Password fixtures through
+`npm run test:workspace-portability`; they do not resolve real secret references
+or clone the private companion.
 
 ## Recovery Boundaries
 
