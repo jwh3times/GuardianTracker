@@ -8,6 +8,6 @@
     "sync:main": "node scripts/sync-main.mjs",
     "sync:agents": "node scripts/sync-agent-configs.mjs",
     "test:docs-links": "node --test scripts/documentation-links.test.mjs",
-    "test:workspace-portability": "node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs"
+    "test:workspace-portability": "node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs"
   }
 }

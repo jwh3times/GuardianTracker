@@ -63,6 +63,13 @@ Or resolve the URL through the maintainer's machine-local 1Password reference:
 ./scripts/bootstrap-private-workspace.ps1 -PrivateFromOnePassword
 ```
 
+For a new Git worktree, `npm run bootstrap:private` uses the Node helper and can
+reuse the main checkout's protected reference file. It stages a new clone before
+installing it, preserves an existing clone, and reports value-free errors without
+forwarding raw Git/1Password diagnostics. Its exact path checks and command-line
+privacy limits are documented in
+[Node bootstrap safety and diagnostics](./docs/maintainers/workspace-recovery.md#node-bootstrap-safety-and-diagnostics).
+
 Restore approved local configuration before `setup.ps1`; both helpers preserve
 existing files:
 

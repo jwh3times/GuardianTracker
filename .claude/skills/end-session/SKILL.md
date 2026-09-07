@@ -31,7 +31,7 @@ call `/ship`.
 Re-read the session and write a flat list of everything it produced that a future
 session would want: decisions made, facts verified against real data, dead ends
 and why they were dead, work started, work discovered but not started, surprises
-that contradicted a doc.
+that contradicted a doc, and every required human action left by completed work.
 
 Include the scratch surfaces, because step 5 clears them:
 
@@ -124,6 +124,14 @@ badly, `anthropic-skills:consolidate-memory` does a full reconciliation pass.
 **Done when:** an issue reader with no access to this session knows the current
 state, and `MEMORY.md` has exactly one live pointer per fact.
 
+Before cleanup, complete the
+[human-follow-up procedure](../../../docs/agents/human-followups.md) for every
+required human action from completed work. This overrides the draft/default-repo
+routing above: verify the private issue, project membership, `ready-for-human`
+label, and published private-wiki steps with bidirectional links. Keep those
+follow-ups open until human acceptance evidence exists; report access blockers
+and retain the prepared handoff if publication cannot complete.
+
 ### 5. Clean the local workspace
 
 Harvesting is done, so deleting is now safe.
@@ -168,9 +176,12 @@ container is still bound to 5533 or the E2E port.
 Give the user, in this order:
 
 1. What was recorded and where — memory files, `private/` files, issues opened,
-   commented, or closed, each by name or number.
+   commented, or closed, each by name or number. Include each human follow-up
+   issue and its published private-wiki procedure, or the publication blocker.
 2. What was cleaned — paths removed, containers stopped.
 3. What is still open — unpushed commits, undelivered branch work, public-doc
    updates owed to `/ship`, and any harvested item you could not route.
 
-State plainly that nothing was pushed or merged.
+State whether application/private-repository commits were pushed or merged, and
+report private-wiki publication separately. Publishing required handoff procedures
+is part of closeout; application shipping remains `/ship` work.
