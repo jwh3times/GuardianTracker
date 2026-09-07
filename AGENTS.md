@@ -167,7 +167,12 @@ machine-local `.private-workspace/repository.env.ref` file containing only
 `GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>`. Do not put the
 private repository location or real 1Password identifiers in public docs.
 `npm run bootstrap:private` (from the repo root) is the Node equivalent for new
-git worktrees; it reuses the main checkout's reference file.
+git worktrees; it reuses the main checkout's reference file. The Node helper
+requires untracked, committed-ignore-protected private/reference paths, stages
+new clones before publication, and suppresses raw Git/1Password diagnostics.
+For its process-argument limits and failure behavior, read
+[Node bootstrap safety](./docs/maintainers/workspace-recovery.md#node-bootstrap-safety-and-diagnostics)
+when restoring private workspaces or changing this helper.
 
 From the repo root, `npm run sync:main` preflights the public checkout and the
 optional independent `private/` repository for uncommitted changes, fetches and
@@ -250,7 +255,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/documentation-links.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
    main-branch synchronization, and local documentation-link policies. The Node policy keeps
