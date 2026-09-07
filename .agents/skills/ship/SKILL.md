@@ -117,6 +117,13 @@ docs/architecture.md, ROADMAP.md, SECURITY.md, AGENTS.md, docs/adr/, .claude/age
 It owns CHANGELOG.md too, but **you** write the changelog section in step 5 — tell it
 to leave CHANGELOG.md alone so you don't fight over the file.
 
+Before leaving the documentation step, complete the
+[human-follow-up procedure](../../../docs/agents/human-followups.md) for every
+required human action arising from this work. Verify private follow-up issues,
+project membership and `ready-for-human` labels, and published step-by-step wiki
+procedures. Reuse existing handoffs on repeat ships; keep private links out of
+public PR bodies and release notes. Report any access/publication gap explicitly.
+
 ### 5. Write the CHANGELOG entry
 
 Insert a section for the target version immediately below `## [Unreleased]`:
@@ -199,6 +206,10 @@ gh pr list --head "$(git branch --show-current)" --state open --json number -q '
 - **PR exists** → `gh pr edit <number>` to refresh the body. Do not open a second PR.
 
 ### 9. Report
+
+Include required human follow-up issue and wiki links in the authorized user
+report, or state that none remain. Distinguish recorded handoffs from any that
+could not be published.
 
 Give the user: the PR URL; the major, minor, or build classification and its
 one-sentence rationale; the exact version this merge will mint; and anything the

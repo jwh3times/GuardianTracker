@@ -68,8 +68,9 @@ and AGENTS.md's Work Tracking section.
 
 `private/README.md` is the sole index for the private repository's current
 layout. Read it before working there; do not cache private filenames in this
-public agent guide. Update private content only when explicitly asked or when
-the active task already changed it.
+public agent guide. Private issue and wiki handoffs required by the human-follow-up
+procedure below are authorized as part of completing the task. Other private
+content updates require an explicit request or relevance to the active change.
 
 Do not auto-copy private content into public docs. Public docs can say that a
 private runbook exists, but must not include private commands, secrets, resource
@@ -173,6 +174,21 @@ are portable and permission-free:
   for agents, `.agents/skills/` for skills); the script regenerates the mirrors and CI
   fails if they drift.
 
+## Human follow-ups before handoff
+
+Before the final documentation handoff, account for every human action arising
+from the completed agent work. Follow
+[Human follow-ups](../../docs/agents/human-followups.md), the canonical procedure:
+search for and reuse an existing follow-up where possible, then ensure each
+action has a private companion issue, a project-board entry marked
+`ready-for-human`, and private wiki instructions with step-by-step execution and
+verification. Link the issue and wiki instructions in both directions. Keep live
+status on the issue and board.
+
+Report the resulting handoff links privately. If access prevents creating or
+updating an issue, board entry, or wiki instructions, identify the missing
+artifact and access limitation honestly; do not report the handoff complete.
+
 ## Output
 
 When done, report:
@@ -180,4 +196,5 @@ When done, report:
 - which files changed and a one-line summary for each
 - which files were checked and found current
 - any drift that could not be resolved from code alone
+- human follow-ups recorded through the canonical procedure, or the exact artifacts still blocked by access
 '''
