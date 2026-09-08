@@ -179,13 +179,14 @@ jobs:
       # The container's browsers live at a version-stamped path, so its tag must
       # match the installed @playwright/test exactly — a stale tag fails every
       # test with "Executable doesn't exist at /ms-playwright/...". Dependabot
-      # cannot keep a hardcoded tag current: its docker ecosystem reads only
-      # Dockerfiles and docker-compose reads only compose files, so an image
-      # literal in a workflow step is invisible to every ecosystem. Deriving the
-      # tag from the lockfile makes the two impossible to drift apart.
-      #
-      # Dockerfile.playwright pins both image digests. The Node policy test keeps
-      # its Playwright tag aligned with the version resolved in the lockfile.
+      # cannot keep the tag current on its own: the docker ecosystem reads only
+      # Dockerfiles and docker-compose reads only compose files, while the npm
+      # bump of @playwright/test edits neither. So the pin lives in
+      # Dockerfile.playwright (ARG PLAYWRIGHT_IMAGE, tag + digest) and
+      # scripts/node-version-policy.test.mjs fails format-check whenever it does
+      # not equal the version resolved in the lockfile. A Playwright bump must
+      # carry a hand-written ARG update; the policy test is the drift alarm, not
+      # the fix.
       - name: Build the matching Playwright image with Node 26
         run: |
           docker build --pull \

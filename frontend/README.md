@@ -173,10 +173,22 @@ wrong stack and fail during login.
 Canonical baselines are Linux renderings. Never commit snapshots generated on
 Windows or macOS; font rasterization differences will fail CI.
 
-Regenerate baselines with `frontend/Dockerfile.playwright`, whose Playwright
-image and Node runtime are kept aligned with the lockfile and root `.nvmrc` by
-repository policy tests. Build the two Go test commands for Linux, then run the
-snapshot script in that image:
+Regenerate baselines with `frontend/Dockerfile.playwright`, whose Node runtime
+must match the root `.nvmrc` and whose Playwright image tag must match the
+`@playwright/test` version in `frontend/package-lock.json`.
+`scripts/node-version-policy.test.mjs` enforces both, but nothing updates them
+for you. Dependabot bumps `@playwright/test` under the **npm** ecosystem, which
+never edits a Dockerfile, so every Playwright bump leaves the image pin behind
+until you edit `ARG PLAYWRIGHT_IMAGE` by hand — both the `vX.Y.Z-noble` tag and
+its `@sha256:` digest. Until you do, `Format Check` fails on the policy test and
+`Browser Visual Regression` fails at browser launch; `Browser E2E + Axe` stays
+green because it installs browsers on the runner instead of using the pinned
+image, so it is not a signal for this drift.
+
+A bump does not by itself invalidate the baselines — a new Chromium often
+renders identically. Regenerate only when the visual run reports actual pixel
+differences. Build the two Go test commands for Linux, then run the snapshot
+script in that image:
 
 ```powershell
 $repo = (Get-Location).Path -replace '\\','/'
