@@ -154,6 +154,26 @@ Rules:
   target version changed since last time (someone else merged first), renumber the
   existing section rather than adding a new one.
 
+Then update the **reference-link footer** at the bottom of the file. A heading with
+no definition renders as plain text instead of a link, and `Changelog Version` never
+looks down there — so a skipped footer is invisible until someone reads the rendered
+file. Two edits, every time:
+
+```markdown
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.24...HEAD
+[0.3.24]: https://github.com/jwh3times/GuardianTracker/compare/v0.3.23...v0.3.24
+```
+
+- Rewrite `[Unreleased]` to compare from the version you just wrote.
+- Insert that version's definition directly beneath it, comparing from the previous
+  release — the tag `scripts/next-version.sh` counted from.
+- Definitions run newest-first, matching section order.
+- **Backfilled a bot release in step 2?** It needs a definition too. One `/ship` can
+  add several sections, so add one line per section you wrote.
+
+`scripts/changelog-footer-policy.test.mjs` enforces all of this in `Format Check`;
+run it before pushing rather than discovering it in CI.
+
 ### 6. Fast checks — refuse to push if any fail
 
 Tests, Staticcheck, `govulncheck`, and the Docker build are **not** run here; CI owns
