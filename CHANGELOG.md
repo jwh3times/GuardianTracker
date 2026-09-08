@@ -14,6 +14,46 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.21] - 2026-09-08
+
+### Fixed
+
+- Corrected the frontend visual-baseline documentation: repository policy tests
+  detect a stale Playwright image pin but do not update it. A `@playwright/test`
+  bump arrives through Dependabot's npm ecosystem, which does not edit
+  Dockerfiles, so `ARG PLAYWRIGHT_IMAGE` in `frontend/Dockerfile.playwright` must
+  be bumped by hand — tag and digest. The note now names the checks that fail
+  until it is, and records that a Playwright bump does not by itself invalidate
+  the committed baselines.
+
+## [1.3.20] - 2026-09-08
+
+### Changed
+
+- Updated Playwright from 1.62.1 to 1.63.0, including the pinned
+  `mcr.microsoft.com/playwright` image used to regenerate visual baselines.
+
+## [1.3.19] - 2026-09-08
+
+### Changed
+
+- Updated `github.com/mattn/go-sqlite3` from 1.14.50 to 1.14.52.
+
+## [1.3.18] - 2026-09-07
+
+### Changed
+
+- Updated `@testing-library/user-event` from 14.6.6 to 14.6.7, `@types/node`
+  from 26.4.0 to 26.4.1, `@types/react-dom` from 19.2.5 to 19.2.7, Oxlint from
+  1.80.0 to 1.81.0, and PostCSS from 8.5.26 to 8.5.28.
+
+## [1.3.17] - 2026-09-07
+
+### Changed
+
+- Updated the frontend runtime image digest for nginx-unprivileged
+  1.31.5-alpine3.24.
+
 ## [1.3.16] - 2026-09-07
 
 ### Security
