@@ -14,6 +14,33 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.23] - 2026-09-08
+
+### Added
+
+- A repository policy test that keeps the jest-dom matcher type shim tied to the
+  upstream gap it covers. It fails `Format Check` once
+  `@testing-library/jest-dom` stops shipping the Vitest 4 assertion shape, so the
+  shim is deleted rather than left in place indefinitely — a redundant type
+  augmentation keeps working and would redden no other check. It also fails if
+  the shim and its scoped lint exemption are ever separated.
+
+## [1.3.22] - 2026-09-08
+
+### Changed
+
+- Updated Vitest and `@vitest/coverage-v8` from 4.1.11 to 5.0.0.
+
+### Fixed
+
+- Restored jest-dom matcher types under Vitest 5, which inlined `@vitest/expect`
+  and dropped the `jest.Matchers` bridge that carried them into `expect(...)`.
+  jest-dom's own entry point augments the Vitest 4 assertion shape, which cannot
+  merge with the current one, so every matcher silently lost its type while
+  continuing to work at runtime. The types are restored through Vitest's
+  documented extension point for third-party Jest matcher libraries, not by
+  suppressing type checking.
+
 ## [1.3.21] - 2026-09-08
 
 ### Fixed
