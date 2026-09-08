@@ -191,6 +191,18 @@
         "vitest/valid-expect-in-promise": "error",
         "vitest/valid-title": "error"
       }
+    },
+    {
+      "files": ["src/test/*.d.ts"],
+      "plugins": ["typescript"],
+      "rules": {
+        "typescript/no-empty-object-type": [
+          "error",
+          {
+            "allowInterfaces": "with-single-extends"
+          }
+        ]
+      }
     }
   ]
 }
