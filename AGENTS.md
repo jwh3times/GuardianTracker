@@ -255,16 +255,20 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
-   main-branch synchronization, and local documentation-link policies. The Node policy keeps
+   main-branch synchronization, local documentation-link, and jest-dom-shim policies. The Node policy keeps
    `.nvmrc`, both workflows, both frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as
    the three Compose PostgreSQL services — Dependabot's `docker-compose` ecosystem does not see
    workflow service images — and fails on any retired `postgres:<version>` reference left behind
-   in a tracked file. The job also runs
+   in a tracked file. The jest-dom policy keeps `frontend/src/test/jest-dom.d.ts` and its
+   scoped `typescript/no-empty-object-type` exemption alive exactly while
+   `@testing-library/jest-dom` still augments the Vitest 4 assertion shape, and fails once
+   upstream ships Vitest 5 support so the shim is deleted rather than left to rot — a
+   redundant augmentation keeps working and would redden no other check. The job also runs
    `npm run sync:agents -- --check`, which fails if
    `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
    (generated from `.agents/skills/`) is out of sync with its source. Fix:
