@@ -12,6 +12,18 @@
   storage `Apply`, and `PreferencesHandler` now implement the Preferences
   decisions below. Wish list ownership slices B3/B5 remain pending, so this ADR
   remains Accepted with sequenced implementation rather than Implemented.
+- Implementation note (2026-09-09): Wish list slice B3 is complete. `services/wishlist`
+  (`Entries`, the domain types, the `Repository` and `ItemLookup` ports, and the
+  typed error vocabulary) now owns persistence, mutation validation, and
+  Item-existence rules, constructed before Weekly as this ADR specifies; the
+  `db/adapters` repository translates internal user IDs and PostgreSQL's
+  duplicate/not-found/unavailable vocabulary. Weekly consumes saved Item hashes
+  through the one-method `WishListReader`, satisfied by `*wishlist.Entries`,
+  replacing its own database adapter. The complete handler-facing
+  `wishlist.Service` — Item and availability completion, tombstones, and the
+  Gin-owned equivalents it would delete — is slice B5 and remains pending, so
+  this ADR remains Accepted with sequenced implementation rather than
+  Implemented.
 
 ## Context
 

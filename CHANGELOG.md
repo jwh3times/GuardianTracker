@@ -14,6 +14,35 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.27] - 2026-09-09
+
+### Changed
+
+- The wish list now owns what a saved entry means. Priorities, note limits,
+  bulk-selection rules, and the difference between "already saved", "not
+  found", and "no database" are decided in one place instead of being spread
+  across the HTTP handler and PostgreSQL error codes. Every wish list status
+  code, error code, and message stays exactly as it was.
+- Saving an item while the item database is unreadable now fails with the same
+  "still downloading" response the rest of the app uses, rather than silently
+  saving an item nothing could confirm exists. An item the database has read
+  and does not contain is still refused as an unknown item.
+- This Week reads saved items through a single narrow question instead of
+  reaching into wish list storage. It still drops personalization rather than
+  failing when the wish list cannot be read, and now records that it did.
+
+### Fixed
+
+- Wish list notes are measured in characters rather than bytes, so notes
+  containing emoji or accented characters are no longer rejected below the
+  500-character limit the database itself enforces.
+
+## [1.3.26] - 2026-09-09
+
+### Changed
+
+- Updated `golang.org/x/time` from 0.15.0 to 0.16.0 in the API service.
+
 ## [1.3.25] - 2026-09-09
 
 ### Changed
@@ -500,7 +529,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.25...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.27...HEAD
+[1.3.27]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.26...v1.3.27
+[1.3.26]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.25...v1.3.26
 [1.3.25]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.24...v1.3.25
 [1.3.24]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.23...v1.3.24
 [1.3.23]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.22...v1.3.23

@@ -183,8 +183,9 @@ them, and farm-only status. Item detail reads those facts through one seam
 rather than joining the manifest itself, which is what stops separate consumers
 describing the same item differently. Collections reads the whole catalog
 through that seam and adds only ownership and presentation-tree placement; the
-wish list still carries its own projection and moves onto the seam as it is
-reworked. Because Collections pairs the catalog with its own tree, the
+wish list validates an added item's existence through the same seam but still
+enriches its response with its own manifest projection, and moves fully onto
+the seam as it is reworked. Because Collections pairs the catalog with its own tree, the
 composition root notifies Items of a new Manifest before Collections. See
 [ADR 0015](./adr/0015-own-item-acquisition-facts-in-items.md).
 
@@ -243,6 +244,23 @@ each flag-gated route enforcing its own flag key, admin routes refusing
 non-admins and degraded builds — are asserted against the built route table in
 `api/router_test.go`. See
 [ADR 0011](./adr/0011-route-table-as-a-testable-composition-root.md).
+
+`services/wishlist` owns persisted wish list entries, mutation validation, and
+Item-existence rules behind a membership-keyed `Repository` port and a
+one-method `ItemLookup` port satisfied by `*items.Service`. Its `Entries` core
+is constructed before Weekly, which reads saved Item hashes through the
+required one-method `WishListReader` — satisfied by `*wishlist.Entries` — and
+degrades to no personalization, with a warning log, rather than failing This
+Week when the read fails. The `db/adapters` repository resolves the internal
+user ID from the Destiny membership and translates PostgreSQL's failure
+vocabulary into typed domain errors, so neither storage identity nor a driver
+error reaches Gin. Adding an item now refuses the write with `503
+MANIFEST_NOT_READY` when the Item lookup itself fails, rather than persisting
+an unvalidated entry; an Item confirmed absent from a successful lookup still
+returns `400`. `WishlistHandler` still owns request binding, ID parsing, typed
+error-to-HTTP mapping, and — pending a later slice — manifest-driven response
+enrichment and the live-vendor availability join. See
+[ADR 0019](./adr/0019-own-wish-list-and-preferences.md).
 
 Preferences are owned behind the HTTP boundary by `services/preferences`, which
 defines the defaults, validates partial patches, and owns irreversible,

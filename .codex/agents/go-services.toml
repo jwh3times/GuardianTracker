@@ -17,7 +17,7 @@ backend/api-service/
   main.go                              ← Composition root only: config, dependency wiring, manifest startup +
                                            swap participant/observer registration, server lifecycle
   api/router.go                        ← The route table. NewRouter(Deps) *gin.Engine; auth applied per group
-  db/adapters/adapters.go              ← db → auth/weekly consumer-interface adapters (sentinel translation)
+  db/adapters/adapters.go              ← db → auth consumer-interface adapters (sentinel translation)
   db/pruner.go                         ← Session and audit retention pruners (injectable interval)
   config/config.go                     ← Typed config with env var parsing helpers; Validate() returns error
   auth/jwt.go                          ← JWT generation and validation (access 30m default, refresh 30d)
@@ -48,9 +48,12 @@ backend/api-service/
   api/handlers/items.go                ← HTTP handlers for manifest-derived item detail: GetPerks (perk pool +
                                            exotic catalyst pool) and GetItem (minimal item view for deep-linked
                                            non-collectible items); no ownership check (public manifest data)
-  api/handlers/wishlist.go             ← Wishlist CRUD + bulk delete/set_priority; enriches with manifest
-                                           defs, every collectible-derived acquisition source, and
-                                           all-rotating-vendor availability
+  api/handlers/wishlist.go             ← Wishlist CRUD + bulk delete/set_priority: binding, id parsing,
+                                           typed-error-to-HTTP mapping (handleWishlistError), and
+                                           serialization only — delegates persistence, mutation validation,
+                                           and item-existence rules to *wishlist.Entries; still enriches
+                                           responses itself with manifest defs, every collectible-derived
+                                           acquisition source, and all-rotating-vendor availability
                                            (via liveVendorIface → weekly.Service.LiveVendorItemHashes)
   api/handlers/preferences.go          ← Thin Preferences HTTP adapter: binds partial patches, maps typed
                                            service errors, and serializes GET provenance; owns no defaults,
@@ -111,9 +114,22 @@ backend/api-service/
                                            wording, explanation, difficulty, emphasis, and Xûr/weekly fallbacks
   services/weekly/service.go           ← Weekly response assembly; required AcquisitionRecommender;
                                            Xûr inventory + XurItemHashes(); milestone data; reset time math;
-                                           ManifestRepo interface; bungie.ManifestObserver
+                                           ManifestRepo interface; bungie.ManifestObserver; consumes saved
+                                           wish list item hashes through the one-method WishListReader
+                                           (satisfied by *wishlist.Entries), fails open with a warning log
   services/weekly/availability.go      ← LiveVendorItemHashes: best-effort all-rotating-vendor item
                                            availability (Xûr, Banshee-44, Ada-1, ritual vendors) for wishlist
+  services/wishlist/wishlist.go        ← ADR 0019 domain types (EntryID, Priority, StoredEntry, AddCommand,
+                                           UpdateCommand, BulkResult), typed error vocabulary, the
+                                           membership-keyed Repository port, and the ItemLookup port
+                                           satisfied by *items.Service
+  services/wishlist/entries.go         ← Entries: the reusable wish list core (List, ListItemHashes, Add,
+                                           Update, Remove, RemoveMany, SetPriorityMany); owns mutation
+                                           validation (Unicode code-point note limit, bulk dedupe/size),
+                                           and Item-existence rules on Add — a failed Item lookup refuses
+                                           the write instead of persisting unvalidated. Constructed before
+                                           Weekly; the complete handler-facing wishlist.Service (B5) is
+                                           not yet built
   services/preferences/service.go      ← Preferences owner: framed/personalized defaults, card-style
                                            validation, atomic field-presence patches, irreversible
                                            onboarding completion, and authoritative/degraded read provenance
@@ -154,6 +170,10 @@ backend/api-service/
                                            (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
   db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens
   db/wishlist.go, db/prefs.go          ← DB stores for wishlist and preferences
+  db/adapters/wishlist.go              ← Membership-keyed wishlist.Repository adapter; hides internal user
+                                           IDs and translates PostgreSQL's failure vocabulary (23505 →
+                                           ErrDuplicate, pgx.ErrNoRows → ErrNotFound, db.ErrUnavailable →
+                                           wishlist.ErrUnavailable) into wishlist's typed errors
   db/adapters/preferences.go           ← Membership-keyed Preferences repository adapter; hides internal
                                            user IDs and translates db.ErrUnavailable to the domain sentinel
   db/audit.go                          ← Unified append-only audit trail store (audit_log): best-effort
@@ -293,25 +313,27 @@ Sentinel errors:
 `db.NewStores(pool)` never returns a nil field. With a `nil` pool it returns
 degraded implementations of every store interface (`UserRepo`, `TokenRepo`,
 `WishlistRepo`, `PrefsRepo`, `FlagRepo`, `AuditRepo`, `Pinger`) whose every
-method returns `db.ErrUnavailable`. There is no store nil-guard convention —
-handlers call the store directly and handle the error like any other:
+method returns `db.ErrUnavailable`. There is no store nil-guard convention.
+The admin/audit/account handlers still call a store directly and handle the
+error like any other:
 
 ```go
-items, err := h.store.List(c.Request.Context(), userID)
+users, err := h.users.ListUsers(c.Request.Context(), c.Query("q"), 200)
 if err != nil {
-    handlers.HandleStoreError(c, err, "wishlist listing failed")
+    HandleStoreError(c, err, "admin user listing failed")
     return
 }
 ```
 
 `HandleStoreError(c, err, logMsg) bool` maps `errors.Is(err, db.ErrUnavailable)`
 to `503 {"error": "...", "code": "DB_UNAVAILABLE"}` and anything else to a
-logged `500 INTERNAL_ERROR`. Wishlist and the admin/audit/account handlers route
-direct store errors through it, so a missing database produces one response
-shape everywhere instead of the bare `{"error": "database not configured"}`
-the wishlist handlers used to emit. `PreferencesHandler` maps the equivalent
-typed `preferences.ErrUnavailable` after the database adapter has removed the
-storage vocabulary.
+logged `500 INTERNAL_ERROR`. The admin/audit/account handlers route direct
+store errors through it, so a missing database produces one response shape
+everywhere instead of the bare `{"error": "database not configured"}` early
+handlers used to emit. `WishlistHandler` and `PreferencesHandler` no longer call
+a store at all: each maps its own domain's typed errors (`wishlist.ErrUnavailable`,
+`preferences.ErrUnavailable`, ...) through its own `handleWishlistError` /
+equivalent after the database adapter has removed the storage vocabulary.
 `auth.RequireTier`'s own 503 (no store involved — it never reads one) uses
 matching wording so both paths read as the same failure.
 
