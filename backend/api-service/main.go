@@ -152,15 +152,15 @@ func main() {
 	// Services — all manifest consumers share manifestProvider (lazy open,
 	// reconnects across manifest swaps).
 	charactersService := characters.NewService(bungieClient, appCache, cfg.CacheTTLCollections)
-	collectionsService := collections.NewService(bungieClient, manifestService, manifestProvider, appCache, cfg.CacheTTLCollections)
+	collectionsAnalysis := collections.NewMembershipAnalysis(bungieClient, manifestService, itemsService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
 	// Weekly service
 	weeklyWishlist := adapters.NewWeeklyWishlist(stores.Wishlist)
-	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService)
+	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsAnalysis, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService)
 	if cfg.E2EFixedTime != nil {
 		fixedTime := *cfg.E2EFixedTime
 		weeklyService = weekly.NewServiceWithClock(
-			bungieClient, manifestProvider, collectionsService, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService,
+			bungieClient, manifestProvider, collectionsAnalysis, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService,
 			func() time.Time { return fixedTime },
 		)
 	}
@@ -185,13 +185,18 @@ func main() {
 
 	// Observers hold manifest-derived state and are told only when a new version
 	// actually landed. Each owns what that means for it; main.go deliberately
-	// knows none of it.
-	manifestService.RegisterObserver(recordsService)
-	manifestService.RegisterObserver(weeklyService)
-	manifestService.RegisterObserver(collectionsService)
-	manifestService.RegisterObserver(itemsService)
-	manifestService.RegisterObserver(searchService)
-	manifestService.RegisterObserver(efficiencyEngine)
+	// knows none of it — except the one ordering constraint below, which no
+	// single owner can enforce.
+	for _, observer := range (manifestObservers{
+		Records:     recordsService,
+		Weekly:      weeklyService,
+		Items:       itemsService,
+		Collections: collectionsAnalysis,
+		Search:      searchService,
+		Efficiency:  efficiencyEngine,
+	}).inNotificationOrder() {
+		manifestService.RegisterObserver(observer)
+	}
 
 	go func() {
 		slog.Info("checking manifest status")
@@ -256,7 +261,7 @@ func main() {
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),
 			Audit:       handlers.NewAuditHandler(stores.Audit),
 			Characters:  handlers.NewCharactersHandler(charactersService, tokenStore),
-			Collections: handlers.NewCollectionsHandler(collectionsService, charactersService, recordsService, tokenStore, weeklyService),
+			Collections: handlers.NewCollectionsHandler(collectionsAnalysis, charactersService, recordsService, tokenStore, weeklyService),
 			Items:       handlers.NewItemsHandler(itemsService),
 			Weekly:      handlers.NewWeeklyHandler(weeklyService, tokenStore),
 			Records:     handlers.NewRecordsHandler(recordsService, tokenStore),
@@ -308,4 +313,38 @@ func tokenPersistenceDeps(databaseAvailable bool, repo auth.TokenRepo, cipher *a
 		return nil, nil
 	}
 	return repo, cipher
+}
+
+// manifestObservers is the set of modules told when a new manifest version has
+// landed. It exists so the one thing the composition root must decide — the
+// order they hear it in — is stated once and can be tested.
+type manifestObservers struct {
+	Records     bungie.ManifestObserver
+	Weekly      bungie.ManifestObserver
+	Items       bungie.ManifestObserver
+	Collections bungie.ManifestObserver
+	Search      bungie.ManifestObserver
+	Efficiency  bungie.ManifestObserver
+}
+
+// inNotificationOrder returns the observers in the order they must be notified.
+//
+// Items advances before Collections (ADR 0018). Collections pairs the Items
+// catalog with its own presentation-tree analysis, so telling Collections first
+// would let it publish a new-generation analysis built from the catalog Items
+// has not replaced yet — a mixture that, being stamped current, would then never
+// be rebuilt. Notified in this order, any such pairing is retired moments later
+// by Collections' own advance and repaired on the next read.
+//
+// The rest are independent of each other; their order is the order they were
+// introduced in.
+func (o manifestObservers) inNotificationOrder() []bungie.ManifestObserver {
+	return []bungie.ManifestObserver{
+		o.Records,
+		o.Weekly,
+		o.Items,
+		o.Collections,
+		o.Search,
+		o.Efficiency,
+	}
 }

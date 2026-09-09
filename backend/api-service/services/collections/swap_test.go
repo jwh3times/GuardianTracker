@@ -1,72 +1,34 @@
 package collections
 
 import (
-	"os"
-	"path/filepath"
+	"context"
 	"testing"
 	"time"
 
-	"guardian-tracker/api-service/cache"
-	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/manifest"
 )
 
-// fakeManifestRepo counts reads so a test can prove a refresh actually hit the
-// manifest rather than silently reusing stale state.
-type fakeManifestRepo struct {
-	cols  []manifest.CollectibleWithItem
-	nodes map[uint32]*manifest.PresentationNodeDef
-	err   error
-	reads int
-}
-
-func (f *fakeManifestRepo) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
-	f.reads++
-	if f.err != nil {
-		return nil, f.err
+func fixtureCatalog() []items.AcquisitionFacts {
+	return []items.AcquisitionFacts{
+		weapon(100, "Fatebringer", 1000),
+		weapon(101, "The Palindrome", 1001),
 	}
-	return f.cols, nil
 }
 
-func (f *fakeManifestRepo) GetAllPresentationNodes() (map[uint32]*manifest.PresentationNodeDef, error) {
-	if f.err != nil {
-		return nil, f.err
+func fixtureNodes() map[uint32]*manifest.PresentationNodeDef {
+	return map[uint32]*manifest.PresentationNodeDef{
+		1:  node(1, "Items", []uint32{10}, nil),
+		10: node(10, "Weapons", nil, []uint32{1000, 1001}),
 	}
-	return f.nodes, nil
 }
 
-// serviceAtVersion builds a Service whose manifest service reports `version`.
-// NewManifestService reads the sibling version file at construction, which is
-// the only way to pin a version without running a download.
-func serviceAtVersion(t *testing.T, version string, repo ManifestRepo) *Service {
+// swapped advances the analysis past one manifest generation, the way the
+// manifest service's observer notification does.
+func swapped(t *testing.T, m *MembershipAnalysis, version string) {
 	t.Helper()
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "manifest.sqlite")
-	if err := os.WriteFile(filepath.Join(dir, "manifest_version.txt"), []byte(version), 0644); err != nil {
-		t.Fatal(err)
-	}
-	ms := bungie.NewManifestService(bungie.NewClient("k", "http://unused", 100, 100), dbPath, time.Hour)
-	if ms.Version() != version {
-		t.Fatalf("fixture manifest version = %q, want %q", ms.Version(), version)
-	}
-	return &Service{
-		manifestService: ms,
-		manifest:        repo,
-		cache:           cache.NewMemoryCache(time.Minute, 0),
-		cacheTTL:        time.Minute,
-	}
-}
-
-func fixtureRepo() *fakeManifestRepo {
-	return &fakeManifestRepo{
-		cols: []manifest.CollectibleWithItem{
-			col(1000, 100, "Fatebringer"),
-			col(1001, 101, "The Palindrome"),
-		},
-		nodes: map[uint32]*manifest.PresentationNodeDef{
-			1:  node(1, "Items", []uint32{10}, nil),
-			10: node(10, "Weapons", nil, []uint32{1000, 1001}),
-		},
+	if err := m.OnVersionChanged(version); err != nil {
+		t.Fatalf("OnVersionChanged(%q): %v", version, err)
 	}
 }
 
@@ -75,20 +37,21 @@ func fixtureRepo() *fakeManifestRepo {
 // cost a rate-limited Bungie fetch. Evicting instead would mean a refetch storm
 // across every active user on every hourly swap.
 func TestRefreshManifestParts_RebuildsManifestHalfKeepsProfileHalf(t *testing.T) {
-	repo := fixtureRepo()
-	s := serviceAtVersion(t, "v2", repo)
+	catalog := &fakeCatalog{facts: fixtureCatalog()}
+	m := newAnalysis(t, catalog, &fakeNodes{nodes: fixtureNodes()})
 
 	collected := map[uint32]bool{1000: true}
-	stale := &analysis{
-		collectibles:    nil, // deliberately empty: proves a real rebuild happened
-		collected:       collected,
-		owned:           map[uint32]bool{},
-		tree:            nil,
-		fetchedAt:       time.Unix(1000, 0).UTC(),
-		manifestVersion: "v1",
-	}
+	stale := m.cached(3, "member-1", &analysis{
+		catalog:   nil, // deliberately empty: proves a real rebuild happened
+		collected: collected,
+		owned:     map[uint32]bool{},
+		tree:      nil,
+		fetchedAt: time.Unix(1000, 0).UTC(),
+	})
+	swapped(t, m, "v2")
 
-	got, err := s.refreshManifestParts(stale)
+	key := analysisCacheKey(3, "member-1")
+	got, err := m.refreshManifestParts(context.Background(), key, stale)
 	if err != nil {
 		t.Fatalf("refreshManifestParts: %v", err)
 	}
@@ -96,17 +59,17 @@ func TestRefreshManifestParts_RebuildsManifestHalfKeepsProfileHalf(t *testing.T)
 	if got == stale {
 		t.Fatal("a stale analysis was returned unchanged")
 	}
-	if repo.reads != 1 {
-		t.Errorf("manifest reads = %d, want 1", repo.reads)
+	if catalog.reads != 1 {
+		t.Errorf("catalog reads = %d, want 1", catalog.reads)
 	}
-	if len(got.collectibles) != 2 {
-		t.Errorf("collectibles = %d, want 2 (rebuilt from the manifest)", len(got.collectibles))
+	if len(got.catalog) != 2 {
+		t.Errorf("catalog = %d entries, want 2 (rebuilt from Items)", len(got.catalog))
 	}
 	if got.tree == nil {
 		t.Error("tree was not rebuilt")
 	}
-	if got.manifestVersion != "v2" {
-		t.Errorf("stamp = %q, want v2", got.manifestVersion)
+	if !got.builtUnder.Current() {
+		t.Error("the rebuilt analysis is not stamped with the current generation")
 	}
 	// The expensive half survives, re-derived rather than refetched.
 	if len(got.collected) != 1 || !got.collected[1000] {
@@ -118,40 +81,61 @@ func TestRefreshManifestParts_RebuildsManifestHalfKeepsProfileHalf(t *testing.T)
 	if !got.fetchedAt.Equal(stale.fetchedAt) {
 		t.Error("fetchedAt changed; no Bungie fetch happened, so it must not move")
 	}
+	// The replacement is what the next request finds.
+	if cached, ok := m.cache.Get(key); !ok || cached.(*analysis) != got {
+		t.Error("the rebuilt analysis was not cached in place of the stale one")
+	}
 
 	// The original must be untouched — concurrent readers hold that pointer.
-	if stale.manifestVersion != "v1" || len(stale.collectibles) != 0 {
+	if len(stale.catalog) != 0 || stale.tree != nil {
 		t.Error("refreshManifestParts mutated the analysis other requests are sharing")
 	}
 }
 
-// The common path: a matching stamp allocates nothing and reads nothing.
-func TestRefreshManifestParts_CurrentStampIsANoOp(t *testing.T) {
-	repo := fixtureRepo()
-	s := serviceAtVersion(t, "v2", repo)
+// The common path: an analysis built under the current generation allocates
+// nothing and reads nothing.
+func TestRefreshManifestParts_CurrentGenerationIsANoOp(t *testing.T) {
+	catalog := &fakeCatalog{facts: fixtureCatalog()}
+	m := newAnalysis(t, catalog, &fakeNodes{nodes: fixtureNodes()})
+	fresh := m.cached(3, "member-1", &analysis{collected: map[uint32]bool{}})
 
-	fresh := &analysis{collected: map[uint32]bool{}, manifestVersion: "v2"}
-	got, err := s.refreshManifestParts(fresh)
+	got, err := m.refreshManifestParts(context.Background(), analysisCacheKey(3, "member-1"), fresh)
 	if err != nil {
 		t.Fatalf("refreshManifestParts: %v", err)
 	}
 	if got != fresh {
 		t.Error("a current analysis was needlessly rebuilt")
 	}
-	if repo.reads != 0 {
-		t.Errorf("manifest reads = %d, want 0", repo.reads)
+	if catalog.reads != 0 {
+		t.Errorf("catalog reads = %d, want 0", catalog.reads)
 	}
 }
 
-// Mid-swap the provider returns ErrNotReady. Serving the previous manifest's
-// labels for one more request beats failing a request whose data we already have.
-func TestRefreshManifestParts_ManifestNotReadyServesStale(t *testing.T) {
-	repo := fixtureRepo()
-	repo.err = manifest.ErrNotReady
-	s := serviceAtVersion(t, "v2", repo)
+// An analysis carrying no attempt at all — a cache entry from before this
+// field existed, or a zero value — must rebuild rather than pass as fresh.
+func TestRefreshManifestParts_UnstampedAnalysisRebuilds(t *testing.T) {
+	catalog := &fakeCatalog{facts: fixtureCatalog()}
+	m := newAnalysis(t, catalog, &fakeNodes{nodes: fixtureNodes()})
 
-	stale := &analysis{collected: map[uint32]bool{1000: true}, manifestVersion: "v1"}
-	got, err := s.refreshManifestParts(stale)
+	got, err := m.refreshManifestParts(context.Background(), analysisCacheKey(3, "member-1"),
+		&analysis{collected: map[uint32]bool{}})
+	if err != nil {
+		t.Fatalf("refreshManifestParts: %v", err)
+	}
+	if len(got.catalog) != 2 || catalog.reads != 1 {
+		t.Errorf("catalog = %d entries after %d reads, want a rebuild", len(got.catalog), catalog.reads)
+	}
+}
+
+// Mid-swap the catalog reports the manifest as not ready. Serving the previous
+// manifest's labels for one more request beats failing a request whose data we
+// already have.
+func TestRefreshManifestParts_ManifestNotReadyServesStale(t *testing.T) {
+	m := newAnalysis(t, &fakeCatalog{err: manifest.ErrNotReady}, &fakeNodes{nodes: fixtureNodes()})
+	stale := m.cached(3, "member-1", &analysis{collected: map[uint32]bool{1000: true}})
+	swapped(t, m, "v2")
+
+	got, err := m.refreshManifestParts(context.Background(), analysisCacheKey(3, "member-1"), stale)
 	if err != nil {
 		t.Fatalf("a mid-swap refresh must not fail the request: %v", err)
 	}
@@ -160,38 +144,78 @@ func TestRefreshManifestParts_ManifestNotReadyServesStale(t *testing.T) {
 	}
 }
 
-// With no version knowable there is nothing to compare against, so the check
-// must disable itself rather than rebuild on every single read.
-func TestRefreshManifestParts_NoVersionSourceIsANoOp(t *testing.T) {
-	repo := fixtureRepo()
-	s := &Service{manifest: repo, cache: cache.NewMemoryCache(time.Minute, 0)}
+// ADR 0014: work that began under one generation still answers the request that
+// started it, but must not be left behind for anyone else. Here the swap lands
+// while the catalog is being read.
+func TestRefreshManifestParts_RetiredGenerationIsNotCached(t *testing.T) {
+	catalog := &fakeCatalog{facts: fixtureCatalog()}
+	m := newAnalysis(t, catalog, &fakeNodes{nodes: fixtureNodes()})
+	stale := m.cached(3, "member-1", &analysis{collected: map[uint32]bool{1000: true}})
+	swapped(t, m, "v2")
+	catalog.onRead = func() { swapped(t, m, "v3") } // a second swap, mid-rebuild
 
-	a := &analysis{collected: map[uint32]bool{}, manifestVersion: "v1"}
-	got, err := s.refreshManifestParts(a)
+	key := analysisCacheKey(3, "member-1")
+	got, err := m.refreshManifestParts(context.Background(), key, stale)
 	if err != nil {
 		t.Fatalf("refreshManifestParts: %v", err)
 	}
-	if got != a || repo.reads != 0 {
-		t.Error("refresh ran without a version to compare against")
+	if len(got.catalog) != 2 {
+		t.Fatalf("the caller must still receive the coherent result it loaded: %+v", got)
+	}
+	cached, ok := m.cache.Get(key)
+	if !ok {
+		t.Fatal("the previous analysis was evicted")
+	}
+	if cached.(*analysis) != stale {
+		t.Error("an analysis built under a retired generation was published")
+	}
+	if m.treeStruct != nil {
+		t.Error("a tree built under a retired generation was published")
 	}
 }
 
 // OnVersionChanged drops the shared tree. It deliberately does NOT evict the
-// per-user entries — refreshManifestParts repairs those lazily instead.
-func TestOnVersionChanged_DropsSharedTreeNotUserEntries(t *testing.T) {
-	repo := fixtureRepo()
-	s := serviceAtVersion(t, "v2", repo)
-	s.treeStruct = &TreeStructure{}
-	s.cache.Set("collections:3:member-1", &analysis{manifestVersion: "v1"}, time.Minute)
+// per-membership entries — refreshManifestParts repairs those lazily instead.
+func TestOnVersionChanged_DropsSharedTreeNotMembershipEntries(t *testing.T) {
+	m := newAnalysis(t, &fakeCatalog{facts: fixtureCatalog()}, &fakeNodes{nodes: fixtureNodes()})
+	m.storeTree(&TreeStructure{})
+	m.cached(3, "member-1", &analysis{})
 
-	if err := s.OnVersionChanged("v2"); err != nil {
-		t.Fatalf("OnVersionChanged: %v", err)
-	}
+	swapped(t, m, "v2")
 
-	if s.treeStruct != nil {
+	if m.treeStruct != nil {
 		t.Error("shared tree survived the swap")
 	}
-	if _, ok := s.cache.Get("collections:3:member-1"); !ok {
-		t.Error("per-user analysis was evicted; that discards a rate-limited Bungie fetch")
+	if _, ok := m.cache.Get(analysisCacheKey(3, "member-1")); !ok {
+		t.Error("per-membership analysis was evicted; that discards a rate-limited Bungie fetch")
+	}
+}
+
+// The shared tree is built once and reused until a swap retires it, so a second
+// membership does not re-read the presentation nodes.
+func TestTreeStructure_SharedUntilTheNextSwap(t *testing.T) {
+	catalog := fixtureCatalog()
+	nodes := &fakeNodes{nodes: fixtureNodes()}
+	m := newAnalysis(t, &fakeCatalog{facts: catalog}, nodes)
+
+	first, err := m.treeStructure(m.publication.Begin(), catalog)
+	if err != nil {
+		t.Fatalf("treeStructure: %v", err)
+	}
+	second, err := m.treeStructure(m.publication.Begin(), catalog)
+	if err != nil {
+		t.Fatalf("treeStructure: %v", err)
+	}
+	if first != second || nodes.reads != 1 {
+		t.Errorf("tree rebuilt per call (reads = %d); it is user-independent", nodes.reads)
+	}
+
+	swapped(t, m, "v2")
+	third, err := m.treeStructure(m.publication.Begin(), catalog)
+	if err != nil {
+		t.Fatalf("treeStructure: %v", err)
+	}
+	if third == first || nodes.reads != 2 {
+		t.Errorf("tree survived a swap (reads = %d)", nodes.reads)
 	}
 }

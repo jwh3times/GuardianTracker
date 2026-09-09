@@ -163,12 +163,17 @@ only while that generation is still current; a request that loses the race still
 returns its own coherent result but leaves nothing behind for anyone else.
 Advancing the generation and running the owner's invalidation are one
 transition, so a loader cannot observe a moved generation over uncleared state.
-Items, Records, and Efficiency hold owner-local publications. Records fences the three fixed
+Items, Records, Efficiency, and Collections hold owner-local publications. Records fences the three fixed
 Manifest-derived lookup tables used to enrich its projections while leaving raw
 per-membership Bungie profile records untouched. Efficiency fences asynchronous
 source-bucket index builds: a stale build cannot publish after a swap, while the
 previous complete index remains available until the current generation succeeds.
-Weekly and Collections still invalidate without a fence and adopt it as each is reworked. See
+Collections spans one attempt across catalog access, presentation-node access,
+tree construction, and the reusable analysis it publishes, and stamps each
+cached membership analysis with the generation it was built under: a swap
+rebuilds only the Manifest-derived half and keeps the rate-limited Bungie
+ownership fetch. Weekly still invalidates without a fence and adopts it as it is
+reworked. See
 [ADR 0014](./adr/0014-own-manifest-derived-publication.md).
 
 `services/items` owns the canonical, user-independent facts about an item — its
@@ -176,8 +181,11 @@ name, icon, slot-specific type, rarity, collection category, linked collectible
 hashes, the deterministic union of acquisition sources contributed by all of
 them, and farm-only status. Item detail reads those facts through one seam
 rather than joining the manifest itself, which is what stops separate consumers
-describing the same item differently. Collections and the wish list still carry
-their own projections and move onto this seam as they are reworked. See
+describing the same item differently. Collections reads the whole catalog
+through that seam and adds only ownership and presentation-tree placement; the
+wish list still carries its own projection and moves onto the seam as it is
+reworked. Because Collections pairs the catalog with its own tree, the
+composition root notifies Items of a new Manifest before Collections. See
 [ADR 0015](./adr/0015-own-item-acquisition-facts-in-items.md).
 
 ## Collection and Acquisition Model

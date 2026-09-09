@@ -323,7 +323,7 @@ func TestRecords_BadParams(t *testing.T) {
 func collectionsHandler(t *testing.T, ts *auth.TokenStore) *CollectionsHandler {
 	t.Helper()
 	c := cache.NewMemoryCache(time.Minute, 0)
-	collSvc := collections.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, nil, c, time.Minute)
+	collSvc := collections.NewMembershipAnalysis(bungie.NewClient("k", "http://x", 100, 100), nil, nil, nil, c, time.Minute)
 	charSvc := characters.NewService(bungie.NewClient("k", "http://x", 100, 100), c, time.Minute)
 	recSvc := records.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, c, time.Minute)
 	return NewCollectionsHandler(collSvc, charSvc, recSvc, ts, nil)
