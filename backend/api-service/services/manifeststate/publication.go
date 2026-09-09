@@ -143,3 +143,26 @@ func (a Attempt) Publish(commit func()) bool {
 	}
 	return true
 }
+
+// Current reports whether the generation this attempt captured is still the
+// current one.
+//
+// Publish answers that question for work that is about to install a result.
+// Current answers it for a result that was already installed and outlives its
+// own load: a value stamped with the attempt it was built under can say, later
+// and cheaply, whether the manifest state underneath it has since been
+// replaced. That is what lets an owner rebuild half of a cached value instead
+// of evicting all of it.
+//
+// The zero Attempt is never current, so a value carrying no attempt rebuilds
+// rather than passing as fresh.
+func (a Attempt) Current() bool {
+	if a.p == nil {
+		return false
+	}
+
+	a.p.mu.Lock()
+	defer a.p.mu.Unlock()
+
+	return a.generation == a.p.generation
+}

@@ -69,9 +69,11 @@ backend/api-service/
                                            RegisterParticipant/RegisterObserver coordinate the file swap
                                            (see "Manifest repository, provider, and swap seam" below)
   services/bungie/types.go             ← All Bungie API types, constants, helpers
-  services/collections/service.go      ← Item-level collection analysis + cosmetics; emits the
-                                           collectible-derived acquisition-source union
-                                           uses ManifestRepo interface (satisfied by *manifest.Provider)
+  services/collections/analysis.go     ← MembershipAnalysis: item-level ownership, tree counts,
+                                           summary, missing set; reads Item facts through
+                                           CatalogReader (*items.Service) and presentation nodes
+                                           through PresentationNodeReader (*manifest.Provider)
+  services/collections/types.go        ← Collections wire shapes + the Items-facts projection
   services/characters/service.go       ← Character fetching; InvalidateCache method
   services/items/facts.go              ← AcquisitionFacts + AcquisitionFactsReader (ADR 0015): the canonical
                                            user-independent Item projection. Slot-specific ItemType, ascending
@@ -96,9 +98,9 @@ backend/api-service/
                                            Publish installs only while it is current, Advance retires
                                            outstanding work and runs the owner's invalidation atomically.
                                            Advance's signature matches OnVersionChanged.
-                                           Items, Records, and Efficiency have adopted it. Weekly and
-                                           Collections still invalidate without a fence and adopt it in
-                                           their own refactor slices.
+                                           Items, Records, Efficiency, and Collections have adopted it.
+                                           Weekly still invalidates without a fence and adopts it in its
+                                           own refactor slice.
   services/manifeststate/load.go       ← Load/LoadIf: cache.Load semantics plus the fence. A value loaded
                                            under a retired generation is returned to its caller but not
                                            cached. Nil cache = load every time; nil publication = error.
@@ -395,11 +397,11 @@ serves; it registers no routes itself.
 - `services/manifest/provider.go` — single `*Provider` shared by all consumers. Opens lazily on first use; implements `bungie.SwapParticipant` (`CloseForSwap()` / `Reopen() error`). Returns `ErrNotReady` (503 `MANIFEST_NOT_READY`) while absent or swapping.
 - `services/bungie/manifest.go` defines the swap seam as two interfaces. Both are registered on `*bungie.ManifestService` in `main.go`, in registration order — `manifest.Provider` is registered first, since observers may query the manifest through it — and registration must happen before the first download can fire:
   - `SwapParticipant { CloseForSwap(); Reopen() error }` — for a module holding an OS-level handle on the manifest file. `RegisterParticipant(p)`. Registered participants: `manifest.Provider`, `search.Service` (search opens its own SQLite connection instead of sharing the Provider).
-  - `ManifestObserver { OnVersionChanged(version string) error }` — for a module holding manifest-derived state (a cache, an index). `RegisterObserver(o)`. Registered observers: `records`, `weekly`, `collections`, `items`, `search`, `efficiency`.
+  - `ManifestObserver { OnVersionChanged(version string) error }` — for a module holding manifest-derived state (a cache, an index). `RegisterObserver(o)`. Registered observers, in notification order: `records`, `weekly`, `items`, `collections`, `search`, `efficiency`. That order is not arbitrary and is not left to the order of the `RegisterObserver` calls — `main.go`'s `manifestObservers.inNotificationOrder` states it once and `TestManifestObservers_ItemsAdvanceBeforeCollections` pins it. **Items must advance before Collections** (ADR 0018): Collections pairs the Items catalog with its own presentation tree, so telling Collections first would let it publish a new-generation analysis built from the catalog Items has not replaced yet, and that mixture — being stamped current — would never be rebuilt.
   - Swap sequence: close every participant → `os.Rename` → reopen every participant → notify every observer, in that order (observers may query the already-reopened manifest). On a **failed** rename (rollback), participants are still reopened — against the still-present old file — but observers are **deliberately not notified**, because the version did not change; `Reopen` means "reopen against whatever manifest is now live", not "a new version was installed".
   - A failing participant or observer is logged (with its `%T` type) and the loop continues rather than aborting — aborting would strand later registrants closed.
   - **Any new module that opens its own handle on the manifest file must register as a `SwapParticipant`**, or `os.Rename` runs under its open handle (fails outright on Windows; serves a deleted inode on Linux). Any module holding manifest-derived state should register as a `ManifestObserver` instead of relying on an ad hoc eviction call from `main.go`.
-- `services/collections/service.go` is an observer but does not evict its per-user cache on swap: `OnVersionChanged` drops only the shared cross-user tree; each cached `*analysis` carries a `manifestVersion` stamp, and `getAnalysis` lazily rebuilds the stale manifest-derived fields (`collectibles`/`tree`/`owned`) via `refreshManifestParts` on the next read, reusing the already-fetched (rate-limited) Bungie `collected` data. `refreshManifestParts` is copy-on-write — it returns a new `*analysis` rather than mutating the cached one, since concurrent requests share that pointer without a lock.
+- `services/collections/analysis.go` is an observer but does not evict its per-membership cache on swap: `OnVersionChanged` advances a `manifeststate.Publication` whose invalidation drops only the shared cross-membership tree. Each cached `*analysis` carries the `manifeststate.Attempt` its manifest-derived fields (`catalog`/`tree`/`owned`) were built under, and `getAnalysis` rebuilds them via `refreshManifestParts` on the next read once `builtUnder.Current()` is false, reusing the already-fetched (rate-limited) Bungie `collected` data. One attempt spans the staleness check, catalog access, presentation-node access, tree construction, and both publications, so a swap landing mid-rebuild leaves nothing behind. `refreshManifestParts` is copy-on-write — it returns a new `*analysis` rather than mutating the cached one, since concurrent requests share that pointer without a lock.
 - `services/weekly/service.go`'s per-character `daily:vendors:*` cache entries are scoped by manifest version (via a `versioner` dependency satisfied by `*bungie.ManifestService`) instead of being evicted on swap, so a swap orphans the old entries and they expire on their existing TTL; the underlying Bungie vendor response stays cached separately under an unversioned key, so nothing refetches from Bungie.
 
 ## Notable manifest methods
@@ -456,15 +458,17 @@ made a milestone's missing-count badge silently not appear.
 
 - `ErrManifestNotReady` exported (aliases `manifest.ErrNotReady`); handler maps it to 503
 - `MembershipCollections` has `FetchedAt` field
-- `CollectionSummary` has `CollectedItems` field (stripped from response unless `?include=all`)
-- `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
-- `DestinyItem.AcquisitionSources` is the deterministic union from all collectibles
-  linked to the item. `DestinyItem` has no item-level `Difficulty` or raw `Sources`.
-- `DestinyItem.FarmOnly` retains the representative collectible's existing
-  "cannot be reacquired" check. Multi-collectible farm-only semantics remain
-  unresolved; do not derive them from the acquisition-source union without a new
-  decision.
-- `DestinyItem.ItemType` — `toDestinyItem` names all verified cosmetic types via `bungie.ItemTypeName`, so cosmetics carry real strings (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`/`Ornament`/`Finisher`) instead of `"Unknown"`; the frontend gallery classifies by these strings
+- `MembershipCollections.Items`, `.CollectedHashes`, and each node's `Items` are stripped from the response unless `?include=all`
+- `Lightweight()` returns a value copy with those three stripped, leaving tree counts, summary, and `fetchedAt`
+- `DestinyItem.AcquisitionSources`, `.FarmOnly`, and `.ItemType` are copied
+  straight from Items' `AcquisitionFacts` (ADR 0015) by `destinyItem` in
+  `collections/types.go` — Collections computes none of them itself anymore.
+  `DestinyItem` has no item-level `Difficulty` or raw `Sources`; multi-collectible
+  farm-only semantics remain unresolved (see `services/items/facts.go`).
+- Cosmetic `ItemType` naming (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`/
+  `Ornament`/`Finisher`) is resolved by `slotSpecificItemType` in
+  `services/items/facts.go` via `bungie.ItemTypeName`, not by Collections; the
+  frontend gallery classifies by these strings.
 - Shaders and ornaments both use `itemType=19` (mod), with verified subtypes 20 and 21 respectively. Gate both by subtype in `manifest.CollectibleCategory`; do NOT add all of item type 19 to `cosmeticItemTypes`. Finishers use verified item type 29.
 
 ## Weekly service
@@ -484,7 +488,7 @@ made a milestone's missing-count badge silently not appear.
 - `GetWeekly(..., requestedCharacterID)` validates the requested character against the authenticated roster and scopes component-402 vendor inventory, today actions, recommendation availability, and Xûr location to that character. Character-specific caches include membership and character IDs. Xûr armor carries an optional manifest `className`; absent class data remains unlabelled.
 - `MissingItemReader` is the consumer-side interface `weekly` declares for the one
   `collections` method it needs (`GetMissingItemHashes`), satisfied structurally by
-  `*collections.Service`; `weekly` does not import `services/collections` at all.
+  `*collections.MembershipAnalysis`; `weekly` does not import `services/collections` at all.
   Required, never nil-guarded — a reader degrading to an empty set would silently
   render as a complete collection.
 - `AcquisitionRecommender` is the required consumer-side interface satisfied by

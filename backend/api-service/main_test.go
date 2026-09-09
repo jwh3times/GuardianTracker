@@ -61,3 +61,43 @@ func TestTokenPersistenceDeps_MissingCipherDisablesPersistencePair(t *testing.T)
 		t.Fatalf("unencrypted persistence = (%T, %v), want (nil, nil)", repo, cipher)
 	}
 }
+
+// namedObserver identifies itself so a test can assert notification order
+// without constructing the real services.
+type namedObserver struct{ name string }
+
+func (namedObserver) OnVersionChanged(string) error { return nil }
+
+// ADR 0018: Collections pairs the Items catalog with its own presentation-tree
+// analysis, so Items must be told about a new manifest first. Getting this
+// backwards is silent — the mixture it produces looks like a valid result — so
+// the order is pinned here rather than left to the order of the registration
+// calls.
+func TestManifestObservers_ItemsAdvanceBeforeCollections(t *testing.T) {
+	set := manifestObservers{
+		Records:     namedObserver{"records"},
+		Weekly:      namedObserver{"weekly"},
+		Items:       namedObserver{"items"},
+		Collections: namedObserver{"collections"},
+		Search:      namedObserver{"search"},
+		Efficiency:  namedObserver{"efficiency"},
+	}
+
+	order := set.inNotificationOrder()
+
+	position := map[string]int{}
+	for i, o := range order {
+		observer, ok := o.(namedObserver)
+		if !ok {
+			t.Fatalf("observer %d is not registered: %#v", i, o)
+		}
+		position[observer.name] = i
+	}
+	if len(position) != 6 {
+		t.Fatalf("notification order = %v, want all six observers exactly once", position)
+	}
+	if position["items"] >= position["collections"] {
+		t.Errorf("items notified at %d, collections at %d; Items must advance first",
+			position["items"], position["collections"])
+	}
+}

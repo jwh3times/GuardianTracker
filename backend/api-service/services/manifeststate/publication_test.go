@@ -216,3 +216,46 @@ func TestAdvance_ConcurrentWithBeginAndPublish(t *testing.T) {
 		t.Error("no invalidation ran across concurrent advances")
 	}
 }
+
+func TestAttempt_CurrentTracksTheGeneration(t *testing.T) {
+	p := New(nil)
+	attempt := p.Begin()
+
+	if !attempt.Current() {
+		t.Error("a fresh attempt is not current")
+	}
+	if err := p.Advance("v2"); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if attempt.Current() {
+		t.Error("an attempt survived the generation it captured")
+	}
+	if !p.Begin().Current() {
+		t.Error("an attempt captured after the advance is not current")
+	}
+}
+
+// A value carrying no attempt must never pass as fresh: the zero Attempt is
+// what a cache entry written before this fence existed would hold.
+func TestAttempt_ZeroValueIsNeverCurrent(t *testing.T) {
+	var zero Attempt
+	if zero.Current() {
+		t.Error("the zero attempt reported itself as current")
+	}
+}
+
+// Repeating the installed version changes nothing, so work already published
+// under it stays reusable.
+func TestAttempt_CurrentSurvivesARepeatedVersion(t *testing.T) {
+	p := New(nil)
+	if err := p.Advance("v2"); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	attempt := p.Begin()
+	if err := p.Advance("v2"); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if !attempt.Current() {
+		t.Error("an idempotent advance retired an outstanding attempt")
+	}
+}

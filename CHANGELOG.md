@@ -14,6 +14,25 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.25] - 2026-09-09
+
+### Changed
+
+- Collections now reads every item's name, icon, type, rarity, acquisition
+  sources, and farm-only status from the shared item-facts owner instead of
+  deriving its own projection from the manifest. The collection grid, item
+  drawer, and wish list can no longer describe the same item differently. The
+  REST shape and the values it carries are unchanged.
+- A manifest swap now refreshes a cached collection analysis under a generation
+  fence: the manifest-derived half is rebuilt from one coherent manifest, the
+  rate-limited Bungie ownership fetch is kept, and analysis that began before
+  the swap can still answer its own request but is never left behind for the
+  next one. A swap also costs one shared catalog read rather than a manifest
+  query per active membership.
+- The API notifies the item-facts owner of a new manifest before Collections,
+  so a collection analysis can never pair a new presentation tree with facts
+  from the manifest it replaced.
+
 ## [1.3.24] - 2026-09-08
 
 ### Fixed
@@ -481,7 +500,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.24...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.25...HEAD
+[1.3.25]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.24...v1.3.25
 [1.3.24]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.23...v1.3.24
 [1.3.23]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.22...v1.3.23
 [1.3.22]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.21...v1.3.22

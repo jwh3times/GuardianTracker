@@ -1,9 +1,11 @@
 package collections
 
 import (
+	"reflect"
 	"testing"
 
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/sources"
 )
@@ -25,16 +27,28 @@ func node(hash uint32, name string, childNodes []uint32, childCols []uint32) *ma
 	return d
 }
 
-// col builds a CollectibleWithItem (collectibleHash, itemHash, name).
-func col(colHash, itemHash uint32, name string) manifest.CollectibleWithItem {
-	item := &bungie.InventoryItemDefinition{Hash: itemHash, ItemType: bungie.ItemTypeWeapon}
-	item.DisplayProperties = bungie.DisplayProperties{Name: name}
-	item.Inventory.TierType = bungie.TierTypeLegendary
-	return manifest.CollectibleWithItem{
-		Collectible: bungie.CollectibleDefinition{Hash: colHash, ItemHash: itemHash,
-			DisplayProperties: bungie.DisplayProperties{Name: name}},
-		Item: item,
+// weapon builds the catalog entry for one legendary weapon and the collectible
+// hashes linked to it. A re-issued item is ONE entry carrying several
+// collectible hashes — the shape Items publishes — never several entries
+// sharing an item hash.
+func weapon(itemHash uint32, name string, collectibleHashes ...uint32) items.AcquisitionFacts {
+	return items.AcquisitionFacts{
+		ItemHash:          itemHash,
+		Name:              name,
+		ItemType:          "Hand Cannon",
+		TierType:          bungie.TierTypeLegendary,
+		Rarity:            bungie.GetTierName(bungie.TierTypeLegendary),
+		Category:          "weapons",
+		CollectibleHashes: collectibleHashes,
 	}
+}
+
+// armor is weapon's counterpart for the armor summary bucket.
+func armor(itemHash uint32, name string, collectibleHashes ...uint32) items.AcquisitionFacts {
+	f := weapon(itemHash, name, collectibleHashes...)
+	f.ItemType = "Helmet"
+	f.Category = "armor"
+	return f
 }
 
 // anchorFixture mirrors the real-manifest shape: a dominant "Items" root that
@@ -46,7 +60,7 @@ func col(colHash, itemHash uint32, name string) manifest.CollectibleWithItem {
 //	  ├─ Armor(20) ─ [col 2000]
 //	  └─ ""(30) ─ [col 3000]        (nameless node: skipped, subtree dropped)
 //	Badges(90) ─ [col 9000, 9001]  (noise root: not selected as dominant)
-func anchorFixture() (map[uint32]*manifest.PresentationNodeDef, []manifest.CollectibleWithItem) {
+func anchorFixture() (map[uint32]*manifest.PresentationNodeDef, []items.AcquisitionFacts) {
 	nodes := map[uint32]*manifest.PresentationNodeDef{
 		1:  node(1, "Items", []uint32{10, 20, 30}, nil),
 		10: node(10, "Weapons", []uint32{11}, nil),
@@ -55,15 +69,15 @@ func anchorFixture() (map[uint32]*manifest.PresentationNodeDef, []manifest.Colle
 		30: node(30, "", nil, []uint32{3000}), // nameless node -> dropped
 		90: node(90, "Badges", nil, []uint32{9000, 9001}),
 	}
-	cols := []manifest.CollectibleWithItem{
-		col(1000, 100, "Fatebringer"),
-		col(1001, 101, "The Palindrome"),
-		col(2000, 200, "Helm of Saint-14"),
-		col(3000, 300, "Hidden Item"),
-		col(9000, 900, "Badge A"),
-		col(9001, 901, "Badge B"),
+	catalog := []items.AcquisitionFacts{
+		weapon(100, "Fatebringer", 1000),
+		weapon(101, "The Palindrome", 1001),
+		armor(200, "Helm of Saint-14", 2000),
+		weapon(300, "Hidden Item", 3000),
+		weapon(900, "Badge A", 9000),
+		weapon(901, "Badge B", 9001),
 	}
-	return nodes, cols
+	return nodes, catalog
 }
 
 // TestBuildTreeStructure_AnchorsAtDominantRoot is the core behavior: ts.Roots are
@@ -71,9 +85,9 @@ func anchorFixture() (map[uint32]*manifest.PresentationNodeDef, []manifest.Colle
 // dominant root itself ("Items") and the noise root ("Badges") are NOT roots, and
 // the nameless node under Items is dropped along with its subtree.
 func TestBuildTreeStructure_AnchorsAtDominantRoot(t *testing.T) {
-	nodes, cols := anchorFixture()
+	nodes, catalog := anchorFixture()
 
-	ts := buildTreeStructure(nodes, cols)
+	ts := buildTreeStructure(nodes, catalog)
 
 	// Roots are the dominant root's named children, name-sorted: Armor, Weapons.
 	if len(ts.Roots) != 2 {
@@ -104,8 +118,8 @@ func TestBuildTreeStructure_AnchorsAtDominantRoot(t *testing.T) {
 
 // TestBuildTreeStructure_PreservesNestingUnderCategory: Weapons -> Hand Cannons -> leaves.
 func TestBuildTreeStructure_PreservesNestingUnderCategory(t *testing.T) {
-	nodes, cols := anchorFixture()
-	ts := buildTreeStructure(nodes, cols)
+	nodes, catalog := anchorFixture()
+	ts := buildTreeStructure(nodes, catalog)
 
 	weapons := findRoot(ts.Roots, "Weapons")
 	if weapons == nil {
@@ -131,8 +145,8 @@ func TestBuildTreeStructure_PreservesNestingUnderCategory(t *testing.T) {
 // collectible 3000 (item 300) must not be present anywhere in the tree, though the
 // item map still indexes valid collectibles regardless of placement.
 func TestBuildTreeStructure_DropsNamelessNodeSubtree(t *testing.T) {
-	nodes, cols := anchorFixture()
-	ts := buildTreeStructure(nodes, cols)
+	nodes, catalog := anchorFixture()
+	ts := buildTreeStructure(nodes, catalog)
 
 	// Item 300's collectible lives only under the nameless node -> never placed as a leaf.
 	for _, r := range ts.Roots {
@@ -142,8 +156,8 @@ func TestBuildTreeStructure_DropsNamelessNodeSubtree(t *testing.T) {
 }
 
 func TestOverlay_RollsUpCounts(t *testing.T) {
-	nodes, cols := anchorFixture()
-	ts := buildTreeStructure(nodes, cols)
+	nodes, catalog := anchorFixture()
+	ts := buildTreeStructure(nodes, catalog)
 
 	// Owned (by ITEM hash): Fatebringer(100) + Helm(200).
 	got := ts.overlay(map[uint32]bool{100: true, 200: true})
@@ -182,16 +196,17 @@ func TestOverlay_RollsUpCounts(t *testing.T) {
 	}
 }
 
-func TestBuildTreeStructure_SkipsNamelessAndUnknownCollectibles(t *testing.T) {
-	// Dominant root "Items" -> "Weapons" holds a real collectible, a nameless one
-	// (skipped), and an unknown hash (absent from the collectible set).
+func TestBuildTreeStructure_SkipsCollectiblesTheCatalogDoesNotCarry(t *testing.T) {
+	// Dominant root "Items" -> "Weapons" lists three collectibles: one the
+	// catalog carries, one whose item Items excluded (a nameless item
+	// definition never reaches the catalog), and one hash no item claims.
+	// Only the catalogued collectible may be placed.
 	nodes := map[uint32]*manifest.PresentationNodeDef{
 		1:  node(1, "Items", []uint32{10}, nil),
 		10: node(10, "Weapons", nil, []uint32{1000, 1001, 9999}),
 	}
-	nameless := col(1001, 101, "")                                           // empty name -> skipped
-	cols := []manifest.CollectibleWithItem{col(1000, 100, "Real"), nameless} // 9999 absent entirely
-	ts := buildTreeStructure(nodes, cols)
+	catalog := []items.AcquisitionFacts{weapon(100, "Real", 1000)}
+	ts := buildTreeStructure(nodes, catalog)
 	if len(ts.Roots) != 1 {
 		t.Fatalf("roots = %+v, want single Weapons root", rootNames(ts.Roots))
 	}
@@ -200,7 +215,7 @@ func TestBuildTreeStructure_SkipsNamelessAndUnknownCollectibles(t *testing.T) {
 		t.Fatalf("root = %q, want Weapons", w.Name)
 	}
 	if len(w.Leaves) != 1 || w.Leaves[0].ItemHash != "100" {
-		t.Fatalf("leaves = %+v (only the valid collectible should remain)", w.Leaves)
+		t.Fatalf("leaves = %+v (only the catalogued collectible should remain)", w.Leaves)
 	}
 }
 
@@ -214,11 +229,11 @@ func TestBuildTreeStructure_SkipsNamelessNodes(t *testing.T) {
 		10: node(10, "Weapons", []uint32{12}, []uint32{1000}),
 		12: node(12, "", nil, []uint32{1200}), // nameless node -> dropped
 	}
-	cols := []manifest.CollectibleWithItem{
-		col(1000, 100, "Real Weapon"),
-		col(1200, 120, "Hidden"),
+	catalog := []items.AcquisitionFacts{
+		weapon(100, "Real Weapon", 1000),
+		weapon(120, "Hidden", 1200),
 	}
-	ts := buildTreeStructure(nodes, cols)
+	ts := buildTreeStructure(nodes, catalog)
 
 	if len(ts.Roots) != 1 || ts.Roots[0].Name != "Weapons" {
 		t.Fatalf("roots = %+v, want single Weapons root", rootNames(ts.Roots))
@@ -249,11 +264,8 @@ func TestOverlay_DedupesDuplicateItemHashWithinNode(t *testing.T) {
 		1:  node(1, "Items", []uint32{20}, nil),
 		20: node(20, "Armor", nil, []uint32{2000, 2001}),
 	}
-	cols := []manifest.CollectibleWithItem{
-		col(2000, 200, "Choir of One"),
-		col(2001, 200, "Choir of One"),
-	}
-	ts := buildTreeStructure(nodes, cols)
+	catalog := []items.AcquisitionFacts{armor(200, "Choir of One", 2000, 2001)}
+	ts := buildTreeStructure(nodes, catalog)
 
 	// Owned (by ITEM hash): item 200 is owned, regardless of which of its two
 	// collectible rows the profile response happened to mark acquired.
@@ -271,30 +283,38 @@ func TestOverlay_DedupesDuplicateItemHashWithinNode(t *testing.T) {
 	}
 }
 
-func TestBuildTreeStructure_UnionsLinkedCollectibleAcquisitionSources(t *testing.T) {
+// The item-detail map is Items' projection carried through unchanged: the
+// source union, its order, and the facets on each source are decided by Items
+// (ADR 0015), and Collections must not re-derive or reorder any of it.
+func TestBuildTreeStructure_CarriesCatalogItemFactsThrough(t *testing.T) {
 	nodes := map[uint32]*manifest.PresentationNodeDef{
 		1:  node(1, "Items", []uint32{20}, nil),
-		20: node(20, "Weapons", nil, []uint32{2000, 2001, 2002}),
+		20: node(20, "Weapons", nil, []uint32{2000, 2001}),
 	}
-	raid := col(2000, 200, "Fatebringer")
-	raid.Collectible.SourceString = "Vault of Glass raid"
-	kiosk := col(2001, 200, "Fatebringer")
-	kiosk.Collectible.SourceString = "Monument to Lost Lights"
-	duplicate := col(2002, 200, "Fatebringer")
-	duplicate.Collectible.SourceString = "Vault of Glass raid"
-
-	item := buildTreeStructure(nodes, []manifest.CollectibleWithItem{raid, kiosk, duplicate}).Items["200"]
-	want := []sources.AcquisitionSource{
+	fatebringer := weapon(200, "Fatebringer", 2000, 2001)
+	fatebringer.Description = "A hand cannon."
+	fatebringer.Icon = "/i/fatebringer.png"
+	fatebringer.FarmOnly = true
+	fatebringer.AcquisitionSources = []sources.AcquisitionSource{
 		{Text: "Monument to Lost Lights", Difficulty: sources.Easy},
 		{Text: "Vault of Glass raid", Difficulty: sources.Challenging, RaidDungeon: true},
 	}
-	if len(item.AcquisitionSources) != len(want) {
-		t.Fatalf("acquisitionSources = %+v, want %+v", item.AcquisitionSources, want)
+
+	item := buildTreeStructure(nodes, []items.AcquisitionFacts{fatebringer}).Items["200"]
+
+	want := DestinyItem{
+		ItemHash:           "200",
+		Name:               "Fatebringer",
+		Description:        "A hand cannon.",
+		Icon:               "/i/fatebringer.png",
+		ItemType:           "Hand Cannon",
+		TierType:           bungie.TierTypeLegendary,
+		Rarity:             bungie.GetTierName(bungie.TierTypeLegendary),
+		FarmOnly:           true,
+		AcquisitionSources: fatebringer.AcquisitionSources,
 	}
-	for i := range want {
-		if item.AcquisitionSources[i] != want[i] {
-			t.Errorf("acquisitionSources[%d] = %+v, want %+v", i, item.AcquisitionSources[i], want[i])
-		}
+	if !reflect.DeepEqual(item, want) {
+		t.Errorf("item detail = %+v, want %+v", item, want)
 	}
 }
 
@@ -306,11 +326,8 @@ func TestOverlay_DedupesDuplicateItemHash_NeitherAcquired(t *testing.T) {
 		1:  node(1, "Items", []uint32{20}, nil),
 		20: node(20, "Armor", nil, []uint32{2000, 2001}),
 	}
-	cols := []manifest.CollectibleWithItem{
-		col(2000, 200, "Choir of One"),
-		col(2001, 200, "Choir of One"),
-	}
-	ts := buildTreeStructure(nodes, cols)
+	catalog := []items.AcquisitionFacts{armor(200, "Choir of One", 2000, 2001)}
+	ts := buildTreeStructure(nodes, catalog)
 
 	got := ts.overlay(map[uint32]bool{}) // nothing owned
 
@@ -331,8 +348,8 @@ func TestBuildTreeStructure_CycleGuard(t *testing.T) {
 		10: node(10, "A", []uint32{11}, nil),
 		11: node(11, "B", []uint32{10}, []uint32{1000}),
 	}
-	cols := []manifest.CollectibleWithItem{col(1000, 100, "X")}
-	ts := buildTreeStructure(nodes, cols) // must terminate
+	catalog := []items.AcquisitionFacts{weapon(100, "X", 1000)}
+	ts := buildTreeStructure(nodes, catalog) // must terminate
 	if len(ts.Roots) == 0 {
 		t.Fatalf("expected at least one root, got none")
 	}
