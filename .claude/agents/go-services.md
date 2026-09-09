@@ -40,8 +40,12 @@ backend/api-service/
                                            audit, body); holds
                                            no session logic of its own
   api/handlers/characters.go           ← HTTP handler for characters
-  api/handlers/collections.go          ← HTTP handler for collections; RefreshCollections invalidates
-                                           collections + characters + records caches via service methods
+  api/handlers/collections.go          ← Thin Collections HTTP adapter (ADR 0018): binds, authenticates,
+                                           resolves the Bungie token, maps errors, and serializes; the
+                                           default read calls Service.GetSummary, `?include=all` calls
+                                           Service.GetFull, and RefreshCollections calls
+                                           Service.RefreshMembership — holds no projection, availability,
+                                           or cache-invalidation logic itself
   api/handlers/items.go                ← HTTP handlers for manifest-derived item detail: GetPerks (perk pool +
                                            exotic catalyst pool) and GetItem (minimal item view for deep-linked
                                            non-collectible items); no ownership check (public manifest data)
@@ -60,7 +64,9 @@ backend/api-service/
   api/handlers/admin.go                ← Admin console: user roster, role management, feature-flag
                                            config, audit log feed
   api/handlers/health.go               ← Health, ready, manifest status endpoints
-  api/handlers/common.go               ← Shared handler helpers (parseMembershipParams, ownershipCheck…)
+  api/handlers/common.go               ← Shared handler helpers (parseMembershipParams, ownershipCheck
+                                           — compares the whole membershipType+membershipId pair against
+                                           the JWT claims and aborts the context on mismatch…)
   api/handlers/storeerror.go           ← HandleStoreError(c, err, logMsg) — maps db.ErrUnavailable to a
                                            503 DB_UNAVAILABLE and anything else to a logged 500 INTERNAL_ERROR;
                                            mirrors handleBungieError
@@ -69,11 +75,27 @@ backend/api-service/
                                            RegisterParticipant/RegisterObserver coordinate the file swap
                                            (see "Manifest repository, provider, and swap seam" below)
   services/bungie/types.go             ← All Bungie API types, constants, helpers
-  services/collections/analysis.go     ← MembershipAnalysis: item-level ownership, tree counts,
-                                           summary, missing set; reads Item facts through
-                                           CatalogReader (*items.Service) and presentation nodes
-                                           through PresentationNodeReader (*manifest.Provider)
-  services/collections/types.go        ← Collections wire shapes + the Items-facts projection
+  services/collections/analysis.go     ← MembershipAnalysis: the inner of ADR 0018's two construction
+                                           stages — item-level ownership, tree counts, summary, missing
+                                           set; reads Item facts through CatalogReader (*items.Service)
+                                           and presentation nodes through PresentationNodeReader
+                                           (*manifest.Provider); Weekly reads missing items from this
+                                           core through its own MissingItemReader
+  services/collections/service.go      ← Service: the outer of ADR 0018's two construction stages,
+                                           built after Weekly in main.go. Owns GetSummary (cheap counted
+                                           tree, no items/availability), GetFull (adds every catalogued
+                                           item's owned state, then a best-effort live-availability join
+                                           via the required LiveAvailabilityReader — satisfied by
+                                           *weekly.Service — intersected with tracked items and never
+                                           cached), and RefreshMembership (fans one membership
+                                           invalidation out to its own analysis plus the required
+                                           RefreshParticipants — *characters.Service and *records.Service)
+  services/collections/tree.go         ← TreeStructure/buildTreeStructure/overlayCounts/overlayWithItems:
+                                           the user-independent presentation forest and its two
+                                           membership overlays (counts only vs. counts + leaf item hashes)
+  services/collections/types.go        ← Collections wire shapes (CategorySummary, DestinyItem) + the
+                                           Items-facts projection; Summary/Full/CollectionItem live in
+                                           service.go
   services/characters/service.go       ← Character fetching; InvalidateCache method
   services/items/facts.go              ← AcquisitionFacts + AcquisitionFactsReader (ADR 0015): the canonical
                                            user-independent Item projection. Slot-specific ItemType, ascending
@@ -205,7 +227,7 @@ backend/api-service/
 | PUT    | `/api/admin/flags/:key`                                  | JWT + admin                   | Toggle enabled / set minTier                                                                                                                                                                                                                                                                                      |
 | GET    | `/api/admin/audit`                                       | JWT + admin                   | Filtered keyset-paginated audit feed                                                                                                                                                                                                                                                                              |
 | GET    | `/api/characters/:membershipType/:membershipId`          | JWT                           | User characters                                                                                                                                                                                                                                                                                                   |
-| GET    | `/api/collections/:membershipType/:membershipId`         | JWT                           | Collections + fetchedAt; `?include=all` adds collectedItems                                                                                                                                                                                                                                                       |
+| GET    | `/api/collections/:membershipType/:membershipId`         | JWT                           | Collections + fetchedAt; `?include=all` adds `items`, `collectedHashes`, `availableNow`                                                                                                                                                                                                                           |
 | POST   | `/api/collections/:membershipType/:membershipId/refresh` | JWT                           | Invalidate cache (collections + characters + records)                                                                                                                                                                                                                                                             |
 | GET    | `/api/manifest/status`                                   | None                          | Manifest version and readiness                                                                                                                                                                                                                                                                                    |
 | GET    | `/api/weekly/recommendations?characterId=`               | JWT + flag                    | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt; validates the optional character against the authenticated roster and falls back to the primary character                                                                                                                                  |
@@ -440,7 +462,7 @@ serves; it registers no routes itself.
 - `Catalyst` struct has `Type` (weapon type), `Icon` (record icon), and `Effect` (catalyst-perk effect text) fields
 - `Effect` is resolved by `resolveCatalystEffect`: links the catalyst record to its weapon via `GetCatalystLinks()` objective-hash overlap first (unambiguous on both the weapon and record side), then a stripped-name match, then a catalyst-plug-name match, falling back to the record's own description and then `""`
 - The three Manifest-derived projections (weapon types, exotic weapons, catalyst links) load through `manifeststate.LoadIf` under one owner-local publication. `OnVersionChanged` (`bungie.ManifestObserver`) advances that publication and evicts exactly those keys, so an in-flight old-generation load may finish for its caller but cannot repopulate the shared cache. Per-user `records:*` profile entries are untouched — they hold raw Bungie data, which a manifest swap does not invalidate
-- `InvalidateCache(membershipType, membershipId)` drops cached profile records (called by RefreshCollections)
+- `InvalidateCache(membershipType, membershipId)` drops cached profile records; Records is one of `collections.Service`'s `RefreshParticipant`s, called from `RefreshMembership` on `POST /api/collections/:membershipType/:membershipId/refresh`
 - `Triumph.Objectives []TriumphObjective` (`omitempty`) — per-objective drill-down built by `GetSeals`: excludes explicitly-hidden objectives (`RecordObjective.Visible *bool`; `nil` = absent = visible — a plain `bool` would decode Bungie's absent-field-means-visible default backwards), falls back to `Objective N` for a blank `progressDescription` (numbered over the objectives that survive visibility filtering), normalizes a zero `completionValue` to `Max=1`, and forces `Done=true`/`Cur==Max` on every objective when the parent record is redeemed regardless of stale objective payloads. The existing top-level `Triumph.Cur`/`Max` is unchanged for response compatibility.
 
 ## Source vocabulary (`services/sources`)
@@ -475,10 +497,13 @@ made a milestone's missing-count badge silently not appear.
 
 ## Collections service
 
-- `ErrManifestNotReady` exported (aliases `manifest.ErrNotReady`); handler maps it to 503
-- `MembershipCollections` has `FetchedAt` field
-- `MembershipCollections.Items`, `.CollectedHashes`, and each node's `Items` are stripped from the response unless `?include=all`
-- `Lightweight()` returns a value copy with those three stripped, leaving tree counts, summary, and `fetchedAt`
+- `ErrManifestNotReady` exported from `collections/analysis.go` (aliases `manifest.ErrNotReady`); handler maps it to 503
+- `Service` (`collections/service.go`) is the outer of ADR 0018's two construction stages — built after Weekly in `main.go` — and owns `GetSummary`, `GetFull`, and `RefreshMembership`; a nil constructor dependency panics at startup rather than degrading
+- `GetSummary` returns `Summary{Tree, Totals, FetchedAt}` — the counted tree via `overlayCounts`, no item surface, no availability work; this is the default (no `?include=all`) response
+- `GetFull` returns `Full{Tree, Items, Totals, FetchedAt}` — the tree via `overlayWithItems` (leaf item hashes included) plus one `CollectionItem{Item, Collected, AvailableFrom}` per catalogued item. It resolves the core analysis first, then asks `LiveAvailabilityReader.LiveVendorItemHashes` (satisfied by `*weekly.Service`) for live availability — best-effort, intersected with tracked items via the catalog loop, never written back into the cached analysis
+- `RefreshMembership` invalidates the analysis cache plus every `RefreshParticipant` (`*characters.Service`, `*records.Service`) through each one's own `InvalidateCache`; it always returns nil today since none of the three participants can fail
+- `CollectionsHandler.fullResponse` (`api/handlers/collections.go`) spreads a `Full` result across the unchanged `items`/`collectedHashes`/`availableNow` wire fields — it is a transcription of `Full.Items`, not a new decision, and relies on `Full.Items` arriving in ascending item-hash order (inherited from the Items catalog, ADR 0015)
+- `MembershipCollections` and its `Lightweight()` projection are deleted; `TreeStructure.Items` (the shared item-detail map) is deleted too — item facts come from the Items catalog on each read, not a copy cached on the tree
 - `DestinyItem.AcquisitionSources`, `.FarmOnly`, and `.ItemType` are copied
   straight from Items' `AcquisitionFacts` (ADR 0015) by `destinyItem` in
   `collections/types.go` — Collections computes none of them itself anymore.

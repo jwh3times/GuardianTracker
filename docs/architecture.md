@@ -189,6 +189,18 @@ the seam as it is reworked. Because Collections pairs the catalog with its own t
 composition root notifies Items of a new Manifest before Collections. See
 [ADR 0015](./adr/0015-own-item-acquisition-facts-in-items.md).
 
+`services/collections`'s `Service`, constructed after Weekly, is the handler-facing
+Collections capability: a cheap `GetSummary` (counted tree and category totals,
+no item or availability work), a `GetFull` that adds every catalogued item's
+owned state and then, only after that core result succeeds, a best-effort live
+availability join read back out of Weekly through the narrow
+`LiveAvailabilityReader` interface, and a `RefreshMembership` that fans one
+membership invalidation out to Collections' own analysis plus Characters and
+Records. Live availability is intersected with tracked items and never written
+into the cached analysis. `CollectionsHandler` only binds, authenticates,
+resolves the Bungie token, maps errors, and serializes; it holds none of that
+policy itself. See [ADR 0018](./adr/0018-own-complete-membership-collections.md).
+
 ## Collection and Acquisition Model
 
 An inventory item can be linked from several manifest collectibles. Collection
@@ -310,6 +322,10 @@ environment runs in development mode and is not production parity.
 - Bungie's access-only authorization is encrypted at rest with exact
   current/previous key versions.
 - CORS allows only configured origins.
+- Membership-scoped routes (collections, collections refresh, characters,
+  catalysts, crafting, seals) authorize the caller's whole Destiny membership
+  pair — platform type and ID, not ID alone — before any Bungie call or cached
+  data is touched.
 - API server timeouts, body limits, no-sniff/referrer headers, and no-store auth
   responses are configured.
 - The frontend CSP disallows inline scripts; inline styles remain an explicitly

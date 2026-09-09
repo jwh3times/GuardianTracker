@@ -52,7 +52,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Cache invalidation**
 
-- `RefreshCollections` must invalidate each service's cache through that service's own `InvalidateCache` method, not by formatting cache keys inline. Flag any handler that constructs a cache key string itself to call `cache.Delete`.
+- `collections.Service.RefreshMembership` (called by the `RefreshCollections` handler) must invalidate each backend owner's cache through that owner's own `InvalidateCache` method (`RefreshParticipant`), not by formatting cache keys inline. Flag any handler or service that constructs a cache key string itself to call `cache.Delete`.
 
 **Cache load-through**
 
@@ -153,7 +153,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 - Flag secrets, API keys, or credentials committed to any source file (not `.env.example`).
 - Flag `CORS_ALLOWED_ORIGINS` changes that add origins beyond the configured frontend URL.
-- Flag endpoints that return another user's data without verifying the requesting user's `membershipId` from the JWT (`ownershipCheck` in `api/handlers/common.go`).
+- Flag endpoints that return another user's data without verifying the requesting user's full Destiny membership pair (`membershipType` + `membershipId`) from the JWT (`ownershipCheck` in `api/handlers/common.go` checks both, not `membershipId` alone).
 - Flag logout implementations that clear tokens client-side but do not call `POST /api/auth/logout`. Note as a known limitation only if the backend endpoint itself fails.
 
 ## Logging checks
