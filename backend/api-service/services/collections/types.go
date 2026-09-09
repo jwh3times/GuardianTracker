@@ -1,24 +1,14 @@
 package collections
 
 import (
-	"time"
-
 	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/sources"
 )
 
-// MembershipCollections is the canonical collections payload: the Bungie presentation-node
-// tree, a shared item-detail map (only on ?include=all), a flat set of owned item
-// hashes (the grid's per-item collected state; only on ?include=all), and a derived
-// four-category summary for the Dashboard hero and weekly recommender.
-type MembershipCollections struct {
-	Tree            []CollectionNode       `json:"tree"`
-	Items           map[string]DestinyItem `json:"items,omitempty"`
-	CollectedHashes []string               `json:"collectedHashes,omitempty"`
-	AvailableNow    map[string]string      `json:"availableNow,omitempty"` // itemHash → vendor name; set by the handler on ?include=all
-	Summary         CategorySummary        `json:"summary"`
-	FetchedAt       time.Time              `json:"fetchedAt"`
-}
+// The types below keep their JSON tags because the HTTP adapter passes them
+// through verbatim. Only the item-derived fields — `items`, `collectedHashes`,
+// and `availableNow` — are assembled at the boundary from a [Full] result; the
+// tree, the category rollup, and fetchedAt are serialized as they stand here.
 
 // CategoryCount is total/collected for one summary bucket.
 type CategoryCount struct {
@@ -32,31 +22,6 @@ type CategorySummary struct {
 	Armor     CategoryCount `json:"armor"`
 	Exotics   CategoryCount `json:"exotics"`
 	Cosmetics CategoryCount `json:"cosmetics"`
-}
-
-// Lightweight returns a copy with the heavy item data removed: the top-level Items
-// map, the CollectedHashes set, and every node's Items hash array. Tree counts,
-// summary, and fetchedAt remain. The cached source is never mutated (value receiver
-// + fresh node slices).
-func (u MembershipCollections) Lightweight() MembershipCollections {
-	u.Items = nil
-	u.CollectedHashes = nil
-	u.AvailableNow = nil
-	u.Tree = nodesWithoutItems(u.Tree)
-	return u
-}
-
-func nodesWithoutItems(nodes []CollectionNode) []CollectionNode {
-	if nodes == nil {
-		return nil
-	}
-	out := make([]CollectionNode, len(nodes))
-	for i, n := range nodes {
-		n.Items = nil
-		n.Children = nodesWithoutItems(n.Children)
-		out[i] = n
-	}
-	return out
 }
 
 // DestinyItem is the frontend-facing item representation.

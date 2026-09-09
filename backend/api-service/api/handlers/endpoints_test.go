@@ -323,10 +323,10 @@ func TestRecords_BadParams(t *testing.T) {
 func collectionsHandler(t *testing.T, ts *auth.TokenStore) *CollectionsHandler {
 	t.Helper()
 	c := cache.NewMemoryCache(time.Minute, 0)
-	collSvc := collections.NewMembershipAnalysis(bungie.NewClient("k", "http://x", 100, 100), nil, nil, nil, c, time.Minute)
+	analysis := collections.NewMembershipAnalysis(bungie.NewClient("k", "http://x", 100, 100), nil, nil, nil, c, time.Minute)
 	charSvc := characters.NewService(bungie.NewClient("k", "http://x", 100, 100), c, time.Minute)
 	recSvc := records.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, c, time.Minute)
-	return NewCollectionsHandler(collSvc, charSvc, recSvc, ts, nil)
+	return NewCollectionsHandler(collections.NewService(analysis, &mockLiveVendors{}, charSvc, recSvc), ts)
 }
 
 func TestCollections_OwnershipMismatch(t *testing.T) {
@@ -334,6 +334,36 @@ func TestCollections_OwnershipMismatch(t *testing.T) {
 	r := authedRouter(http.MethodGet, "/api/collections/:membershipType/:membershipId", "9999999999", h.GetCollections)
 	if w := do(r, http.MethodGet, "/api/collections/3/"+testUserID); w.Code != http.StatusForbidden {
 		t.Errorf("ownership = %d, want 403", w.Code)
+	}
+}
+
+// Every membership-scoped route authorizes the pair, not just the id. The
+// check lives in one shared helper, but each route has to hand it the type from
+// its own path — passing the caller's own type instead would authorize
+// everything — so the claim is pinned per route rather than once.
+func TestMembershipRoutes_RejectAPlatformMismatch(t *testing.T) {
+	ts := newTokenStore(t)
+	records := recordsHandler(t, ts)
+	collections := collectionsHandler(t, ts)
+
+	routes := map[string]gin.HandlerFunc{
+		"collections":         collections.GetCollections,
+		"collections refresh": collections.RefreshCollections,
+		"characters":          charactersHandler(t, "http://x", ts).GetCharacters,
+		"catalysts":           records.GetCatalysts,
+		"crafting":            records.GetCrafting,
+		"seals":               records.GetSeals,
+	}
+	for name, fn := range routes {
+		t.Run(name, func(t *testing.T) {
+			// The context membership id matches; only the platform differs from
+			// the type the router set (3).
+			r := authedRouter(http.MethodGet, "/api/x/:membershipType/:membershipId", testUserID, fn)
+			w := do(r, http.MethodGet, "/api/x/2/"+testUserID)
+			if w.Code != http.StatusForbidden {
+				t.Errorf("%s with a mismatched platform = %d, want 403", name, w.Code)
+			}
+		})
 	}
 }
 

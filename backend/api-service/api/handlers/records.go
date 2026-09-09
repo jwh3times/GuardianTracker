@@ -26,7 +26,7 @@ func (h *RecordsHandler) GetCatalysts(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if !ownershipCheck(c, membershipID) {
+	if !ownershipCheck(c, membershipType, membershipID) {
 		return
 	}
 	bungieToken, ok := getBungieToken(c, membershipID, h.tokenStore)
@@ -47,7 +47,7 @@ func (h *RecordsHandler) GetCrafting(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if !ownershipCheck(c, membershipID) {
+	if !ownershipCheck(c, membershipType, membershipID) {
 		return
 	}
 	bungieToken, ok := getBungieToken(c, membershipID, h.tokenStore)
@@ -68,7 +68,7 @@ func (h *RecordsHandler) GetSeals(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if !ownershipCheck(c, membershipID) {
+	if !ownershipCheck(c, membershipType, membershipID) {
 		return
 	}
 	bungieToken, ok := getBungieToken(c, membershipID, h.tokenStore)

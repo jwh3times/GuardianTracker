@@ -27,7 +27,7 @@ func (h *CharactersHandler) GetCharacters(c *gin.Context) {
 		return
 	}
 
-	if !ownershipCheck(c, membershipID) {
+	if !ownershipCheck(c, membershipType, membershipID) {
 		return
 	}
 

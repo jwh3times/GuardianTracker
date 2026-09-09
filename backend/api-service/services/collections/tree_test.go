@@ -160,7 +160,7 @@ func TestOverlay_RollsUpCounts(t *testing.T) {
 	ts := buildTreeStructure(nodes, catalog)
 
 	// Owned (by ITEM hash): Fatebringer(100) + Helm(200).
-	got := ts.overlay(map[uint32]bool{100: true, 200: true})
+	got := ts.overlayWithItems(map[uint32]bool{100: true, 200: true})
 
 	if len(got) != 2 {
 		t.Fatalf("roots = %d, want 2", len(got))
@@ -269,7 +269,7 @@ func TestOverlay_DedupesDuplicateItemHashWithinNode(t *testing.T) {
 
 	// Owned (by ITEM hash): item 200 is owned, regardless of which of its two
 	// collectible rows the profile response happened to mark acquired.
-	got := ts.overlay(map[uint32]bool{200: true})
+	got := ts.overlayWithItems(map[uint32]bool{200: true})
 
 	armor := findCounted(got, "Armor")
 	if armor == nil {
@@ -283,14 +283,10 @@ func TestOverlay_DedupesDuplicateItemHashWithinNode(t *testing.T) {
 	}
 }
 
-// The item-detail map is Items' projection carried through unchanged: the
+// An item's wire projection is Items' facts carried through unchanged: the
 // source union, its order, and the facets on each source are decided by Items
 // (ADR 0015), and Collections must not re-derive or reorder any of it.
-func TestBuildTreeStructure_CarriesCatalogItemFactsThrough(t *testing.T) {
-	nodes := map[uint32]*manifest.PresentationNodeDef{
-		1:  node(1, "Items", []uint32{20}, nil),
-		20: node(20, "Weapons", nil, []uint32{2000, 2001}),
-	}
+func TestDestinyItem_CarriesCatalogItemFactsThrough(t *testing.T) {
 	fatebringer := weapon(200, "Fatebringer", 2000, 2001)
 	fatebringer.Description = "A hand cannon."
 	fatebringer.Icon = "/i/fatebringer.png"
@@ -300,7 +296,7 @@ func TestBuildTreeStructure_CarriesCatalogItemFactsThrough(t *testing.T) {
 		{Text: "Vault of Glass raid", Difficulty: sources.Challenging, RaidDungeon: true},
 	}
 
-	item := buildTreeStructure(nodes, []items.AcquisitionFacts{fatebringer}).Items["200"]
+	item := destinyItem(fatebringer)
 
 	want := DestinyItem{
 		ItemHash:           "200",
@@ -329,7 +325,7 @@ func TestOverlay_DedupesDuplicateItemHash_NeitherAcquired(t *testing.T) {
 	catalog := []items.AcquisitionFacts{armor(200, "Choir of One", 2000, 2001)}
 	ts := buildTreeStructure(nodes, catalog)
 
-	got := ts.overlay(map[uint32]bool{}) // nothing owned
+	got := ts.overlayWithItems(map[uint32]bool{}) // nothing owned
 
 	armor := findCounted(got, "Armor")
 	if armor == nil {
