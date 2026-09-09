@@ -1,96 +1,73 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"guardian-tracker/api-service/db"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/sources"
+	"guardian-tracker/api-service/services/wishlist"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// --- mock wishlist store ---
+// --- stub wish list core ---
+//
+// The handler owns no wish list rules any more, so these tests drive the seam
+// rather than a fake database: what reaches the service, and what each typed
+// outcome renders as. The rules themselves are tested in services/wishlist.
 
-type mockWishlistStore struct {
-	userID       int64
-	items        []db.WishlistItem
-	addErr       error
-	delFound     bool
-	bulkAffected *int64
-	lastBulkIDs  []int64
-	getUserIDErr error
-	bulkErr      error
+type stubEntries struct {
+	entries []wishlist.StoredEntry
+	stored  wishlist.StoredEntry
+	bulk    wishlist.BulkResult
+	err     error
+
+	gotMembershipID string
+	gotAdd          wishlist.AddCommand
+	gotUpdateID     wishlist.EntryID
+	gotUpdate       wishlist.UpdateCommand
+	gotRemoveID     wishlist.EntryID
+	gotBulkIDs      []wishlist.EntryID
+	gotBulkPriority wishlist.Priority
+	gotAction       string
 }
 
-func (m *mockWishlistStore) GetUserID(_ context.Context, _ string) (int64, error) {
-	if m.getUserIDErr != nil {
-		return 0, m.getUserIDErr
-	}
-	return m.userID, nil
+func (s *stubEntries) List(_ context.Context, membershipID string) ([]wishlist.StoredEntry, error) {
+	s.gotMembershipID = membershipID
+	return s.entries, s.err
 }
 
-func (m *mockWishlistStore) List(_ context.Context, _ int64) ([]db.WishlistItem, error) {
-	return m.items, nil
+func (s *stubEntries) Add(_ context.Context, membershipID string, cmd wishlist.AddCommand) (wishlist.StoredEntry, error) {
+	s.gotMembershipID, s.gotAdd = membershipID, cmd
+	return s.stored, s.err
 }
 
-func (m *mockWishlistStore) Add(_ context.Context, _ int64, hash uint32, prio int16, notes string) (*db.WishlistItem, error) {
-	if m.addErr != nil {
-		return nil, m.addErr
-	}
-	return &db.WishlistItem{ID: 1, ItemHash: hash, Priority: prio, Notes: notes, CreatedAt: time.Now()}, nil
+func (s *stubEntries) Update(_ context.Context, membershipID string, id wishlist.EntryID, patch wishlist.UpdateCommand) (wishlist.StoredEntry, error) {
+	s.gotMembershipID, s.gotUpdateID, s.gotUpdate = membershipID, id, patch
+	return s.stored, s.err
 }
 
-func (m *mockWishlistStore) Update(_ context.Context, _, id int64, prio *int16, notes *string) (*db.WishlistItem, error) {
-	if len(m.items) == 0 {
-		return nil, pgx.ErrNoRows
-	}
-	it := m.items[0]
-	if prio != nil {
-		it.Priority = *prio
-	}
-	if notes != nil {
-		it.Notes = *notes
-	}
-	return &it, nil
+func (s *stubEntries) Remove(_ context.Context, membershipID string, id wishlist.EntryID) error {
+	s.gotMembershipID, s.gotRemoveID = membershipID, id
+	return s.err
 }
 
-func (m *mockWishlistStore) Delete(_ context.Context, _, _ int64) (bool, error) {
-	return m.delFound, nil
+func (s *stubEntries) RemoveMany(_ context.Context, membershipID string, ids []wishlist.EntryID) (wishlist.BulkResult, error) {
+	s.gotMembershipID, s.gotBulkIDs, s.gotAction = membershipID, ids, "delete"
+	return s.bulk, s.err
 }
 
-func (m *mockWishlistStore) BulkDelete(_ context.Context, _ int64, ids []int64) (int64, error) {
-	m.lastBulkIDs = ids
-	if m.bulkErr != nil {
-		return 0, m.bulkErr
-	}
-	if m.bulkAffected != nil {
-		return *m.bulkAffected, nil
-	}
-	return int64(len(ids)), nil
-}
-
-func (m *mockWishlistStore) BulkSetPriority(_ context.Context, _ int64, ids []int64, _ int16) (int64, error) {
-	m.lastBulkIDs = ids
-	if m.bulkErr != nil {
-		return 0, m.bulkErr
-	}
-	if m.bulkAffected != nil {
-		return *m.bulkAffected, nil
-	}
-	return int64(len(ids)), nil
+func (s *stubEntries) SetPriorityMany(_ context.Context, membershipID string, ids []wishlist.EntryID, priority wishlist.Priority) (wishlist.BulkResult, error) {
+	s.gotMembershipID, s.gotBulkIDs, s.gotBulkPriority, s.gotAction = membershipID, ids, priority, "set_priority"
+	return s.bulk, s.err
 }
 
 // --- mock manifest ---
@@ -166,380 +143,307 @@ func newTestRouter(h *WishlistHandler) *gin.Engine {
 	return r
 }
 
-// --- tests ---
-
-func TestGetWishlist_ReturnsItems(t *testing.T) {
-	store := &mockWishlistStore{
-		userID: 42,
-		items: []db.WishlistItem{
-			{ID: 1, UserID: 42, ItemHash: 1234, Priority: 2, Notes: "nice roll", CreatedAt: time.Now()},
-		},
+func send(r *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
+	var req *http.Request
+	if body == "" {
+		req = httptest.NewRequest(method, path, nil)
+	} else {
+		req = httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
 	}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
+	return w
+}
+
+func savedEntry(id wishlist.EntryID, hash uint32, priority wishlist.Priority) wishlist.StoredEntry {
+	return wishlist.StoredEntry{ID: id, ItemHash: hash, Priority: priority, CreatedAt: time.Now()}
+}
+
+// --- tests ---
+
+func TestGetWishlist_SerializesStoredEntries(t *testing.T) {
+	entries := &stubEntries{entries: []wishlist.StoredEntry{
+		{ID: 1, ItemHash: 1234, Priority: wishlist.PriorityHigh, Notes: "nice roll", CreatedAt: time.Now()},
+	}}
+	w := send(newTestRouter(NewWishlistHandler(entries, nil, nil, nil)), http.MethodGet, "/api/wishlist", "")
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
 	}
 	var resp []wishlistResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("could not decode response: %v", err)
+		t.Fatalf("decode: %v", err)
 	}
 	if len(resp) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(resp))
+		t.Fatalf("items = %d, want 1", len(resp))
 	}
-	if resp[0].ID != "1" {
-		t.Errorf("expected id=1, got %s", resp[0].ID)
-	}
-	if resp[0].Priority != "HIGH" {
-		t.Errorf("expected priority=HIGH, got %s", resp[0].Priority)
+	if resp[0].ID != "1" || resp[0].ItemHash != 1234 || resp[0].Priority != "HIGH" || resp[0].Notes != "nice roll" {
+		t.Errorf("item = %+v", resp[0])
 	}
 }
 
-func TestGetWishlist_DegradedMode_Returns503(t *testing.T) {
-	degraded := db.NewStores(nil)
-	h := NewWishlistHandler(degraded.Wishlist, nil, nil, nil)
-	r := newTestRouter(h)
+// An empty wish list is an empty JSON array, never null: the frontend maps over
+// it directly.
+func TestGetWishlist_EmptyListSerializesAsAnArray(t *testing.T) {
+	w := send(newTestRouter(NewWishlistHandler(&stubEntries{}, nil, nil, nil)), http.MethodGet, "/api/wishlist", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", w.Code)
+	if body := strings.TrimSpace(w.Body.String()); body != "[]" {
+		t.Errorf("body = %s, want []", body)
 	}
 }
 
-func TestGetWishlist_UsesJWTMembershipID(t *testing.T) {
-	capturedMembershipID := ""
-	store := &mockWishlistStore{userID: 7, items: []db.WishlistItem{}}
-	// Override GetUserID to capture what was passed
-	spy := &membershipIDSpy{inner: store, captured: &capturedMembershipID}
-	h := NewWishlistHandler(spy, nil, nil, nil)
-	r := newTestRouter(h)
+func TestGetWishlist_UsesTheJWTMembership(t *testing.T) {
+	entries := &stubEntries{}
+	send(newTestRouter(NewWishlistHandler(entries, nil, nil, nil)), http.MethodGet, "/api/wishlist", "")
 
-	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if capturedMembershipID != "test-member-123" {
-		t.Errorf("expected membership_id=test-member-123, got %q", capturedMembershipID)
+	if entries.gotMembershipID != "test-member-123" {
+		t.Errorf("membership = %q, want the one the JWT carried", entries.gotMembershipID)
 	}
 }
 
-// membershipIDSpy wraps mockWishlistStore and records the membershipID passed to GetUserID.
-type membershipIDSpy struct {
-	inner    *mockWishlistStore
-	captured *string
-}
-
-func (s *membershipIDSpy) GetUserID(ctx context.Context, membershipID string) (int64, error) {
-	*s.captured = membershipID
-	return s.inner.GetUserID(ctx, membershipID)
-}
-func (s *membershipIDSpy) List(ctx context.Context, userID int64) ([]db.WishlistItem, error) {
-	return s.inner.List(ctx, userID)
-}
-func (s *membershipIDSpy) Add(ctx context.Context, userID int64, hash uint32, prio int16, notes string) (*db.WishlistItem, error) {
-	return s.inner.Add(ctx, userID, hash, prio, notes)
-}
-func (s *membershipIDSpy) Update(ctx context.Context, userID, id int64, prio *int16, notes *string) (*db.WishlistItem, error) {
-	return s.inner.Update(ctx, userID, id, prio, notes)
-}
-func (s *membershipIDSpy) Delete(ctx context.Context, userID, id int64) (bool, error) {
-	return s.inner.Delete(ctx, userID, id)
-}
-func (s *membershipIDSpy) BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error) {
-	return s.inner.BulkDelete(ctx, userID, ids)
-}
-func (s *membershipIDSpy) BulkSetPriority(ctx context.Context, userID int64, ids []int64, prio int16) (int64, error) {
-	return s.inner.BulkSetPriority(ctx, userID, ids, prio)
-}
-
-func TestAddToWishlist_Duplicate_Returns409(t *testing.T) {
-	store := &mockWishlistStore{
-		userID: 42,
-		addErr: &pgconn.PgError{Code: "23505"},
-	}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	body := `{"itemHash": 1234567}`
-	req := httptest.NewRequest(http.MethodPost, "/api/wishlist", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestAddToWishlist_NotesTooLong_Returns400(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	longNotes := strings.Repeat("x", 501)
-	body, _ := json.Marshal(map[string]any{
-		"itemHash": 1234567,
-		"notes":    longNotes,
-	})
-	req := httptest.NewRequest(http.MethodPost, "/api/wishlist", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestAddToWishlist_InvalidPriority_Returns400(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	body := `{"itemHash": 1234567, "priority": "CRITICAL"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/wishlist", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestAddToWishlist_MissingItemHash_Returns400(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	body := `{"priority": "HIGH"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/wishlist", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestAddToWishlist_ManifestValidation_UnknownHash_Returns400(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	manifest := &mockManifest{defs: map[uint32]*bungie.InventoryItemDefinition{}} // empty — hash not found
-	h := NewWishlistHandler(store, manifest, nil, nil)
-	r := newTestRouter(h)
-
-	body := `{"itemHash": 9999999}`
-	req := httptest.NewRequest(http.MethodPost, "/api/wishlist", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestAddToWishlist_PriorityMapping(t *testing.T) {
+// Every typed outcome the wish list can produce has exactly one wire meaning.
+// Flattening any two of them would put domain meaning back in the handler.
+func TestWishlistErrors_MapToTheExistingWire(t *testing.T) {
 	cases := []struct {
-		priority string
-		expected int16
+		name     string
+		err      error
+		status   int
+		contains string
 	}{
-		{"LOW", 0},
-		{"MEDIUM", 1},
-		{"HIGH", 2},
-		{"URGENT", 3},
+		{"unavailable", wishlist.ErrUnavailable, http.StatusServiceUnavailable, "DB_UNAVAILABLE"},
+		{"not found", wishlist.ErrNotFound, http.StatusNotFound, "wishlist item not found"},
+		{"duplicate", wishlist.ErrDuplicate, http.StatusConflict, "item already in wishlist"},
+		{"items unavailable", wishlist.ErrItemsUnavailable, http.StatusServiceUnavailable, "MANIFEST_NOT_READY"},
+		{"unknown item", wishlist.ErrUnknownItem, http.StatusBadRequest, "unknown item hash"},
+		{"invalid priority", wishlist.ErrInvalidPriority, http.StatusBadRequest, "priority must be LOW, MEDIUM, HIGH, or URGENT"},
+		{"notes too long", wishlist.ErrNotesTooLong, http.StatusBadRequest, "notes must be 500 characters or fewer"},
+		{"unexpected", errors.New("connection reset"), http.StatusInternalServerError, "INTERNAL_ERROR"},
 	}
-
 	for _, tc := range cases {
-		t.Run(tc.priority, func(t *testing.T) {
-			store := &mockWishlistStore{userID: 42}
-			h := NewWishlistHandler(store, nil, nil, nil)
-			r := newTestRouter(h)
+		t.Run(tc.name, func(t *testing.T) {
+			r := newTestRouter(NewWishlistHandler(&stubEntries{err: tc.err}, nil, nil, nil))
+			w := send(r, http.MethodPost, "/api/wishlist", `{"itemHash":1234}`)
 
-			body := fmt.Sprintf(`{"itemHash": 1234567, "priority": "%s"}`, tc.priority)
-			req := httptest.NewRequest(http.MethodPost, "/api/wishlist", strings.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			if w.Code != http.StatusCreated {
-				t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+			if w.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.status, w.Body.String())
 			}
-			var resp wishlistResponse
-			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-				t.Fatalf("decode error: %v", err)
-			}
-			if resp.Priority != tc.priority {
-				t.Errorf("expected priority=%s, got %s", tc.priority, resp.Priority)
+			if !strings.Contains(w.Body.String(), tc.contains) {
+				t.Errorf("body = %s, want it to contain %q", w.Body.String(), tc.contains)
 			}
 		})
 	}
 }
 
-func TestAddToWishlist_DefaultPriorityIsMedium(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
+func TestGetWishlist_UnavailablePersistenceReturns503(t *testing.T) {
+	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrUnavailable}, nil, nil, nil))
+	w := send(r, http.MethodGet, "/api/wishlist", "")
 
-	body := `{"itemHash": 1234567}`
-	req := httptest.NewRequest(http.MethodPost, "/api/wishlist", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "DB_UNAVAILABLE") {
+		t.Errorf("status = %d body = %s, want 503 DB_UNAVAILABLE", w.Code, w.Body.String())
+	}
+}
+
+func TestAddToWishlist_PassesTheRequestThroughAsACommand(t *testing.T) {
+	entries := &stubEntries{stored: savedEntry(9, 1234, wishlist.PriorityUrgent)}
+	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+
+	w := send(r, http.MethodPost, "/api/wishlist", `{"itemHash":1234,"priority":"URGENT","notes":"soon"}`)
 
 	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 201: %s", w.Code, w.Body.String())
 	}
-	var resp wishlistResponse
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Priority != "MEDIUM" {
-		t.Errorf("expected default priority=MEDIUM, got %s", resp.Priority)
-	}
-}
-
-func TestRemoveFromWishlist_NotFound_Returns404(t *testing.T) {
-	store := &mockWishlistStore{userID: 42, delFound: false}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	req := httptest.NewRequest(http.MethodDelete, "/api/wishlist/99", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
+	want := wishlist.AddCommand{ItemHash: 1234, Priority: wishlist.PriorityUrgent, Notes: "soon"}
+	if entries.gotAdd != want {
+		t.Errorf("command = %+v, want %+v", entries.gotAdd, want)
 	}
 }
 
-func TestRemoveFromWishlist_Success_Returns204(t *testing.T) {
-	store := &mockWishlistStore{userID: 42, delFound: true}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
+// An omitted priority reaches the service empty. The default is the wish
+// list's to choose, and the handler must not quietly pick one first.
+func TestAddToWishlist_OmittedPriorityStaysUnsetAtTheSeam(t *testing.T) {
+	entries := &stubEntries{stored: savedEntry(9, 1234, wishlist.PriorityMedium)}
+	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/wishlist/1", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	send(r, http.MethodPost, "/api/wishlist", `{"itemHash":1234}`)
 
-	if w.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", w.Code, w.Body.String())
+	if entries.gotAdd.Priority != "" {
+		t.Errorf("priority = %q, want it left to the wish list", entries.gotAdd.Priority)
 	}
 }
 
-func TestRemoveFromWishlist_InvalidID_Returns400(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
+func TestAddToWishlist_MissingItemHashIsRejectedBeforeTheSeam(t *testing.T) {
+	entries := &stubEntries{}
+	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/wishlist/abc", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := send(r, http.MethodPost, "/api/wishlist", `{"priority":"HIGH"}`)
 
 	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	if entries.gotAdd.ItemHash != 0 {
+		t.Error("a request with no item hash reached the wish list")
 	}
 }
 
-func TestUpdateWishlistItem_InvalidPriority_Returns400(t *testing.T) {
-	store := &mockWishlistStore{
-		userID: 42,
-		items:  []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 1234, Priority: 1}},
-	}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
+func TestUpdateWishlistItem_SendsAPartialPatch(t *testing.T) {
+	entries := &stubEntries{stored: savedEntry(7, 1234, wishlist.PriorityLow)}
+	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
 
-	body := `{"priority": "LEGENDARY"}`
-	req := httptest.NewRequest(http.MethodPut, "/api/wishlist/1", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestUpdateWishlistItem_NotFound_Returns404(t *testing.T) {
-	store := &mockWishlistStore{userID: 42, items: []db.WishlistItem{}} // empty = ErrNoRows
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	body := `{"priority": "HIGH"}`
-	req := httptest.NewRequest(http.MethodPut, "/api/wishlist/99", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestUpdateWishlistItem_NotesTooLong_Returns400(t *testing.T) {
-	store := &mockWishlistStore{
-		userID: 42,
-		items:  []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 1234, Priority: 1}},
-	}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	longNotes := strings.Repeat("y", 501)
-	body, _ := json.Marshal(map[string]any{"notes": longNotes})
-	req := httptest.NewRequest(http.MethodPut, "/api/wishlist/1", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestUpdateWishlistItem_Success(t *testing.T) {
-	store := &mockWishlistStore{
-		userID: 42,
-		items:  []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 1234, Priority: 1, Notes: "original", CreatedAt: time.Now()}},
-	}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-
-	body := `{"priority": "URGENT", "notes": "updated"}`
-	req := httptest.NewRequest(http.MethodPut, "/api/wishlist/1", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := send(r, http.MethodPut, "/api/wishlist/7", `{"notes":"changed"}`)
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
 	}
-	var resp wishlistResponse
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Priority != "URGENT" {
-		t.Errorf("expected priority=URGENT, got %s", resp.Priority)
+	if entries.gotUpdateID != 7 {
+		t.Errorf("entry id = %d, want 7", entries.gotUpdateID)
 	}
-	if resp.Notes != "updated" {
-		t.Errorf("expected notes=updated, got %s", resp.Notes)
+	if entries.gotUpdate.Priority != nil {
+		t.Error("an absent priority was sent as a change")
+	}
+	if entries.gotUpdate.Notes == nil || *entries.gotUpdate.Notes != "changed" {
+		t.Errorf("notes patch = %v, want \"changed\"", entries.gotUpdate.Notes)
 	}
 }
 
-func TestEnrichItems_WithManifest(t *testing.T) {
-	store := &mockWishlistStore{
-		userID: 42,
-		items: []db.WishlistItem{
-			{ID: 1, UserID: 42, ItemHash: 5555, Priority: 3, CreatedAt: time.Now()},
-		},
+func TestUpdateWishlistItem_NotFoundReturns404(t *testing.T) {
+	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrNotFound}, nil, nil, nil))
+
+	if w := send(r, http.MethodPut, "/api/wishlist/7", `{"notes":"x"}`); w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
 	}
+}
+
+func TestWishlistItemID_MustBeNumeric(t *testing.T) {
+	entries := &stubEntries{}
+	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+
+	for _, method := range []string{http.MethodPut, http.MethodDelete} {
+		w := send(r, method, "/api/wishlist/abc", `{}`)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s status = %d, want 400", method, w.Code)
+		}
+	}
+	if entries.gotUpdateID != 0 || entries.gotRemoveID != 0 {
+		t.Error("a malformed id reached the wish list")
+	}
+}
+
+func TestRemoveFromWishlist_SuccessReturns204(t *testing.T) {
+	entries := &stubEntries{}
+	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+
+	w := send(r, http.MethodDelete, "/api/wishlist/5", "")
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", w.Code)
+	}
+	if entries.gotRemoveID != 5 {
+		t.Errorf("removed id = %d, want 5", entries.gotRemoveID)
+	}
+}
+
+func TestRemoveFromWishlist_NotFoundReturns404(t *testing.T) {
+	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrNotFound}, nil, nil, nil))
+
+	if w := send(r, http.MethodDelete, "/api/wishlist/5", ""); w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+}
+
+func TestBulkUpdate_RoutesEachActionToItsCommand(t *testing.T) {
+	t.Run("delete", func(t *testing.T) {
+		entries := &stubEntries{bulk: wishlist.BulkResult{Updated: 2, Skipped: 1}}
+		r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+
+		w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"delete","ids":[1,2,999]}`)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+		}
+		if entries.gotAction != "delete" || len(entries.gotBulkIDs) != 3 {
+			t.Errorf("action = %q with ids %v", entries.gotAction, entries.gotBulkIDs)
+		}
+		var body struct{ Updated, Skipped int }
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if body.Updated != 2 || body.Skipped != 1 {
+			t.Errorf("body = %+v, want {2 1}", body)
+		}
+	})
+
+	t.Run("set priority", func(t *testing.T) {
+		entries := &stubEntries{bulk: wishlist.BulkResult{Updated: 1}}
+		r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+
+		w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"set_priority","ids":[4],"priority":"HIGH"}`)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+		}
+		if entries.gotAction != "set_priority" || entries.gotBulkPriority != wishlist.PriorityHigh {
+			t.Errorf("action = %q priority = %q", entries.gotAction, entries.gotBulkPriority)
+		}
+	})
+}
+
+// The action string is the handler's own vocabulary — it names which command to
+// call, so an unknown one never reaches the wish list.
+func TestBulkUpdate_UnknownActionIsRejectedBeforeTheSeam(t *testing.T) {
+	entries := &stubEntries{}
+	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+
+	w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"explode","ids":[1]}`)
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), "action must be") {
+		t.Fatalf("status = %d body = %s, want 400", w.Code, w.Body.String())
+	}
+	if entries.gotAction != "" {
+		t.Errorf("action %q reached the wish list", entries.gotAction)
+	}
+}
+
+func TestBulkUpdate_ValidationRefusalsRenderAsTheExistingMessages(t *testing.T) {
+	cases := []struct {
+		name     string
+		err      error
+		contains string
+	}{
+		{"empty", wishlist.ErrNoEntries, "ids must be a non-empty list"},
+		{"too many", wishlist.ErrTooManyEntries, "at most 100 ids per request"},
+		{"invalid priority", wishlist.ErrInvalidPriority, "priority must be LOW, MEDIUM, HIGH, or URGENT"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newTestRouter(NewWishlistHandler(&stubEntries{err: tc.err}, nil, nil, nil))
+			w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"delete","ids":[1]}`)
+
+			if w.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", w.Code, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.contains) {
+				t.Errorf("body = %s, want %q", w.Body.String(), tc.contains)
+			}
+		})
+	}
+}
+
+func TestBulkUpdate_UnavailablePersistenceReturns503(t *testing.T) {
+	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrUnavailable}, nil, nil, nil))
+	w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"delete","ids":[1]}`)
+
+	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "DB_UNAVAILABLE") {
+		t.Errorf("status = %d body = %s, want 503 DB_UNAVAILABLE", w.Code, w.Body.String())
+	}
+}
+
+// --- completion (still handler-owned until the complete wish list service) ---
+
+func TestEnrichItems_WithManifest(t *testing.T) {
+	entries := &stubEntries{entries: []wishlist.StoredEntry{
+		{ID: 1, ItemHash: 5555, Priority: wishlist.PriorityUrgent, CreatedAt: time.Now()},
+	}}
 	manifest := &mockManifest{
 		defs: map[uint32]*bungie.InventoryItemDefinition{
 			5555: {
@@ -553,45 +457,56 @@ func TestEnrichItems_WithManifest(t *testing.T) {
 			},
 		},
 	}
-	h := NewWishlistHandler(store, manifest, nil, nil)
-	r := newTestRouter(h)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := send(newTestRouter(NewWishlistHandler(entries, manifest, nil, nil)), http.MethodGet, "/api/wishlist", "")
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
+		t.Fatalf("status = %d, want 200", w.Code)
 	}
 	var resp []wishlistResponse
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if len(resp) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(resp))
+		t.Fatalf("items = %d, want 1", len(resp))
 	}
-	if resp[0].Name != "Gjallarhorn" {
-		t.Errorf("expected Name=Gjallarhorn, got %s", resp[0].Name)
-	}
-	if resp[0].Rarity != "Exotic" {
-		t.Errorf("expected Rarity=Exotic, got %s", resp[0].Rarity)
-	}
-	if resp[0].ItemType != "Rocket Launcher" {
-		t.Errorf("expected ItemType=Rocket Launcher, got %s", resp[0].ItemType)
+	if resp[0].Name != "Gjallarhorn" || resp[0].Rarity != "Exotic" || resp[0].ItemType != "Rocket Launcher" {
+		t.Errorf("item = %+v", resp[0])
 	}
 	if resp[0].Priority != "URGENT" {
-		t.Errorf("expected Priority=URGENT, got %s", resp[0].Priority)
+		t.Errorf("priority = %s, want URGENT", resp[0].Priority)
+	}
+}
+
+// An item the manifest no longer carries keeps its user-authored metadata and
+// the visible fallback projection, rather than vanishing from the list.
+func TestEnrichItems_UnknownItemKeepsTheFallbackProjection(t *testing.T) {
+	entries := &stubEntries{entries: []wishlist.StoredEntry{
+		{ID: 1, ItemHash: 4242, Priority: wishlist.PriorityLow, Notes: "kept", CreatedAt: time.Now()},
+	}}
+	w := send(newTestRouter(NewWishlistHandler(entries, &mockManifest{}, nil, nil)), http.MethodGet, "/api/wishlist", "")
+
+	var resp []wishlistResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp) != 1 {
+		t.Fatalf("items = %d, want the stored entry retained", len(resp))
+	}
+	if resp[0].Name != "Unknown Item" || resp[0].ItemType != "Item" || resp[0].Rarity != "Common" || resp[0].Icon != "" {
+		t.Errorf("fallback projection = %+v", resp[0])
+	}
+	if resp[0].Notes != "kept" {
+		t.Errorf("notes = %q, want the user's metadata preserved", resp[0].Notes)
 	}
 }
 
 // TestEnrichItems_AvailabilityAndAcquisitionSources: live availability stays
 // separate from the deterministic union of collectible provenance.
 func TestEnrichItems_AvailabilityAndAcquisitionSources(t *testing.T) {
-	store := &mockWishlistStore{
-		userID: 42,
-		items: []db.WishlistItem{
-			{ID: 1, UserID: 42, ItemHash: 5555, Priority: 1, CreatedAt: time.Now()},
-			{ID: 2, UserID: 42, ItemHash: 6666, Priority: 1, CreatedAt: time.Now()},
-		},
-	}
+	entries := &stubEntries{entries: []wishlist.StoredEntry{
+		{ID: 1, ItemHash: 5555, Priority: wishlist.PriorityMedium, CreatedAt: time.Now()},
+		{ID: 2, ItemHash: 6666, Priority: wishlist.PriorityMedium, CreatedAt: time.Now()},
+	}}
 	gjally := &bungie.InventoryItemDefinition{Hash: 5555}
 	gjally.DisplayProperties.Name = "Gjallarhorn"
 	gjally.DisplayProperties.Icon = "/icons/gjally.png"
@@ -609,15 +524,12 @@ func TestEnrichItems_AvailabilityAndAcquisitionSources(t *testing.T) {
 	}
 	// 5555 sold by Banshee-44 (a non-Xûr vendor); 6666 not currently sold.
 	live := &mockLiveVendors{hashes: map[uint32]string{5555: "Banshee-44"}}
-	h := NewWishlistHandler(store, manifest, live, &mockTokens{token: "tok"})
-	r := newTestRouter(h)
+	h := NewWishlistHandler(entries, manifest, live, &mockTokens{token: "tok"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	w := send(newTestRouter(h), http.MethodGet, "/api/wishlist", "")
 
 	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
 	}
 	var resp []wishlistResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -662,151 +574,15 @@ func TestEnrichItems_AvailabilityAndAcquisitionSources(t *testing.T) {
 // TestEnrichItems_TokenErrorBestEffort: a token-store error must not fail the
 // request — availability just falls back to whatever the provider returns.
 func TestEnrichItems_TokenErrorBestEffort(t *testing.T) {
-	store := &mockWishlistStore{userID: 42, items: []db.WishlistItem{{ID: 1, UserID: 42, ItemHash: 5555, Priority: 1, CreatedAt: time.Now()}}}
+	entries := &stubEntries{entries: []wishlist.StoredEntry{
+		{ID: 1, ItemHash: 5555, Priority: wishlist.PriorityMedium, CreatedAt: time.Now()},
+	}}
 	live := &mockLiveVendors{hashes: map[uint32]string{5555: "Xûr"}}
-	h := NewWishlistHandler(store, nil, live, &mockTokens{err: fmt.Errorf("no token")})
-	r := newTestRouter(h)
-	req := httptest.NewRequest(http.MethodGet, "/api/wishlist", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
+	h := NewWishlistHandler(entries, nil, live, &mockTokens{err: fmt.Errorf("no token")})
+
+	w := send(newTestRouter(h), http.MethodGet, "/api/wishlist", "")
+
 	if w.Code != http.StatusOK {
 		t.Fatalf("token error should not fail request; got %d", w.Code)
-	}
-}
-
-// --- bulk update tests ---
-
-func bulkReq(body string) (*http.Request, *httptest.ResponseRecorder) {
-	req := httptest.NewRequest(http.MethodPost, "/api/wishlist/bulk", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	return req, httptest.NewRecorder()
-}
-
-func TestBulkUpdate_Delete_PartialSuccess(t *testing.T) {
-	two := int64(2)
-	store := &mockWishlistStore{userID: 42, bulkAffected: &two} // only 2 of 3 owned
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-	req, w := bulkReq(`{"action":"delete","ids":[1,2,999]}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	var resp struct{ Updated, Skipped int }
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Updated != 2 || resp.Skipped != 1 {
-		t.Errorf("got updated=%d skipped=%d, want 2/1", resp.Updated, resp.Skipped)
-	}
-}
-
-func TestBulkUpdate_SetPriority(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-	req, w := bulkReq(`{"action":"set_priority","ids":[1,2],"priority":"HIGH"}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	var resp struct{ Updated, Skipped int }
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Updated != 2 || resp.Skipped != 0 {
-		t.Errorf("got updated=%d skipped=%d, want 2/0", resp.Updated, resp.Skipped)
-	}
-}
-
-func TestBulkUpdate_Validation(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-	cases := []string{
-		`{"action":"nope","ids":[1]}`,                               // bad action
-		`{"action":"delete","ids":[]}`,                              // empty ids
-		`{"action":"set_priority","ids":[1]}`,                       // missing priority
-		`{"action":"set_priority","ids":[1],"priority":"CRITICAL"}`, // bad priority
-	}
-	for _, body := range cases {
-		req, w := bulkReq(body)
-		r.ServeHTTP(w, req)
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("body %s: got %d, want 400", body, w.Code)
-		}
-	}
-	// Over-cap ids (101) → 400
-	ids := make([]string, 101)
-	for i := range ids {
-		ids[i] = strconv.Itoa(i + 1)
-	}
-	req, w := bulkReq(`{"action":"delete","ids":[` + strings.Join(ids, ",") + `]}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("over-cap: got %d, want 400", w.Code)
-	}
-}
-
-func TestBulkUpdate_DegradedMode_Returns503(t *testing.T) {
-	degraded := db.NewStores(nil)
-	h := NewWishlistHandler(degraded.Wishlist, nil, nil, nil)
-	r := newTestRouter(h)
-	req, w := bulkReq(`{"action":"delete","ids":[1]}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", w.Code)
-	}
-}
-
-func TestBulkUpdate_DedupesIDs(t *testing.T) {
-	store := &mockWishlistStore{userID: 42}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-	req, w := bulkReq(`{"action":"delete","ids":[1,1,2]}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	want := []int64{1, 2}
-	if len(store.lastBulkIDs) != len(want) || store.lastBulkIDs[0] != want[0] || store.lastBulkIDs[1] != want[1] {
-		t.Fatalf("store.lastBulkIDs = %v, want %v (duplicates must be collapsed before reaching the store)", store.lastBulkIDs, want)
-	}
-	var resp struct{ Updated, Skipped int }
-	json.Unmarshal(w.Body.Bytes(), &resp)
-	if resp.Updated != 2 || resp.Skipped != 0 {
-		t.Errorf("got updated=%d skipped=%d, want 2/0 (skipped must be computed from deduped count, not raw count)", resp.Updated, resp.Skipped)
-	}
-}
-
-func TestBulkUpdate_GetUserIDError_Returns500(t *testing.T) {
-	store := &mockWishlistStore{userID: 42, getUserIDErr: errors.New("db down")}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-	req, w := bulkReq(`{"action":"delete","ids":[1]}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-func TestBulkUpdate_StoreError_Returns500(t *testing.T) {
-	store := &mockWishlistStore{userID: 42, bulkErr: errors.New("db down")}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-	req, w := bulkReq(`{"action":"delete","ids":[1]}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", w.Code, w.Body.String())
-	}
-}
-
-// TestBulkUpdate_ValidatesBeforeUserLookup proves action/priority validation runs
-// before GetUserID: a bad action still returns 400 even when GetUserID would error
-// (if validation ran after the lookup, this would be a 500).
-func TestBulkUpdate_ValidatesBeforeUserLookup(t *testing.T) {
-	store := &mockWishlistStore{userID: 42, getUserIDErr: errors.New("db down")}
-	h := NewWishlistHandler(store, nil, nil, nil)
-	r := newTestRouter(h)
-	req, w := bulkReq(`{"action":"nope","ids":[1]}`)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 (validation before user lookup), got %d: %s", w.Code, w.Body.String())
 	}
 }

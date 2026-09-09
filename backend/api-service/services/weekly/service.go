@@ -153,7 +153,7 @@ type Service struct {
 	bungie      *bungie.Client
 	manifest    ManifestRepo
 	collections MissingItemReader
-	wishlist    WishlistReader
+	wishlist    WishListReader
 	cache       cache.Cache
 	efficiency  *efficiency.Engine
 	recommender AcquisitionRecommender
@@ -205,10 +205,14 @@ type ManifestRepo interface {
 	GetActivityModifierDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModifierDefinition, error)
 }
 
-// WishlistReader is satisfied by *db.WishlistStore.
-type WishlistReader interface {
-	GetUserID(ctx context.Context, membershipID string) (int64, error)
-	List(ctx context.Context, userID int64) ([]WishlistItem, error)
+// WishListReader is the entire wish list surface Weekly consumes: which items
+// this membership has saved. Satisfied by *wishlist.Entries.
+//
+// Consumer-side and one method by design. Weekly personalizes with saved items
+// but is fully useful without them, so it must not learn the wish list's
+// storage identity, ordering, or entry shape to ask this one question.
+type WishListReader interface {
+	ListItemHashes(ctx context.Context, membershipID string) ([]uint32, error)
 }
 
 // AcquisitionRecommender owns complete recommendation policy. It is required;
@@ -217,13 +221,8 @@ type AcquisitionRecommender interface {
 	Recommend(input recommendations.Input) []recommendations.Recommendation
 }
 
-// WishlistItem mirrors db.WishlistItem (subset we need).
-type WishlistItem struct {
-	ItemHash uint32
-}
-
 // NewService creates a new weekly recommendations service.
-func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner) *Service {
+func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishListReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner) *Service {
 	return NewServiceWithClock(b, m, c, w, appCache, eng, recommender, v, time.Now)
 }
 
@@ -231,7 +230,7 @@ func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w Wishlis
 // production constructor above always uses time.Now; the alternate constructor
 // exists so hermetic browser tests can keep Xur in a deterministic weekend
 // window without changing production behavior.
-func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishlistReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner, now func() time.Time) *Service {
+func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishListReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner, now func() time.Time) *Service {
 	if recommender == nil {
 		panic("weekly: acquisition recommender is required")
 	}
@@ -386,17 +385,20 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 		missingHashes = map[uint32]struct{}{}
 	}
 
-	// Per-user wishlist hashes
+	// Per-membership wish list hashes. Optional personalization: an unreadable
+	// wish list degrades to none rather than failing This Week, which stays
+	// useful without it.
 	wishlistHashes := map[uint32]struct{}{}
 	if s.wishlist != nil {
-		userID, wlErr := s.wishlist.GetUserID(ctx, membershipID)
-		if wlErr == nil {
-			items, wlErr := s.wishlist.List(ctx, userID)
-			if wlErr == nil {
-				for _, it := range items {
-					wishlistHashes[it.ItemHash] = struct{}{}
-				}
-			}
+		saved, wlErr := s.wishlist.ListItemHashes(ctx, membershipID)
+		if wlErr != nil {
+			observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "weekly wish list read failed; continuing without personalization",
+				observability.ID("membership", membershipID),
+				observability.Err(wlErr),
+			)
+		}
+		for _, itemHash := range saved {
+			wishlistHashes[itemHash] = struct{}{}
 		}
 	}
 

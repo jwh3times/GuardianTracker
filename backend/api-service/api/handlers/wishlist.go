@@ -3,35 +3,30 @@ package handlers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
-	"guardian-tracker/api-service/db"
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/sources"
+	"guardian-tracker/api-service/services/wishlist"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// Priority mapping between string labels and DB int16 values.
-var priorityToInt = map[string]int16{"LOW": 0, "MEDIUM": 1, "HIGH": 2, "URGENT": 3}
-var priorityToStr = map[int16]string{0: "LOW", 1: "MEDIUM", 2: "HIGH", 3: "URGENT"}
+// --- interfaces (satisfied by concrete service types via structural typing) ---
 
-// --- interfaces (satisfied by concrete db/manifest types via structural typing) ---
-
-type wishlistStoreIface interface {
-	GetUserID(ctx context.Context, membershipID string) (int64, error)
-	List(ctx context.Context, userID int64) ([]db.WishlistItem, error)
-	Add(ctx context.Context, userID int64, hash uint32, prio int16, notes string) (*db.WishlistItem, error)
-	Update(ctx context.Context, userID, id int64, prio *int16, notes *string) (*db.WishlistItem, error)
-	Delete(ctx context.Context, userID, id int64) (bool, error)
-	BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error)
-	BulkSetPriority(ctx context.Context, userID int64, ids []int64, prio int16) (int64, error)
+// wishlistEntries is the wish list capability this handler drives. Satisfied by
+// *wishlist.Entries, which owns validation, persistence, and item-existence
+// rules — the handler owns none of them.
+type wishlistEntries interface {
+	List(ctx context.Context, membershipID string) ([]wishlist.StoredEntry, error)
+	Add(ctx context.Context, membershipID string, cmd wishlist.AddCommand) (wishlist.StoredEntry, error)
+	Update(ctx context.Context, membershipID string, id wishlist.EntryID, patch wishlist.UpdateCommand) (wishlist.StoredEntry, error)
+	Remove(ctx context.Context, membershipID string, id wishlist.EntryID) error
+	RemoveMany(ctx context.Context, membershipID string, ids []wishlist.EntryID) (wishlist.BulkResult, error)
+	SetPriorityMany(ctx context.Context, membershipID string, ids []wishlist.EntryID, priority wishlist.Priority) (wishlist.BulkResult, error)
 }
 
 type manifestLookupIface interface {
@@ -55,16 +50,16 @@ type tokenProvider interface {
 
 // WishlistHandler handles wishlist endpoints.
 type WishlistHandler struct {
-	store       wishlistStoreIface  // degraded implementation when no database exists
+	entries     wishlistEntries
 	manifest    manifestLookupIface // nil = no enrichment
 	liveVendors liveVendorIface     // nil = availability always false
 	tokens      tokenProvider       // nil = public-only availability
 }
 
-// NewWishlistHandler creates a handler. Store is required and remains non-nil
-// in degraded mode; enrichment dependencies may be nil when unavailable.
-func NewWishlistHandler(store wishlistStoreIface, manifest manifestLookupIface, liveVendors liveVendorIface, tokens tokenProvider) *WishlistHandler {
-	return &WishlistHandler{store: store, manifest: manifest, liveVendors: liveVendors, tokens: tokens}
+// NewWishlistHandler creates a handler. Entries is required; the completion
+// dependencies may be nil when unavailable.
+func NewWishlistHandler(entries wishlistEntries, manifest manifestLookupIface, liveVendors liveVendorIface, tokens tokenProvider) *WishlistHandler {
+	return &WishlistHandler{entries: entries, manifest: manifest, liveVendors: liveVendors, tokens: tokens}
 }
 
 // wishlistResponse is the JSON shape returned to clients.
@@ -85,18 +80,12 @@ type wishlistResponse struct {
 
 // GetWishlist handles GET /api/wishlist
 func (h *WishlistHandler) GetWishlist(c *gin.Context) {
-	membershipID := c.GetString("membership_id")
-	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
+	entries, err := h.entries.List(c.Request.Context(), c.GetString("membership_id"))
 	if err != nil {
-		HandleStoreError(c, err, "wishlist user lookup failed")
+		handleWishlistError(c, err, "wishlist listing failed")
 		return
 	}
-	items, err := h.store.List(c.Request.Context(), userID)
-	if err != nil {
-		HandleStoreError(c, err, "wishlist listing failed")
-		return
-	}
-	c.JSON(http.StatusOK, h.enrichItems(items, h.liveVendorMap(c)))
+	c.JSON(http.StatusOK, h.enrichEntries(entries, h.liveVendorMap(c)))
 }
 
 // AddToWishlist handles POST /api/wishlist
@@ -110,55 +99,23 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "itemHash is required"})
 		return
 	}
-	// Validate item exists in manifest (best-effort; skip if manifest unavailable)
-	if h.manifest != nil {
-		defs, err := h.manifest.GetItemsByHashes([]uint32{body.ItemHash})
-		if err != nil || defs[body.ItemHash] == nil {
-			if err != nil {
-				observability.Logger(c.Request.Context()).WarnContext(c.Request.Context(), "wishlist manifest lookup failed",
-					"item_hash", body.ItemHash, observability.Err(err))
-			} else {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "unknown item hash"})
-				return
-			}
-		}
-	}
-	prio := priorityToInt["MEDIUM"]
-	if body.Priority != "" {
-		p, ok := priorityToInt[body.Priority]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "priority must be LOW, MEDIUM, HIGH, or URGENT"})
-			return
-		}
-		prio = p
-	}
-	if len(body.Notes) > 500 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "notes must be 500 characters or fewer"})
-		return
-	}
-	membershipID := c.GetString("membership_id")
-	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
+
+	entry, err := h.entries.Add(c.Request.Context(), c.GetString("membership_id"), wishlist.AddCommand{
+		ItemHash: body.ItemHash,
+		Priority: wishlist.Priority(body.Priority),
+		Notes:    body.Notes,
+	})
 	if err != nil {
-		HandleStoreError(c, err, "wishlist user lookup failed")
+		handleWishlistError(c, err, "wishlist item creation failed")
 		return
 	}
-	item, err := h.store.Add(c.Request.Context(), userID, body.ItemHash, prio, body.Notes)
-	if err != nil {
-		if isDuplicate(err) {
-			c.JSON(http.StatusConflict, gin.H{"error": "item already in wishlist"})
-			return
-		}
-		HandleStoreError(c, err, "wishlist item creation failed")
-		return
-	}
-	c.JSON(http.StatusCreated, h.enrichOne(*item, h.liveVendorMap(c)))
+	c.JSON(http.StatusCreated, h.enrichOne(entry, h.liveVendorMap(c)))
 }
 
 // UpdateWishlistItem handles PUT /api/wishlist/:id
 func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+	id, ok := parseEntryID(c)
+	if !ok {
 		return
 	}
 	var body struct {
@@ -169,63 +126,32 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	var prio *int16
+
+	patch := wishlist.UpdateCommand{Notes: body.Notes}
 	if body.Priority != nil {
-		p, ok := priorityToInt[*body.Priority]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "priority must be LOW, MEDIUM, HIGH, or URGENT"})
-			return
-		}
-		prio = &p
+		priority := wishlist.Priority(*body.Priority)
+		patch.Priority = &priority
 	}
-	if body.Notes != nil && len(*body.Notes) > 500 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "notes must be 500 characters or fewer"})
-		return
-	}
-	membershipID := c.GetString("membership_id")
-	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
+	entry, err := h.entries.Update(c.Request.Context(), c.GetString("membership_id"), id, patch)
 	if err != nil {
-		HandleStoreError(c, err, "wishlist user lookup failed")
+		handleWishlistError(c, err, "wishlist item update failed")
 		return
 	}
-	item, err := h.store.Update(c.Request.Context(), userID, id, prio, body.Notes)
-	if err != nil {
-		if isNotFound(err) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "wishlist item not found"})
-			return
-		}
-		HandleStoreError(c, err, "wishlist item update failed")
-		return
-	}
-	c.JSON(http.StatusOK, h.enrichOne(*item, h.liveVendorMap(c)))
+	c.JSON(http.StatusOK, h.enrichOne(entry, h.liveVendorMap(c)))
 }
 
 // RemoveFromWishlist handles DELETE /api/wishlist/:id
 func (h *WishlistHandler) RemoveFromWishlist(c *gin.Context) {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+	id, ok := parseEntryID(c)
+	if !ok {
 		return
 	}
-	membershipID := c.GetString("membership_id")
-	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
-	if err != nil {
-		HandleStoreError(c, err, "wishlist user lookup failed")
-		return
-	}
-	found, err := h.store.Delete(c.Request.Context(), userID, id)
-	if err != nil {
-		HandleStoreError(c, err, "wishlist item deletion failed")
-		return
-	}
-	if !found {
-		c.JSON(http.StatusNotFound, gin.H{"error": "wishlist item not found"})
+	if err := h.entries.Remove(c.Request.Context(), c.GetString("membership_id"), id); err != nil {
+		handleWishlistError(c, err, "wishlist item deletion failed")
 		return
 	}
 	c.Status(http.StatusNoContent)
 }
-
-const bulkMaxIDs = 100
 
 // BulkUpdate handles POST /api/wishlist/bulk — delete or set-priority on a set of
 // items in one request. Partial success: foreign/missing ids are silently skipped
@@ -240,73 +166,97 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
 		return
 	}
-	// Dedupe ids, preserving nothing but uniqueness.
-	seen := make(map[int64]struct{}, len(body.IDs))
-	ids := make([]int64, 0, len(body.IDs))
-	for _, id := range body.IDs {
-		if _, dup := seen[id]; dup {
-			continue
-		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
-	}
-	if len(ids) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ids must be a non-empty list"})
-		return
-	}
-	if len(ids) > bulkMaxIDs {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("at most %d ids per request", bulkMaxIDs)})
-		return
+
+	ids := make([]wishlist.EntryID, len(body.IDs))
+	for i, id := range body.IDs {
+		ids[i] = wishlist.EntryID(id)
 	}
 
-	// Validate the action (and priority) before resolving the user, so a malformed
-	// request doesn't cost a DB lookup.
-	var prio int16
+	membershipID := c.GetString("membership_id")
+	var result wishlist.BulkResult
+	var err error
 	switch body.Action {
 	case "delete":
-		// no priority needed
+		result, err = h.entries.RemoveMany(c.Request.Context(), membershipID, ids)
 	case "set_priority":
-		p, ok := priorityToInt[body.Priority]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "priority must be LOW, MEDIUM, HIGH, or URGENT"})
-			return
-		}
-		prio = p
+		result, err = h.entries.SetPriorityMany(c.Request.Context(), membershipID, ids, wishlist.Priority(body.Priority))
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete' or 'set_priority'"})
 		return
 	}
-
-	membershipID := c.GetString("membership_id")
-	userID, err := h.store.GetUserID(c.Request.Context(), membershipID)
 	if err != nil {
-		HandleStoreError(c, err, "wishlist user lookup failed")
+		handleWishlistError(c, err, "wishlist bulk update failed")
 		return
 	}
-
-	var updated int64
-	switch body.Action {
-	case "delete":
-		updated, err = h.store.BulkDelete(c.Request.Context(), userID, ids)
-	case "set_priority":
-		updated, err = h.store.BulkSetPriority(c.Request.Context(), userID, ids, prio)
-	}
-	if err != nil {
-		HandleStoreError(c, err, "wishlist bulk update failed")
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"updated": updated, "skipped": int64(len(ids)) - updated})
+	c.JSON(http.StatusOK, gin.H{"updated": result.Updated, "skipped": result.Skipped})
 }
 
 // --- helpers ---
 
-func (h *WishlistHandler) enrichItems(items []db.WishlistItem, live map[uint32]string) []wishlistResponse {
-	if len(items) == 0 {
+// parseEntryID reads the :id route parameter. The wire carries entry ids as
+// strings; anything that is not one is a malformed request, not a missing entry.
+func parseEntryID(c *gin.Context) (wishlist.EntryID, bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return 0, false
+	}
+	return wishlist.EntryID(id), true
+}
+
+// handleWishlistError maps the wish list's error vocabulary to the existing
+// wire. Each case is a distinction the domain drew deliberately, and flattening
+// any two of them here would put the meaning back in the handler.
+func handleWishlistError(c *gin.Context, err error, logMsg string) {
+	switch {
+	case errors.Is(err, wishlist.ErrUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "This feature needs the user data database, which isn't configured on this server.",
+			"code":  "DB_UNAVAILABLE",
+		})
+	case errors.Is(err, wishlist.ErrNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": "wishlist item not found"})
+	case errors.Is(err, wishlist.ErrDuplicate):
+		c.JSON(http.StatusConflict, gin.H{"error": "item already in wishlist"})
+	case errors.Is(err, wishlist.ErrItemsUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "The item database is still downloading — try again in a moment.",
+			"code":  "MANIFEST_NOT_READY",
+		})
+	case wishlist.IsValidationError(err):
+		c.JSON(http.StatusBadRequest, gin.H{"error": validationMessage(err)})
+	default:
+		ctx := handlerContext(c)
+		observability.Logger(ctx).ErrorContext(ctx, logMsg, observability.Err(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error", "code": "INTERNAL_ERROR"})
+	}
+}
+
+// validationMessage keeps the exact refusal text clients already receive. The
+// domain errors carry a package prefix for logs; the wire never has.
+func validationMessage(err error) string {
+	switch {
+	case errors.Is(err, wishlist.ErrInvalidPriority):
+		return "priority must be LOW, MEDIUM, HIGH, or URGENT"
+	case errors.Is(err, wishlist.ErrNotesTooLong):
+		return "notes must be 500 characters or fewer"
+	case errors.Is(err, wishlist.ErrNoEntries):
+		return "ids must be a non-empty list"
+	case errors.Is(err, wishlist.ErrTooManyEntries):
+		return "at most 100 ids per request"
+	case errors.Is(err, wishlist.ErrUnknownItem):
+		return "unknown item hash"
+	}
+	return "invalid request"
+}
+
+func (h *WishlistHandler) enrichEntries(entries []wishlist.StoredEntry, live map[uint32]string) []wishlistResponse {
+	if len(entries) == 0 {
 		return []wishlistResponse{}
 	}
-	hashes := make([]uint32, len(items))
-	for i, it := range items {
-		hashes[i] = it.ItemHash
+	hashes := make([]uint32, len(entries))
+	for i, entry := range entries {
+		hashes[i] = entry.ItemHash
 	}
 	defs := map[uint32]*bungie.InventoryItemDefinition{}
 	cols := map[uint32][]bungie.CollectibleDefinition{}
@@ -318,25 +268,25 @@ func (h *WishlistHandler) enrichItems(items []db.WishlistItem, live map[uint32]s
 			cols = cs
 		}
 	}
-	resp := make([]wishlistResponse, len(items))
-	for i, it := range items {
-		resp[i] = buildResponse(it, defs[it.ItemHash], cols[it.ItemHash], live[it.ItemHash])
+	resp := make([]wishlistResponse, len(entries))
+	for i, entry := range entries {
+		resp[i] = buildResponse(entry, defs[entry.ItemHash], cols[entry.ItemHash], live[entry.ItemHash])
 	}
 	return resp
 }
 
-func (h *WishlistHandler) enrichOne(it db.WishlistItem, live map[uint32]string) wishlistResponse {
+func (h *WishlistHandler) enrichOne(entry wishlist.StoredEntry, live map[uint32]string) wishlistResponse {
 	var def *bungie.InventoryItemDefinition
 	var cols []bungie.CollectibleDefinition
 	if h.manifest != nil {
-		if m, err := h.manifest.GetItemsByHashes([]uint32{it.ItemHash}); err == nil {
-			def = m[it.ItemHash]
+		if m, err := h.manifest.GetItemsByHashes([]uint32{entry.ItemHash}); err == nil {
+			def = m[entry.ItemHash]
 		}
-		if cs, err := h.manifest.GetCollectiblesByItemHashes([]uint32{it.ItemHash}); err == nil {
-			cols = cs[it.ItemHash]
+		if cs, err := h.manifest.GetCollectiblesByItemHashes([]uint32{entry.ItemHash}); err == nil {
+			cols = cs[entry.ItemHash]
 		}
 	}
-	return buildResponse(it, def, cols, live[it.ItemHash])
+	return buildResponse(entry, def, cols, live[entry.ItemHash])
 }
 
 // liveVendorMap resolves item→vendor-name availability for the calling user.
@@ -356,7 +306,7 @@ func (h *WishlistHandler) liveVendorMap(c *gin.Context) map[uint32]string {
 	return h.liveVendors.LiveVendorItemHashes(c.Request.Context(), membershipType, membershipID, bungieToken)
 }
 
-func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, collectibles []bungie.CollectibleDefinition, vendor string) wishlistResponse {
+func buildResponse(entry wishlist.StoredEntry, def *bungie.InventoryItemDefinition, collectibles []bungie.CollectibleDefinition, vendor string) wishlistResponse {
 	name, itemTypeStr, rarity, icon := "Unknown Item", "Item", "Common", ""
 	sourceTexts := make([]string, 0, len(collectibles))
 	if def != nil {
@@ -369,29 +319,20 @@ func buildResponse(it db.WishlistItem, def *bungie.InventoryItemDefinition, coll
 		sourceTexts = append(sourceTexts, col.SourceString)
 	}
 	resp := wishlistResponse{
-		ID:                 strconv.FormatInt(it.ID, 10),
-		ItemHash:           it.ItemHash,
+		ID:                 strconv.FormatInt(int64(entry.ID), 10),
+		ItemHash:           entry.ItemHash,
 		Name:               name,
 		ItemType:           itemTypeStr,
 		Rarity:             rarity,
 		Icon:               icon,
-		Priority:           priorityToStr[it.Priority],
-		Notes:              it.Notes,
+		Priority:           string(entry.Priority),
+		Notes:              entry.Notes,
 		AcquisitionSources: sources.DescribeAll(sourceTexts),
 		AvailableNow:       vendor != "",
-		DateAdded:          it.CreatedAt.UTC().Format(time.RFC3339),
+		DateAdded:          entry.CreatedAt.UTC().Format(time.RFC3339),
 	}
 	if vendor != "" {
 		resp.AvailableFrom = vendor
 	}
 	return resp
-}
-
-func isDuplicate(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && pgErr.Code == "23505"
-}
-
-func isNotFound(err error) bool {
-	return errors.Is(err, pgx.ErrNoRows)
 }
