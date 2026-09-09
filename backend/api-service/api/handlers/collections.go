@@ -25,14 +25,14 @@ type liveAvailabilityProvider interface {
 
 // CollectionsHandler handles collection-related endpoints.
 type CollectionsHandler struct {
-	collectionsService *collections.Service
+	collectionsService *collections.MembershipAnalysis
 	charactersService  *characters.Service
 	recordsService     *records.Service
 	tokenStore         *auth.TokenStore
 	liveVendors        liveAvailabilityProvider
 }
 
-func NewCollectionsHandler(svc *collections.Service, chars *characters.Service, recs *records.Service, ts *auth.TokenStore, live liveAvailabilityProvider) *CollectionsHandler {
+func NewCollectionsHandler(svc *collections.MembershipAnalysis, chars *characters.Service, recs *records.Service, ts *auth.TokenStore, live liveAvailabilityProvider) *CollectionsHandler {
 	return &CollectionsHandler{
 		collectionsService: svc,
 		charactersService:  chars,

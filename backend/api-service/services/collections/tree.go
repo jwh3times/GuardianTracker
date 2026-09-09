@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strconv"
 
+	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/manifest"
 )
 
@@ -48,30 +49,24 @@ type TreeStructure struct {
 }
 
 // buildTreeStructure assembles the Collections forest from the full node map and
-// collectible set. Collectible-bearing roots are discovered (no hard-coded
+// the Items catalog. Collectible-bearing roots are discovered (no hard-coded
 // Collections root): a node is a candidate root when it transitively contains a
-// valid collectible and is not referenced as a child of any other
+// catalogued collectible and is not referenced as a child of any other
 // collectible-bearing node. The single DOMINANT candidate (most collectibles in its
 // subtree) is treated as the real Collections root, and ts.Roots is set to that
 // root's NAMED children — the in-game top-level categories — which drops the noise
 // roots and nameless/redacted branches the real manifest carries.
-func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collectibles []manifest.CollectibleWithItem) *TreeStructure {
-	colByHash := make(map[uint32]manifest.CollectibleWithItem, len(collectibles))
-	items := make(map[string]DestinyItem)
-	sourceTextsByItem := make(map[uint32][]string)
-	for _, cwi := range collectibles {
-		if cwi.Item != nil && cwi.Item.DisplayProperties.Name != "" {
-			sourceTextsByItem[cwi.Item.Hash] = append(sourceTextsByItem[cwi.Item.Hash], cwi.Collectible.SourceString)
-		}
-	}
-	for _, cwi := range collectibles {
-		if cwi.Item == nil || cwi.Item.DisplayProperties.Name == "" {
-			continue
-		}
-		colByHash[cwi.Collectible.Hash] = cwi
-		ih := strconv.FormatUint(uint64(cwi.Item.Hash), 10)
-		if _, ok := items[ih]; !ok {
-			items[ih] = toDestinyItemWithSources(&cwi, sourceTextsByItem[cwi.Item.Hash])
+//
+// The catalog decides which collectibles exist and what each item is; this
+// function decides only where they sit. A collectible the catalog does not
+// carry — an unknown hash, or one whose item Items excluded — is not placed.
+func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, catalog []items.AcquisitionFacts) *TreeStructure {
+	itemByCollectible := make(map[uint32]uint32, len(catalog))
+	itemDetail := make(map[string]DestinyItem, len(catalog))
+	for _, f := range catalog {
+		itemDetail[itemHashString(f.ItemHash)] = destinyItem(f)
+		for _, collectibleHash := range f.CollectibleHashes {
+			itemByCollectible[collectibleHash] = f.ItemHash
 		}
 	}
 
@@ -94,7 +89,7 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 		visiting[h] = true
 		res := false
 		for _, c := range n.Children.Collectibles {
-			if _, ok := colByHash[c.CollectibleHash]; ok {
+			if _, ok := itemByCollectible[c.CollectibleHash]; ok {
 				res = true
 				break
 			}
@@ -183,21 +178,21 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, collecti
 		// itemHash placed under a different node still gets its own leaf there.
 		seenItems := make(map[uint32]bool)
 		for _, c := range n.Children.Collectibles {
-			cwi, ok := colByHash[c.CollectibleHash]
-			if !ok || seenItems[cwi.Item.Hash] {
+			itemHash, ok := itemByCollectible[c.CollectibleHash]
+			if !ok || seenItems[itemHash] {
 				continue
 			}
-			seenItems[cwi.Item.Hash] = true
+			seenItems[itemHash] = true
 			sn.Leaves = append(sn.Leaves, leafRef{
-				ItemHash:    strconv.FormatUint(uint64(cwi.Item.Hash), 10),
-				ItemHashNum: cwi.Item.Hash,
+				ItemHash:    itemHashString(itemHash),
+				ItemHashNum: itemHash,
 			})
 		}
 		delete(path, h)
 		return sn
 	}
 
-	ts := &TreeStructure{Items: items}
+	ts := &TreeStructure{Items: itemDetail}
 
 	// Build every discovered root, then anchor at the single DOMINANT root — the
 	// one whose subtree holds the most collectibles. Against the real manifest the

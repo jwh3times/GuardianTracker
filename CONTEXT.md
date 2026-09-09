@@ -238,6 +238,14 @@ preference defaults, validation, atomic partial updates, and irreversible
 onboarding completion. See
 [ADR 0019](./docs/adr/0019-own-wish-list-and-preferences.md).
 
+**Membership collections analysis** (`collections.MembershipAnalysis`) — the
+reusable core that overlays one membership's collected state onto the Item
+catalog: item-level ownership, presentation-tree placement, tree counts, the
+four-category summary, and the missing-Item set. It reads Item meaning through
+Items' `Catalog` and owns no live availability, no HTTP policy, and no
+projection choice. Weekly consumes it through `weekly.MissingItemReader`.
+See [ADR 0018](./docs/adr/0018-own-complete-membership-collections.md).
+
 **Collections service** (`collections.Service`) — the complete handler-facing
 owner of summary and full membership-collection reads plus membership data
 refresh. It is constructed after Weekly around the earlier
