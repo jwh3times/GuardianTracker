@@ -98,9 +98,9 @@ backend/api-service/
                                            Publish installs only while it is current, Advance retires
                                            outstanding work and runs the owner's invalidation atomically.
                                            Advance's signature matches OnVersionChanged.
-                                           Items, Records, and Efficiency have adopted it. Weekly and
-                                           Collections still invalidate without a fence and adopt it in
-                                           their own refactor slices.
+                                           Items, Records, Efficiency, and Collections have adopted it.
+                                           Weekly still invalidates without a fence and adopts it in its
+                                           own refactor slice.
   services/manifeststate/load.go       ← Load/LoadIf: cache.Load semantics plus the fence. A value loaded
                                            under a retired generation is returned to its caller but not
                                            cached. Nil cache = load every time; nil publication = error.
@@ -458,15 +458,17 @@ made a milestone's missing-count badge silently not appear.
 
 - `ErrManifestNotReady` exported (aliases `manifest.ErrNotReady`); handler maps it to 503
 - `MembershipCollections` has `FetchedAt` field
-- `CollectionSummary` has `CollectedItems` field (stripped from response unless `?include=all`)
-- `WithoutCollectedItems()` returns a value copy with all `CollectedItems` cleared
-- `DestinyItem.AcquisitionSources` is the deterministic union from all collectibles
-  linked to the item. `DestinyItem` has no item-level `Difficulty` or raw `Sources`.
-- `DestinyItem.FarmOnly` retains the representative collectible's existing
-  "cannot be reacquired" check. Multi-collectible farm-only semantics remain
-  unresolved; do not derive them from the acquisition-source union without a new
-  decision.
-- `DestinyItem.ItemType` — `toDestinyItem` names all verified cosmetic types via `bungie.ItemTypeName`, so cosmetics carry real strings (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`/`Ornament`/`Finisher`) instead of `"Unknown"`; the frontend gallery classifies by these strings
+- `MembershipCollections.Items`, `.CollectedHashes`, and each node's `Items` are stripped from the response unless `?include=all`
+- `Lightweight()` returns a value copy with those three stripped, leaving tree counts, summary, and `fetchedAt`
+- `DestinyItem.AcquisitionSources`, `.FarmOnly`, and `.ItemType` are copied
+  straight from Items' `AcquisitionFacts` (ADR 0015) by `destinyItem` in
+  `collections/types.go` — Collections computes none of them itself anymore.
+  `DestinyItem` has no item-level `Difficulty` or raw `Sources`; multi-collectible
+  farm-only semantics remain unresolved (see `services/items/facts.go`).
+- Cosmetic `ItemType` naming (`Emblem`/`Ship`/`Sparrow`/`Ghost`/`Emote`/`Shader`/
+  `Ornament`/`Finisher`) is resolved by `slotSpecificItemType` in
+  `services/items/facts.go` via `bungie.ItemTypeName`, not by Collections; the
+  frontend gallery classifies by these strings.
 - Shaders and ornaments both use `itemType=19` (mod), with verified subtypes 20 and 21 respectively. Gate both by subtype in `manifest.CollectibleCategory`; do NOT add all of item type 19 to `cosmeticItemTypes`. Finishers use verified item type 29.
 
 ## Weekly service
