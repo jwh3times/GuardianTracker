@@ -14,6 +14,36 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.28] - 2026-09-09
+
+### Fixed
+
+- Requests for your collection, characters, catalysts, crafting patterns, or
+  seals now have to name the platform you actually signed in on, not just your
+  membership number. Naming a different platform is refused before the app
+  contacts Bungie or touches any cached data. This never exposed anyone else's
+  data — the membership number was always checked against your own sign-in, and
+  a mismatched platform names an account that does not exist rather than
+  someone else's — but it did spend a Bungie request and leave stray cache
+  entries behind. Refused requests now stop cleanly instead of continuing.
+
+### Changed
+
+- The collections summary and the full collection are now two separate reads
+  rather than one read trimmed down. The Dashboard's summary does no item work
+  and makes no vendor request at all, so it stays cheap; the full grid gets one
+  complete answer per item — what the item is, whether you own it, and where it
+  is on sale right now — instead of three separate lists that could disagree.
+  What the app sends to the browser is unchanged.
+- Vendor availability is now joined only for the full collection, only after
+  your ownership data has loaded, and only for items your collection actually
+  tracks. It stays best effort: if vendor data is unavailable, the collection
+  still loads with nothing marked on sale rather than failing, and one request's
+  vendor rotation is no longer able to linger into later reads.
+- Refreshing a membership is now one operation owned by the collections service
+  rather than a list the web layer kept, so the refresh still reaches
+  collections, characters, and records without the route having to know that.
+
 ## [1.3.27] - 2026-09-09
 
 ### Changed
@@ -529,7 +559,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.27...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.28...HEAD
+[1.3.28]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.27...v1.3.28
 [1.3.27]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.26...v1.3.27
 [1.3.26]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.25...v1.3.26
 [1.3.25]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.24...v1.3.25

@@ -139,15 +139,16 @@ JWT-gated. NOT membership-scoped — returns public manifest-derived data only (
 
 ### `GET /api/collections/:membershipType/:membershipId`
 
-The `membershipId` in the path must be validated against the JWT `membership_id` claim.
+The path `membershipType`/`membershipId` pair must be validated together against the JWT's `membership_type`/`membership_id` claims — `ownershipCheck` (`api/handlers/common.go`) checks both, not `membershipId` alone. The same helper guards `GET /api/characters/:membershipType/:membershipId` and the catalysts/crafting/seals routes.
 
 - Test: authenticate as user A, then request `/api/collections/3/<user_B_membershipId>` — must be rejected (403), not return user B's data
 - Test: call without a JWT — must return 401
 - Test: call with a valid JWT but path `membershipId` that doesn't match JWT claim — must be rejected
+- Test: call with the caller's own `membershipId` but a `membershipType` that doesn't match the JWT claim — must be rejected (403); do not accept a platform the caller never authenticated against
 
 ### `POST /api/collections/:membershipType/:membershipId/refresh`
 
-Same data-isolation check — must enforce ownership before invalidating cache.
+Same data-isolation check — must enforce ownership of the full membership pair before invalidating cache.
 
 ## Wishlist endpoints — data isolation
 

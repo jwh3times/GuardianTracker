@@ -9,8 +9,9 @@ import (
 )
 
 // CollectionNode is one presentation node with rolled-up counts, as serialized to
-// the frontend. Items holds the item hashes of this node's direct leaf collectibles
-// (stripped on the lightweight response — see MembershipCollections.Lightweight).
+// the frontend. Items holds the item hashes of this node's direct leaf
+// collectibles, and is populated only for a Full outcome — a Summary counts the
+// same leaves without naming them (see overlayCounts).
 type CollectionNode struct {
 	Hash      string           `json:"hash"`
 	Name      string           `json:"name"`
@@ -41,11 +42,15 @@ type structNode struct {
 	Leaves   []leafRef
 }
 
-// TreeStructure is the cached, user-independent Collections forest plus the shared
-// item-detail map. overlay turns it into counted CollectionNodes for one user.
+// TreeStructure is the cached, user-independent Collections forest: where every
+// catalogued item sits, with no user's ownership in it. overlayCounts and
+// overlayWithItems turn it into counted CollectionNodes for one user.
+//
+// It holds no item-detail map. What an item *is* comes from the Items catalog
+// on each read (ADR 0015), so there is exactly one copy of that answer rather
+// than a second one cached here that could drift from it.
 type TreeStructure struct {
 	Roots []structNode
-	Items map[string]DestinyItem
 }
 
 // buildTreeStructure assembles the Collections forest from the full node map and
@@ -62,9 +67,7 @@ type TreeStructure struct {
 // carry — an unknown hash, or one whose item Items excluded — is not placed.
 func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, catalog []items.AcquisitionFacts) *TreeStructure {
 	itemByCollectible := make(map[uint32]uint32, len(catalog))
-	itemDetail := make(map[string]DestinyItem, len(catalog))
 	for _, f := range catalog {
-		itemDetail[itemHashString(f.ItemHash)] = destinyItem(f)
 		for _, collectibleHash := range f.CollectibleHashes {
 			itemByCollectible[collectibleHash] = f.ItemHash
 		}
@@ -192,7 +195,7 @@ func buildTreeStructure(nodes map[uint32]*manifest.PresentationNodeDef, catalog 
 		return sn
 	}
 
-	ts := &TreeStructure{Items: itemDetail}
+	ts := &TreeStructure{}
 
 	// Build every discovered root, then anchor at the single DOMINANT root — the
 	// one whose subtree holds the most collectibles. Against the real manifest the
@@ -236,24 +239,39 @@ func leafCount(n structNode) int {
 	return c
 }
 
-// overlay produces counted CollectionNodes for a user's owned set (itemHash-keyed —
-// see deriveOwnedItems).
-func (ts *TreeStructure) overlay(owned map[uint32]bool) []CollectionNode {
+// overlayCounts produces counted CollectionNodes for a user's owned set
+// (itemHash-keyed — see deriveOwnedItems), without naming the items behind the
+// counts. This is a Summary's whole tree.
+func (ts *TreeStructure) overlayCounts(owned map[uint32]bool) []CollectionNode {
+	return ts.overlay(owned, false)
+}
+
+// overlayWithItems is overlayCounts plus each node's leaf item hashes, which the
+// grid needs to render a node's contents. This is a Full outcome's tree.
+func (ts *TreeStructure) overlayWithItems(owned map[uint32]bool) []CollectionNode {
+	return ts.overlay(owned, true)
+}
+
+// overlay walks the forest once. withItems decides only whether the leaf hashes
+// a node counted are also listed; the counts themselves are identical either
+// way, which is what keeps a Summary and a Full of the same membership
+// consistent with each other.
+func (ts *TreeStructure) overlay(owned map[uint32]bool, withItems bool) []CollectionNode {
 	out := make([]CollectionNode, 0, len(ts.Roots))
 	for _, r := range ts.Roots {
-		out = append(out, overlayNode(r, owned))
+		out = append(out, overlayNode(r, owned, withItems))
 	}
 	return out
 }
 
-func overlayNode(n structNode, owned map[uint32]bool) CollectionNode {
+func overlayNode(n structNode, owned map[uint32]bool, withItems bool) CollectionNode {
 	cn := CollectionNode{
 		Hash: strconv.FormatUint(uint64(n.Hash), 10),
 		Name: n.Name,
 		Icon: n.Icon,
 	}
 	for _, c := range n.Children {
-		child := overlayNode(c, owned)
+		child := overlayNode(c, owned, withItems)
 		cn.Children = append(cn.Children, child)
 		cn.Total += child.Total
 		cn.Collected += child.Collected
@@ -263,7 +281,9 @@ func overlayNode(n structNode, owned map[uint32]bool) CollectionNode {
 		if owned[lf.ItemHashNum] {
 			cn.Collected++
 		}
-		cn.Items = append(cn.Items, lf.ItemHash)
+		if withItems {
+			cn.Items = append(cn.Items, lf.ItemHash)
+		}
 	}
 	return cn
 }

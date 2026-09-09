@@ -174,6 +174,14 @@ func main() {
 	recordsService := records.NewService(bungieClient, manifestProvider, appCache, cfg.CacheTTLRecords)
 	preferencesService := preferences.NewService(adapters.NewPreferencesRepository(stores.Prefs))
 
+	// The complete Collections service — the outer of ADR 0018's two stages.
+	// It is constructed here, after Weekly and Records, because it reads live
+	// availability back out of Weekly and refreshes Characters and Records.
+	// Weekly in turn reads missing items from the analysis core above, and
+	// building the two stages in this order is what makes that pair acyclic
+	// without a setter or a late-bound dependency.
+	collectionsService := collections.NewService(collectionsAnalysis, weeklyService, charactersService, recordsService)
+
 	// Manifest swap enrolment. Must happen before EnsureReady can trigger a
 	// download, and therefore after every participant and observer exists.
 	//
@@ -266,7 +274,7 @@ func main() {
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),
 			Audit:       handlers.NewAuditHandler(stores.Audit),
 			Characters:  handlers.NewCharactersHandler(charactersService, tokenStore),
-			Collections: handlers.NewCollectionsHandler(collectionsAnalysis, charactersService, recordsService, tokenStore, weeklyService),
+			Collections: handlers.NewCollectionsHandler(collectionsService, tokenStore),
 			Items:       handlers.NewItemsHandler(itemsService),
 			Weekly:      handlers.NewWeeklyHandler(weeklyService, tokenStore),
 			Records:     handlers.NewRecordsHandler(recordsService, tokenStore),

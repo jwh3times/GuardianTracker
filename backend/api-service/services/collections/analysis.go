@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -297,35 +296,6 @@ func (m *MembershipAnalysis) storeTree(ts *TreeStructure) {
 // not reach them. refreshManifestParts is what repairs those, lazily, on read.
 func (m *MembershipAnalysis) dropTree() {
 	m.storeTree(nil)
-}
-
-// GetMembershipCollections returns the full collection projection for one
-// membership.
-func (m *MembershipAnalysis) GetMembershipCollections(ctx context.Context, membershipType int, membershipID, accessToken string) (*MembershipCollections, error) {
-	a, err := m.getAnalysis(ctx, membershipType, membershipID, accessToken)
-	if err != nil {
-		return nil, err
-	}
-	// Per-item collected state for the grid's missing-only toggle: the item hashes
-	// the membership owns. Stripped on the lightweight (default) response.
-	ownedHashes := make([]uint32, 0, len(a.owned))
-	for itemHash, owned := range a.owned {
-		if owned {
-			ownedHashes = append(ownedHashes, itemHash)
-		}
-	}
-	slices.Sort(ownedHashes)
-	collectedHashes := make([]string, len(ownedHashes))
-	for i, itemHash := range ownedHashes {
-		collectedHashes[i] = itemHashString(itemHash)
-	}
-	return &MembershipCollections{
-		Tree:            a.tree.overlay(a.owned),
-		Items:           a.tree.Items,
-		CollectedHashes: collectedHashes,
-		Summary:         buildCategorySummary(a.catalog, a.owned),
-		FetchedAt:       a.fetchedAt,
-	}, nil
 }
 
 // GetMissingItemHashes returns not-collected weapon/armor/exotic item hashes

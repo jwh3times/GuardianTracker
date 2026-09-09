@@ -233,6 +233,7 @@ deployed frontend runtime is nginx.
 - Refresh token revocation is backed by PostgreSQL.
 - Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
 - Single-device logout preserves Bungie authorization; logout-all evicts it.
+- Membership-scoped routes (collections, collections refresh, characters, catalysts, crafting, seals) authorize the caller's whole Destiny membership pair — platform type and ID, not ID alone — and abort the request on mismatch before any Bungie call or cache access.
 - Admin access is controlled by explicit membership ID configuration. Self-service role updates lock the current database row, reject admins, and commit `role.optin` audit events atomically without session/token-version changes. Successful bootstrap admin upserts evict the local authorization cache; cross-replica cache propagation retains its 60-second window.
 
 See `SECURITY.md` for public security posture and reporting guidance.

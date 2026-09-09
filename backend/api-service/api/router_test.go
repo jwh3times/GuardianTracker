@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -77,7 +78,7 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 			Admin:       handlers.NewAdminHandler(nil, nil, nil),
 			Audit:       handlers.NewAuditHandler(nil),
 			Characters:  handlers.NewCharactersHandler(nil, nil),
-			Collections: handlers.NewCollectionsHandler(nil, nil, nil, nil, nil),
+			Collections: handlers.NewCollectionsHandler(nil, nil),
 			Items:       handlers.NewItemsHandler(nil),
 			Weekly:      handlers.NewWeeklyHandler(nil, nil),
 			Records:     handlers.NewRecordsHandler(nil, nil),
@@ -339,4 +340,65 @@ func TestInvalidTokenIsRejected(t *testing.T) {
 	if got := dispatch(r, http.MethodGet, "/api/wishlist", refresh); got != http.StatusUnauthorized {
 		t.Errorf("refresh token on an API route = %d, want 401", got)
 	}
+}
+
+// membershipPathParam is the path segment that makes a route membership-scoped.
+const membershipPathParam = ":membershipId"
+
+// Every membership-scoped route must authorize the whole Destiny membership —
+// platform and id — not just the id (ADR 0018).
+//
+// This walks the route table gin actually built rather than listing handlers,
+// because the defect it guards against is precisely "a route that does not
+// authorize the whole identity". A hand-written list closes the instance; only
+// walking the table closes the class, so a seventh membership route added later
+// is covered without anyone remembering to come back here.
+func TestEveryMembershipRouteAuthorizesTheWholePair(t *testing.T) {
+	// Flags enabled: a disabled flag also answers 403, which would let a
+	// genuinely unguarded route pass this test for the wrong reason.
+	r := newTestRouter(t, auth.RoleStandard, false)
+	token := accessToken(t)
+
+	var checked int
+	for _, route := range r.Routes() {
+		if !strings.Contains(route.Path, membershipPathParam) {
+			continue
+		}
+		checked++
+		key := route.Method + " " + route.Path
+
+		// The token is minted for membership type 3; type 2 is an allowlisted
+		// platform the caller has not authenticated against.
+		if got := dispatch(r, route.Method, membershipPath(route.Path, 2), token); got != http.StatusForbidden {
+			t.Errorf("%s with a mismatched platform = %d, want 403 — the route authorizes the id alone", key, got)
+		}
+		// Control: the matching pair must get past the check, or the assertion
+		// above would hold even on a route that refuses everything.
+		if got := dispatch(r, route.Method, membershipPath(route.Path, 3), token); got == http.StatusForbidden {
+			t.Errorf("%s with the caller's own membership = 403; the check rejects a legitimate pair", key)
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("no membership-scoped routes found; the route table did not build")
+	}
+}
+
+// membershipPath makes a membership-scoped route requestable for the test
+// token's own membership id under the given platform.
+func membershipPath(path string, membershipType int) string {
+	parts := strings.Split(path, "/")
+	for i, p := range parts {
+		switch p {
+		case ":membershipType":
+			parts[i] = strconv.Itoa(membershipType)
+		case membershipPathParam:
+			parts[i] = testMembershipID
+		default:
+			if strings.HasPrefix(p, ":") {
+				parts[i] = "1"
+			}
+		}
+	}
+	return strings.Join(parts, "/")
 }

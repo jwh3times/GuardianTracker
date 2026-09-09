@@ -310,3 +310,24 @@ owning loader also participates in the generation protocol.
 - The complete membership-pair authorization check closes the platform-type
   mismatch before credentials or cached data are touched.
 - Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.
+- Implementation note (2026-09-09): Collections slice B4's read path is complete.
+  `collections.Service` — constructed after Weekly, as the two-stage design
+  requires — now owns `GetSummary`, `GetFull`, and `RefreshMembership`, the typed
+  `Summary`/`Full` outcomes, and the complete `CollectionItem`. Live availability
+  arrives through the required consumer-side `LiveAvailabilityReader` satisfied by
+  `*weekly.Service`, is asked for only by `GetFull` and only after the core result
+  succeeds, is intersected with tracked Items, and is never written back into the
+  cached analysis. Gin keeps binding, authentication, token resolution, error
+  mapping, and serialization, and mechanically spreads a `Full` across the
+  unchanged `items`, `collectedHashes`, and `availableNow` wire fields. The
+  handler's projection choice, availability overlay, and direct Characters,
+  Records, and Weekly dependencies are deleted, along with `MembershipCollections`
+  and its `Lightweight` projection. Route ownership validation now compares the
+  complete membership pair before token lookup or service access, on every
+  membership-scoped route rather than Collections alone. The Items-before-
+  Collections observer order landed earlier with slice B2. What remains of B4 is
+  the owner-local per-membership publication fence in Collections, Characters, and
+  Records that gives `RefreshMembership` its post-return freshness boundary;
+  until then refresh keeps its existing cache-deletion semantics. This ADR
+  therefore remains Accepted with sequenced implementation rather than
+  Implemented.
