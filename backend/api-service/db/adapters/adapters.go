@@ -1,5 +1,5 @@
 // Package adapters translates db stores into the consumer-side interfaces that
-// auth and weekly declare.
+// auth and the domain services declare.
 //
 // It exists because those packages must not import db — each declares the
 // narrow interface it needs and the wiring supplies something satisfying it.
@@ -17,7 +17,6 @@ import (
 
 	"guardian-tracker/api-service/auth"
 	"guardian-tracker/api-service/db"
-	"guardian-tracker/api-service/services/weekly"
 )
 
 // tokenRepo adapts a db.TokenRepo to auth.TokenRepo.
@@ -118,35 +117,4 @@ func (a *sessionStore) DeleteUserSessions(ctx context.Context, membershipID stri
 
 func (a *sessionStore) BumpTokenVersion(ctx context.Context, membershipID string) error {
 	return unavailable(a.s.BumpTokenVersion(ctx, membershipID))
-}
-
-// WishlistLister is the two-method slice of db.WishlistRepo this adapter reads.
-// Narrow on purpose: weekly only lists, and depending on the full seven-method
-// repo would make every stand-in implement five methods it never calls.
-type WishlistLister interface {
-	GetUserID(ctx context.Context, membershipID string) (int64, error)
-	List(ctx context.Context, userID int64) ([]db.WishlistItem, error)
-}
-
-// weeklyWishlist adapts a wishlist store to weekly.WishlistReader, projecting
-// the stored rows down to the one field weekly reads.
-type weeklyWishlist struct{ s WishlistLister }
-
-// NewWeeklyWishlist wraps a db wishlist store for weekly.Service.
-func NewWeeklyWishlist(s WishlistLister) weekly.WishlistReader { return &weeklyWishlist{s: s} }
-
-func (a *weeklyWishlist) GetUserID(ctx context.Context, membershipID string) (int64, error) {
-	return a.s.GetUserID(ctx, membershipID)
-}
-
-func (a *weeklyWishlist) List(ctx context.Context, userID int64) ([]weekly.WishlistItem, error) {
-	items, err := a.s.List(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]weekly.WishlistItem, len(items))
-	for i, it := range items {
-		out[i] = weekly.WishlistItem{ItemHash: it.ItemHash}
-	}
-	return out, nil
 }

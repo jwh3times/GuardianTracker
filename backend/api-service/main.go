@@ -35,6 +35,7 @@ import (
 	"guardian-tracker/api-service/services/records"
 	"guardian-tracker/api-service/services/search"
 	"guardian-tracker/api-service/services/weekly"
+	"guardian-tracker/api-service/services/wishlist"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -154,13 +155,17 @@ func main() {
 	charactersService := characters.NewService(bungieClient, appCache, cfg.CacheTTLCollections)
 	collectionsAnalysis := collections.NewMembershipAnalysis(bungieClient, manifestService, itemsService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
+	// Wish list core — constructed before Weekly, which reads saved item hashes
+	// through it. The complete wish list service is constructed after Weekly
+	// (ADR 0019), which is what keeps that pair acyclic.
+	wishlistEntries := wishlist.NewEntries(adapters.NewWishlistRepository(stores.Wishlist), itemsService)
+
 	// Weekly service
-	weeklyWishlist := adapters.NewWeeklyWishlist(stores.Wishlist)
-	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsAnalysis, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService)
+	weeklyService := weekly.NewService(bungieClient, manifestProvider, collectionsAnalysis, wishlistEntries, appCache, efficiencyEngine, recommendationPlanner, manifestService)
 	if cfg.E2EFixedTime != nil {
 		fixedTime := *cfg.E2EFixedTime
 		weeklyService = weekly.NewServiceWithClock(
-			bungieClient, manifestProvider, collectionsAnalysis, weeklyWishlist, appCache, efficiencyEngine, recommendationPlanner, manifestService,
+			bungieClient, manifestProvider, collectionsAnalysis, wishlistEntries, appCache, efficiencyEngine, recommendationPlanner, manifestService,
 			func() time.Time { return fixedTime },
 		)
 	}
@@ -255,7 +260,7 @@ func main() {
 		Handlers: api.Handlers{
 			Health:      handlers.NewHealthHandler(manifestService, readinessPinger),
 			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
-			Wishlist:    handlers.NewWishlistHandler(stores.Wishlist, manifestProvider, weeklyService, tokenStore),
+			Wishlist:    handlers.NewWishlistHandler(wishlistEntries, manifestProvider, weeklyService, tokenStore),
 			Preferences: handlers.NewPreferencesHandler(preferencesService),
 			User:        handlers.NewUserHandler(stores.Users, stores.Flags, appCache),
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),

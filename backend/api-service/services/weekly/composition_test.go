@@ -43,19 +43,14 @@ func (f *fakeMissingItems) GetMissingItemHashes(_ context.Context, _ int, _, _ s
 	return f.hashes, f.err
 }
 
+// fakeWishlist is the one-method stand-in the seam exists to make possible.
 type fakeWishlist struct {
-	userID  int64
-	items   []WishlistItem
-	userErr error
-	listErr error
+	hashes []uint32
+	err    error
 }
 
-func (f fakeWishlist) GetUserID(context.Context, string) (int64, error) {
-	return f.userID, f.userErr
-}
-
-func (f fakeWishlist) List(context.Context, int64) ([]WishlistItem, error) {
-	return f.items, f.listErr
+func (f fakeWishlist) ListItemHashes(context.Context, string) ([]uint32, error) {
+	return f.hashes, f.err
 }
 
 // weeklyFixture seeds every cache entry GetWeekly's authenticated path reads, so
@@ -73,7 +68,7 @@ type weeklyFixture struct {
 	characterVendors *bungie.CharacterVendorsResponse
 	liveVendorItems  map[uint32]string
 	missing          MissingItemReader
-	wishlist         WishlistReader
+	wishlist         WishListReader
 	engine           *efficiency.Engine
 	recommender      AcquisitionRecommender
 	manifest         ManifestRepo
@@ -226,7 +221,7 @@ func TestGetWeekly_TodayActionBadgePrecedence(t *testing.T) {
 		),
 		// 100 is both missing and wishlisted; 200 is wishlisted only.
 		missing:  &fakeMissingItems{hashes: map[uint32]struct{}{100: {}}},
-		wishlist: fakeWishlist{userID: 7, items: []WishlistItem{{ItemHash: 100}, {ItemHash: 200}}},
+		wishlist: fakeWishlist{hashes: []uint32{100, 200}},
 	}.get(t)
 
 	byID := map[string]TodayAction{}
@@ -288,7 +283,7 @@ func TestGetWeeklyCallsRecommenderOnceAndAssemblesVerbatim(t *testing.T) {
 			MilestoneNames:  map[uint32]string{10: "Grandmaster Nightfall"},
 		},
 		missing:         &fakeMissingItems{hashes: map[uint32]struct{}{100: {}}},
-		wishlist:        fakeWishlist{userID: 7, items: []WishlistItem{{ItemHash: 200}}},
+		wishlist:        fakeWishlist{hashes: []uint32{200}},
 		liveVendorItems: map[uint32]string{100: "Banshee-44"},
 		recommender:     recommender,
 	}.get(t)
@@ -383,5 +378,32 @@ func TestGetWeekly_MissingItemErrorDegradesToEmptySet(t *testing.T) {
 	}
 	if res.ResetLabel == "" {
 		t.Error("schedule lost to a missing-items failure")
+	}
+}
+
+// Wish list personalization is optional. An unreadable wish list must degrade
+// to no personalization rather than failing This Week — the page is fully
+// useful without it, and a hard failure here would take down a response
+// assembled from five other sources.
+func TestGetWeekly_UnreadableWishListStillReturnsTheWeek(t *testing.T) {
+	recommender := &recordingRecommender{}
+	res := weeklyFixture{
+		pub: &publicWeeklyCache{
+			XurPresent: true,
+			XurItems:   []xurItemEnriched{{Hash: 100, Name: "Xûr item", Type: "Weapon"}},
+		},
+		missing:     &fakeMissingItems{hashes: map[uint32]struct{}{100: {}}},
+		wishlist:    fakeWishlist{err: errors.New("wishlist persistence unavailable")},
+		recommender: recommender,
+	}.get(t)
+
+	if res == nil {
+		t.Fatal("GetWeekly returned nothing for an unreadable wish list")
+	}
+	if recommender.calls != 1 {
+		t.Fatalf("Recommend calls = %d, want the week assembled anyway", recommender.calls)
+	}
+	if len(recommender.input.WishlistItemHashes) != 0 {
+		t.Errorf("wish list hashes = %v, want none after a failed read", recommender.input.WishlistItemHashes)
 	}
 }
