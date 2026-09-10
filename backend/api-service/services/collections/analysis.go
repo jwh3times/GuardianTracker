@@ -15,6 +15,7 @@ import (
 	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/manifeststate"
+	"guardian-tracker/api-service/services/membershipstate"
 )
 
 // CatalogReader is the entire Items surface Collections consumes: the
@@ -57,6 +58,12 @@ type MembershipAnalysis struct {
 	// itself once a swap has replaced that generation (ADR 0014).
 	publication *manifeststate.Publication
 
+	// refresh fences the per-membership analysis against a membership data
+	// refresh, the second independent axis: publication asks "is this still the
+	// current Manifest?", refresh asks "has this membership been refreshed
+	// since?" (ADR 0018). Both must say yes before an analysis is cached.
+	refresh *membershipstate.Publication
+
 	treeMu     sync.RWMutex
 	treeStruct *TreeStructure // user-independent; rebuilt after a manifest swap
 }
@@ -77,9 +84,12 @@ func NewMembershipAnalysis(
 		cache:           c,
 		cacheTTL:        cacheTTL,
 	}
-	// The callback runs inside the publication's critical section, so it only
-	// drops the shared tree pointer and never calls back into the publication.
+	// Both callbacks run inside their publication's critical section, so each
+	// only drops state and never calls back into a publication.
 	m.publication = manifeststate.New(m.dropTree)
+	m.refresh = membershipstate.New(func(membershipType int, membershipID string) {
+		m.cache.Delete(analysisCacheKey(membershipType, membershipID))
+	})
 	return m
 }
 
@@ -164,6 +174,12 @@ func itemHashString(itemHash uint32) string {
 
 func (m *MembershipAnalysis) getAnalysis(ctx context.Context, membershipType int, membershipID, accessToken string) (*analysis, error) {
 	cacheKey := analysisCacheKey(membershipType, membershipID)
+
+	// Captured before the cache read, not just before the write: an entry a
+	// concurrent refresh is about to clear is still coherent to serve, but
+	// anything loaded from here on belongs to this refresh generation.
+	sinceRefresh := m.refresh.Begin(membershipType, membershipID)
+
 	if cached, found := m.cache.Get(cacheKey); found {
 		if a, ok := cached.(*analysis); ok {
 			// The manifest-derived half of a cached analysis goes stale on a
@@ -172,7 +188,7 @@ func (m *MembershipAnalysis) getAnalysis(ctx context.Context, membershipType int
 			// owns and keep the profile data, so a swap costs a catalog read
 			// instead of a refetch storm across every active user. This is why
 			// `collections:*` is not evicted when the manifest version changes.
-			return m.refreshManifestParts(ctx, cacheKey, a)
+			return m.refreshManifestParts(ctx, cacheKey, a, sinceRefresh)
 		}
 	}
 
@@ -231,8 +247,25 @@ func (m *MembershipAnalysis) getAnalysis(ctx context.Context, membershipType int
 		fetchedAt:  time.Now().UTC(),
 		builtUnder: attempt,
 	}
-	attempt.Publish(func() { m.cache.Set(cacheKey, a, m.cacheTTL) })
+	publishAnalysis(attempt, sinceRefresh, func() { m.cache.Set(cacheKey, a, m.cacheTTL) })
 	return a, nil
+}
+
+// publishAnalysis installs a freshly built analysis only if both fences still
+// agree it belongs: the Manifest it was derived from is still installed, and
+// the membership has not been refreshed since the work began.
+//
+// The two are taken Manifest-outside, membership-inside, and every publication
+// site in this package keeps that order. Fixing an order is safe here because
+// neither invalidation callback reaches into the other publication — a Manifest
+// advance only drops the shared tree, a refresh only deletes one cache entry —
+// so the two locks are never requested the other way round.
+func publishAnalysis(sinceSwap manifeststate.Attempt, sinceRefresh membershipstate.Attempt, commit func()) bool {
+	published := false
+	sinceSwap.Publish(func() {
+		published = sinceRefresh.Publish(commit)
+	})
+	return published
 }
 
 // manifestParts builds the manifest-derived half of an analysis — the catalog
@@ -319,8 +352,12 @@ func (m *MembershipAnalysis) GetMissingItemHashes(ctx context.Context, membershi
 	return missing, nil
 }
 
+// InvalidateCache retires this owner's cached analysis for one membership as a
+// single transition: the generation advances and the entry is deleted together,
+// so a load already in flight can still answer its own request but can no
+// longer become reusable.
 func (m *MembershipAnalysis) InvalidateCache(membershipType int, membershipID string) {
-	m.cache.Delete(analysisCacheKey(membershipType, membershipID))
+	m.refresh.Advance(membershipType, membershipID)
 }
 
 // OnVersionChanged retires every in-flight analysis and drops the shared tree,
@@ -342,7 +379,7 @@ func (m *MembershipAnalysis) OnVersionChanged(version string) error {
 //
 // It never mutates `a`: concurrent requests share that pointer without a lock,
 // so a replacement is built and cached in its place.
-func (m *MembershipAnalysis) refreshManifestParts(ctx context.Context, cacheKey string, a *analysis) (*analysis, error) {
+func (m *MembershipAnalysis) refreshManifestParts(ctx context.Context, cacheKey string, a *analysis, sinceRefresh membershipstate.Attempt) (*analysis, error) {
 	// One attempt covers the staleness question and everything the answer
 	// causes, so a swap landing mid-rebuild cannot leave the replacement behind.
 	attempt := m.publication.Begin()
@@ -369,6 +406,6 @@ func (m *MembershipAnalysis) refreshManifestParts(ctx context.Context, cacheKey 
 		fetchedAt:  a.fetchedAt,
 		builtUnder: attempt,
 	}
-	attempt.Publish(func() { m.cache.Set(cacheKey, refreshed, m.cacheTTL) })
+	publishAnalysis(attempt, sinceRefresh, func() { m.cache.Set(cacheKey, refreshed, m.cacheTTL) })
 	return refreshed, nil
 }

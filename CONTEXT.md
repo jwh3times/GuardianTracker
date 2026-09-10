@@ -212,6 +212,14 @@ work begun before that observer advances may finish for its initiating request,
 but cannot become reusable state after the generation is retired. See
 [ADR 0014](./docs/adr/0014-own-manifest-derived-publication.md).
 
+**Membership publication** (`membershipstate.Publication`) — the same fence as
+Manifest publication, on the other axis: cached data an owner holds for one
+Destiny membership, retired when that membership is refreshed. Each participant
+in a Membership data refresh keeps its own, holding one generation per
+membership, so one user's refresh cannot retire another user's in-flight work.
+An owner fenced on both axes takes Manifest outside, membership inside. See
+[ADR 0018](./docs/adr/0018-own-complete-membership-collections.md).
+
 **Provider** (`manifest.Provider`) — the lazily-opened, swap-aware handle on the
 manifest database. Returns `manifest.ErrNotReady` while the file is downloading
 or mid-swap; that is a 503, not an error.
