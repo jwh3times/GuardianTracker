@@ -70,8 +70,32 @@ type weeklyFixture struct {
 	missing          MissingItemReader
 	wishlist         WishListReader
 	engine           *efficiency.Engine
+	counter          MilestoneMissingCounter
 	recommender      AcquisitionRecommender
 	manifest         ManifestRepo
+}
+
+// fakeMilestoneCounts is the stand-in for the MilestoneMissingCounter seam:
+// it answers from a name→count table without an index, a Manifest, or a
+// lifecycle. matched is keyed separately from count so a matched-but-fully-
+// collected milestone (0, true) stays distinguishable from an unmatched one.
+type fakeMilestoneCounts struct {
+	counts     map[string]int
+	matched    map[string]bool
+	calls      int
+	sawMissing map[uint32]struct{}
+}
+
+func (f *fakeMilestoneCounts) MissingForMilestone(name string, missing map[uint32]struct{}) (int, bool) {
+	f.calls++
+	f.sawMissing = missing
+	if f.matched != nil {
+		if m, ok := f.matched[name]; ok {
+			return f.counts[name], m
+		}
+	}
+	count, ok := f.counts[name]
+	return count, ok
 }
 
 func (f weeklyFixture) service(t *testing.T) *Service {
@@ -90,9 +114,17 @@ func (f weeklyFixture) service(t *testing.T) *Service {
 			recommender = recommendations.NewPlanner(f.engine)
 		}
 	}
+	// The engine doubles as the counter when a test wires a real one, but only
+	// via this explicit non-nil check: assigning a nil *efficiency.Engine to the
+	// interface parameter yields a non-nil interface holding a nil receiver,
+	// which panics inside MissingForMilestone rather than degrading.
+	counter := f.counter
+	if counter == nil && f.engine != nil {
+		counter = f.engine
+	}
 	s := NewServiceWithClock(
 		nil, // bungie — every read below is served from the seeded cache
-		f.manifest, missing, f.wishlist, c, f.engine,
+		f.manifest, missing, f.wishlist, c, counter,
 		recommender,
 		fakeVersioner{"v-test"},
 		func() time.Time { return testWeeklyNow },
@@ -405,5 +437,52 @@ func TestGetWeekly_UnreadableWishListStillReturnsTheWeek(t *testing.T) {
 	}
 	if len(recommender.input.WishlistItemHashes) != 0 {
 		t.Errorf("wish list hashes = %v, want none after a failed read", recommender.input.WishlistItemHashes)
+	}
+}
+
+// Weekly consumes the MilestoneMissingCounter seam and adapts its answer
+// verbatim: a matched count becomes the badge, and an unmatched milestone gets
+// none. The (0, true) case is pinned separately because a matched-but-fully-
+// collected raid must render a "0 missing" badge, which a naive `count > 0`
+// stamp would silently drop.
+func TestGetWeekly_StampsMilestoneMissingFromCounter(t *testing.T) {
+	counter := &fakeMilestoneCounts{
+		counts:  map[string]int{"Vault of Glass": 2, "Root of Nightmares": 0},
+		matched: map[string]bool{"Vault of Glass": true, "Root of Nightmares": true, "Clan Rewards": false},
+	}
+	res := weeklyFixture{
+		pub: &publicWeeklyCache{
+			MilestoneHashes: []uint32{10, 11, 12},
+			MilestoneNames: map[uint32]string{
+				10: "Vault of Glass", 11: "Root of Nightmares", 12: "Clan Rewards",
+			},
+		},
+		missing: &fakeMissingItems{hashes: map[uint32]struct{}{100: {}, 102: {}}},
+		counter: counter,
+	}.get(t)
+
+	byName := map[string]Milestone{}
+	for _, m := range res.Milestones {
+		byName[m.Name] = m
+	}
+	if len(byName) != 3 {
+		t.Fatalf("milestones = %d, want 3", len(byName))
+	}
+	if got := byName["Vault of Glass"].Missing; got == nil || *got != 2 {
+		t.Errorf("Vault of Glass Missing = %v, want 2 stamped verbatim from the counter", got)
+	}
+	if got := byName["Root of Nightmares"].Missing; got == nil || *got != 0 {
+		t.Errorf("Root of Nightmares Missing = %v, want a stamped 0 — matched-but-complete is a badge, not an absence", got)
+	}
+	if byName["Clan Rewards"].Missing != nil {
+		t.Error("an unmatched milestone must carry no badge")
+	}
+	if counter.calls != 3 {
+		t.Errorf("counter calls = %d, want one per named milestone (3)", counter.calls)
+	}
+	// The counter must see the membership's resolved missing set, not an empty
+	// placeholder: a counter fed the wrong set returns plausible-looking counts.
+	if len(counter.sawMissing) != 2 {
+		t.Errorf("counter saw %d missing hashes, want the resolved set of 2", len(counter.sawMissing))
 	}
 }

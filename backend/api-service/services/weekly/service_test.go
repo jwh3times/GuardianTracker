@@ -358,10 +358,32 @@ func TestBuildMilestones_SetsMissingForRaid(t *testing.T) {
 		t.Error("non-raid milestone Missing should be nil")
 	}
 
-	// nil engine → all nil, no panic.
-	for _, m := range buildMilestones(pub, nil, missing) {
+}
+
+// A service built without a counter must still render every milestone, just
+// without a badge. Asserted through the constructor rather than by passing a
+// nil counter to buildMilestones directly, because the substitution that makes
+// the field non-nil is the behavior under test.
+func TestBuildMilestones_WithoutCounterLeavesMissingNil(t *testing.T) {
+	s := NewService(nil, nil, nil, nil, cache.NewNoOpCache(), nil,
+		recommendations.NewPlanner(nil), fakeVersioner{"v1"})
+
+	pub := &publicWeeklyCache{
+		MilestoneHashes:  []uint32{10, 11},
+		MilestoneNames:   map[uint32]string{10: "Vault of Glass", 11: "Clan Rewards"},
+		MilestoneRewards: map[uint32]string{10: "Pinnacle Gear", 11: "XP"},
+	}
+
+	ms := buildMilestones(pub, s.milestoneCounts, map[uint32]struct{}{100: {}, 102: {}})
+	if len(ms) != 2 {
+		t.Fatalf("milestones = %d, want 2 — an absent counter must not drop rows", len(ms))
+	}
+	for _, m := range ms {
 		if m.Missing != nil {
-			t.Errorf("nil engine should leave Missing nil, got %v", m.Missing)
+			t.Errorf("%s: absent counter should leave Missing nil, got %v", m.Name, *m.Missing)
+		}
+		if m.Name == "" || m.Reward == "" {
+			t.Errorf("%s: absent counter cost a manifest-resolved field (reward %q)", m.Name, m.Reward)
 		}
 	}
 }
