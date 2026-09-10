@@ -1,6 +1,6 @@
 # ADR 0018: Own Complete Membership Collections
 
-- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Implemented in `v1.3.29`
 - Date: 2026-08-17
 
 ## Context
@@ -309,8 +309,8 @@ owning loader also participates in the generation protocol.
   advancement order.
 - The complete membership-pair authorization check closes the platform-type
   mismatch before credentials or cached data are touched.
-- Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.
-- Implementation note (2026-09-09): Collections slice B4's read path is complete.
+- Implementation was sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeded slice by slice.
+- Implementation note (2026-09-09): Collections slice B4's read path shipped in `v1.3.28`.
   `collections.Service` — constructed after Weekly, as the two-stage design
   requires — now owns `GetSummary`, `GetFull`, and `RefreshMembership`, the typed
   `Summary`/`Full` outcomes, and the complete `CollectionItem`. Live availability
@@ -329,5 +329,20 @@ owning loader also participates in the generation protocol.
   the owner-local per-membership publication fence in Collections, Characters, and
   Records that gives `RefreshMembership` its post-return freshness boundary;
   until then refresh keeps its existing cache-deletion semantics. This ADR
-  therefore remains Accepted with sequenced implementation rather than
-  Implemented.
+  shipped separately as part two, below.
+- Implementation note (2026-09-09): this decision is now fully implemented, in
+  `v1.3.29`. `membershipstate.Publication` is the per-membership counterpart to
+  ADR 0014's Manifest fence: Collections, Characters, and Records each hold one,
+  and each one's invalidation advances that membership's generation and evicts
+  its cache entry inside a single critical section. A loader captures the
+  generation before it reads the cache, so work already in flight when a refresh
+  lands still answers the request that started it but can no longer install
+  itself. `RefreshMembership` therefore has the post-return freshness boundary
+  this decision specified: once it returns, the next read of any of the three
+  participants genuinely fetches fresh data. The generation is kept per
+  membership rather than per owner so one user's refresh cannot retire another
+  user's in-flight work. Collections is the one owner fenced on both axes and
+  takes them Manifest-outside, membership-inside; neither invalidation callback
+  reaches into the other publication, so that order is safe to fix. The general
+  cache contract in ADR 0013 is unchanged — no new API, capacities, TTLs, or
+  eviction policy.

@@ -14,6 +14,20 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.29] - 2026-09-09
+
+### Fixed
+
+- Refreshing your data now actually means the next thing you load is fresh.
+  Refreshing cleared the stored copies of your collection, characters,
+  catalysts, crafting patterns, and seals, but a request that had already
+  started fetching in the background could finish a moment later and quietly
+  put its older copy back. The refresh said it worked and the next page you
+  opened could still show you the data from before it. Anything already
+  loading when you refresh now still finishes for the page that asked for it,
+  but is no longer kept for the next one. Refreshing your own data has never
+  affected anyone else's, and still does not.
+
 ## [1.3.28] - 2026-09-09
 
 ### Fixed
@@ -559,7 +573,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.28...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.29...HEAD
+[1.3.29]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.28...v1.3.29
 [1.3.28]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.27...v1.3.28
 [1.3.27]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.26...v1.3.27
 [1.3.26]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.25...v1.3.26

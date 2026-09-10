@@ -8,6 +8,7 @@ import (
 
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/membershipstate"
 )
 
 const bungieBaseURL = "https://www.bungie.net"
@@ -17,10 +18,24 @@ type Service struct {
 	bungieClient *bungie.Client
 	cache        cache.Cache
 	cacheTTL     time.Duration
+
+	// refresh fences this owner's per-membership cache against a membership
+	// data refresh: a roster loaded before the refresh may answer its own
+	// request but may not be left behind afterwards (ADR 0018).
+	refresh *membershipstate.Publication
 }
 
 func NewService(bungieClient *bungie.Client, c cache.Cache, cacheTTL time.Duration) *Service {
-	return &Service{bungieClient: bungieClient, cache: c, cacheTTL: cacheTTL}
+	s := &Service{bungieClient: bungieClient, cache: c, cacheTTL: cacheTTL}
+	// The callback runs inside the publication's critical section, so it only
+	// deletes the entry and never calls back into the publication.
+	s.refresh = membershipstate.New(func(membershipType int, membershipID string) {
+		if s.cache == nil {
+			return
+		}
+		s.cache.Delete(charactersCacheKey(membershipType, membershipID))
+	})
+	return s
 }
 
 // Character is the frontend-facing representation of a Destiny 2 character.
@@ -43,7 +58,8 @@ func charactersCacheKey(membershipType int, membershipID string) string {
 
 // GetCharacters returns the user's characters sorted most-recently-played first.
 func (s *Service) GetCharacters(ctx context.Context, membershipType int, membershipID, accessToken string) ([]Character, error) {
-	return cache.Load(ctx, s.cache, charactersCacheKey(membershipType, membershipID), s.cacheTTL,
+	return membershipstate.Load(ctx, s.refresh, s.cache, membershipType, membershipID,
+		charactersCacheKey(membershipType, membershipID), s.cacheTTL,
 		func() ([]Character, error) {
 			resp, err := s.bungieClient.GetCharacters(ctx, membershipType, membershipID, accessToken)
 			if err != nil {
@@ -70,8 +86,13 @@ func (s *Service) GetCharacters(ctx context.Context, membershipType int, members
 		})
 }
 
+// InvalidateCache retires this owner's cached roster for one membership as a
+// single transition: the generation advances and the entry is deleted together,
+// so a load already in flight can still answer its own request but can no
+// longer become reusable. Implements the Collections refresh participant
+// contract.
 func (s *Service) InvalidateCache(membershipType int, membershipID string) {
-	s.cache.Delete(fmt.Sprintf("characters:%d:%s", membershipType, membershipID))
+	s.refresh.Advance(membershipType, membershipID)
 }
 
 func absoluteURL(path string) string {

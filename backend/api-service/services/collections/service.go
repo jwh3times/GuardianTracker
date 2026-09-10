@@ -24,9 +24,15 @@ type LiveAvailabilityReader interface {
 // RefreshParticipant is one owner of membership-scoped cached data that a
 // manual refresh must invalidate.
 //
-// The participant owns its own cache keys; Collections names the membership and
-// never learns how that owner stores it. Satisfied by *characters.Service and
-// *records.Service.
+// The participant owns its own cache keys and its own publication fence;
+// Collections names the membership and never learns how that owner stores it or
+// how it keeps its own in-flight work from republishing. Satisfied by
+// *characters.Service and *records.Service.
+//
+// Invalidating is required to be one transition, not a bare cache delete: after
+// it returns, work that began before it may still answer its own request but
+// may no longer become reusable. Without that, a refresh could delete an entry
+// only for an older in-flight load to refill it moments later.
 type RefreshParticipant interface {
 	InvalidateCache(membershipType int, membershipID string)
 }
@@ -198,8 +204,14 @@ func (s *Service) GetFull(ctx context.Context, req MembershipRequest) (Full, err
 // not participants — they are either not membership-scoped or govern their own
 // rotation.
 //
-// All three are advanced before this returns, so a caller told the refresh
-// succeeded can rely on it for every one of them, not just Collections.
+// All three are advanced before this returns, and each advance is one
+// owner-local transition of a generation plus an eviction. That is what makes
+// the promise enforceable rather than merely stated: once this returns, no
+// pre-refresh work anywhere in the participant set can install itself, so the
+// next read of any of the three genuinely fetches fresh data. Work already in
+// flight still answers the request that started it — it just is not left
+// behind. Deleting the three cache entries without the fence would let an older
+// load refill one immediately after the refresh reported success.
 //
 // The error return is the contract's room for a participant that can fail.
 // None of the current three can, so today this only ever returns nil.

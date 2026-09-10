@@ -14,6 +14,7 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/manifeststate"
+	"guardian-tracker/api-service/services/membershipstate"
 )
 
 // Record state bit flags from the Bungie API.
@@ -131,6 +132,13 @@ type Service struct {
 	cache       cache.Cache
 	ttl         time.Duration
 	publication *manifeststate.Publication
+
+	// refresh fences the per-membership `records:*` entry against a membership
+	// data refresh. It is a second, independent axis from publication above:
+	// that one retires manifest-derived projections when a new Manifest lands,
+	// this one retires one membership's raw profile records when the user asks
+	// for fresh data (ADR 0018).
+	refresh *membershipstate.Publication
 }
 
 // NewService creates a new records Service.
@@ -138,6 +146,14 @@ type Service struct {
 func NewService(b *bungie.Client, m ManifestRepo, c cache.Cache, ttl time.Duration) *Service {
 	s := &Service{bungie: b, manifest: m, cache: c, ttl: ttl}
 	s.publication = manifeststate.New(s.invalidateManifestProjections)
+	// The callback runs inside the publication's critical section, so it only
+	// deletes the entry and never calls back into the publication.
+	s.refresh = membershipstate.New(func(membershipType int, membershipID string) {
+		if s.cache == nil {
+			return
+		}
+		s.cache.Delete(recordsCacheKey(membershipType, membershipID))
+	})
 	return s
 }
 
@@ -376,8 +392,13 @@ func recordsCacheKey(membershipType int, membershipID string) string {
 }
 
 // InvalidateCache drops the cached profile records for a user (e.g. on refresh).
+// InvalidateCache retires this owner's cached profile records for one
+// membership as a single transition: the generation advances and the entry is
+// deleted together, so a load already in flight can still answer its own
+// request but can no longer become reusable. Implements the Collections
+// refresh participant contract.
 func (s *Service) InvalidateCache(membershipType int, membershipID string) {
-	s.cache.Delete(recordsCacheKey(membershipType, membershipID))
+	s.refresh.Advance(membershipType, membershipID)
 }
 
 // OnVersionChanged drops the three manifest-derived lookup tables so they
@@ -392,7 +413,8 @@ func (s *Service) OnVersionChanged(version string) error {
 // getProfileRecords fetches and caches the profile records component (900) for a user.
 // The returned time is when the data was actually fetched from Bungie.
 func (s *Service) getProfileRecords(ctx context.Context, membershipType int, membershipID, bungieToken string) (*bungie.RecordsProfileResponse, time.Time, error) {
-	r, err := cache.Load(ctx, s.cache, recordsCacheKey(membershipType, membershipID), s.ttl,
+	r, err := membershipstate.Load(ctx, s.refresh, s.cache, membershipType, membershipID,
+		recordsCacheKey(membershipType, membershipID), s.ttl,
 		func() (*cachedRecords, error) {
 			resp, err := s.bungie.GetRecords(ctx, membershipType, membershipID, bungieToken)
 			if err != nil {

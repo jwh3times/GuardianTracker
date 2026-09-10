@@ -50,6 +50,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 **Cache invalidation**
 
 - `collections.Service.RefreshMembership` (called by the `RefreshCollections` handler) must invalidate each backend owner's cache through that owner's own `InvalidateCache` method (`RefreshParticipant`), not by formatting cache keys inline. Flag any handler or service that constructs a cache key string itself to call `cache.Delete`.
+- A `RefreshParticipant`'s `InvalidateCache` must be one fenced transition through that owner's own `membershipstate.Publication` (`Advance`, ADR 0018) — advancing the membership's generation and evicting the cache entry inside the same critical section — not a bare `cache.Delete`. A bare delete lets an older in-flight load, still keyed to the pre-refresh generation, refill the entry after the refresh reports success; `*collections.MembershipAnalysis`, `*characters.Service`, and `*records.Service` all route their per-membership loads through `membershipstate.Load`, which captures the generation before the cache read, so flag a participant whose load path bypasses it.
 
 **Cache load-through**
 
