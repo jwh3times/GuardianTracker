@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"unicode/utf8"
+
+	"guardian-tracker/api-service/services/items"
 )
 
 // Entries is the reusable wish list core: persistence, mutation validation,
@@ -55,20 +57,30 @@ func (e *Entries) ListItemHashes(ctx context.Context, membershipID string) ([]ui
 // writes nothing and says so: allowing the save would record a wish for an
 // item nobody has confirmed exists, and refusing it as "unknown" would blame
 // the user's request for the manifest being unreadable.
-func (e *Entries) Add(ctx context.Context, membershipID string, cmd AddCommand) (StoredEntry, error) {
+// The facts it validated against are returned alongside the stored row. The
+// caller needs them to describe what it just saved, and handing back the answer
+// already in hand is not a convenience: looking the same item up again after
+// the write opens a window where the row is committed but the response cannot
+// be built, which would report a failure for an operation that succeeded.
+func (e *Entries) Add(ctx context.Context, membershipID string, cmd AddCommand) (StoredEntry, items.AcquisitionFacts, error) {
 	if cmd.Priority == "" {
 		cmd.Priority = PriorityMedium
 	}
 	if !cmd.Priority.Valid() {
-		return StoredEntry{}, ErrInvalidPriority
+		return StoredEntry{}, items.AcquisitionFacts{}, ErrInvalidPriority
 	}
 	if err := validateNotes(cmd.Notes); err != nil {
-		return StoredEntry{}, err
+		return StoredEntry{}, items.AcquisitionFacts{}, err
 	}
-	if err := e.requireKnownItem(ctx, cmd.ItemHash); err != nil {
-		return StoredEntry{}, err
+	facts, err := e.requireKnownItem(ctx, cmd.ItemHash)
+	if err != nil {
+		return StoredEntry{}, items.AcquisitionFacts{}, err
 	}
-	return e.repository.Add(ctx, membershipID, cmd)
+	stored, err := e.repository.Add(ctx, membershipID, cmd)
+	if err != nil {
+		return StoredEntry{}, items.AcquisitionFacts{}, err
+	}
+	return stored, facts, nil
 }
 
 // Update applies a partial patch to one entry the membership owns.
@@ -125,15 +137,17 @@ func (e *Entries) SetPriorityMany(ctx context.Context, membershipID string, ids 
 
 // requireKnownItem separates the three item outcomes that must never collapse
 // into each other: a confirmed item, a confirmed absence, and no answer at all.
-func (e *Entries) requireKnownItem(ctx context.Context, itemHash uint32) error {
+// A confirmed item's facts come back with it, so nobody has to ask twice.
+func (e *Entries) requireKnownItem(ctx context.Context, itemHash uint32) (items.AcquisitionFacts, error) {
 	facts, err := e.items.Lookup(ctx, []uint32{itemHash})
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrItemsUnavailable, err)
+		return items.AcquisitionFacts{}, fmt.Errorf("%w: %w", ErrItemsUnavailable, err)
 	}
-	if _, known := facts[itemHash]; !known {
-		return ErrUnknownItem
+	known, ok := facts[itemHash]
+	if !ok {
+		return items.AcquisitionFacts{}, ErrUnknownItem
 	}
-	return nil
+	return known, nil
 }
 
 // validateNotes counts code points, matching the PostgreSQL `char_length`

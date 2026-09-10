@@ -1,6 +1,6 @@
 # ADR 0019: Own Wish List and Preferences
 
-- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Implemented in `v1.3.31`
 - Date: 2026-08-17
 - Superseded in part by
   [ADR 0021](./0021-own-preferences-synchronization.md): the Boundaries
@@ -21,9 +21,35 @@
   through the one-method `WishListReader`, satisfied by `*wishlist.Entries`,
   replacing its own database adapter. The complete handler-facing
   `wishlist.Service` — Item and availability completion, tombstones, and the
-  Gin-owned equivalents it would delete — is slice B5 and remains pending, so
-  this ADR remains Accepted with sequenced implementation rather than
-  Implemented.
+  Gin-owned equivalents it would delete — shipped separately as slice B5, below.
+- Implementation note (2026-09-09): this decision is now fully implemented, in
+  `v1.3.31`. `wishlist.Service` is constructed after Weekly around the required
+  Entries core, an Item lookup, a required `LiveAvailabilityReader`, and a
+  best-effort credential reader, giving the dependency order this ADR specified:
+  Items → Entries → Weekly → complete Service → Gin. `List` resolves every
+  stored hash in one batched Item lookup and short-circuits entirely when
+  nothing is saved; `Remove`, `DeleteMany`, and `SetPriorityMany` resolve no
+  Item facts, credentials, or vendors. `ItemState` is a tagged
+  `KnownItem | UnknownItemTombstone` whose accessors always answer, so the three
+  Item outcomes stay distinct: a successful lookup containing the hash is a
+  known item, one that does not is a tombstone retaining the user's metadata and
+  the visible stand-in projection, and a lookup that failed fails the operation.
+  That third outcome was previously invisible — an unreadable Manifest rendered
+  every entry as an unknown item with a `200`, which this decision names as the
+  defect it removes. `Update` resolves the stored row's Item state before
+  writing, so a confirmed tombstone stays editable while a transient failure
+  writes nothing. Gin keeps binding, the bulk action vocabulary, typed-error
+  mapping, and serialization, and loses its Manifest, Weekly, and token-store
+  dependencies.
+
+  One value-level wire change is deliberate and recorded here: an armor entry's
+  `itemType` now reports its slot rather than the literal `"Armor"`. The handler
+  previously derived the projection from raw Manifest rows; it now reads the
+  canonical ADR 0015 facts, which is what the collections grid and item detail
+  have always shown. Every other field's value is unchanged, and nothing in the
+  frontend branches on it. The Boundaries statement below that this ADR "does
+  not change the existing REST wire" should be read with that exception and the
+  ADR 0021 one above it.
 
 ## Context
 

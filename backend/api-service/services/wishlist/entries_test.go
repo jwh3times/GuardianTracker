@@ -98,7 +98,7 @@ func TestAdd_DefaultsOmittedPriorityToMedium(t *testing.T) {
 	repo := &fakeRepository{}
 	entries := NewEntries(repo, &fakeItems{known: []uint32{100}})
 
-	if _, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100}); err != nil {
+	if _, _, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100}); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func TestAdd_RejectsAnInvalidPriorityWithoutWriting(t *testing.T) {
 	itemLookup := &fakeItems{known: []uint32{100}}
 	entries := NewEntries(repo, itemLookup)
 
-	_, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100, Priority: "SOON"})
+	_, _, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100, Priority: "SOON"})
 
 	if !errors.Is(err, ErrInvalidPriority) {
 		t.Fatalf("Add error = %v, want ErrInvalidPriority", err)
@@ -141,7 +141,7 @@ func TestAdd_CountsNotesInCodePointsNotBytes(t *testing.T) {
 			repo := &fakeRepository{}
 			entries := NewEntries(repo, &fakeItems{known: []uint32{100}})
 
-			_, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100, Notes: tc.notes})
+			_, _, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100, Notes: tc.notes})
 
 			if tc.wantErr {
 				if !errors.Is(err, ErrNotesTooLong) {
@@ -167,7 +167,7 @@ func TestAdd_SeparatesAnUnknownItemFromAnUnreadableLookup(t *testing.T) {
 		repo := &fakeRepository{}
 		entries := NewEntries(repo, &fakeItems{known: []uint32{999}})
 
-		_, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100})
+		_, _, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100})
 
 		if !errors.Is(err, ErrUnknownItem) {
 			t.Fatalf("Add error = %v, want ErrUnknownItem", err)
@@ -182,7 +182,7 @@ func TestAdd_SeparatesAnUnknownItemFromAnUnreadableLookup(t *testing.T) {
 		repo := &fakeRepository{}
 		entries := NewEntries(repo, &fakeItems{err: boom})
 
-		_, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100})
+		_, _, err := entries.Add(context.Background(), member, AddCommand{ItemHash: 100})
 
 		if !errors.Is(err, ErrItemsUnavailable) {
 			t.Fatalf("Add error = %v, want ErrItemsUnavailable", err)

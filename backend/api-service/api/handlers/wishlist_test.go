@@ -4,33 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
-	"guardian-tracker/api-service/services/bungie"
-	"guardian-tracker/api-service/services/sources"
+	"guardian-tracker/api-service/services/items"
 	"guardian-tracker/api-service/services/wishlist"
 
 	"github.com/gin-gonic/gin"
 )
 
-// --- stub wish list core ---
+// --- stub wish list service ---
 //
 // The handler owns no wish list rules any more, so these tests drive the seam
 // rather than a fake database: what reaches the service, and what each typed
-// outcome renders as. The rules themselves are tested in services/wishlist.
+// outcome renders as. The rules themselves, and every part of completing an
+// entry, are tested in services/wishlist.
 
-type stubEntries struct {
-	entries []wishlist.StoredEntry
-	stored  wishlist.StoredEntry
+type stubWishlist struct {
+	entries []wishlist.Entry
+	entry   wishlist.Entry
 	bulk    wishlist.BulkResult
 	err     error
 
-	gotMembershipID string
+	gotMembership   wishlist.Membership
 	gotAdd          wishlist.AddCommand
 	gotUpdateID     wishlist.EntryID
 	gotUpdate       wishlist.UpdateCommand
@@ -40,90 +39,35 @@ type stubEntries struct {
 	gotAction       string
 }
 
-func (s *stubEntries) List(_ context.Context, membershipID string) ([]wishlist.StoredEntry, error) {
-	s.gotMembershipID = membershipID
+func (s *stubWishlist) List(_ context.Context, m wishlist.Membership) ([]wishlist.Entry, error) {
+	s.gotMembership = m
 	return s.entries, s.err
 }
 
-func (s *stubEntries) Add(_ context.Context, membershipID string, cmd wishlist.AddCommand) (wishlist.StoredEntry, error) {
-	s.gotMembershipID, s.gotAdd = membershipID, cmd
-	return s.stored, s.err
+func (s *stubWishlist) Add(_ context.Context, m wishlist.Membership, cmd wishlist.AddCommand) (wishlist.Entry, error) {
+	s.gotMembership, s.gotAdd = m, cmd
+	return s.entry, s.err
 }
 
-func (s *stubEntries) Update(_ context.Context, membershipID string, id wishlist.EntryID, patch wishlist.UpdateCommand) (wishlist.StoredEntry, error) {
-	s.gotMembershipID, s.gotUpdateID, s.gotUpdate = membershipID, id, patch
-	return s.stored, s.err
+func (s *stubWishlist) Update(_ context.Context, m wishlist.Membership, id wishlist.EntryID, patch wishlist.UpdateCommand) (wishlist.Entry, error) {
+	s.gotMembership, s.gotUpdateID, s.gotUpdate = m, id, patch
+	return s.entry, s.err
 }
 
-func (s *stubEntries) Remove(_ context.Context, membershipID string, id wishlist.EntryID) error {
-	s.gotMembershipID, s.gotRemoveID = membershipID, id
+func (s *stubWishlist) Remove(_ context.Context, m wishlist.Membership, id wishlist.EntryID) error {
+	s.gotMembership, s.gotRemoveID = m, id
 	return s.err
 }
 
-func (s *stubEntries) RemoveMany(_ context.Context, membershipID string, ids []wishlist.EntryID) (wishlist.BulkResult, error) {
-	s.gotMembershipID, s.gotBulkIDs, s.gotAction = membershipID, ids, "delete"
+func (s *stubWishlist) DeleteMany(_ context.Context, m wishlist.Membership, ids []wishlist.EntryID) (wishlist.BulkResult, error) {
+	s.gotMembership, s.gotBulkIDs, s.gotAction = m, ids, "delete"
 	return s.bulk, s.err
 }
 
-func (s *stubEntries) SetPriorityMany(_ context.Context, membershipID string, ids []wishlist.EntryID, priority wishlist.Priority) (wishlist.BulkResult, error) {
-	s.gotMembershipID, s.gotBulkIDs, s.gotBulkPriority, s.gotAction = membershipID, ids, priority, "set_priority"
+func (s *stubWishlist) SetPriorityMany(_ context.Context, m wishlist.Membership, ids []wishlist.EntryID, priority wishlist.Priority) (wishlist.BulkResult, error) {
+	s.gotMembership, s.gotBulkIDs, s.gotBulkPriority, s.gotAction = m, ids, priority, "set_priority"
 	return s.bulk, s.err
 }
-
-// --- mock manifest ---
-
-type mockManifest struct {
-	defs map[uint32]*bungie.InventoryItemDefinition
-	cols map[uint32][]bungie.CollectibleDefinition
-}
-
-func (m *mockManifest) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
-	if m.defs == nil {
-		return map[uint32]*bungie.InventoryItemDefinition{}, nil
-	}
-	out := make(map[uint32]*bungie.InventoryItemDefinition)
-	for _, h := range hashes {
-		if def, ok := m.defs[h]; ok {
-			out[h] = def
-		}
-	}
-	return out, nil
-}
-
-func (m *mockManifest) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
-	if m.cols == nil {
-		return map[uint32][]bungie.CollectibleDefinition{}, nil
-	}
-	out := make(map[uint32][]bungie.CollectibleDefinition)
-	for _, h := range hashes {
-		if col, ok := m.cols[h]; ok {
-			out[h] = col
-		}
-	}
-	return out, nil
-}
-
-// --- mock live-vendor availability ---
-
-type mockLiveVendors struct {
-	hashes map[uint32]string
-}
-
-func (m *mockLiveVendors) LiveVendorItemHashes(_ context.Context, _ int, _, _ string) map[uint32]string {
-	if m.hashes == nil {
-		return map[uint32]string{}
-	}
-	return m.hashes
-}
-
-// --- mock token provider ---
-
-type mockTokens struct {
-	token string
-	err   error
-}
-
-func (m *mockTokens) GetValidToken(_ string) (string, error) { return m.token, m.err }
 
 // --- router setup helper ---
 
@@ -156,17 +100,17 @@ func send(r *gin.Engine, method, path, body string) *httptest.ResponseRecorder {
 	return w
 }
 
-func savedEntry(id wishlist.EntryID, hash uint32, priority wishlist.Priority) wishlist.StoredEntry {
-	return wishlist.StoredEntry{ID: id, ItemHash: hash, Priority: priority, CreatedAt: time.Now()}
+func savedEntry(id wishlist.EntryID, hash uint32, priority wishlist.Priority) wishlist.Entry {
+	return wishlist.Entry{ID: id, ItemHash: hash, Priority: priority, CreatedAt: time.Now()}
 }
 
 // --- tests ---
 
 func TestGetWishlist_SerializesStoredEntries(t *testing.T) {
-	entries := &stubEntries{entries: []wishlist.StoredEntry{
+	entries := &stubWishlist{entries: []wishlist.Entry{
 		{ID: 1, ItemHash: 1234, Priority: wishlist.PriorityHigh, Notes: "nice roll", CreatedAt: time.Now()},
 	}}
-	w := send(newTestRouter(NewWishlistHandler(entries, nil, nil, nil)), http.MethodGet, "/api/wishlist", "")
+	w := send(newTestRouter(NewWishlistHandler(entries)), http.MethodGet, "/api/wishlist", "")
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
@@ -186,19 +130,80 @@ func TestGetWishlist_SerializesStoredEntries(t *testing.T) {
 // An empty wish list is an empty JSON array, never null: the frontend maps over
 // it directly.
 func TestGetWishlist_EmptyListSerializesAsAnArray(t *testing.T) {
-	w := send(newTestRouter(NewWishlistHandler(&stubEntries{}, nil, nil, nil)), http.MethodGet, "/api/wishlist", "")
+	w := send(newTestRouter(NewWishlistHandler(&stubWishlist{})), http.MethodGet, "/api/wishlist", "")
 
 	if body := strings.TrimSpace(w.Body.String()); body != "[]" {
 		t.Errorf("body = %s, want []", body)
 	}
 }
 
+// The wish list is never addressed by client-supplied identity: the whole
+// membership pair comes from the JWT the middleware validated. The platform
+// half matters because availability is resolved per platform, so dropping it
+// would silently resolve vendors for the wrong one.
 func TestGetWishlist_UsesTheJWTMembership(t *testing.T) {
-	entries := &stubEntries{}
-	send(newTestRouter(NewWishlistHandler(entries, nil, nil, nil)), http.MethodGet, "/api/wishlist", "")
+	entries := &stubWishlist{}
+	send(newTestRouter(NewWishlistHandler(entries)), http.MethodGet, "/api/wishlist", "")
 
-	if entries.gotMembershipID != "test-member-123" {
-		t.Errorf("membership = %q, want the one the JWT carried", entries.gotMembershipID)
+	want := wishlist.Membership{MembershipType: 3, MembershipID: "test-member-123"}
+	if entries.gotMembership != want {
+		t.Errorf("membership = %+v, want the pair the JWT carried %+v", entries.gotMembership, want)
+	}
+}
+
+// Every field of a complete entry reaches the wire under the name it has always
+// had, including the independent availability pair.
+func TestGetWishlist_SerializesEveryFieldOfACompleteEntry(t *testing.T) {
+	entries := &stubWishlist{entries: []wishlist.Entry{
+		{
+			ID:            9,
+			ItemHash:      100,
+			Priority:      wishlist.PriorityUrgent,
+			Notes:         "god roll",
+			CreatedAt:     time.Date(2026, 7, 18, 18, 0, 0, 0, time.UTC),
+			Item:          wishlist.KnownItem(items.AcquisitionFacts{Name: "Fatebringer", ItemType: "Hand Cannon", Rarity: "Legendary", Icon: "/i/f.png"}),
+			AvailableFrom: "Xûr",
+		},
+		{
+			ID:        10,
+			ItemHash:  999,
+			Priority:  wishlist.PriorityLow,
+			CreatedAt: time.Date(2026, 7, 18, 18, 0, 0, 0, time.UTC),
+			Item:      wishlist.UnknownItemTombstone(),
+		},
+	}}
+
+	w := send(newTestRouter(NewWishlistHandler(entries)), http.MethodGet, "/api/wishlist", "")
+
+	var resp []wishlistResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp) != 2 {
+		t.Fatalf("items = %d, want 2", len(resp))
+	}
+
+	known := resp[0]
+	if known.ID != "9" || known.Name != "Fatebringer" || known.ItemType != "Hand Cannon" || known.Rarity != "Legendary" || known.Icon != "/i/f.png" {
+		t.Errorf("known item = %+v", known)
+	}
+	if known.Priority != "URGENT" || known.Notes != "god roll" || known.DateAdded != "2026-07-18T18:00:00Z" {
+		t.Errorf("stored fields = %+v", known)
+	}
+	if !known.AvailableNow || known.AvailableFrom != "Xûr" {
+		t.Errorf("availability = %v/%q, want true/Xûr", known.AvailableNow, known.AvailableFrom)
+	}
+
+	// A tombstone renders its stand-in, and nothing is claimed to be on sale.
+	tombstone := resp[1]
+	if tombstone.Name != "Unknown Item" || tombstone.ItemType != "Item" || tombstone.Rarity != "Common" || tombstone.Icon != "" {
+		t.Errorf("tombstone = %+v", tombstone)
+	}
+	if tombstone.AvailableNow || tombstone.AvailableFrom != "" {
+		t.Errorf("availability = %v/%q, want false/empty", tombstone.AvailableNow, tombstone.AvailableFrom)
+	}
+	if tombstone.AcquisitionSources == nil {
+		t.Error("acquisitionSources must serialize as [] rather than null")
 	}
 }
 
@@ -222,7 +227,7 @@ func TestWishlistErrors_MapToTheExistingWire(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := newTestRouter(NewWishlistHandler(&stubEntries{err: tc.err}, nil, nil, nil))
+			r := newTestRouter(NewWishlistHandler(&stubWishlist{err: tc.err}))
 			w := send(r, http.MethodPost, "/api/wishlist", `{"itemHash":1234}`)
 
 			if w.Code != tc.status {
@@ -236,7 +241,7 @@ func TestWishlistErrors_MapToTheExistingWire(t *testing.T) {
 }
 
 func TestGetWishlist_UnavailablePersistenceReturns503(t *testing.T) {
-	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrUnavailable}, nil, nil, nil))
+	r := newTestRouter(NewWishlistHandler(&stubWishlist{err: wishlist.ErrUnavailable}))
 	w := send(r, http.MethodGet, "/api/wishlist", "")
 
 	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "DB_UNAVAILABLE") {
@@ -245,8 +250,8 @@ func TestGetWishlist_UnavailablePersistenceReturns503(t *testing.T) {
 }
 
 func TestAddToWishlist_PassesTheRequestThroughAsACommand(t *testing.T) {
-	entries := &stubEntries{stored: savedEntry(9, 1234, wishlist.PriorityUrgent)}
-	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+	entries := &stubWishlist{entry: savedEntry(9, 1234, wishlist.PriorityUrgent)}
+	r := newTestRouter(NewWishlistHandler(entries))
 
 	w := send(r, http.MethodPost, "/api/wishlist", `{"itemHash":1234,"priority":"URGENT","notes":"soon"}`)
 
@@ -262,8 +267,8 @@ func TestAddToWishlist_PassesTheRequestThroughAsACommand(t *testing.T) {
 // An omitted priority reaches the service empty. The default is the wish
 // list's to choose, and the handler must not quietly pick one first.
 func TestAddToWishlist_OmittedPriorityStaysUnsetAtTheSeam(t *testing.T) {
-	entries := &stubEntries{stored: savedEntry(9, 1234, wishlist.PriorityMedium)}
-	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+	entries := &stubWishlist{entry: savedEntry(9, 1234, wishlist.PriorityMedium)}
+	r := newTestRouter(NewWishlistHandler(entries))
 
 	send(r, http.MethodPost, "/api/wishlist", `{"itemHash":1234}`)
 
@@ -273,8 +278,8 @@ func TestAddToWishlist_OmittedPriorityStaysUnsetAtTheSeam(t *testing.T) {
 }
 
 func TestAddToWishlist_MissingItemHashIsRejectedBeforeTheSeam(t *testing.T) {
-	entries := &stubEntries{}
-	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+	entries := &stubWishlist{}
+	r := newTestRouter(NewWishlistHandler(entries))
 
 	w := send(r, http.MethodPost, "/api/wishlist", `{"priority":"HIGH"}`)
 
@@ -287,8 +292,8 @@ func TestAddToWishlist_MissingItemHashIsRejectedBeforeTheSeam(t *testing.T) {
 }
 
 func TestUpdateWishlistItem_SendsAPartialPatch(t *testing.T) {
-	entries := &stubEntries{stored: savedEntry(7, 1234, wishlist.PriorityLow)}
-	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+	entries := &stubWishlist{entry: savedEntry(7, 1234, wishlist.PriorityLow)}
+	r := newTestRouter(NewWishlistHandler(entries))
 
 	w := send(r, http.MethodPut, "/api/wishlist/7", `{"notes":"changed"}`)
 
@@ -307,7 +312,7 @@ func TestUpdateWishlistItem_SendsAPartialPatch(t *testing.T) {
 }
 
 func TestUpdateWishlistItem_NotFoundReturns404(t *testing.T) {
-	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrNotFound}, nil, nil, nil))
+	r := newTestRouter(NewWishlistHandler(&stubWishlist{err: wishlist.ErrNotFound}))
 
 	if w := send(r, http.MethodPut, "/api/wishlist/7", `{"notes":"x"}`); w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", w.Code)
@@ -315,8 +320,8 @@ func TestUpdateWishlistItem_NotFoundReturns404(t *testing.T) {
 }
 
 func TestWishlistItemID_MustBeNumeric(t *testing.T) {
-	entries := &stubEntries{}
-	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+	entries := &stubWishlist{}
+	r := newTestRouter(NewWishlistHandler(entries))
 
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
 		w := send(r, method, "/api/wishlist/abc", `{}`)
@@ -330,8 +335,8 @@ func TestWishlistItemID_MustBeNumeric(t *testing.T) {
 }
 
 func TestRemoveFromWishlist_SuccessReturns204(t *testing.T) {
-	entries := &stubEntries{}
-	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+	entries := &stubWishlist{}
+	r := newTestRouter(NewWishlistHandler(entries))
 
 	w := send(r, http.MethodDelete, "/api/wishlist/5", "")
 
@@ -344,7 +349,7 @@ func TestRemoveFromWishlist_SuccessReturns204(t *testing.T) {
 }
 
 func TestRemoveFromWishlist_NotFoundReturns404(t *testing.T) {
-	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrNotFound}, nil, nil, nil))
+	r := newTestRouter(NewWishlistHandler(&stubWishlist{err: wishlist.ErrNotFound}))
 
 	if w := send(r, http.MethodDelete, "/api/wishlist/5", ""); w.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", w.Code)
@@ -353,8 +358,8 @@ func TestRemoveFromWishlist_NotFoundReturns404(t *testing.T) {
 
 func TestBulkUpdate_RoutesEachActionToItsCommand(t *testing.T) {
 	t.Run("delete", func(t *testing.T) {
-		entries := &stubEntries{bulk: wishlist.BulkResult{Updated: 2, Skipped: 1}}
-		r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+		entries := &stubWishlist{bulk: wishlist.BulkResult{Updated: 2, Skipped: 1}}
+		r := newTestRouter(NewWishlistHandler(entries))
 
 		w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"delete","ids":[1,2,999]}`)
 
@@ -374,8 +379,8 @@ func TestBulkUpdate_RoutesEachActionToItsCommand(t *testing.T) {
 	})
 
 	t.Run("set priority", func(t *testing.T) {
-		entries := &stubEntries{bulk: wishlist.BulkResult{Updated: 1}}
-		r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+		entries := &stubWishlist{bulk: wishlist.BulkResult{Updated: 1}}
+		r := newTestRouter(NewWishlistHandler(entries))
 
 		w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"set_priority","ids":[4],"priority":"HIGH"}`)
 
@@ -391,8 +396,8 @@ func TestBulkUpdate_RoutesEachActionToItsCommand(t *testing.T) {
 // The action string is the handler's own vocabulary — it names which command to
 // call, so an unknown one never reaches the wish list.
 func TestBulkUpdate_UnknownActionIsRejectedBeforeTheSeam(t *testing.T) {
-	entries := &stubEntries{}
-	r := newTestRouter(NewWishlistHandler(entries, nil, nil, nil))
+	entries := &stubWishlist{}
+	r := newTestRouter(NewWishlistHandler(entries))
 
 	w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"explode","ids":[1]}`)
 
@@ -416,7 +421,7 @@ func TestBulkUpdate_ValidationRefusalsRenderAsTheExistingMessages(t *testing.T) 
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := newTestRouter(NewWishlistHandler(&stubEntries{err: tc.err}, nil, nil, nil))
+			r := newTestRouter(NewWishlistHandler(&stubWishlist{err: tc.err}))
 			w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"delete","ids":[1]}`)
 
 			if w.Code != http.StatusBadRequest {
@@ -430,159 +435,10 @@ func TestBulkUpdate_ValidationRefusalsRenderAsTheExistingMessages(t *testing.T) 
 }
 
 func TestBulkUpdate_UnavailablePersistenceReturns503(t *testing.T) {
-	r := newTestRouter(NewWishlistHandler(&stubEntries{err: wishlist.ErrUnavailable}, nil, nil, nil))
+	r := newTestRouter(NewWishlistHandler(&stubWishlist{err: wishlist.ErrUnavailable}))
 	w := send(r, http.MethodPost, "/api/wishlist/bulk", `{"action":"delete","ids":[1]}`)
 
 	if w.Code != http.StatusServiceUnavailable || !strings.Contains(w.Body.String(), "DB_UNAVAILABLE") {
 		t.Errorf("status = %d body = %s, want 503 DB_UNAVAILABLE", w.Code, w.Body.String())
-	}
-}
-
-// --- completion (still handler-owned until the complete wish list service) ---
-
-func TestEnrichItems_WithManifest(t *testing.T) {
-	entries := &stubEntries{entries: []wishlist.StoredEntry{
-		{ID: 1, ItemHash: 5555, Priority: wishlist.PriorityUrgent, CreatedAt: time.Now()},
-	}}
-	manifest := &mockManifest{
-		defs: map[uint32]*bungie.InventoryItemDefinition{
-			5555: {
-				Hash:              5555,
-				DisplayProperties: bungie.DisplayProperties{Name: "Gjallarhorn"},
-				ItemType:          bungie.ItemTypeWeapon,
-				ItemSubType:       bungie.WeaponSubTypeRocketLauncher,
-				Inventory: struct {
-					TierType int `json:"tierType"`
-				}{TierType: bungie.TierTypeExotic},
-			},
-		},
-	}
-	w := send(newTestRouter(NewWishlistHandler(entries, manifest, nil, nil)), http.MethodGet, "/api/wishlist", "")
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", w.Code)
-	}
-	var resp []wishlistResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(resp) != 1 {
-		t.Fatalf("items = %d, want 1", len(resp))
-	}
-	if resp[0].Name != "Gjallarhorn" || resp[0].Rarity != "Exotic" || resp[0].ItemType != "Rocket Launcher" {
-		t.Errorf("item = %+v", resp[0])
-	}
-	if resp[0].Priority != "URGENT" {
-		t.Errorf("priority = %s, want URGENT", resp[0].Priority)
-	}
-}
-
-// An item the manifest no longer carries keeps its user-authored metadata and
-// the visible fallback projection, rather than vanishing from the list.
-func TestEnrichItems_UnknownItemKeepsTheFallbackProjection(t *testing.T) {
-	entries := &stubEntries{entries: []wishlist.StoredEntry{
-		{ID: 1, ItemHash: 4242, Priority: wishlist.PriorityLow, Notes: "kept", CreatedAt: time.Now()},
-	}}
-	w := send(newTestRouter(NewWishlistHandler(entries, &mockManifest{}, nil, nil)), http.MethodGet, "/api/wishlist", "")
-
-	var resp []wishlistResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(resp) != 1 {
-		t.Fatalf("items = %d, want the stored entry retained", len(resp))
-	}
-	if resp[0].Name != "Unknown Item" || resp[0].ItemType != "Item" || resp[0].Rarity != "Common" || resp[0].Icon != "" {
-		t.Errorf("fallback projection = %+v", resp[0])
-	}
-	if resp[0].Notes != "kept" {
-		t.Errorf("notes = %q, want the user's metadata preserved", resp[0].Notes)
-	}
-}
-
-// TestEnrichItems_AvailabilityAndAcquisitionSources: live availability stays
-// separate from the deterministic union of collectible provenance.
-func TestEnrichItems_AvailabilityAndAcquisitionSources(t *testing.T) {
-	entries := &stubEntries{entries: []wishlist.StoredEntry{
-		{ID: 1, ItemHash: 5555, Priority: wishlist.PriorityMedium, CreatedAt: time.Now()},
-		{ID: 2, ItemHash: 6666, Priority: wishlist.PriorityMedium, CreatedAt: time.Now()},
-	}}
-	gjally := &bungie.InventoryItemDefinition{Hash: 5555}
-	gjally.DisplayProperties.Name = "Gjallarhorn"
-	gjally.DisplayProperties.Icon = "/icons/gjally.png"
-	other := &bungie.InventoryItemDefinition{Hash: 6666}
-	other.DisplayProperties.Name = "Fatebringer"
-	manifest := &mockManifest{
-		defs: map[uint32]*bungie.InventoryItemDefinition{5555: gjally, 6666: other},
-		cols: map[uint32][]bungie.CollectibleDefinition{
-			6666: {
-				{ItemHash: 6666, SourceString: "Vault of Glass raid"},
-				{ItemHash: 6666, SourceString: "Monument to Lost Lights"},
-				{ItemHash: 6666, SourceString: "Vault of Glass raid"},
-			},
-		},
-	}
-	// 5555 sold by Banshee-44 (a non-Xûr vendor); 6666 not currently sold.
-	live := &mockLiveVendors{hashes: map[uint32]string{5555: "Banshee-44"}}
-	h := NewWishlistHandler(entries, manifest, live, &mockTokens{token: "tok"})
-
-	w := send(newTestRouter(h), http.MethodGet, "/api/wishlist", "")
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
-	}
-	var resp []wishlistResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	byHash := map[uint32]wishlistResponse{}
-	for _, it := range resp {
-		byHash[it.ItemHash] = it
-	}
-	atVendor := byHash[5555]
-	if !atVendor.AvailableNow || atVendor.AvailableFrom != "Banshee-44" {
-		t.Errorf("vendor item = availableNow %v from %q; want true, Banshee-44", atVendor.AvailableNow, atVendor.AvailableFrom)
-	}
-	notSold := byHash[6666]
-	if notSold.AvailableNow || notSold.AvailableFrom != "" {
-		t.Errorf("unsold item flagged available: %+v", notSold)
-	}
-	wantSources := []sources.AcquisitionSource{
-		{Text: "Monument to Lost Lights", Difficulty: sources.Easy},
-		{Text: "Vault of Glass raid", Difficulty: sources.Challenging, RaidDungeon: true},
-	}
-	if len(notSold.AcquisitionSources) != len(wantSources) {
-		t.Fatalf("acquisitionSources = %+v, want %+v", notSold.AcquisitionSources, wantSources)
-	}
-	for i := range wantSources {
-		if notSold.AcquisitionSources[i] != wantSources[i] {
-			t.Errorf("acquisitionSources[%d] = %+v, want %+v", i, notSold.AcquisitionSources[i], wantSources[i])
-		}
-	}
-	var wire []map[string]any
-	if err := json.Unmarshal(w.Body.Bytes(), &wire); err != nil {
-		t.Fatalf("decode wire shape: %v", err)
-	}
-	if _, exists := wire[1]["difficulty"]; exists {
-		t.Errorf("wishlist item must not expose aggregate difficulty: %s", w.Body.Bytes())
-	}
-	if _, exists := wire[1]["sources"]; exists {
-		t.Errorf("wishlist item must not expose legacy text-only sources: %s", w.Body.Bytes())
-	}
-}
-
-// TestEnrichItems_TokenErrorBestEffort: a token-store error must not fail the
-// request — availability just falls back to whatever the provider returns.
-func TestEnrichItems_TokenErrorBestEffort(t *testing.T) {
-	entries := &stubEntries{entries: []wishlist.StoredEntry{
-		{ID: 1, ItemHash: 5555, Priority: wishlist.PriorityMedium, CreatedAt: time.Now()},
-	}}
-	live := &mockLiveVendors{hashes: map[uint32]string{5555: "Xûr"}}
-	h := NewWishlistHandler(entries, nil, live, &mockTokens{err: fmt.Errorf("no token")})
-
-	w := send(newTestRouter(h), http.MethodGet, "/api/wishlist", "")
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("token error should not fail request; got %d", w.Code)
 	}
 }

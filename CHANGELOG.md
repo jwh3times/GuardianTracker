@@ -14,6 +14,35 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.31] - 2026-09-09
+
+### Fixed
+
+- Your wish list no longer quietly claims it has forgotten what your items are.
+  When the item database could not be read, every saved entry rendered as
+  "Unknown Item" and the page looked successful — indistinguishable from the
+  items genuinely having been removed from the game. That case now says the
+  item database is still downloading, the same as everywhere else in the app,
+  and an item that really has left the game still keeps its own row with your
+  priority and notes intact.
+- Saving an item can no longer report a failure for a save that actually
+  worked. Adding an item looked it up a second time after storing it, so a
+  badly timed item-database update could return an error for an entry that was
+  already on your list — and trying again would then say it was a duplicate.
+- Editing the priority or notes on an item that has left the game now works
+  even while the item database is being updated, instead of depending on when
+  the edit happened to land.
+
+### Changed
+
+- Armor on your wish list now shows what it is — "Helmet", "Gauntlets", and so
+  on — instead of just "Armor". The wish list previously worked out item
+  details on its own; it now reads the same source the collection grid and item
+  detail already use, so an item reads the same everywhere. Weapons and
+  everything else are unchanged.
+- Opening your wish list looks items up once for the whole list rather than
+  once per item, so a long list loads with a single lookup instead of dozens.
+
 ## [1.3.30] - 2026-09-09
 
 ### Fixed
@@ -598,7 +627,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.30...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.31...HEAD
+[1.3.31]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.30...v1.3.31
 [1.3.30]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.29...v1.3.30
 [1.3.29]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.28...v1.3.29
 [1.3.28]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.27...v1.3.28

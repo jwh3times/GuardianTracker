@@ -195,9 +195,9 @@ them, and farm-only status. Item detail reads those facts through one seam
 rather than joining the manifest itself, which is what stops separate consumers
 describing the same item differently. Collections reads the whole catalog
 through that seam and adds only ownership and presentation-tree placement; the
-wish list validates an added item's existence through the same seam but still
-enriches its response with its own manifest projection, and moves fully onto
-the seam as it is reworked. Because Collections pairs the catalog with its own tree, the
+wish list validates an added item's existence through the same seam and, on
+`GET`, resolves every saved entry's item through one batched lookup rather than
+a per-entry manifest projection. Because Collections pairs the catalog with its own tree, the
 composition root notifies Items of a new Manifest before Collections. See
 [ADR 0015](./adr/0015-own-item-acquisition-facts-in-items.md).
 
@@ -284,9 +284,22 @@ vocabulary into typed domain errors, so neither storage identity nor a driver
 error reaches Gin. Adding an item now refuses the write with `503
 MANIFEST_NOT_READY` when the Item lookup itself fails, rather than persisting
 an unvalidated entry; an Item confirmed absent from a successful lookup still
-returns `400`. `WishlistHandler` still owns request binding, ID parsing, typed
-error-to-HTTP mapping, and — pending a later slice — manifest-driven response
-enrichment and the live-vendor availability join. See
+returns `400`.
+
+The complete `wishlist.Service` is the outer of ADR 0019's two construction
+stages, built after Weekly because it reads live availability back out of it
+while Weekly reads saved item hashes from `Entries`. `List` resolves every
+stored hash in one batched Item lookup and short-circuits entirely when
+nothing is saved; `Remove`, `DeleteMany`, and `SetPriorityMany` resolve no
+Item facts, credentials, or vendors. A stored entry's item is one of two
+states — a known item with its canonical facts, or a tombstone that keeps the
+user's priority and notes with the wish list's existing stand-in projection
+("Unknown Item" / "Item" / "Common" / no icon / no sources) — and a lookup
+that fails outright fails the operation instead of rendering as a tombstone.
+`Update` resolves the stored row's item state before writing, so a confirmed
+tombstone stays editable while a transient lookup failure writes nothing.
+`WishlistHandler` owns only request binding, ID parsing, typed error-to-HTTP
+mapping, and serialization. See
 [ADR 0019](./adr/0019-own-wish-list-and-preferences.md).
 
 Preferences are owned behind the HTTP boundary by `services/preferences`, which

@@ -8,58 +8,48 @@ import (
 	"time"
 
 	"guardian-tracker/api-service/observability"
-	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/sources"
 	"guardian-tracker/api-service/services/wishlist"
 
 	"github.com/gin-gonic/gin"
 )
 
-// --- interfaces (satisfied by concrete service types via structural typing) ---
-
-// wishlistEntries is the wish list capability this handler drives. Satisfied by
-// *wishlist.Entries, which owns validation, persistence, and item-existence
-// rules — the handler owns none of them.
-type wishlistEntries interface {
-	List(ctx context.Context, membershipID string) ([]wishlist.StoredEntry, error)
-	Add(ctx context.Context, membershipID string, cmd wishlist.AddCommand) (wishlist.StoredEntry, error)
-	Update(ctx context.Context, membershipID string, id wishlist.EntryID, patch wishlist.UpdateCommand) (wishlist.StoredEntry, error)
-	Remove(ctx context.Context, membershipID string, id wishlist.EntryID) error
-	RemoveMany(ctx context.Context, membershipID string, ids []wishlist.EntryID) (wishlist.BulkResult, error)
-	SetPriorityMany(ctx context.Context, membershipID string, ids []wishlist.EntryID, priority wishlist.Priority) (wishlist.BulkResult, error)
+// wishlistService is the complete wish list capability this handler drives.
+// Satisfied by *wishlist.Service, which owns validation, persistence,
+// item-existence rules, Item completion, tombstones, credentials, and the
+// availability join — the handler owns none of them.
+type wishlistService interface {
+	List(ctx context.Context, m wishlist.Membership) ([]wishlist.Entry, error)
+	Add(ctx context.Context, m wishlist.Membership, cmd wishlist.AddCommand) (wishlist.Entry, error)
+	Update(ctx context.Context, m wishlist.Membership, id wishlist.EntryID, patch wishlist.UpdateCommand) (wishlist.Entry, error)
+	Remove(ctx context.Context, m wishlist.Membership, id wishlist.EntryID) error
+	DeleteMany(ctx context.Context, m wishlist.Membership, ids []wishlist.EntryID) (wishlist.BulkResult, error)
+	SetPriorityMany(ctx context.Context, m wishlist.Membership, ids []wishlist.EntryID, priority wishlist.Priority) (wishlist.BulkResult, error)
 }
 
-type manifestLookupIface interface {
-	GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error)
-	GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error)
-}
-
-// liveVendorIface returns itemHash → selling-vendor display name for items
-// available right now from rotating vendors (Xûr + Banshee-44 + Ada-1 + ritual
-// vendors). Satisfied by *weekly.Service — the same source Collections uses.
-type liveVendorIface interface {
-	LiveVendorItemHashes(ctx context.Context, membershipType int, membershipID, bungieToken string) map[uint32]string
-}
-
-// tokenProvider yields a user's current Bungie access token for the authed
-// vendor fetch. Satisfied by *auth.TokenStore. Best-effort: an error means we
-// resolve public-only availability (Xûr).
-type tokenProvider interface {
-	GetValidToken(membershipID string) (string, error)
-}
-
-// WishlistHandler handles wishlist endpoints.
+// WishlistHandler adapts the complete wish list capability to HTTP.
+//
+// It owns request binding, the bulk action vocabulary, error-to-status mapping,
+// and serialization — and nothing else. Resolving what an item is, whether it
+// is on sale, and which credential to use all belong to wishlist.Service
+// (ADR 0019), which is why this type no longer holds the Manifest, Weekly, or
+// the token store.
 type WishlistHandler struct {
-	entries     wishlistEntries
-	manifest    manifestLookupIface // nil = no enrichment
-	liveVendors liveVendorIface     // nil = availability always false
-	tokens      tokenProvider       // nil = public-only availability
+	wishlist wishlistService
 }
 
-// NewWishlistHandler creates a handler. Entries is required; the completion
-// dependencies may be nil when unavailable.
-func NewWishlistHandler(entries wishlistEntries, manifest manifestLookupIface, liveVendors liveVendorIface, tokens tokenProvider) *WishlistHandler {
-	return &WishlistHandler{entries: entries, manifest: manifest, liveVendors: liveVendors, tokens: tokens}
+func NewWishlistHandler(svc wishlistService) *WishlistHandler {
+	return &WishlistHandler{wishlist: svc}
+}
+
+// membershipOf reads the caller's Destiny membership from the JWT the
+// middleware validated. The wish list is never addressed by client-supplied
+// identity: there is no membership on the route or in any request body.
+func membershipOf(c *gin.Context) wishlist.Membership {
+	return wishlist.Membership{
+		MembershipType: c.GetInt("membership_type"),
+		MembershipID:   c.GetString("membership_id"),
+	}
 }
 
 // wishlistResponse is the JSON shape returned to clients.
@@ -80,12 +70,12 @@ type wishlistResponse struct {
 
 // GetWishlist handles GET /api/wishlist
 func (h *WishlistHandler) GetWishlist(c *gin.Context) {
-	entries, err := h.entries.List(c.Request.Context(), c.GetString("membership_id"))
+	entries, err := h.wishlist.List(c.Request.Context(), membershipOf(c))
 	if err != nil {
 		handleWishlistError(c, err, "wishlist listing failed")
 		return
 	}
-	c.JSON(http.StatusOK, h.enrichEntries(entries, h.liveVendorMap(c)))
+	c.JSON(http.StatusOK, wishlistResponses(entries))
 }
 
 // AddToWishlist handles POST /api/wishlist
@@ -100,7 +90,7 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 		return
 	}
 
-	entry, err := h.entries.Add(c.Request.Context(), c.GetString("membership_id"), wishlist.AddCommand{
+	entry, err := h.wishlist.Add(c.Request.Context(), membershipOf(c), wishlist.AddCommand{
 		ItemHash: body.ItemHash,
 		Priority: wishlist.Priority(body.Priority),
 		Notes:    body.Notes,
@@ -109,7 +99,7 @@ func (h *WishlistHandler) AddToWishlist(c *gin.Context) {
 		handleWishlistError(c, err, "wishlist item creation failed")
 		return
 	}
-	c.JSON(http.StatusCreated, h.enrichOne(entry, h.liveVendorMap(c)))
+	c.JSON(http.StatusCreated, wishlistResponseOf(entry))
 }
 
 // UpdateWishlistItem handles PUT /api/wishlist/:id
@@ -132,12 +122,12 @@ func (h *WishlistHandler) UpdateWishlistItem(c *gin.Context) {
 		priority := wishlist.Priority(*body.Priority)
 		patch.Priority = &priority
 	}
-	entry, err := h.entries.Update(c.Request.Context(), c.GetString("membership_id"), id, patch)
+	entry, err := h.wishlist.Update(c.Request.Context(), membershipOf(c), id, patch)
 	if err != nil {
 		handleWishlistError(c, err, "wishlist item update failed")
 		return
 	}
-	c.JSON(http.StatusOK, h.enrichOne(entry, h.liveVendorMap(c)))
+	c.JSON(http.StatusOK, wishlistResponseOf(entry))
 }
 
 // RemoveFromWishlist handles DELETE /api/wishlist/:id
@@ -146,7 +136,7 @@ func (h *WishlistHandler) RemoveFromWishlist(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.entries.Remove(c.Request.Context(), c.GetString("membership_id"), id); err != nil {
+	if err := h.wishlist.Remove(c.Request.Context(), membershipOf(c), id); err != nil {
 		handleWishlistError(c, err, "wishlist item deletion failed")
 		return
 	}
@@ -172,14 +162,14 @@ func (h *WishlistHandler) BulkUpdate(c *gin.Context) {
 		ids[i] = wishlist.EntryID(id)
 	}
 
-	membershipID := c.GetString("membership_id")
+	membership := membershipOf(c)
 	var result wishlist.BulkResult
 	var err error
 	switch body.Action {
 	case "delete":
-		result, err = h.entries.RemoveMany(c.Request.Context(), membershipID, ids)
+		result, err = h.wishlist.DeleteMany(c.Request.Context(), membership, ids)
 	case "set_priority":
-		result, err = h.entries.SetPriorityMany(c.Request.Context(), membershipID, ids, wishlist.Priority(body.Priority))
+		result, err = h.wishlist.SetPriorityMany(c.Request.Context(), membership, ids, wishlist.Priority(body.Priority))
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete' or 'set_priority'"})
 		return
@@ -250,89 +240,32 @@ func validationMessage(err error) string {
 	return "invalid request"
 }
 
-func (h *WishlistHandler) enrichEntries(entries []wishlist.StoredEntry, live map[uint32]string) []wishlistResponse {
-	if len(entries) == 0 {
-		return []wishlistResponse{}
-	}
-	hashes := make([]uint32, len(entries))
+// wishlistResponses transcribes complete entries onto the wire.
+//
+// A transcription, not a decision: what an item is called, what a tombstone
+// looks like, and whether something is on sale are all resolved before they get
+// here. The handler only chooses field names.
+func wishlistResponses(entries []wishlist.Entry) []wishlistResponse {
+	out := make([]wishlistResponse, len(entries))
 	for i, entry := range entries {
-		hashes[i] = entry.ItemHash
+		out[i] = wishlistResponseOf(entry)
 	}
-	defs := map[uint32]*bungie.InventoryItemDefinition{}
-	cols := map[uint32][]bungie.CollectibleDefinition{}
-	if h.manifest != nil {
-		if m, err := h.manifest.GetItemsByHashes(hashes); err == nil {
-			defs = m
-		}
-		if cs, err := h.manifest.GetCollectiblesByItemHashes(hashes); err == nil {
-			cols = cs
-		}
-	}
-	resp := make([]wishlistResponse, len(entries))
-	for i, entry := range entries {
-		resp[i] = buildResponse(entry, defs[entry.ItemHash], cols[entry.ItemHash], live[entry.ItemHash])
-	}
-	return resp
+	return out
 }
 
-func (h *WishlistHandler) enrichOne(entry wishlist.StoredEntry, live map[uint32]string) wishlistResponse {
-	var def *bungie.InventoryItemDefinition
-	var cols []bungie.CollectibleDefinition
-	if h.manifest != nil {
-		if m, err := h.manifest.GetItemsByHashes([]uint32{entry.ItemHash}); err == nil {
-			def = m[entry.ItemHash]
-		}
-		if cs, err := h.manifest.GetCollectiblesByItemHashes([]uint32{entry.ItemHash}); err == nil {
-			cols = cs[entry.ItemHash]
-		}
-	}
-	return buildResponse(entry, def, cols, live[entry.ItemHash])
-}
-
-// liveVendorMap resolves item→vendor-name availability for the calling user.
-// Best-effort: empty on degraded mode or token failure; never errors.
-func (h *WishlistHandler) liveVendorMap(c *gin.Context) map[uint32]string {
-	if h.liveVendors == nil {
-		return map[uint32]string{}
-	}
-	membershipID := c.GetString("membership_id")
-	membershipType := c.GetInt("membership_type")
-	bungieToken := ""
-	if h.tokens != nil {
-		if t, err := h.tokens.GetValidToken(membershipID); err == nil {
-			bungieToken = t
-		}
-	}
-	return h.liveVendors.LiveVendorItemHashes(c.Request.Context(), membershipType, membershipID, bungieToken)
-}
-
-func buildResponse(entry wishlist.StoredEntry, def *bungie.InventoryItemDefinition, collectibles []bungie.CollectibleDefinition, vendor string) wishlistResponse {
-	name, itemTypeStr, rarity, icon := "Unknown Item", "Item", "Common", ""
-	sourceTexts := make([]string, 0, len(collectibles))
-	if def != nil {
-		name = def.DisplayProperties.Name
-		itemTypeStr = bungie.ItemTypeName(def.ItemType, def.ItemSubType)
-		rarity = bungie.GetTierName(def.Inventory.TierType)
-		icon = def.DisplayProperties.Icon
-	}
-	for _, col := range collectibles {
-		sourceTexts = append(sourceTexts, col.SourceString)
-	}
-	resp := wishlistResponse{
+func wishlistResponseOf(entry wishlist.Entry) wishlistResponse {
+	return wishlistResponse{
 		ID:                 strconv.FormatInt(int64(entry.ID), 10),
 		ItemHash:           entry.ItemHash,
-		Name:               name,
-		ItemType:           itemTypeStr,
-		Rarity:             rarity,
-		Icon:               icon,
+		Name:               entry.Item.Name(),
+		ItemType:           entry.Item.ItemType(),
+		Rarity:             entry.Item.Rarity(),
+		Icon:               entry.Item.Icon(),
 		Priority:           string(entry.Priority),
 		Notes:              entry.Notes,
-		AcquisitionSources: sources.DescribeAll(sourceTexts),
-		AvailableNow:       vendor != "",
+		AcquisitionSources: entry.Item.AcquisitionSources(),
+		AvailableNow:       entry.AvailableFrom != "",
+		AvailableFrom:      entry.AvailableFrom,
 		DateAdded:          entry.CreatedAt.UTC().Format(time.RFC3339),
 	}
-	if vendor != "" {
-		resp.AvailableFrom = vendor
-	}
-	return resp
 }
