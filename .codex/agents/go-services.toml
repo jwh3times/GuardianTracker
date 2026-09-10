@@ -83,7 +83,10 @@ backend/api-service/
                                            set; reads Item facts through CatalogReader (*items.Service)
                                            and presentation nodes through PresentationNodeReader
                                            (*manifest.Provider); Weekly reads missing items from this
-                                           core through its own MissingItemReader
+                                           core through its own MissingItemReader. Holds both a
+                                           manifeststate.Publication (Manifest axis) and a
+                                           membershipstate.Publication (refresh axis, ADR 0018);
+                                           publishAnalysis takes them Manifest-outside, membership-inside
   services/collections/service.go      ← Service: the outer of ADR 0018's two construction stages,
                                            built after Weekly in main.go. Owns GetSummary (cheap counted
                                            tree, no items/availability), GetFull (adds every catalogued
@@ -92,14 +95,19 @@ backend/api-service/
                                            *weekly.Service — intersected with tracked items and never
                                            cached), and RefreshMembership (fans one membership
                                            invalidation out to its own analysis plus the required
-                                           RefreshParticipants — *characters.Service and *records.Service)
+                                           RefreshParticipants — *characters.Service and *records.Service
+                                           — each through its own fenced InvalidateCache, giving the
+                                           post-return call a real freshness guarantee, not just a
+                                           cache-deletion event)
   services/collections/tree.go         ← TreeStructure/buildTreeStructure/overlayCounts/overlayWithItems:
                                            the user-independent presentation forest and its two
                                            membership overlays (counts only vs. counts + leaf item hashes)
   services/collections/types.go        ← Collections wire shapes (CategorySummary, DestinyItem) + the
                                            Items-facts projection; Summary/Full/CollectionItem live in
                                            service.go
-  services/characters/service.go       ← Character fetching; InvalidateCache method
+  services/characters/service.go       ← Character fetching; membershipstate-fenced InvalidateCache
+                                           method (ADR 0018) advances that membership's generation and
+                                           evicts its cache entry in one transition
   services/items/facts.go              ← AcquisitionFacts + AcquisitionFactsReader (ADR 0015): the canonical
                                            user-independent Item projection. Slot-specific ItemType, ascending
                                            CollectibleHashes, sources.DescribeAll union, representative
@@ -129,6 +137,16 @@ backend/api-service/
   services/manifeststate/load.go       ← Load/LoadIf: cache.Load semantics plus the fence. A value loaded
                                            under a retired generation is returned to its caller but not
                                            cached. Nil cache = load every time; nil publication = error.
+  services/membershipstate/publication.go ← ADR 0018 generation fence, manifeststate's sibling on the
+                                           other axis: one generation per Destiny membership instead of
+                                           per owner, advanced by a membership data refresh instead of a
+                                           Manifest swap. Begin/Attempt.Publish/Advance mirror
+                                           manifeststate's shape; Advance's signature matches
+                                           RefreshParticipant.InvalidateCache. Collections' own analysis,
+                                           Characters, and Records each hold one.
+  services/membershipstate/load.go     ← Load: cache.Load semantics plus the membership fence. A value
+                                           loaded under a retired generation is returned to its caller but
+                                           not cached. Nil cache = load every time; nil publication = error.
   services/efficiency/                 ← Manifest-derived source-bucket index, publication-fenced async
                                            builds, explicit cold/ready ranked facts, and milestone missing
                                            counts; score and build coordination remain internal
@@ -445,7 +463,7 @@ serves; it registers no routes itself.
   - Swap sequence: close every participant → `os.Rename` → reopen every participant → notify every observer, in that order (observers may query the already-reopened manifest). On a **failed** rename (rollback), participants are still reopened — against the still-present old file — but observers are **deliberately not notified**, because the version did not change; `Reopen` means "reopen against whatever manifest is now live", not "a new version was installed".
   - A failing participant or observer is logged (with its `%T` type) and the loop continues rather than aborting — aborting would strand later registrants closed.
   - **Any new module that opens its own handle on the manifest file must register as a `SwapParticipant`**, or `os.Rename` runs under its open handle (fails outright on Windows; serves a deleted inode on Linux). Any module holding manifest-derived state should register as a `ManifestObserver` instead of relying on an ad hoc eviction call from `main.go`.
-- `services/collections/analysis.go` is an observer but does not evict its per-membership cache on swap: `OnVersionChanged` advances a `manifeststate.Publication` whose invalidation drops only the shared cross-membership tree. Each cached `*analysis` carries the `manifeststate.Attempt` its manifest-derived fields (`catalog`/`tree`/`owned`) were built under, and `getAnalysis` rebuilds them via `refreshManifestParts` on the next read once `builtUnder.Current()` is false, reusing the already-fetched (rate-limited) Bungie `collected` data. One attempt spans the staleness check, catalog access, presentation-node access, tree construction, and both publications, so a swap landing mid-rebuild leaves nothing behind. `refreshManifestParts` is copy-on-write — it returns a new `*analysis` rather than mutating the cached one, since concurrent requests share that pointer without a lock.
+- `services/collections/analysis.go` is an observer but does not evict its per-membership cache on swap: `OnVersionChanged` advances a `manifeststate.Publication` whose invalidation drops only the shared cross-membership tree. Each cached `*analysis` carries the `manifeststate.Attempt` its manifest-derived fields (`catalog`/`tree`/`owned`) were built under, and `getAnalysis` rebuilds them via `refreshManifestParts` on the next read once `builtUnder.Current()` is false, reusing the already-fetched (rate-limited) Bungie `collected` data. One attempt spans the staleness check, catalog access, presentation-node access, tree construction, and both publications, so a swap landing mid-rebuild leaves nothing behind. `refreshManifestParts` is copy-on-write — it returns a new `*analysis` rather than mutating the cached one, since concurrent requests share that pointer without a lock. `MembershipAnalysis` separately holds a `membershipstate.Publication` (ADR 0018) fencing the per-membership entry against `RefreshMembership`: `getAnalysis` captures that generation (`sinceRefresh := m.refresh.Begin(...)`) before its cache read, and `publishAnalysis` installs a built analysis only through both attempts' `Publish` nested Manifest-outside, membership-inside — `sinceSwap.Publish` wraps `sinceRefresh.Publish`. `InvalidateCache` is `m.refresh.Advance(...)`, which evicts the entry inside the same critical section that advances the generation, so an older in-flight load cannot refill it after a refresh.
 - `services/weekly/service.go`'s per-character `daily:vendors:*` cache entries are scoped by manifest version (via a `versioner` dependency satisfied by `*bungie.ManifestService`) instead of being evicted on swap, so a swap orphans the old entries and they expire on their existing TTL; the underlying Bungie vendor response stays cached separately under an unversioned key, so nothing refetches from Bungie.
 
 ## Notable manifest methods
@@ -465,7 +483,7 @@ serves; it registers no routes itself.
 - `Catalyst` struct has `Type` (weapon type), `Icon` (record icon), and `Effect` (catalyst-perk effect text) fields
 - `Effect` is resolved by `resolveCatalystEffect`: links the catalyst record to its weapon via `GetCatalystLinks()` objective-hash overlap first (unambiguous on both the weapon and record side), then a stripped-name match, then a catalyst-plug-name match, falling back to the record's own description and then `""`
 - The three Manifest-derived projections (weapon types, exotic weapons, catalyst links) load through `manifeststate.LoadIf` under one owner-local publication. `OnVersionChanged` (`bungie.ManifestObserver`) advances that publication and evicts exactly those keys, so an in-flight old-generation load may finish for its caller but cannot repopulate the shared cache. Per-user `records:*` profile entries are untouched — they hold raw Bungie data, which a manifest swap does not invalidate
-- `InvalidateCache(membershipType, membershipId)` drops cached profile records; Records is one of `collections.Service`'s `RefreshParticipant`s, called from `RefreshMembership` on `POST /api/collections/:membershipType/:membershipId/refresh`
+- `InvalidateCache(membershipType, membershipId)` is `s.refresh.Advance(...)` on Records' own `membershipstate.Publication` (ADR 0018): it advances that membership's generation and drops cached profile records inside one critical section, so a load already in flight cannot republish stale profile data after the refresh returns. `getProfileRecords` fetches through `membershipstate.Load`, which captures the generation before the cache read. Records is one of `collections.Service`'s `RefreshParticipant`s, called from `RefreshMembership` on `POST /api/collections/:membershipType/:membershipId/refresh`
 - `Triumph.Objectives []TriumphObjective` (`omitempty`) — per-objective drill-down built by `GetSeals`: excludes explicitly-hidden objectives (`RecordObjective.Visible *bool`; `nil` = absent = visible — a plain `bool` would decode Bungie's absent-field-means-visible default backwards), falls back to `Objective N` for a blank `progressDescription` (numbered over the objectives that survive visibility filtering), normalizes a zero `completionValue` to `Max=1`, and forces `Done=true`/`Cur==Max` on every objective when the parent record is redeemed regardless of stale objective payloads. The existing top-level `Triumph.Cur`/`Max` is unchanged for response compatibility.
 
 ## Source vocabulary (`services/sources`)
@@ -504,7 +522,7 @@ made a milestone's missing-count badge silently not appear.
 - `Service` (`collections/service.go`) is the outer of ADR 0018's two construction stages — built after Weekly in `main.go` — and owns `GetSummary`, `GetFull`, and `RefreshMembership`; a nil constructor dependency panics at startup rather than degrading
 - `GetSummary` returns `Summary{Tree, Totals, FetchedAt}` — the counted tree via `overlayCounts`, no item surface, no availability work; this is the default (no `?include=all`) response
 - `GetFull` returns `Full{Tree, Items, Totals, FetchedAt}` — the tree via `overlayWithItems` (leaf item hashes included) plus one `CollectionItem{Item, Collected, AvailableFrom}` per catalogued item. It resolves the core analysis first, then asks `LiveAvailabilityReader.LiveVendorItemHashes` (satisfied by `*weekly.Service`) for live availability — best-effort, intersected with tracked items via the catalog loop, never written back into the cached analysis
-- `RefreshMembership` invalidates the analysis cache plus every `RefreshParticipant` (`*characters.Service`, `*records.Service`) through each one's own `InvalidateCache`; it always returns nil today since none of the three participants can fail
+- `RefreshMembership` invalidates the analysis cache plus every `RefreshParticipant` (`*characters.Service`, `*records.Service`) through each one's own `InvalidateCache`; it always returns nil today since none of the three participants can fail. Each `InvalidateCache` is fenced by that owner's own `membershipstate.Publication` (ADR 0018), so the three advances are real generation transitions, not bare `cache.Delete` calls — once `RefreshMembership` returns, work that began before it cannot install itself into any of the three caches afterward, closing the gap where an older in-flight load could refill an entry a refresh had just cleared
 - `CollectionsHandler.fullResponse` (`api/handlers/collections.go`) spreads a `Full` result across the unchanged `items`/`collectedHashes`/`availableNow` wire fields — it is a transcription of `Full.Items`, not a new decision, and relies on `Full.Items` arriving in ascending item-hash order (inherited from the Items catalog, ADR 0015)
 - `MembershipCollections` and its `Lightweight()` projection are deleted; `TreeStructure.Items` (the shared item-detail map) is deleted too — item facts come from the Items catalog on each read, not a copy cached on the tree
 - `DestinyItem.AcquisitionSources`, `.FarmOnly`, and `.ItemType` are copied

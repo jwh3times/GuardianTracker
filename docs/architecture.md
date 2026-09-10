@@ -176,6 +176,18 @@ ownership fetch. Weekly still invalidates without a fence and adopts it as it is
 reworked. See
 [ADR 0014](./adr/0014-own-manifest-derived-publication.md).
 
+`services/membershipstate` is that fence's sibling on the other axis: one
+generation per Destiny membership rather than one per owner, advanced when that
+membership's data is refreshed rather than when the Manifest swaps. Collections'
+own analysis, Characters, and Records each hold a `membershipstate.Publication`
+and evict their per-membership cache entry inside the same critical section that
+advances the generation, so a load already in flight when a refresh lands can
+still answer its own request but cannot republish afterwards. Because the
+generation is keyed per membership, one user's refresh cannot retire another
+user's in-flight work. Collections is fenced on both axes and takes them
+Manifest-outside, membership-inside. See
+[ADR 0018](./adr/0018-own-complete-membership-collections.md).
+
 `services/items` owns the canonical, user-independent facts about an item — its
 name, icon, slot-specific type, rarity, collection category, linked collectible
 hashes, the deterministic union of acquisition sources contributed by all of
@@ -196,7 +208,10 @@ owned state and then, only after that core result succeeds, a best-effort live
 availability join read back out of Weekly through the narrow
 `LiveAvailabilityReader` interface, and a `RefreshMembership` that fans one
 membership invalidation out to Collections' own analysis plus Characters and
-Records. Live availability is intersected with tracked items and never written
+Records, each through its own fenced `InvalidateCache`. Once `RefreshMembership`
+returns, the next read of any of the three participants genuinely fetches fresh
+data — a load already in flight when the refresh landed cannot install itself
+afterwards. Live availability is intersected with tracked items and never written
 into the cached analysis. `CollectionsHandler` only binds, authenticates,
 resolves the Bungie token, maps errors, and serializes; it holds none of that
 policy itself. See [ADR 0018](./adr/0018-own-complete-membership-collections.md).
