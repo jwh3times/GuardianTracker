@@ -320,6 +320,20 @@ func TestRecords_BadParams(t *testing.T) {
 
 // ---------------- Collections (gating + refresh) ----------------
 
+// mockLiveVendors stands in for Weekly's live-availability capability. These
+// tests are about routing and authorization, so it always answers "nothing on
+// sale" rather than participating in the result.
+type mockLiveVendors struct {
+	hashes map[uint32]string
+}
+
+func (m *mockLiveVendors) LiveVendorItemHashes(_ context.Context, _ int, _, _ string) map[uint32]string {
+	if m.hashes == nil {
+		return map[uint32]string{}
+	}
+	return m.hashes
+}
+
 func collectionsHandler(t *testing.T, ts *auth.TokenStore) *CollectionsHandler {
 	t.Helper()
 	c := cache.NewMemoryCache(time.Minute, 0)

@@ -174,6 +174,11 @@ func main() {
 	recordsService := records.NewService(bungieClient, manifestProvider, appCache, cfg.CacheTTLRecords)
 	preferencesService := preferences.NewService(adapters.NewPreferencesRepository(stores.Prefs))
 
+	// The complete Wish list service — the outer of ADR 0019's two stages,
+	// constructed after Weekly because it reads live availability back out of
+	// it while Weekly reads saved item hashes from the Entries core above.
+	wishlistService := wishlist.NewService(wishlistEntries, itemsService, weeklyService, tokenStore)
+
 	// The complete Collections service — the outer of ADR 0018's two stages.
 	// It is constructed here, after Weekly and Records, because it reads live
 	// availability back out of Weekly and refreshes Characters and Records.
@@ -268,7 +273,7 @@ func main() {
 		Handlers: api.Handlers{
 			Health:      handlers.NewHealthHandler(manifestService, readinessPinger),
 			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
-			Wishlist:    handlers.NewWishlistHandler(wishlistEntries, manifestProvider, weeklyService, tokenStore),
+			Wishlist:    handlers.NewWishlistHandler(wishlistService),
 			Preferences: handlers.NewPreferencesHandler(preferencesService),
 			User:        handlers.NewUserHandler(stores.Users, stores.Flags, appCache),
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),
