@@ -14,6 +14,22 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.34] - 2026-09-10
+
+### Changed
+
+- The This Week page's per-raid "missing" counts are now requested through a
+  single narrow question — "how many of my missing items drop here?" — instead
+  of the weekly page holding on to the whole recommendation-ranking engine to
+  ask it. No behaviour changes: every milestone badge, including the "0 missing"
+  badge on a raid you have fully collected, is identical. This is the last
+  backend step of the acquisition-recommendation ownership split; only the
+  frontend portion remains.
+- When that count is unavailable — while the game's item index is still being
+  built after startup, or for any milestone that is not a raid or dungeon — the
+  page continues to render the milestone with no badge rather than a wrong one,
+  exactly as before.
+
 ## [1.3.33] - 2026-09-10
 
 ### Changed
@@ -653,7 +669,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.33...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.34...HEAD
+[1.3.34]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.33...v1.3.34
 [1.3.33]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.32...v1.3.33
 [1.3.32]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.31...v1.3.32
 [1.3.31]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.30...v1.3.31

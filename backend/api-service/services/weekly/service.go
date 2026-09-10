@@ -12,7 +12,6 @@ import (
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/observability"
 	"guardian-tracker/api-service/services/bungie"
-	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/recommendations"
 	"guardian-tracker/api-service/services/sources"
 )
@@ -150,15 +149,15 @@ type dailyVendorItem struct {
 
 // Service assembles the weekly recommendations.
 type Service struct {
-	bungie      *bungie.Client
-	manifest    ManifestRepo
-	collections MissingItemReader
-	wishlist    WishListReader
-	cache       cache.Cache
-	efficiency  *efficiency.Engine
-	recommender AcquisitionRecommender
-	version     versioner
-	now         func() time.Time
+	bungie          *bungie.Client
+	manifest        ManifestRepo
+	collections     MissingItemReader
+	wishlist        WishListReader
+	cache           cache.Cache
+	milestoneCounts MilestoneMissingCounter
+	recommender     AcquisitionRecommender
+	version         versioner
+	now             func() time.Time
 }
 
 // MissingItemReader is the entire surface weekly uses from collections,
@@ -221,32 +220,64 @@ type AcquisitionRecommender interface {
 	Recommend(input recommendations.Input) []recommendations.Recommendation
 }
 
+// MilestoneMissingCounter reports how many of a membership's missing items drop
+// from the raid/dungeon source bucket(s) a milestone covers, and whether any
+// bucket matched at all. Satisfied by *efficiency.Engine.
+//
+// Consumer-side and one method by design. Weekly stamps an optional per-
+// milestone badge; it must not learn the ranking engine's index lifecycle,
+// bucket shape, or scoring to ask this one question.
+//
+// Optional, unlike MissingItemReader. "No count" is already a first-class
+// answer here — the counter reports it for every non-raid milestone, and for
+// every milestone while its index is still cold — and the frontend hides the
+// badge rather than rendering a wrong one, so a substitute that always answers
+// that way degrades honestly instead of lying. NewServiceWithClock installs
+// degradedMilestoneCounts when none is injected, which is what keeps the field
+// non-nil; pass a literal nil rather than a nil *efficiency.Engine, which would
+// be a non-nil interface holding a nil receiver.
+type MilestoneMissingCounter interface {
+	MissingForMilestone(milestoneName string, missing map[uint32]struct{}) (int, bool)
+}
+
+// degradedMilestoneCounts stands in when no counter is injected. It returns the
+// same answer a real counter gives before its index exists, so the milestone
+// path has one behavior to reason about rather than two.
+type degradedMilestoneCounts struct{}
+
+func (degradedMilestoneCounts) MissingForMilestone(string, map[uint32]struct{}) (int, bool) {
+	return 0, false
+}
+
 // NewService creates a new weekly recommendations service.
-func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishListReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner) *Service {
-	return NewServiceWithClock(b, m, c, w, appCache, eng, recommender, v, time.Now)
+func NewService(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishListReader, appCache cache.Cache, counter MilestoneMissingCounter, recommender AcquisitionRecommender, v versioner) *Service {
+	return NewServiceWithClock(b, m, c, w, appCache, counter, recommender, v, time.Now)
 }
 
 // NewServiceWithClock creates a weekly service with an injected clock. The
 // production constructor above always uses time.Now; the alternate constructor
 // exists so hermetic browser tests can keep Xur in a deterministic weekend
 // window without changing production behavior.
-func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishListReader, appCache cache.Cache, eng *efficiency.Engine, recommender AcquisitionRecommender, v versioner, now func() time.Time) *Service {
+func NewServiceWithClock(b *bungie.Client, m ManifestRepo, c MissingItemReader, w WishListReader, appCache cache.Cache, counter MilestoneMissingCounter, recommender AcquisitionRecommender, v versioner, now func() time.Time) *Service {
 	if recommender == nil {
 		panic("weekly: acquisition recommender is required")
+	}
+	if counter == nil {
+		counter = degradedMilestoneCounts{}
 	}
 	if now == nil {
 		now = time.Now
 	}
 	return &Service{
-		bungie:      b,
-		manifest:    m,
-		collections: c,
-		wishlist:    w,
-		cache:       appCache,
-		efficiency:  eng,
-		recommender: recommender,
-		version:     v,
-		now:         now,
+		bungie:          b,
+		manifest:        m,
+		collections:     c,
+		wishlist:        w,
+		cache:           appCache,
+		milestoneCounts: counter,
+		recommender:     recommender,
+		version:         v,
+		now:             now,
 	}
 }
 
@@ -433,7 +464,7 @@ func (s *Service) GetWeekly(ctx context.Context, membershipType int, membershipI
 	}
 
 	// Assemble weekly milestones (for This Week page), with per-raid missing counts.
-	milestones := buildMilestones(pub, s.efficiency, missingHashes)
+	milestones := buildMilestones(pub, s.milestoneCounts, missingHashes)
 
 	liveAvailability := make(map[uint32]string)
 	if bungieToken != "" {
@@ -499,10 +530,10 @@ func (s *Service) xurItemHashesAt(ctx context.Context, now time.Time) map[uint32
 }
 
 // buildMilestones turns the cached public milestones into the wire shape, stamping a
-// per-milestone Missing count for raid milestones whose source bucket the efficiency
-// engine can match (nil otherwise — the frontend hides the badge). eng may be nil
-// (legacy fallback / tests).
-func buildMilestones(pub *publicWeeklyCache, eng *efficiency.Engine, missing map[uint32]struct{}) []Milestone {
+// per-milestone Missing count for raid milestones whose source bucket the counter
+// can match (nil otherwise — the frontend hides the badge). counter is the
+// service's own field, which NewServiceWithClock guarantees is non-nil.
+func buildMilestones(pub *publicWeeklyCache, counter MilestoneMissingCounter, missing map[uint32]struct{}) []Milestone {
 	milestones := make([]Milestone, 0, len(pub.MilestoneHashes))
 	for _, hash := range pub.MilestoneHashes {
 		name := pub.MilestoneNames[hash]
@@ -516,11 +547,9 @@ func buildMilestones(pub *publicWeeklyCache, eng *efficiency.Engine, missing map
 			Reward: pub.MilestoneRewards[hash],
 			Note:   "",
 		}
-		if eng != nil {
-			if count, matched := eng.MissingForMilestone(name, missing); matched {
-				c := count
-				m.Missing = &c
-			}
+		if count, matched := counter.MissingForMilestone(name, missing); matched {
+			c := count
+			m.Missing = &c
 		}
 		milestones = append(milestones, m)
 	}

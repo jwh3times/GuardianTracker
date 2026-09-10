@@ -7,8 +7,9 @@ Implementation is incremental. The backend ownership slice is complete:
 Sources exposes a named difficulty tier, Efficiency publishes fenced ranked
 facts, Recommendations owns complete outcomes and fallbacks, and Weekly consumes
 the required `AcquisitionRecommender` without retaining recommendation policy.
-C2 now contains only the separate `MilestoneMissingCounter` rewire; C3 retains
-the frontend raw-type and tolerant-adapter work.
+C2's `MilestoneMissingCounter` rewire has now landed, so Weekly no longer names
+or stores the concrete Efficiency engine. Only C3's frontend raw-type and
+tolerant-adapter work remains.
 
 ## Context
 
@@ -171,7 +172,8 @@ unchanged.
 ## Migration and test surface
 
 Implementation replaces rather than layers the existing split. Steps 1–4 landed
-together so the backend never retained two recommendation-policy owners:
+together so the backend never retained two recommendation-policy owners, and
+step 5 followed on its own:
 
 1. Add the typed source difficulty, Recommendations outcome types, and the
    consumer-side `weekly.AcquisitionRecommender` interface.

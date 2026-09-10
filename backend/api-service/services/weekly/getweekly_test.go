@@ -213,7 +213,7 @@ func TestGetWeekly_PublicPath(t *testing.T) {
 		nil, // collections — unused when bungieToken is empty
 		nil, // wishlist — nil-checked
 		cache.NewMemoryCache(time.Minute, 0),
-		nil, // efficiency engine — milestone counts remain unavailable
+		nil, // milestone counter — counts remain unavailable
 		recommendations.NewPlanner(nil),
 		fakeVersioner{"v-test"},
 	)
