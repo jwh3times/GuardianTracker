@@ -563,10 +563,12 @@ made a milestone's missing-count badge silently not appear.
   `vendorLocationIndex`, the manifest resolves its destination, and the known Last City
   destination is presented as `The Tower`; failures omit the field.
 - `Milestone.Missing` is `*int` (omitempty) — populated by `buildMilestones` for
-  raid/dungeon milestones via `efficiency.MissingForMilestone`; verified current
-  non-raid reward definitions contain no collectible-linked items, so others omit it.
-  The efficiency index deduplicates item hashes within each source bucket, and
-  `MissingForMilestone` counts the union across every matched bucket.
+  raid/dungeon milestones via the one-method `MilestoneMissingCounter` interface
+  `weekly` declares (`MissingForMilestone`), satisfied structurally by
+  `*efficiency.Engine`; verified current non-raid reward definitions contain no
+  collectible-linked items, so others omit it. The efficiency index deduplicates
+  item hashes within each source bucket, and `MissingForMilestone` counts the
+  union across every matched bucket.
 - `XurItemHashes(ctx)` returns the set of hashes Xûr currently sells
 - `LiveVendorItemHashes(ctx, membershipType, membershipID, bungieToken)` (`services/weekly/availability.go`) returns item hash → vendor display name across all rotating vendors (Xûr, Banshee-44, Ada-1, ritual vendors); best-effort with the caller's Bungie token — consumed as `wishlist.LiveAvailabilityReader` by `*wishlist.Service` instead of the Xûr-only `XurItemHashes`
 - `GetWeekly(..., requestedCharacterID)` validates the requested character against the authenticated roster and scopes component-402 vendor inventory, today actions, recommendation availability, and Xûr location to that character. Character-specific caches include membership and character IDs. Xûr armor carries an optional manifest `className`; absent class data remains unlabelled.
@@ -589,9 +591,13 @@ made a milestone's missing-count badge silently not appear.
   six-candidate cap internally. Its owner-local Manifest publication prevents an
   obsolete async build from replacing current state while preserving the prior
   complete index during a rebuild.
-- Weekly still depends on concrete `*efficiency.Engine` for
-  `MissingForMilestone`; replacing that dependency with the narrow
-  `MilestoneMissingCounter` seam is the remaining C2 slice.
+- Weekly does not import `services/efficiency`. `NewService`/`NewServiceWithClock`
+  take `MilestoneMissingCounter` (declared in `services/weekly/service.go`), not
+  `*efficiency.Engine`; `main.go` still passes the same `*efficiency.Engine` it
+  always did, which satisfies the interface structurally. When no counter is
+  injected, the constructor installs `degradedMilestoneCounts` — always "no
+  count" — so the field is never nil; this is the same non-nil-substitute
+  pattern `db/degraded.go` uses for `db.Stores`.
 
 ## Go patterns
 
