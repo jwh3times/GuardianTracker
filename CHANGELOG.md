@@ -14,6 +14,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.33] - 2026-09-10
+
+### Changed
+
+- Updated the Node.js version used to build and test the frontend from 26.8.1
+  to 26.8.2, a patch release. This is build tooling only — the deployed
+  frontend is served by nginx and does not run Node.
+
 ## [1.3.32] - 2026-09-10
 
 ### Fixed
@@ -645,7 +653,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.32...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.33...HEAD
+[1.3.33]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.32...v1.3.33
 [1.3.32]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.31...v1.3.32
 [1.3.31]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.30...v1.3.31
 [1.3.30]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.29...v1.3.30
