@@ -338,32 +338,10 @@ func (r *Repository) sameNamedCatalystFallbackLocked(name string) (string, error
 // isDisplayable) by hash. Assumes r.mu is held.
 func (r *Repository) getSandboxPerksLocked(hashes []uint32) (map[uint32]*sandboxPerkDef, error) {
 	out := map[uint32]*sandboxPerkDef{}
-	if len(hashes) == 0 {
-		return out, nil
-	}
-	placeholders := make([]string, len(hashes))
-	args := make([]any, len(hashes))
-	for i, h := range hashes {
-		placeholders[i] = "?"
-		args[i] = hashToDBKey(h)
-	}
-	q := "SELECT id, json FROM DestinySandboxPerkDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-	rows, err := r.db.Query(q, args...)
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinySandboxPerkDefinition", "getSandboxPerks"),
+		func(id uint32, def *sandboxPerkDef) { out[id] = def })
 	if err != nil {
-		return nil, fmt.Errorf("getSandboxPerks: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var dbID int64
-		var blob string
-		if err := rows.Scan(&dbID, &blob); err != nil {
-			return nil, fmt.Errorf("getSandboxPerks scan: %w", err)
-		}
-		var def sandboxPerkDef
-		if err := json.Unmarshal([]byte(blob), &def); err != nil {
-			continue
-		}
-		out[dbKeyToHash(dbID)] = &def
-	}
-	return out, rows.Err()
+	return out, nil
 }
