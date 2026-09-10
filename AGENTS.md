@@ -256,7 +256,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
    main-branch synchronization, local documentation-link, jest-dom-shim, and
@@ -328,7 +328,7 @@ npm run test:docker-context
 
 # Go (from backend/api-service/)
 go test ./...
-go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+GOTOOLCHAIN=go1.26.6 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...   # pin required; see below
 go tool govulncheck ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
@@ -356,6 +356,21 @@ baselines are Linux renderings and must be regenerated inside the
 `@playwright/test` — never commit snapshots produced on
 Windows. Both procedures, including baseline regeneration, are in
 [frontend/README.md](./frontend/README.md#browser-tests).
+
+### Staticcheck needs the pinned toolchain
+
+`GOTOOLCHAIN=go1.26.6` on the Staticcheck line is required, not decoration.
+Staticcheck 2026.1 is compiled by whatever Go is active, and on a newer
+toolchain it cannot decode the standard library's export data, so it fails while
+loading and analyzes nothing at all. Every error names a stdlib package rather
+than project code, and the empty output that follows is indistinguishable from a
+clean run — which is exactly how an unpinned run gets mistaken for "no
+findings". `go.mod`'s `toolchain` directive is a floor, not a pin, and does not
+prevent it.
+
+The pinned value must equal `GO_VERSION` in both workflows;
+`npm run test:go-toolchain-policy` fails the build if they drift apart, so
+moving the Go pin means moving it everywhere at once.
 
 ### Full Go coverage locally (matches CI)
 
