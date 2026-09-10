@@ -56,23 +56,21 @@ rows, err := db.Query(
 )
 ```
 
-**Do not modify the manifest SQLite** — it is a read-only Bungie artifact. All queries live in `services/manifest/repository.go`. Keep them SELECT-only.
+**Do not modify the manifest SQLite** — it is a read-only Bungie artifact. Queries live in `services/manifest/repository.go` (plus `perks.go` and `catalysts.go`), and every batched hash lookup runs through `chunked.go`. Keep them SELECT-only.
 
 ### Notable manifest query methods
 
-| Method                                | Purpose                                                                            |
-| ------------------------------------- | ---------------------------------------------------------------------------------- |
-| `GetItemsByHashes(hashes)`            | Batch item definition lookup; chunked at 500 for SQLite IN-clause limits           |
-| `GetAllCollectibles()`                | All collectible definitions (full table scan)                                      |
-| `GetAllCollectiblesWithItems()`       | Collectibles joined to items; holds read lock across both queries                  |
-| `GetCollectiblesByItemHashes(hashes)` | Every collectible def keyed by `itemHash`; preserves multiplicity for source union |
-| `GetFilteredCollectibles()`           | Collectibles split into weapon/armor/exotic/cosmetic buckets                       |
-| `GetWeaponTypesByName()`              | Lowercased weapon name → weapon type display name (full table scan; callers cache) |
+| Method                          | Purpose                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `GetItemsByHashes(hashes)`      | Batch item definition lookup, keyed by the requested row id                                                                   |
+| `GetAllCollectiblesWithItems()` | Collectibles joined to items; holds read lock across both queries                                                             |
+| `GetAcquisitionRows(hashes)`    | Item definitions and their linked collectibles under ONE read lock; keeps an item's several collectibles for the source union |
+| `GetWeaponTypesByName()`        | Lowercased weapon name → weapon type display name (full table scan; callers cache)                                            |
 
 ### Query guidelines
 
 - Filter on `json_extract()` for indexed fields; full JSON scans on large tables (DestinyInventoryItemDefinition has ~10k+ rows) should apply early WHERE clauses
-- IN-clause queries must be chunked at 500 items to stay within SQLite's parameter limit
+- Batched lookups by hash go through `queryDefsChunked` in `services/manifest/chunked.go`, never a hand-written loop. It owns the chunking at 500 (SQLite's bound-parameter limit), the placeholder list, the argument encoding, row iteration, and JSON decoding; a call site supplies only a table, an argument encoding, and how to accumulate a decoded row. The one batched read that stayed outside the shared path had silently stopped chunking at all, which is exactly the failure this consolidation removes
 - Cross-table joins require application-side assembly (manifest tables don't have FK relationships in Bungie's schema)
 - When adding new manifest queries: add to `services/manifest/repository.go`, keep read-only, add a locked variant if the query must compose with another locked call
 
