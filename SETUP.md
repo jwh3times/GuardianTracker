@@ -342,9 +342,18 @@ Backend:
 cd backend/api-service
 go test ./...
 go vet ./...
-go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+GOTOOLCHAIN=go1.26.6 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ./test-local.ps1
 ```
+
+`GOTOOLCHAIN` is not optional. Staticcheck 2026.1 is built by whatever Go is
+active, and on a toolchain newer than the pin it cannot decode the standard
+library's export data — so it fails during loading and analyzes nothing. The
+errors all name stdlib packages rather than project code, and empty output
+afterwards reads exactly like a clean run. `go.mod`'s `toolchain` directive is a
+floor, not a pin, so it does not prevent this. The pinned value matches
+`GO_VERSION` in the CI workflows, and `npm run test:go-toolchain-policy` fails if
+the two drift apart.
 
 Frontend:
 

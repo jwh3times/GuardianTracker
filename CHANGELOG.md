@@ -14,6 +14,31 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.30] - 2026-09-09
+
+### Fixed
+
+- The documented local Staticcheck command now pins the Go toolchain, so it
+  actually checks the code. Staticcheck 2026.1 is compiled by whatever Go is
+  active, and on a newer toolchain it cannot decode the standard library's
+  export data — it fails while loading and analyzes nothing. Every error names
+  a standard-library package rather than project code, and the empty output
+  afterwards is indistinguishable from a clean run, so an unpinned run reads as
+  "no findings". `go.mod`'s `toolchain` directive is a floor rather than a pin
+  and does not prevent it. `AGENTS.md` and `SETUP.md` now say why the prefix is
+  there, so it is not mistaken for noise. CI was never affected: it installs the
+  pinned Go before running.
+
+### Added
+
+- A repository policy test for that pin, so it cannot drift. Rather than naming
+  the Go release a fifth time, it derives the expected value from the workflows'
+  `GO_VERSION` and fails the build if the documented commands, the two
+  workflows, or `go.mod`'s toolchain stop naming the same release. It also
+  records the one deliberate exemption — CI's own invocation stays unpinned
+  because the job already installed that Go, and a second inline pin would be a
+  duplicate that could drift on its own.
+
 ## [1.3.29] - 2026-09-09
 
 ### Fixed
@@ -573,7 +598,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.29...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.30...HEAD
+[1.3.30]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.29...v1.3.30
 [1.3.29]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.28...v1.3.29
 [1.3.28]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.27...v1.3.28
 [1.3.27]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.26...v1.3.27
