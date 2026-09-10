@@ -342,9 +342,12 @@ func stateFor(facts map[uint32]items.AcquisitionFacts, itemHash uint32) ItemStat
 
 // storedEntry finds one of the membership's stored rows.
 //
-// It reads through the list rather than a dedicated repository lookup because
-// the wish list is small and bounded, and adding a by-id read to the
-// persistence port would widen it for one caller. A row that is missing or
+// It reads through the list rather than a dedicated repository lookup, which
+// trades a full per-membership scan on every update for not widening the
+// persistence port to serve one caller. Nothing enforces an upper bound on how
+// many items one membership may save — only bulk commands are capped — so this
+// is a judgement about realistic wish list sizes rather than a guarantee. A
+// by-id read is the answer if that stops being true. A row that is missing or
 // belongs to someone else is the same answer, for the same reason it is
 // everywhere else in this package: distinguishing them would confirm another
 // user's entry ids.
