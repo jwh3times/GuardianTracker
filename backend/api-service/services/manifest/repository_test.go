@@ -82,6 +82,9 @@ func writeFixtureDB(t *testing.T, path string) {
 		4000: `{"hash":4000,"itemHash":400,"sourceString":"Eververse","displayProperties":{"name":"Test Ship"}}`,
 		5000: `{"hash":5000,"itemHash":500,"sourceString":"Eververse","displayProperties":{"name":"Test Ornament"}}`,
 		6000: `{"hash":6000,"itemHash":600,"sourceString":"Eververse","displayProperties":{"name":"Test Finisher"}}`,
+		// Unnamed: the manifest carries placeholder collectibles with no display
+		// name, and the all-collectibles scan drops them.
+		6001: `{"hash":6001,"itemHash":600,"sourceString":"Eververse","displayProperties":{"name":""}}`,
 	}
 	for hash, blob := range collectibles {
 		if _, err := db.Exec(`INSERT INTO DestinyCollectibleDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -123,6 +126,48 @@ func writeFixtureDB(t *testing.T, path string) {
 	for hash, blob := range nodes {
 		if _, err := db.Exec(`INSERT INTO DestinyPresentationNodeDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
 			t.Fatalf("fixture pnode %d: %v", hash, err)
+		}
+	}
+
+	for _, ddl := range []string{
+		`CREATE TABLE DestinyRecordDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
+		`CREATE TABLE DestinyActivityDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
+		`CREATE TABLE DestinyActivityModifierDefinition (id INTEGER PRIMARY KEY, json TEXT)`,
+	} {
+		if _, err := db.Exec(ddl); err != nil {
+			t.Fatalf("fixture ddl: %v", err)
+		}
+	}
+
+	records := map[uint32]string{
+		7000: `{"hash":7000,"displayProperties":{"name":"Gjallarhorn Catalyst"},"recordTypeName":"Exotic Catalysts",
+			"stateInfo":{"obscuredDescription":"Found in strikes and the Crucible."},"objectiveHashes":[71,72]}`,
+		7001: `{"hash":7001,"displayProperties":{"name":"Fatebringer Pattern"},"recordTypeName":"Weapon Pattern",
+			"parentNodeHashes":[10]}`,
+	}
+	for hash, blob := range records {
+		if _, err := db.Exec(`INSERT INTO DestinyRecordDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
+			t.Fatalf("fixture record %d: %v", hash, err)
+		}
+	}
+
+	activities := map[uint32]string{
+		8000: `{"hash":8000,"displayProperties":{"name":"Vault of Glass"},"activityTypeHash":2043403989}`,
+		8001: `{"hash":8001,"displayProperties":{"name":"Grasp of Avarice"},"activityTypeHash":608898761}`,
+	}
+	for hash, blob := range activities {
+		if _, err := db.Exec(`INSERT INTO DestinyActivityDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
+			t.Fatalf("fixture activity %d: %v", hash, err)
+		}
+	}
+
+	modifiers := map[uint32]string{
+		9000: `{"hash":9000,"displayProperties":{"name":"Match Game"}}`,
+		9001: `{"hash":9001,"displayProperties":{"name":"Champion Foes"}}`,
+	}
+	for hash, blob := range modifiers {
+		if _, err := db.Exec(`INSERT INTO DestinyActivityModifierDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
+			t.Fatalf("fixture modifier %d: %v", hash, err)
 		}
 	}
 }
@@ -197,24 +242,104 @@ func TestRepository_GetMilestoneDefinitions_ParsesRewardMappings(t *testing.T) {
 	}
 }
 
-func TestRepository_GetCollectiblesByItemHashes(t *testing.T) {
+func TestRepository_GetRecordDefinitions(t *testing.T) {
 	repo, _ := fixtureRepo(t)
-	cols, err := repo.GetCollectiblesByItemHashes([]uint32{100, 400, 999})
+	defs, err := repo.GetRecordDefinitions([]uint32{7000, 7001, 999})
 	if err != nil {
-		t.Fatalf("GetCollectiblesByItemHashes: %v", err)
+		t.Fatalf("GetRecordDefinitions: %v", err)
 	}
-	if len(cols) != 2 {
-		t.Fatalf("len = %d, want 2", len(cols))
+	if len(defs) != 2 {
+		t.Fatalf("len = %d, want 2 (unknown hash omitted)", len(defs))
 	}
-	if len(cols[100]) != 2 {
-		t.Fatalf("collectibles for item 100 = %+v, want both linked collectibles", cols[100])
+	catalyst := defs[7000]
+	if catalyst == nil {
+		t.Fatal("record 7000 missing")
 	}
-	sourceSet := map[string]bool{}
-	for _, col := range cols[100] {
-		sourceSet[col.SourceString] = true
+	// RecordTypeName is how the records service tells catalysts and crafting
+	// patterns apart inside Bungie's one combined presentation node, and
+	// ObscuredDescription is the acquisition text it shows. Both are top-level
+	// decode targets that a wrong struct tag would silently blank.
+	if catalyst.RecordTypeName != "Exotic Catalysts" {
+		t.Errorf("RecordTypeName = %q, want %q", catalyst.RecordTypeName, "Exotic Catalysts")
 	}
-	if !sourceSet["Vault of Glass raid"] || !sourceSet["Monument to Lost Lights"] {
-		t.Errorf("sources for item 100 = %v, want both distinct attributions", sourceSet)
+	if catalyst.StateInfo.ObscuredDescription != "Found in strikes and the Crucible." {
+		t.Errorf("ObscuredDescription = %q, want the obscured acquisition text", catalyst.StateInfo.ObscuredDescription)
+	}
+	if len(catalyst.ObjectiveHashes) != 2 || catalyst.ObjectiveHashes[0] != 71 {
+		t.Errorf("ObjectiveHashes = %v, want [71 72]", catalyst.ObjectiveHashes)
+	}
+	if pattern := defs[7001]; pattern == nil || pattern.RecordTypeName != "Weapon Pattern" {
+		t.Errorf("record 7001 = %+v, want RecordTypeName=Weapon Pattern", pattern)
+	}
+}
+
+func TestRepository_GetActivityDefinitions(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	defs, err := repo.GetActivityDefinitions([]uint32{8000, 8001, 999})
+	if err != nil {
+		t.Fatalf("GetActivityDefinitions: %v", err)
+	}
+	if len(defs) != 2 {
+		t.Fatalf("len = %d, want 2 (unknown hash omitted)", len(defs))
+	}
+	raid := defs[8000]
+	if raid == nil || raid.DisplayProperties.Name != "Vault of Glass" {
+		t.Fatalf("activity 8000 = %+v, want Name=Vault of Glass", raid)
+	}
+	// ActivityTypeHash is what the weekly service classifies raid versus dungeon
+	// with, so it has to survive the decode.
+	if raid.ActivityTypeHash != 2043403989 {
+		t.Errorf("ActivityTypeHash = %d, want 2043403989", raid.ActivityTypeHash)
+	}
+}
+
+func TestRepository_GetActivityModifierDefinitions(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	defs, err := repo.GetActivityModifierDefinitions([]uint32{9000, 999})
+	if err != nil {
+		t.Fatalf("GetActivityModifierDefinitions: %v", err)
+	}
+	if len(defs) != 1 {
+		t.Fatalf("len = %d, want 1 (unknown hash omitted)", len(defs))
+	}
+	if defs[9000] == nil || defs[9000].DisplayProperties.Name != "Match Game" {
+		t.Errorf("modifier 9000 = %+v, want Name=Match Game", defs[9000])
+	}
+}
+
+func TestRepository_GetAllCollectiblesWithItems(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	rows, err := repo.GetAllCollectiblesWithItems()
+	if err != nil {
+		t.Fatalf("GetAllCollectiblesWithItems: %v", err)
+	}
+	// One row per collectible, not per item: Fatebringer's two collectibles are
+	// two rows that both carry the same item definition.
+	// 8 collectible rows in the fixture, one of them unnamed and dropped by the
+	// scan, so 7 reach the caller.
+	if len(rows) != 7 {
+		t.Fatalf("len = %d, want one row per NAMED fixture collectible (7 of 8)", len(rows))
+	}
+	for _, row := range rows {
+		if row.Collectible.DisplayProperties.Name == "" {
+			t.Fatalf("unnamed collectible %d reached the caller", row.Collectible.Hash)
+		}
+	}
+	var fatebringer int
+	for _, row := range rows {
+		if row.Collectible.ItemHash != 100 {
+			continue
+		}
+		fatebringer++
+		if row.Item == nil {
+			t.Fatal("collectible for item 100 has no joined item definition")
+		}
+		if row.Item.DisplayProperties.Name != "Fatebringer" {
+			t.Errorf("joined item = %q, want Fatebringer", row.Item.DisplayProperties.Name)
+		}
+	}
+	if fatebringer != 2 {
+		t.Errorf("rows for item 100 = %d, want 2", fatebringer)
 	}
 }
 
@@ -366,11 +491,22 @@ func TestGetAcquisitionRows(t *testing.T) {
 	if _, ok := rows.Items[999999]; ok {
 		t.Error("unknown hash should be absent from Items")
 	}
-	// The collectibles half is keyed by item hash and may legitimately be empty
-	// for an item the fixture links to nothing; what matters is that both halves
-	// came back from one read.
 	if rows.Collectibles == nil {
-		t.Error("Collectibles map is nil, want allocated")
+		t.Fatal("Collectibles map is nil, want allocated")
+	}
+	// An item hash resolves to EVERY collectible that links it, not one
+	// representative row: two collectibles attribute Fatebringer to two
+	// different sources, and both must survive the join.
+	if len(rows.Collectibles[100]) != 2 {
+		t.Fatalf("collectibles for item 100 = %+v, want both linked collectibles", rows.Collectibles[100])
+	}
+	// Ordered by collectible id (1000 before 1001), so repeated reads present an
+	// item's several attributions the same way round.
+	if got := []string{rows.Collectibles[100][0].SourceString, rows.Collectibles[100][1].SourceString}; got[0] != "Vault of Glass raid" || got[1] != "Monument to Lost Lights" {
+		t.Errorf("sources for item 100 = %v, want both attributions in collectible-id order", got)
+	}
+	if _, ok := rows.Collectibles[999999]; ok {
+		t.Error("unknown hash should be absent from Collectibles")
 	}
 }
 

@@ -369,65 +369,21 @@ func keys(m map[uint32]struct{}) []uint32 {
 // getPlugSetsLocked batch-fetches plug sets by hash. Assumes r.mu is held.
 func (r *Repository) getPlugSetsLocked(hashes []uint32) (map[uint32]*plugSetDef, error) {
 	out := map[uint32]*plugSetDef{}
-	if len(hashes) == 0 {
-		return out, nil
-	}
-	placeholders := make([]string, len(hashes))
-	args := make([]any, len(hashes))
-	for i, h := range hashes {
-		placeholders[i] = "?"
-		args[i] = hashToDBKey(h)
-	}
-	q := "SELECT id, json FROM DestinyPlugSetDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-	rows, err := r.db.Query(q, args...)
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyPlugSetDefinition", "getPlugSets"),
+		func(id uint32, def *plugSetDef) { out[id] = def })
 	if err != nil {
-		return nil, fmt.Errorf("getPlugSets: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var dbID int64
-		var blob string
-		if err := rows.Scan(&dbID, &blob); err != nil {
-			return nil, fmt.Errorf("getPlugSets scan: %w", err)
-		}
-		var def plugSetDef
-		if err := json.Unmarshal([]byte(blob), &def); err != nil {
-			continue
-		}
-		out[dbKeyToHash(dbID)] = &def
-	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // getPlugItemsLocked batch-fetches plug-item defs (name + category). Assumes r.mu is held.
 func (r *Repository) getPlugItemsLocked(hashes []uint32) (map[uint32]*plugItemDef, error) {
 	out := map[uint32]*plugItemDef{}
-	if len(hashes) == 0 {
-		return out, nil
-	}
-	placeholders := make([]string, len(hashes))
-	args := make([]any, len(hashes))
-	for i, h := range hashes {
-		placeholders[i] = "?"
-		args[i] = hashToDBKey(h)
-	}
-	q := "SELECT id, json FROM DestinyInventoryItemDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-	rows, err := r.db.Query(q, args...)
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyInventoryItemDefinition", "getPlugItems"),
+		func(id uint32, def *plugItemDef) { out[id] = def })
 	if err != nil {
-		return nil, fmt.Errorf("getPlugItems: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var dbID int64
-		var blob string
-		if err := rows.Scan(&dbID, &blob); err != nil {
-			return nil, fmt.Errorf("getPlugItems scan: %w", err)
-		}
-		var def plugItemDef
-		if err := json.Unmarshal([]byte(blob), &def); err != nil {
-			continue
-		}
-		out[dbKeyToHash(dbID)] = &def
-	}
-	return out, rows.Err()
+	return out, nil
 }

@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"math"
 	"strings"
 	"sync"
@@ -85,42 +84,6 @@ func dbKeyToHash(key int64) uint32 {
 	return uint32(key)
 }
 
-func (r *Repository) GetCollectibleDefinition(hash uint32) (*bungie.CollectibleDefinition, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	var blob string
-	err := r.db.QueryRow("SELECT json FROM DestinyCollectibleDefinition WHERE id = ?", hashToDBKey(hash)).Scan(&blob)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to query collectible: %w", err)
-	}
-	var def bungie.CollectibleDefinition
-	if err := json.Unmarshal([]byte(blob), &def); err != nil {
-		return nil, fmt.Errorf("failed to parse collectible JSON: %w", err)
-	}
-	return &def, nil
-}
-
-func (r *Repository) GetInventoryItemDefinition(hash uint32) (*bungie.InventoryItemDefinition, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	var blob string
-	err := r.db.QueryRow("SELECT json FROM DestinyInventoryItemDefinition WHERE id = ?", hashToDBKey(hash)).Scan(&blob)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to query item: %w", err)
-	}
-	var def bungie.InventoryItemDefinition
-	if err := json.Unmarshal([]byte(blob), &def); err != nil {
-		return nil, fmt.Errorf("failed to parse item JSON: %w", err)
-	}
-	return &def, nil
-}
-
 // ResolveVendorLocation resolves a live vendor location index through the
 // vendor and destination manifest definitions. Missing definitions and invalid
 // indexes are represented by zero values so best-effort callers can omit the
@@ -177,13 +140,9 @@ func (r *Repository) ResolveVendorLocation(vendorHash uint32, locationIndex int)
 	return destinationHash, destination.DisplayProperties.Name, nil
 }
 
-func (r *Repository) GetAllCollectibles() ([]bungie.CollectibleDefinition, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.getAllCollectiblesLocked()
-}
-
-// getAllCollectiblesLocked is GetAllCollectibles assuming r.mu is already held.
+// getAllCollectiblesLocked reads every named collectible in the manifest. It
+// assumes r.mu is already held, so its one caller can hold a single read lock
+// across both halves of the collectible-plus-item join.
 func (r *Repository) getAllCollectiblesLocked() ([]bungie.CollectibleDefinition, error) {
 	rows, err := r.db.Query("SELECT json FROM DestinyCollectibleDefinition")
 	if err != nil {
@@ -194,7 +153,7 @@ func (r *Repository) getAllCollectiblesLocked() ([]bungie.CollectibleDefinition,
 	for rows.Next() {
 		var blob string
 		if err := rows.Scan(&blob); err != nil {
-			return nil, fmt.Errorf("GetAllCollectibles scan: %w", err)
+			return nil, fmt.Errorf("getAllCollectibles scan: %w", err)
 		}
 		var def bungie.CollectibleDefinition
 		if err := json.Unmarshal([]byte(blob), &def); err != nil {
@@ -234,7 +193,7 @@ func (r *Repository) GetAllCollectiblesWithItems() ([]CollectibleWithItem, error
 			hashes = append(hashes, col.ItemHash)
 		}
 	}
-	items, err := r.getItemsByHashesChunkedLocked(hashes)
+	items, err := r.getItemsByHashesLocked(hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -247,22 +206,6 @@ func (r *Repository) GetAllCollectiblesWithItems() ([]CollectibleWithItem, error
 		results = append(results, cwi)
 	}
 	return results, nil
-}
-
-// getItemsByHashesChunkedLocked fetches item definitions in IN-clause chunks of
-// 500 (SQLite parameter limits) assuming r.mu is already held by the caller.
-func (r *Repository) getItemsByHashesChunkedLocked(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
-	out := make(map[uint32]*bungie.InventoryItemDefinition, len(hashes))
-	const chunkSize = 500
-	for i := 0; i < len(hashes); i += chunkSize {
-		chunk := hashes[i:min(i+chunkSize, len(hashes))]
-		defs, err := r.getItemsByHashesLocked(chunk)
-		if err != nil {
-			return nil, err
-		}
-		maps.Copy(out, defs)
-	}
-	return out, nil
 }
 
 // cosmeticItemTypes is the set of itemType values bucketed as cosmetics.
@@ -320,41 +263,21 @@ func (r *Repository) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.Inven
 }
 
 // getItemsByHashesLocked is GetItemsByHashes assuming r.mu is already held.
+//
+// Definitions are keyed by the row id rather than by the hash inside the blob,
+// so an item whose stored id and self-reported hash disagree is still returned
+// under the hash the caller asked for.
 func (r *Repository) getItemsByHashesLocked(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
-	if len(hashes) == 0 {
-		return map[uint32]*bungie.InventoryItemDefinition{}, nil
-	}
-	placeholders := make([]string, len(hashes))
-	args := make([]any, len(hashes))
-	for i, h := range hashes {
-		placeholders[i] = "?"
-		args[i] = hashToDBKey(h)
-	}
-	q := "SELECT id, json FROM DestinyInventoryItemDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-	rows, err := r.db.Query(q, args...)
+	out := make(map[uint32]*bungie.InventoryItemDefinition, len(hashes))
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyInventoryItemDefinition", "GetItemsByHashes"),
+		func(id uint32, def *bungie.InventoryItemDefinition) { out[id] = def })
 	if err != nil {
-		return nil, fmt.Errorf("GetItemsByHashes: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	out := make(map[uint32]*bungie.InventoryItemDefinition)
-	for rows.Next() {
-		var dbID int64
-		var blob string
-		if err := rows.Scan(&dbID, &blob); err != nil {
-			return nil, fmt.Errorf("GetItemsByHashes scan: %w", err)
-		}
-		var def bungie.InventoryItemDefinition
-		if err := json.Unmarshal([]byte(blob), &def); err != nil {
-			continue
-		}
-		out[dbKeyToHash(dbID)] = &def
-	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // GetMilestoneDefinitions fetches milestone definitions for a batch of hashes.
-// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
 func (r *Repository) GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungie.MilestoneDefinition, error) {
 	if len(hashes) == 0 {
 		return map[uint32]*bungie.MilestoneDefinition{}, nil
@@ -363,38 +286,14 @@ func (r *Repository) GetMilestoneDefinitions(hashes []uint32) (map[uint32]*bungi
 	defer r.mu.RUnlock()
 
 	out := make(map[uint32]*bungie.MilestoneDefinition, len(hashes))
-	const chunkSize = 500
-	for i := 0; i < len(hashes); i += chunkSize {
-		chunk := hashes[i:min(i+chunkSize, len(hashes))]
-		placeholders := make([]string, len(chunk))
-		args := make([]any, len(chunk))
-		for j, h := range chunk {
-			placeholders[j] = "?"
-			args[j] = hashToDBKey(h)
-		}
-		q := "SELECT json FROM DestinyMilestoneDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-		rows, err := r.db.Query(q, args...)
-		if err != nil {
-			return nil, fmt.Errorf("GetMilestoneDefinitions: %w", err)
-		}
-		for rows.Next() {
-			var blob string
-			if err := rows.Scan(&blob); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			var def bungie.MilestoneDefinition
-			if err := json.Unmarshal([]byte(blob), &def); err != nil {
-				continue
-			}
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyMilestoneDefinition", "GetMilestoneDefinitions"),
+		func(_ uint32, def *bungie.MilestoneDefinition) {
 			if def.Hash != 0 {
-				out[def.Hash] = &def
+				out[def.Hash] = def
 			}
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+		})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -447,7 +346,6 @@ type RecordDef struct {
 }
 
 // GetPresentationNodeDefinitions fetches a batch of presentation node definitions by hash.
-// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
 func (r *Repository) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32]*PresentationNodeDef, error) {
 	if len(hashes) == 0 {
 		return map[uint32]*PresentationNodeDef{}, nil
@@ -456,38 +354,10 @@ func (r *Repository) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32
 	defer r.mu.RUnlock()
 
 	results := make(map[uint32]*PresentationNodeDef, len(hashes))
-	const chunkSize = 500
-	for i := 0; i < len(hashes); i += chunkSize {
-		chunk := hashes[i:min(i+chunkSize, len(hashes))]
-
-		placeholders := make([]string, len(chunk))
-		args := make([]any, len(chunk))
-		for j, h := range chunk {
-			placeholders[j] = "?"
-			args[j] = hashToDBKey(h)
-		}
-		query := fmt.Sprintf("SELECT json FROM DestinyPresentationNodeDefinition WHERE id IN (%s)",
-			strings.Join(placeholders, ","))
-		rows, err := r.db.Query(query, args...)
-		if err != nil {
-			return nil, fmt.Errorf("GetPresentationNodeDefinitions: %w", err)
-		}
-		for rows.Next() {
-			var blob string
-			if err := rows.Scan(&blob); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			var def PresentationNodeDef
-			if err := json.Unmarshal([]byte(blob), &def); err != nil {
-				continue
-			}
-			results[def.Hash] = &def
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyPresentationNodeDefinition", "GetPresentationNodeDefinitions"),
+		func(_ uint32, def *PresentationNodeDef) { results[def.Hash] = def })
+	if err != nil {
+		return nil, err
 	}
 	return results, nil
 }
@@ -521,7 +391,6 @@ func (r *Repository) GetAllPresentationNodes() (map[uint32]*PresentationNodeDef,
 }
 
 // GetRecordDefinitions fetches a batch of record definitions by hash.
-// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
 func (r *Repository) GetRecordDefinitions(hashes []uint32) (map[uint32]*RecordDef, error) {
 	if len(hashes) == 0 {
 		return map[uint32]*RecordDef{}, nil
@@ -530,44 +399,15 @@ func (r *Repository) GetRecordDefinitions(hashes []uint32) (map[uint32]*RecordDe
 	defer r.mu.RUnlock()
 
 	results := make(map[uint32]*RecordDef, len(hashes))
-	const chunkSize = 500
-	for i := 0; i < len(hashes); i += chunkSize {
-		chunk := hashes[i:min(i+chunkSize, len(hashes))]
-
-		placeholders := make([]string, len(chunk))
-		args := make([]any, len(chunk))
-		for j, h := range chunk {
-			placeholders[j] = "?"
-			args[j] = hashToDBKey(h)
-		}
-		query := fmt.Sprintf("SELECT json FROM DestinyRecordDefinition WHERE id IN (%s)",
-			strings.Join(placeholders, ","))
-		rows, err := r.db.Query(query, args...)
-		if err != nil {
-			return nil, fmt.Errorf("GetRecordDefinitions: %w", err)
-		}
-		for rows.Next() {
-			var blob string
-			if err := rows.Scan(&blob); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			var def RecordDef
-			if err := json.Unmarshal([]byte(blob), &def); err != nil {
-				continue
-			}
-			results[def.Hash] = &def
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyRecordDefinition", "GetRecordDefinitions"),
+		func(_ uint32, def *RecordDef) { results[def.Hash] = def })
+	if err != nil {
+		return nil, err
 	}
 	return results, nil
 }
 
 // GetActivityDefinitions fetches activity definitions for a batch of hashes.
-// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
 func (r *Repository) GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error) {
 	if len(hashes) == 0 {
 		return map[uint32]*bungie.ActivityDefinition{}, nil
@@ -576,44 +416,19 @@ func (r *Repository) GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie
 	defer r.mu.RUnlock()
 
 	out := make(map[uint32]*bungie.ActivityDefinition, len(hashes))
-	const chunkSize = 500
-	for i := 0; i < len(hashes); i += chunkSize {
-		chunk := hashes[i:min(i+chunkSize, len(hashes))]
-		placeholders := make([]string, len(chunk))
-		args := make([]any, len(chunk))
-		for j, h := range chunk {
-			placeholders[j] = "?"
-			args[j] = hashToDBKey(h)
-		}
-		q := "SELECT json FROM DestinyActivityDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-		rows, err := r.db.Query(q, args...)
-		if err != nil {
-			return nil, fmt.Errorf("GetActivityDefinitions: %w", err)
-		}
-		for rows.Next() {
-			var blob string
-			if err := rows.Scan(&blob); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			var def bungie.ActivityDefinition
-			if err := json.Unmarshal([]byte(blob), &def); err != nil {
-				continue
-			}
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyActivityDefinition", "GetActivityDefinitions"),
+		func(_ uint32, def *bungie.ActivityDefinition) {
 			if def.Hash != 0 {
-				out[def.Hash] = &def
+				out[def.Hash] = def
 			}
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+		})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
 // GetActivityModifierDefinitions fetches activity modifier definitions for a batch of hashes.
-// Hashes are chunked at 500 to avoid SQLite IN-clause limits.
 func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModifierDefinition, error) {
 	if len(hashes) == 0 {
 		return map[uint32]*bungie.ActivityModifierDefinition{}, nil
@@ -622,51 +437,16 @@ func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32
 	defer r.mu.RUnlock()
 
 	out := make(map[uint32]*bungie.ActivityModifierDefinition, len(hashes))
-	const chunkSize = 500
-	for i := 0; i < len(hashes); i += chunkSize {
-		chunk := hashes[i:min(i+chunkSize, len(hashes))]
-		placeholders := make([]string, len(chunk))
-		args := make([]any, len(chunk))
-		for j, h := range chunk {
-			placeholders[j] = "?"
-			args[j] = hashToDBKey(h)
-		}
-		q := "SELECT json FROM DestinyActivityModifierDefinition WHERE id IN (" + strings.Join(placeholders, ",") + ")"
-		rows, err := r.db.Query(q, args...)
-		if err != nil {
-			return nil, fmt.Errorf("GetActivityModifierDefinitions: %w", err)
-		}
-		for rows.Next() {
-			var blob string
-			if err := rows.Scan(&blob); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			var def bungie.ActivityModifierDefinition
-			if err := json.Unmarshal([]byte(blob), &def); err != nil {
-				continue
-			}
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyActivityModifierDefinition", "GetActivityModifierDefinitions"),
+		func(_ uint32, def *bungie.ActivityModifierDefinition) {
 			if def.Hash != 0 {
-				out[def.Hash] = &def
+				out[def.Hash] = def
 			}
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+		})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
-}
-
-// GetCollectiblesByItemHashes returns every collectible definition linked to
-// each requested itemHash. More than one collectible can attribute a different
-// acquisition source to the same item, so the multiplicity is part of this
-// interface rather than an implementation detail. Hashes are chunked at 500 to
-// avoid SQLite IN-clause limits.
-func (r *Repository) GetCollectiblesByItemHashes(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.getCollectiblesByItemHashesLocked(hashes)
 }
 
 // AcquisitionRows is one coherent read of the item definitions and linked
@@ -695,7 +475,7 @@ func (r *Repository) GetAcquisitionRows(hashes []uint32) (*AcquisitionRows, erro
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	items, err := r.getItemsByHashesChunkedLocked(hashes)
+	items, err := r.getItemsByHashesLocked(hashes)
 	if err != nil {
 		return nil, err
 	}
@@ -706,47 +486,40 @@ func (r *Repository) GetAcquisitionRows(hashes []uint32) (*AcquisitionRows, erro
 	return &AcquisitionRows{Items: items, Collectibles: collectibles}, nil
 }
 
-// getCollectiblesByItemHashesLocked is GetCollectiblesByItemHashes assuming
-// r.mu is already held.
+// collectiblesByItemHash matches collectibles on the itemHash inside the blob
+// rather than on the row id, because the link this query follows runs the other
+// way: from an item hash to every collectible that attributes a source to it.
+// Rows are ordered by id so an item's several collectibles keep a stable order.
+var collectiblesByItemHash = chunkedQuery{
+	label: "getCollectiblesByItemHashes",
+	statement: func(placeholders string) string {
+		return "SELECT id, json FROM DestinyCollectibleDefinition WHERE json_extract(json, '$.itemHash') IN (" +
+			placeholders + ") ORDER BY id"
+	},
+	// itemHash is stored unsigned inside the JSON blob, so it is compared as the
+	// plain hash rather than through hashToDBKey's signed row-id encoding.
+	arg: func(hash uint32) any { return int64(hash) },
+}
+
+// getCollectiblesByItemHashesLocked returns every collectible definition linked
+// to each requested itemHash, assuming r.mu is already held. More than one
+// collectible can attribute a different acquisition source to the same item, so
+// the multiplicity is part of this interface rather than an implementation
+// detail.
 func (r *Repository) getCollectiblesByItemHashesLocked(hashes []uint32) (map[uint32][]bungie.CollectibleDefinition, error) {
 	if len(hashes) == 0 {
 		return map[uint32][]bungie.CollectibleDefinition{}, nil
 	}
 
 	out := make(map[uint32][]bungie.CollectibleDefinition, len(hashes))
-	const chunkSize = 500
-	for i := 0; i < len(hashes); i += chunkSize {
-		chunk := hashes[i:min(i+chunkSize, len(hashes))]
-		placeholders := make([]string, len(chunk))
-		args := make([]any, len(chunk))
-		for j, h := range chunk {
-			placeholders[j] = "?"
-			args[j] = int64(h) // itemHash is stored unsigned inside the JSON blob
-		}
-		q := "SELECT json FROM DestinyCollectibleDefinition WHERE json_extract(json, '$.itemHash') IN (" +
-			strings.Join(placeholders, ",") + ") ORDER BY id"
-		rows, err := r.db.Query(q, args...)
-		if err != nil {
-			return nil, fmt.Errorf("GetCollectiblesByItemHashes: %w", err)
-		}
-		for rows.Next() {
-			var blob string
-			if err := rows.Scan(&blob); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("GetCollectiblesByItemHashes scan: %w", err)
-			}
-			var def bungie.CollectibleDefinition
-			if err := json.Unmarshal([]byte(blob), &def); err != nil {
-				continue
-			}
+	err := queryDefsChunked(r.db, hashes, collectiblesByItemHash,
+		func(_ uint32, def *bungie.CollectibleDefinition) {
 			if def.ItemHash != 0 {
-				out[def.ItemHash] = append(out[def.ItemHash], def)
+				out[def.ItemHash] = append(out[def.ItemHash], *def)
 			}
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return nil, err
-		}
+		})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
