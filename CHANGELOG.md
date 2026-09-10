@@ -14,6 +14,24 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.32] - 2026-09-10
+
+### Fixed
+
+- Very large item lookups against the game's item database can no longer fail
+  outright. One of the internal batch reads asked for every item in a single
+  query instead of splitting the request into batches like its siblings did, so
+  a big enough request could exceed the database's limit on how many values one
+  query may carry. It now batches the same way everything else does.
+
+### Changed
+
+- The ten places that read batches of definitions out of the game's item
+  database now share one implementation instead of each carrying its own copy of
+  the batching, and four internal read methods that nothing called were removed.
+  No behaviour changes; this is groundwork that makes the next manifest change
+  smaller and harder to get wrong.
+
 ## [1.3.31] - 2026-09-09
 
 ### Fixed
@@ -627,7 +645,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.31...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.32...HEAD
+[1.3.32]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.31...v1.3.32
 [1.3.31]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.30...v1.3.31
 [1.3.30]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.29...v1.3.30
 [1.3.29]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.28...v1.3.29
