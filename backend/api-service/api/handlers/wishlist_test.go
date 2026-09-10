@@ -442,5 +442,3 @@ func TestBulkUpdate_UnavailablePersistenceReturns503(t *testing.T) {
 		t.Errorf("status = %d body = %s, want 503 DB_UNAVAILABLE", w.Code, w.Body.String())
 	}
 }
-
-// --- completion (still handler-owned until the complete wish list service) ---

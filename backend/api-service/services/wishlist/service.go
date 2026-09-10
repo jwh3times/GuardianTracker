@@ -216,12 +216,25 @@ func (s *Service) List(ctx context.Context, m Membership) ([]Entry, error) {
 //
 // The item must exist: Entries refuses an item a successful lookup does not
 // contain, and writes nothing when the lookup itself fails.
+//
+// The facts come back from that same validation rather than a second lookup.
+// Asking again after the write would open a window where the row is committed
+// but the response cannot be built — the caller would be told the save failed,
+// and a retry would then be refused as a duplicate.
 func (s *Service) Add(ctx context.Context, m Membership, cmd AddCommand) (Entry, error) {
-	stored, err := s.entries.Add(ctx, m.MembershipID, cmd)
+	stored, facts, err := s.entries.Add(ctx, m.MembershipID, cmd)
 	if err != nil {
 		return Entry{}, err
 	}
-	return s.completeOne(ctx, m, stored)
+	return Entry{
+		ID:            stored.ID,
+		ItemHash:      stored.ItemHash,
+		Priority:      stored.Priority,
+		Notes:         stored.Notes,
+		CreatedAt:     stored.CreatedAt,
+		Item:          KnownItem(facts),
+		AvailableFrom: s.availability(ctx, m)[stored.ItemHash],
+	}, nil
 }
 
 // Update applies a partial patch and returns the entry complete.
@@ -304,14 +317,6 @@ func (s *Service) complete(ctx context.Context, m Membership, stored []StoredEnt
 		}
 	}
 	return out, nil
-}
-
-func (s *Service) completeOne(ctx context.Context, m Membership, stored StoredEntry) (Entry, error) {
-	completed, err := s.complete(ctx, m, []StoredEntry{stored})
-	if err != nil {
-		return Entry{}, err
-	}
-	return completed[0], nil
 }
 
 // itemState resolves one item's current state, distinguishing a tombstone from

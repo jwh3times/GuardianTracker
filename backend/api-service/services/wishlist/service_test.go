@@ -457,3 +457,85 @@ func TestNewService_AcceptsAMissingCredentialReader(t *testing.T) {
 		t.Errorf("availableFrom = %q, want public availability without a credential reader", got[0].AvailableFrom)
 	}
 }
+
+// A failure from the core is the caller's answer, not something completion
+// papers over. These are the paths where the service's only job is to stop.
+func TestServiceForwardsCoreFailures(t *testing.T) {
+	unavailable := ErrUnavailable
+
+	t.Run("List when persistence is unavailable", func(t *testing.T) {
+		repo := &fakeRepository{err: unavailable}
+		lookup := &richItems{}
+		svc := NewService(NewEntries(repo, lookup), lookup, &fakeVendors{}, nil)
+
+		_, err := svc.List(context.Background(), membership())
+
+		if !errors.Is(err, unavailable) {
+			t.Fatalf("err = %v, want ErrUnavailable", err)
+		}
+		if lookup.calls != 0 {
+			t.Errorf("item lookups = %d; there is nothing to complete", lookup.calls)
+		}
+	})
+
+	t.Run("Add when the write is refused", func(t *testing.T) {
+		repo := &fakeRepository{err: ErrDuplicate}
+		lookup := &richItems{facts: map[uint32]items.AcquisitionFacts{100: fatebringer()}}
+		svc := NewService(NewEntries(repo, lookup), lookup, &fakeVendors{}, nil)
+
+		_, err := svc.Add(context.Background(), membership(), AddCommand{ItemHash: 100})
+
+		if !errors.Is(err, ErrDuplicate) {
+			t.Fatalf("err = %v, want ErrDuplicate", err)
+		}
+	})
+
+	t.Run("Add when the item is unknown", func(t *testing.T) {
+		repo := &fakeRepository{}
+		lookup := &richItems{} // knows nothing
+		svc := NewService(NewEntries(repo, lookup), lookup, &fakeVendors{}, nil)
+
+		_, err := svc.Add(context.Background(), membership(), AddCommand{ItemHash: 100})
+
+		if !errors.Is(err, ErrUnknownItem) {
+			t.Fatalf("err = %v, want ErrUnknownItem", err)
+		}
+		if repo.writes != 0 {
+			t.Errorf("writes = %d, want none", repo.writes)
+		}
+	})
+
+	t.Run("Update when the write is refused", func(t *testing.T) {
+		repo := &fakeRepository{entries: []StoredEntry{storedAt(1, 100)}, err: ErrNotFound}
+		lookup := &richItems{facts: map[uint32]items.AcquisitionFacts{100: fatebringer()}}
+		svc := NewService(NewEntries(repo, lookup), lookup, &fakeVendors{}, nil)
+
+		_, err := svc.Update(context.Background(), membership(), 1, UpdateCommand{})
+
+		if !errors.Is(err, ErrNotFound) {
+			t.Fatalf("err = %v, want the repository's refusal", err)
+		}
+	})
+}
+
+// Saving must not report a failure for a row it already committed. The facts
+// used to describe a new entry are the ones its own validation resolved, so
+// there is no second lookup after the write that could fail.
+func TestAdd_DoesNotLookTheItemUpAgainAfterWriting(t *testing.T) {
+	repo := &fakeRepository{returnedStored: storedAt(7, 100)}
+	lookup := &richItems{facts: map[uint32]items.AcquisitionFacts{100: fatebringer()}}
+	svc := NewService(NewEntries(repo, lookup), lookup, &fakeVendors{}, nil)
+
+	got, err := svc.Add(context.Background(), membership(), AddCommand{ItemHash: 100})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	if lookup.calls != 1 {
+		t.Errorf("item lookups = %d, want exactly 1 — a second one after the write "+
+			"could fail and report a committed save as an error", lookup.calls)
+	}
+	if !got.Item.Known() || got.Item.Name() != "Fatebringer" {
+		t.Errorf("entry = %+v; the validated facts must describe the saved item", got)
+	}
+}
