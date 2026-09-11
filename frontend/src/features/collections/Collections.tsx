@@ -27,17 +27,15 @@ import {
 } from "../../lib/queries";
 import { toGTItemView } from "../../lib/adapters";
 import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
-import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../../lib/constants";
+import {
+  DIFFS,
+  DIFF_LABEL,
+  RARITIES,
+  RARITY_LABEL,
+  RARITY_RANK,
+} from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
 import type { APICacheRefreshResponse, WishListItem } from "../../types/api";
-
-const RARITY_RANK: Record<Rarity, number> = {
-  exotic: 0,
-  legendary: 1,
-  rare: 2,
-  uncommon: 3,
-  common: 4,
-};
 
 export function Collections() {
   const { showToast } = useToast();

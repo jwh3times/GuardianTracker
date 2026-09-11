@@ -24,6 +24,18 @@ export const RARITY_LABEL: Record<Rarity, string> = {
   uncommon: "Uncommon",
   common: "Common",
 };
+
+/**
+ * Sort order, best first. Separate from {@link RARITIES}, which is the filter
+ * control's display order: they coincide today but answer different questions.
+ */
+export const RARITY_RANK: Record<Rarity, number> = {
+  exotic: 0,
+  legendary: 1,
+  rare: 2,
+  uncommon: 3,
+  common: 4,
+};
 export const DIFF_LABEL: Record<Difficulty, string> = {
   easy: "Easy",
   moderate: "Moderate",

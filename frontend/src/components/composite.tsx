@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import React, { useState } from "react";
 import { Icon } from "./Icon";
+import { useOutsideClick } from "../lib/useOutsideClick";
 
 /* ---------------- PAGE HEADER ---------------- */
 export function PageHead({
@@ -97,15 +97,7 @@ export function Dropdown({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    };
-    document.addEventListener("click", h);
-    return () => document.removeEventListener("click", h);
-  }, []);
+  const ref = useOutsideClick<HTMLDivElement>(() => setOpen(false));
   return (
     <div className="gt-dd" ref={ref}>
       <button
