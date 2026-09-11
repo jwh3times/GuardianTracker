@@ -18,9 +18,9 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
 import { apiFetch } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
-import { collectionsQuery } from "../../lib/queries";
+import { collectionsQuery, weeklyQuery } from "../../lib/queries";
 import { toWishlistEntry } from "../../lib/adapters";
-import type { SummaryCategory, TodayAction, Weekly } from "../../types/design";
+import type { SummaryCategory, TodayAction } from "../../types/design";
 import type { WishListItem } from "../../types/api";
 
 function formatDuration(
@@ -74,11 +74,7 @@ export function Dashboard() {
     isLoading: weeklyLoading,
     isError: weeklyFailed,
   } = useQuery({
-    queryKey: ["weekly", activeCharacter?.id ?? null],
-    queryFn: () =>
-      apiFetch<Weekly>(
-        `/api/weekly/recommendations${activeCharacter ? `?characterId=${encodeURIComponent(activeCharacter.id)}` : ""}`,
-      ),
+    ...weeklyQuery(activeCharacter?.id),
     enabled: membershipType != null && !!membershipId && !charactersLoading,
   });
 

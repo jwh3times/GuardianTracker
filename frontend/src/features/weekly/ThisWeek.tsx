@@ -13,8 +13,7 @@ import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
-import { apiFetch } from "../../lib/api";
-import type { Weekly } from "../../types/design";
+import { weeklyQuery } from "../../lib/queries";
 
 const DONE_KEY_PREFIX = "gt_done:";
 
@@ -60,11 +59,7 @@ export function ThisWeek() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ["weekly", characterID ?? null],
-    queryFn: () =>
-      apiFetch<Weekly>(
-        `/api/weekly/recommendations${characterID ? `?characterId=${encodeURIComponent(characterID)}` : ""}`,
-      ),
+    ...weeklyQuery(characterID),
     enabled: !!user && !charactersLoading,
   });
 
