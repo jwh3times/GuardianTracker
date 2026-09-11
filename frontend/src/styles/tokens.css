@@ -49,10 +49,17 @@
   /* ---- DIFFICULTY (acquisition effort) ---- */
   --c-easy: oklch(0.76 0.115 168);
   --c-moderate: oklch(0.8 0.13 72);
-  --c-challenging: oklch(0.67 0.18 32);
+  /* Lighter than its hue alone suggests: `color` and the 14% background tint of
+     .gt-badge are both drawn from this token, so the tier has to clear AA
+     against a wash of itself. At L=0.67 it scored 4.37:1 on --c-surface-2 while
+     easy and moderate cleared 6:1 — an outlier that went unnoticed while a wire
+     vocabulary mismatch was routing ranked weekly badges to the neutral colour
+     instead of here (ADR 0016). L=0.72/C=0.17 scores 5.21:1, stays inside the
+     sRGB gamut, and is still the darkest and hottest of the three tiers. */
+  --c-challenging: oklch(0.72 0.17 32);
   --c-easy-dim: oklch(0.76 0.115 168 / 0.16);
   --c-moderate-dim: oklch(0.8 0.13 72 / 0.16);
-  --c-challenging-dim: oklch(0.67 0.18 32 / 0.16);
+  --c-challenging-dim: oklch(0.72 0.17 32 / 0.16);
 
   /* ---- STATUS / AVAILABILITY ---- */
   --c-avail: oklch(0.78 0.14 158); /* available now (green) */

@@ -31,6 +31,49 @@ describe("ThisWeek page", () => {
     expect(screen.getByText("0/1 done")).toBeInTheDocument();
   });
 
+  it("gives a ranked title-case tier the challenging badge colour", async () => {
+    // The defect ADR 0016 set out to fix: the wire tier ("Challenging") reached
+    // Badge unadapted, missed BADGE_COLOR's lowercase keys, and silently fell
+    // back to the neutral text colour with no type error. The label survived
+    // only because Badge falls through to rendering the raw kind.
+    renderPage(<ThisWeek />);
+    const badge = await screen.findByText("Challenging");
+    expect(badge).toHaveClass("gt-badge");
+    expect(badge.style.getPropertyValue("--bdg")).toBe("var(--c-challenging)");
+  });
+
+  it("still colours a legacy lowercase fallback tier", async () => {
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json({
+          ...sampleWeekly,
+          recommended: [
+            { ...sampleWeekly.recommended[0], id: "rec-1", diff: "moderate" },
+          ],
+        }),
+      ),
+    );
+    renderPage(<ThisWeek />);
+    const badge = await screen.findByText("Moderate");
+    expect(badge.style.getPropertyValue("--bdg")).toBe("var(--c-moderate)");
+  });
+
+  it("shows an unrecognised tier as Unrated rather than as raw wire text", async () => {
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () =>
+        HttpResponse.json({
+          ...sampleWeekly,
+          recommended: [
+            { ...sampleWeekly.recommended[0], id: "rec-1", diff: "Brutal" },
+          ],
+        }),
+      ),
+    );
+    renderPage(<ThisWeek />);
+    expect(await screen.findByText("Unrated")).toBeInTheDocument();
+    expect(screen.queryByText("Brutal")).not.toBeInTheDocument();
+  });
+
   it("toggles a recommended action done and persists across the reset key", async () => {
     server.use(
       http.get(`${API}/api/weekly/recommendations`, () =>

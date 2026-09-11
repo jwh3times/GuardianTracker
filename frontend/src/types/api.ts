@@ -34,10 +34,17 @@ export interface CurrentUserResponse {
 
 // --- Collections: mirrors services/collections/service.go ---
 
+/**
+ * The canonical difficulty vocabulary on the wire — `sources.DifficultyTier` in
+ * `services/sources`. Shared by acquisition sources and weekly recommendations;
+ * `lib/difficulty.ts` is the only thing that turns it into the design type.
+ */
+export type APIDifficulty = "Easy" | "Moderate" | "Challenging" | "Unrated";
+
 /** One collectible-derived provenance attribution for an item. */
 export interface APIAcquisitionSource {
   text: string;
-  difficulty: string;
+  difficulty: APIDifficulty;
   raidDungeon: boolean;
 }
 
@@ -197,6 +204,48 @@ export type {
 export interface APIRecordsEnvelope<T> {
   items: T[];
   fetchedAt: string; // RFC3339
+}
+
+// --- Weekly: mirrors services/weekly/service.go ---
+// Reset timing, milestones, Xûr inventory and today's actions are byte-identical
+// to their design types, so they are re-exported rather than restated. Only the
+// recommendation differs: its `diff` arrives in the canonical title-case wire
+// vocabulary, which is precisely what `lib/weeklyView.ts` adapts (ADR 0016).
+
+import type { Duration, Milestone, TodayAction, Xur } from "./design";
+
+export type {
+  Duration as APIDuration,
+  Milestone as APIMilestone,
+  TodayAction as APITodayAction,
+  Xur as APIXur,
+  XurItem as APIXurItem,
+} from "./design";
+
+/** One ranked or fallback action from the weekly recommender. */
+export interface APIRecommendedAction {
+  id: string;
+  text: string;
+  detail: string;
+  badge: string;
+  done: boolean;
+  diff: APIDifficulty;
+  time: string;
+}
+
+/** GET /api/weekly/recommendations[?characterId=<id>] */
+export interface APIWeekly {
+  resetLabel: string;
+  resetIn: Duration;
+  dailyResetIn: Duration;
+  resetAt: string; // RFC3339
+  fetchedAt: string; // RFC3339
+  degraded?: boolean;
+  xur: Xur | null; // null when Xûr is not in town
+  milestones: Milestone[];
+  /** Null rather than [] when the recommender produced nothing. */
+  recommended: APIRecommendedAction[] | null;
+  dailyActions: TodayAction[];
 }
 
 // --- Roles & feature flags (item 13) ---

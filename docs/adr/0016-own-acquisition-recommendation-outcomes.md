@@ -1,15 +1,21 @@
 # ADR 0016: Own Acquisition Recommendation Outcomes
 
-- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Implemented in `v1.3.35`
 - Date: 2026-08-17
 
-Implementation is incremental. The backend ownership slice is complete:
-Sources exposes a named difficulty tier, Efficiency publishes fenced ranked
-facts, Recommendations owns complete outcomes and fallbacks, and Weekly consumes
-the required `AcquisitionRecommender` without retaining recommendation policy.
-C2's `MilestoneMissingCounter` rewire has now landed, so Weekly no longer names
-or stores the concrete Efficiency engine. Only C3's frontend raw-type and
-tolerant-adapter work remains.
+Every slice has landed. Sources exposes a named difficulty tier, Efficiency
+publishes fenced ranked facts, Recommendations owns complete outcomes and
+fallbacks, Weekly consumes the required `AcquisitionRecommender` and the narrow
+`MilestoneMissingCounter` without naming the concrete Efficiency engine, and C3
+closed the frontend projection: `lib/difficulty.ts` owns the one tolerant wire
+adapter, `lib/weeklyView.ts` owns the payload projection, and `weeklyQuery`
+hangs it on the query seam so no feature module casts weekly JSON to a design
+type.
+
+The badge defect this decision set out to fix is corrected. Repairing it also
+exposed a latent WCAG AA failure the defect had been masking — `--c-challenging`
+had never actually been rendered on the weekly action row — which was fixed in
+the same release by raising that token's lightness.
 
 ## Context
 
@@ -146,8 +152,8 @@ Raw weekly response types use that union and adapt it to the lowercase design
 vocabulary through the same exhaustive difficulty adapter used for acquisition
 sources. During migration the runtime adapter accepts both canonical title-case
 and legacy lowercase spellings; an unknown value becomes the explicit `unrated`
-state. Feature modules never cast weekly JSON directly to design types. This is
-the planned correctness fix; recommendation content and ordering remain otherwise
+state. Feature modules never cast weekly JSON directly to design types. This was
+the correctness fix; recommendation content and ordering are otherwise
 unchanged.
 
 ## Boundaries
@@ -171,9 +177,9 @@ unchanged.
 
 ## Migration and test surface
 
-Implementation replaces rather than layers the existing split. Steps 1–4 landed
-together so the backend never retained two recommendation-policy owners, and
-step 5 followed on its own:
+Implementation replaced rather than layered the existing split. Steps 1–4 landed
+together so the backend never retained two recommendation-policy owners; steps 5
+and 6 each followed on their own:
 
 1. Add the typed source difficulty, Recommendations outcome types, and the
    consumer-side `weekly.AcquisitionRecommender` interface.
@@ -233,8 +239,8 @@ Weekly; it does not merely rename or forward `ScoredAction`.
   order and is the sole owner of final ranked-versus-fallback selection, wording,
   explanation, action kind, source, difficulty, emphasis, and fallback policy.
 - Weekly becomes an assembler rather than a second recommendation implementation.
-- The backend now emits one typed, canonical wire vocabulary. C3 completes the
-  frontend projection needed to fix the verified badge drift.
-- Existing recommendation and fallback behavior remains stable. C3 will correct
-  the frontend difficulty representation and badge styling.
-- Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.
+- The backend emits one typed, canonical wire vocabulary, and the frontend
+  projection that consumes it fixed the verified badge drift.
+- Existing recommendation and fallback behavior remained stable throughout; only
+  the frontend difficulty representation and badge styling changed.
+- Implementation was sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeded slice by slice.
