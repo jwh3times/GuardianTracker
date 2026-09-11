@@ -87,8 +87,17 @@ frontend/src/
     api.ts                     ← apiFetch helper + ApiError (status/code/retryAfter) + QueryClient;
                                    API_URL exported; all REST calls go through apiFetch
     acquisitionSources.ts      ← toAcquisitionSource: the one APIAcquisitionSource → AcquisitionSource
-                                   adapter shared by collection and wishlist projections; maps unknown
-                                   wire tiers to unrated without inventing an item-level tier
+                                   adapter shared by collection and wishlist projections; takes its tier
+                                   from difficulty.ts rather than owning a second map
+    difficulty.ts              ← toDifficulty: the one wire-tier → design Difficulty adapter, shared by
+                                   acquisition sources and weekly recommendations. Accepts canonical
+                                   title-case (APIDifficulty) and legacy lowercase spellings; anything
+                                   else becomes the explicit unrated state. Looks up through a Map so
+                                   server text like "toString" cannot resolve through the prototype chain
+    weeklyView.ts              ← toWeekly: the sole adapter for the weekly payload (APIWeekly → design
+                                   Weekly). Only `recommended` is projected — every other field already
+                                   arrives in the design vocabulary — and a nil-slice `null` becomes an
+                                   empty list here rather than in each reader
     collectionsView.ts         ← The sole adapter for the collections payload (APIMembershipCollections → design
                                    types). toCollectionsSummary(raw) returns CollectionsSummaryView (roots,
                                    rootHashes, summary, overallPct, fetchedAt, node(), pathToNode()) for the
@@ -121,7 +130,10 @@ frontend/src/
                                    unchanged: ["collections", type, id, "all" | "missing"].
                                    itemPerksQuery(itemHash) — lazy perk-pool fetch (staleTime: Infinity);
                                    itemByHashQuery(itemHash) — minimal item view for deep-link miss resolution
-                                   (staleTime: Infinity, retry: false)
+                                   (staleTime: Infinity, retry: false);
+                                   weeklyQuery(characterId) — This Week payload (select: toWeekly), shared by
+                                   Dashboard and ThisWeek on cache key ["weekly", characterId ?? null];
+                                   caller supplies enabled
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (navigates to
                                    /collections?item=<hash>); character switcher (reads CharacterContext);
@@ -187,7 +199,11 @@ frontend/src/
     api.ts                     ← API response types (APIGuardianTrackerUser, AuthTokenResponse, WishListItem with
                                    icon/availableNow/availableFrom, APIMembershipCollections with fetchedAt,
                                    APICollectionSummary with collectedItems, APIRecordsEnvelope<T>,
-                                   APIPerkColumn, APIItemCatalyst, APIItemPerks, APIItemView)
+                                   APIPerkColumn, APIItemCatalyst, APIItemPerks, APIItemView,
+                                   APIDifficulty — the canonical title-case wire tier shared by acquisition
+                                   sources and weekly — plus APIWeekly/APIRecommendedAction. The other weekly
+                                   shapes are re-exported from design.ts under API* aliases because they are
+                                   identical on the wire, as APICatalyst/APISeal already are)
     design.ts                  ← Design-system domain types (GTItem — GTItem.perks field REMOVED, Seal,
                                    Weekly with resetAt/fetchedAt/degraded, Milestone.missing now optional,
                                    WishlistEntry with icon, PerkColumn, ItemCatalyst, Catalyst.effect,
@@ -248,6 +264,7 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 - `collectionsFullQuery(membershipType, membershipId)` — the full collections query with items (`select: toCollections`); used by Collections and Cosmetics. A separate function rather than a boolean `includeAll` parameter because the two variants return different view types — asking the counts-only view for items is a compile error, not an empty array. Cache keys are unchanged: `["collections", type, id, "all" | "missing"]`.
 - `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
 - `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
+- `weeklyQuery(characterId)` — the This Week payload (`GET /api/weekly/recommendations`), with `select: toWeekly` from `lib/weeklyView.ts`. Dashboard and ThisWeek share one cache entry per selected character on `["weekly", characterId ?? null]`. `enabled` is deliberately left to the caller: the two consumers gate on different identity facts. The `select` reference must stay module-level — React Query memoises it per observer on function identity, so an inline arrow would re-run the adapter every render. Feature modules must not fetch this endpoint directly; casting weekly JSON to a design type is what ADR 0016 removed.
 
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) accepts moving this
 per-feature pattern to one data-access module per resource under
