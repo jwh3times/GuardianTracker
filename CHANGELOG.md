@@ -14,6 +14,32 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.40] - 2026-09-11
+
+### Changed
+
+- Documentation only: recorded the two dependency releases below, which merged
+  without entries. Automated dependency updates are exempt from the check that
+  requires one, so their entries are written afterwards rather than not at all.
+
+## [1.3.39] - 2026-09-11
+
+### Changed
+
+- Updated three frontend development dependencies: `@tanstack/react-virtual`
+  3.14.10 to 3.14.11, `@types/node` 26.4.1 to 26.5.0, and `oxlint` 1.81.0 to
+  1.82.0. Nothing in the app changes; the first backs the cosmetics grid's
+  scrolling and the other two are type definitions and the linter, neither of
+  which ships to the browser.
+
+## [1.3.38] - 2026-09-11
+
+### Changed
+
+- Updated the PostgreSQL driver `github.com/jackc/pgx/v5` from 5.10.0 to 5.11.0.
+  A routine maintenance release with no change to how the app stores or reads
+  your data.
+
 ## [1.3.37] - 2026-09-11
 
 ### Changed
@@ -732,7 +758,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.37...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.40...HEAD
+[1.3.40]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.39...v1.3.40
+[1.3.39]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.38...v1.3.39
+[1.3.38]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.37...v1.3.38
 [1.3.37]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.36...v1.3.37
 [1.3.36]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.35...v1.3.36
 [1.3.35]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.34...v1.3.35
