@@ -151,6 +151,23 @@ describe("Cosmetics", () => {
     expect(screen.getByText("1/2 collected")).toBeInTheDocument();
   });
 
+  it("orders tiles by rarity before name", async () => {
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(cosmeticsData),
+      ),
+    );
+    renderCosmetics();
+    await screen.findByText("Calus Selected");
+    // Exotic outranks Legendary, so "Neon Mareld" leads even though
+    // "Calus Selected" wins alphabetically — which is what distinguishes the
+    // rarity sort from a name-only sort, and from a reversed comparator.
+    const names = screen
+      .getAllByText(/Calus Selected|Neon Mareld/)
+      .map((el) => el.textContent);
+    expect(names).toEqual(["Neon Mareld", "Calus Selected"]);
+  });
+
   it("filters to owned only", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
