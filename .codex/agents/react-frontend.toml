@@ -445,7 +445,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Browser suites live under `frontend/e2e/` and use Playwright (version pinned in `frontend/package.json`) plus `@axe-core/playwright`. Run `npm run e2e` for functional + accessibility + destructive-auth projects and `npm run e2e:visual` for visual comparison.
 - Start `docker compose --profile e2e up -d --wait e2e-postgres` first and set `E2E_FIXED_TIME=2026-07-18T18:00:00Z`. Playwright launches fake Bungie, the real API, and Vite; never substitute live Bungie calls.
 - Keep `workers: 1` because fixtures mutate shared Guardian Tracker user/scenario state. Destructive logout tests run only after functional and accessibility projects.
-- CI has exactly one retry for functional/axe, traces on the first retry, and retains reports/screenshots/video/diffs for 14 days. Visual baselines use 1440x900 Chromium in the `mcr.microsoft.com/playwright` image pinned by `ARG PLAYWRIGHT_IMAGE` in `frontend/Dockerfile.playwright`, and stay advisory. That pin must track `@playwright/test`, and only a hand edit moves it — the policy test fails the build when it drifts.
+- CI has exactly one retry for functional/axe, traces on the first retry, and retains reports/screenshots/video/diffs for 14 days. Visual baselines use 1440x900 Chromium in the `mcr.microsoft.com/playwright` image pinned by `ARG PLAYWRIGHT_IMAGE` in `frontend/Dockerfile.playwright`, and stay advisory. That pin must track `@playwright/test`; `npm run sync:image-pins` from the repo root resolves the tag to its current registry digest and rewrites it — the policy test fails the build when it drifts.
 
 ## Known limitations / TODOs
 

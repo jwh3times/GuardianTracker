@@ -162,6 +162,12 @@ changing a pin; this guide owns only the coupling rules:
   `node --test scripts/node-version-policy.test.mjs`.
 - Keep the Playwright Dockerfile image aligned with the installed
   `@playwright/test` version; the Node policy test checks both.
+  Run `npm run sync:image-pins` from the repo root to fix drift in either pin:
+  it resolves the `.nvmrc`-driven `node` tag and the lockfile-driven Playwright
+  tag to their current registry digests and rewrites `ARG PLAYWRIGHT_IMAGE`
+  plus the `node` pins in all three frontend Dockerfiles. It needs network
+  access and is intentionally not a CI step, so the offline policy test remains
+  the gate.
 - Keep all three Compose PostgreSQL services and the `Test Go Services` workflow
   service on one server `major.minor`, using their appropriate Alpine/Debian
   refs. Run `node --test scripts/postgres-pin-policy.test.mjs`.
