@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Dropdown, PageHead, SealCard } from "../../components/composite";
+import { Dropdown, PageHead } from "../../components/composite";
+import { SealCard } from "./SealCard";
 import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "../../lib/api";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";

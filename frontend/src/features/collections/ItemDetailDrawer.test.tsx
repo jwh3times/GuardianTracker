@@ -2,8 +2,8 @@ import React from "react";
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ItemDetailDrawer } from "./composite";
-import type { GTItem } from "../types/design";
+import { ItemDetailDrawer } from "./ItemDetailDrawer";
+import type { GTItem } from "../../types/design";
 
 const baseItem: GTItem = {
   id: "1000",
