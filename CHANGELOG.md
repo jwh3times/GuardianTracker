@@ -14,6 +14,35 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.41] - 2026-09-11
+
+### Fixed
+
+- Corrected agent and type documentation that still named a `manifest.ItemView`
+  wire deleted some releases ago. The item-detail endpoint has since been served
+  from the canonical acquisition facts, and its response fields never changed, so
+  nothing about the API moves here — only the descriptions of it.
+- Corrected the documented recipe for adding a task to the project board. The
+  flag it told agents to use for a multi-line body is not one the GitHub CLI
+  accepts for project items, so the documented command always failed; it is
+  replaced by one verified to preserve line breaks and punctuation exactly.
+
+### Changed
+
+- Removed an unreachable fallback from the cosmetics rarity sort. Item rarity is
+  already normalized upstream, so the fallback could never be reached, and the
+  two sorting call sites now read identically.
+- Recorded that the retained design prototype intentionally keeps its original
+  "challenging" difficulty colour. The application raised that colour in v1.3.35
+  to meet contrast requirements; the prototype is design history rather than a
+  specification, so the two differ on purpose.
+
+### Added
+
+- Added a test pinning the cosmetics grid's ordering, which sorts by rarity
+  before name. The ordering was previously unverified, so a reversed or dropped
+  rarity comparison would not have failed any test.
+
 ## [1.3.40] - 2026-09-11
 
 ### Changed
@@ -758,7 +787,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.40...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.41...HEAD
+[1.3.41]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.40...v1.3.41
 [1.3.40]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.39...v1.3.40
 [1.3.39]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.38...v1.3.39
 [1.3.38]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.37...v1.3.38
