@@ -176,14 +176,26 @@ Windows or macOS; font rasterization differences will fail CI.
 Regenerate baselines with `frontend/Dockerfile.playwright`, whose Node runtime
 must match the root `.nvmrc` and whose Playwright image tag must match the
 `@playwright/test` version in `frontend/package-lock.json`.
-`scripts/node-version-policy.test.mjs` enforces both, but nothing updates them
-for you. Dependabot bumps `@playwright/test` under the **npm** ecosystem, which
-never edits a Dockerfile, so every Playwright bump leaves the image pin behind
-until you edit `ARG PLAYWRIGHT_IMAGE` by hand — both the `vX.Y.Z-noble` tag and
-its `@sha256:` digest. Until you do, `Format Check` fails on the policy test and
-`Browser Visual Regression` fails at browser launch; `Browser E2E + Axe` stays
-green because it installs browsers on the runner instead of using the pinned
-image, so it is not a signal for this drift.
+`scripts/node-version-policy.test.mjs` enforces both. Dependabot bumps
+`@playwright/test` under the **npm** ecosystem, which never edits a Dockerfile,
+so every Playwright bump leaves the image pin behind. Until it is corrected,
+`Format Check` fails on the policy test and `Browser Visual Regression` fails at
+browser launch; `Browser E2E + Axe` stays green because it installs browsers on
+the runner instead of using the pinned image, so it is not a signal for this
+drift.
+
+Fix it from the repo root with:
+
+```powershell
+npm run sync:image-pins
+```
+
+That resolves each tag to its current registry digest and rewrites every pin the
+policy test gates — `ARG PLAYWRIGHT_IMAGE` here, plus the `node` pins in this
+Dockerfile, `Dockerfile`, and `Dockerfile.dev`. It needs network access and no
+Docker daemon, and it is deliberately **not** a CI step: a required check must
+not depend on a registry being reachable. The offline policy test stays the
+gate. `npm run sync:image-pins -- --check` reports drift without writing.
 
 A bump does not by itself invalidate the baselines — a new Chromium often
 renders identically. Regenerate only when the visual run reports actual pixel

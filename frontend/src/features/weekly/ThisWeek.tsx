@@ -2,13 +2,10 @@ import React, { useEffect, useMemo, useReducer } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { CountdownChip } from "../../components/primitives";
-import {
-  ActionList,
-  MilestoneModule,
-  PageHead,
-  Panel,
-  XurModule,
-} from "../../components/composite";
+import { PageHead, Panel } from "../../components/composite";
+import { ActionList } from "./ActionList";
+import { MilestoneModule } from "./MilestoneModule";
+import { XurModule } from "./XurModule";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { useAuth } from "../../contexts/AuthContext";

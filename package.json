@@ -7,6 +7,7 @@
     "bootstrap:private": "node scripts/bootstrap-private.mjs",
     "sync:main": "node scripts/sync-main.mjs",
     "sync:agents": "node scripts/sync-agent-configs.mjs",
+    "sync:image-pins": "node scripts/sync-image-pins.mjs",
     "test:docs-links": "node --test scripts/documentation-links.test.mjs",
     "test:go-toolchain-policy": "node --test scripts/go-toolchain-policy.test.mjs",
     "test:workspace-portability": "node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs"

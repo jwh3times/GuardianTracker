@@ -256,7 +256,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
    main-branch synchronization, local documentation-link, jest-dom-shim, and
@@ -356,6 +356,17 @@ baselines are Linux renderings and must be regenerated inside the
 `@playwright/test` — never commit snapshots produced on
 Windows. Both procedures, including baseline regeneration, are in
 [frontend/README.md](./frontend/README.md#browser-tests).
+
+When that tag no longer matches the lockfile — every `@playwright/test` bump,
+because npm and docker are separate Dependabot ecosystems — run
+`npm run sync:image-pins` from the repo root instead of hand-resolving a digest.
+It rewrites every frontend image pin whose tag a version file owns: the
+Playwright image, and the `node` pins in all three frontend Dockerfiles that
+`.nvmrc` drives. It needs network access, needs no Docker daemon, and is
+deliberately not a CI step — a required check must not depend on a registry
+being reachable, so the offline `scripts/node-version-policy.test.mjs` remains
+the gate and now names this command when it fails. `-- --check` reports drift
+without writing.
 
 ### Staticcheck needs the pinned toolchain
 

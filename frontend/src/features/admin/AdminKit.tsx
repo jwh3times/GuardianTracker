@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/primitives";
 import {
@@ -11,6 +11,7 @@ import {
   type Tier,
 } from "../../lib/roles";
 import type { APIAdminFlag, APIResolvedFlag } from "../../types/api";
+import { useOutsideClick } from "../../lib/useOutsideClick";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 
@@ -71,15 +72,7 @@ export function RoleSelect({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    };
-    document.addEventListener("click", h);
-    return () => document.removeEventListener("click", h);
-  }, []);
+  const ref = useOutsideClick<HTMLDivElement>(() => setOpen(false));
   const roles = ROLES.filter((r) => includeAdmin || r !== "admin");
   return (
     <div className="gt-dd" ref={ref}>

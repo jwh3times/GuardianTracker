@@ -7,12 +7,14 @@ import {
   CountdownChip,
   DataFreshnessChip,
   EmptyState,
+  fmtDur,
   ItemTile,
   ProgressBar,
   RadialProgress,
   Skeleton,
 } from "../../components/primitives";
 import { PageHead, Panel } from "../../components/composite";
+import { MilestoneRow } from "../../components/MilestoneRow";
 import { Icon } from "../../components/Icon";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
@@ -22,24 +24,7 @@ import { collectionsQuery, weeklyQuery } from "../../lib/queries";
 import { toWishlistEntry } from "../../lib/adapters";
 import type { SummaryCategory, TodayAction } from "../../types/design";
 import type { WishListItem } from "../../types/api";
-
-function formatDuration(
-  d: import("../../types/design").Duration | undefined,
-): string {
-  if (!d) return "";
-  if (d.d && d.d > 0) return `${d.d}d ${d.h ?? 0}h`;
-  if (d.h && d.h > 0) return `${d.h}h ${d.m ?? 0}m`;
-  return `${d.m ?? 0}m`;
-}
-
-const emblemStyle = (url?: string): React.CSSProperties | undefined =>
-  url
-    ? {
-        backgroundImage: `url(${url})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }
-    : undefined;
+import { emblemStyle } from "../../lib/emblem";
 
 // Shown until the summary arrives. The adapter always returns all four
 // categories, so this is only ever the loading placeholder.
@@ -337,7 +322,7 @@ export function Dashboard() {
                       : "var(--c-signal)";
               const timingLabel =
                 action.category === "xur" ? "leaves in" : "resets in";
-              const timingStr = formatDuration(action.resetsIn);
+              const timingStr = action.resetsIn ? fmtDur(action.resetsIn) : "";
               return (
                 <button
                   key={action.id}
@@ -423,20 +408,9 @@ export function Dashboard() {
                 </li>
               ))
             ) : (
-              (weeklyData?.milestones ?? []).slice(0, 2).map((m) => (
-                <li key={m.id} className="gt-milestone">
-                  <div className="gt-milestone-l">
-                    <div className="gt-action-meta mono">{m.label}</div>
-                    <div className="gt-item-name">{m.name}</div>
-                    <div className="gt-item-type">Reward: {m.reward}</div>
-                  </div>
-                  {m.missing != null && m.missing > 0 && (
-                    <Badge kind="missing" dot>
-                      {m.missing} missing
-                    </Badge>
-                  )}
-                </li>
-              ))
+              (weeklyData?.milestones ?? [])
+                .slice(0, 2)
+                .map((m) => <MilestoneRow key={m.id} milestone={m} />)
             )}
           </ul>
         </Panel>
