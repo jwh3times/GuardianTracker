@@ -137,6 +137,21 @@ test("plan covers every pin the Node policy test enforces", () => {
   ]);
   assert.match(policy, /ARG PLAYWRIGHT_IMAGE=mcr/);
   assert.match(policy, /ARG NODE_IMAGE=node:/);
+
+  // Image and file identity are not enough: the two sides also have to agree on
+  // the tag *variant*. If the policy gate starts demanding a different flavour
+  // (-noble -> -jammy, say) and plan() keeps writing the old one, every run of
+  // this script would produce a file the gate rejects.
+  // The policy test spells its variants inside regex literals, where dots are
+  // escaped (`-alpine3\.24`), so compare against a de-escaped copy.
+  const policyLiterals = policy.replaceAll("\\", "");
+  for (const target of plan({ node: "1.2.3", playwright: "4.5.6" })) {
+    const variant = target.tag.replace(/^v?[\d.]+/, "");
+    assert.ok(
+      policyLiterals.includes(variant),
+      `${target.file} pins a ${variant} tag, which the policy test never mentions`,
+    );
+  }
 });
 
 function fakeRepo(overrides = {}) {
