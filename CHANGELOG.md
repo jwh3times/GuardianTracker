@@ -14,6 +14,25 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.36] - 2026-09-11
+
+### Added
+
+- One command, `npm run sync:image-pins`, now updates the container images the
+  browser tests are built from. Those images are pinned to an exact version and
+  fingerprint, and the version is decided by a different file than the pin lives
+  in — so an automated dependency update could only ever change one of the two
+  and always arrived with the build already failing. Finishing it meant looking
+  up a fingerprint by hand and pasting it in. The command does that lookup and
+  rewrites every affected pin instead. Nothing about the shipped app changes;
+  routine dependency updates simply stop arriving broken.
+
+### Changed
+
+- The check that catches a mismatched image pin now names the command that fixes
+  it, rather than leaving the reader to work out which file and which fingerprint
+  it meant.
+
 ## [1.3.35] - 2026-09-10
 
 ### Fixed
@@ -699,7 +718,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.35...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.36...HEAD
+[1.3.36]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.35...v1.3.36
 [1.3.35]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.34...v1.3.35
 [1.3.34]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.33...v1.3.34
 [1.3.33]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.32...v1.3.33
