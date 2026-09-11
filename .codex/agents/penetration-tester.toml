@@ -114,8 +114,9 @@ Session issuance is centralized in `auth.SessionIssuer`; a login whose session r
 
 ### `GET /api/items/:itemHash`
 
-JWT-gated. NOT membership-scoped — returns a public manifest-only `ItemView` (name, icon,
-itemType, tierType, rarity, description). The relevant checks are auth enforcement and input
+JWT-gated. NOT membership-scoped — returns a public manifest-only view (name, icon,
+itemType, tierType, rarity, description), served as `handlers.itemViewResponse` and built from
+`items.AcquisitionFacts`. The relevant checks are auth enforcement and input
 validation, not data isolation.
 
 - Test: call without a JWT — must return 401

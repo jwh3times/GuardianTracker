@@ -48,9 +48,13 @@ export function Cosmetics() {
           ? it.collected
           : !it.collected,
     );
+    // No fallback rank: RARITY_RANK is Record<Rarity, number> — exhaustive by
+    // compile check — and every GTItem.rarity reaching here came from
+    // toCollections, which maps an unrecognized Bungie tier to "legendary"
+    // rather than letting it through. The lookup cannot miss.
     return [...filtered].sort(
       (a, b) =>
-        (RARITY_RANK[a.rarity] ?? 9) - (RARITY_RANK[b.rarity] ?? 9) ||
+        RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity] ||
         a.name.localeCompare(b.name),
     );
   }, [bucket, filter]);

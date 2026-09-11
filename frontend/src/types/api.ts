@@ -62,7 +62,7 @@ export interface APIDestinyItem {
   isExotic: boolean;
 }
 
-/** GET /api/items/:itemHash — minimal manifest item view (mirrors manifest.ItemView). */
+/** GET /api/items/:itemHash — minimal manifest item view (mirrors handlers.itemViewResponse). */
 export interface APIItemView {
   itemHash: string;
   name: string;

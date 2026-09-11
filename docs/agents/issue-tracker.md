@@ -28,7 +28,23 @@ private companion. See [ADR 0022](../adr/0022-github-owns-task-status.md).
 
 - **List items**: `gh project item-list 4 --owner jwh3times --format json`
 - **Read fields**: `gh project field-list 4 --owner jwh3times --format json --jq '.fields[] | "\(.name) | \(.id)"'`
-- **Add a draft**: `gh project item-create 4 --owner jwh3times --title "..." --body-file <path>`
+- **Add a draft**: `gh project item-create` and `item-edit` accept only `--body`,
+  never `--body-file` (verified against `gh` 2.100.0), so a multi-line draft body
+  has to survive the shell as one argument. Use the GraphQL mutation with the body
+  read from a file, which keeps real newlines and performs no interpolation:
+
+  ```sh
+  gh api graphql \
+    -f query='mutation($project:ID!,$title:String!,$body:String!){addProjectV2DraftIssue(input:{projectId:$project,title:$title,body:$body}){projectItem{id}}}' \
+    -f project='<project-node-id>' \
+    -f title='...' \
+    -F body=@<path>
+  ```
+
+  `-F key=@<path>` reads the value from a file; `-f` would take the literal
+  `@<path>` string. The same `-F body=@<path>` form works for
+  `updateProjectV2DraftIssue` when editing a draft body.
+
 - **Add an existing issue**: `gh project item-add 4 --owner jwh3times --url <issue-url>`
 - **Set a field**: `gh project item-edit --id <item-id> --project-id <project-id> --field-id <field-id> --text "..."` (or `--number`, or `--single-select-option-id`)
 
