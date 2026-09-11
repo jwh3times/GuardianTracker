@@ -120,7 +120,14 @@ frontend/src/
                                    items only ever come from collectionsView.ts, which alone can join ownership
                                    and availability.
     format.ts                  ← relTime (guards zero-time)
-    constants.ts               ← Label constants (RARITIES, glyphs) + BUNGIE_CDN base URL
+    emblem.ts                  ← emblemStyle(url) → background CSS for a character emblem, or undefined
+                                   so the caller keeps the CSS placeholder (AppShell + Dashboard)
+    useOutsideClick.ts         ← useOutsideClick(onOutside) → ref; the one close-on-outside-click effect,
+                                   used by both AppShell dropdowns, the Dropdown kit, and RoleSelect.
+                                   Subscribes once and reads the callback through a ref — depending on
+                                   onOutside would resubscribe every render, as callers pass inline arrows
+    constants.ts               ← Label constants (RARITIES, RARITY_LABEL, RARITY_RANK sort order, DIFFS,
+                                   DIFF_LABEL, glyphs) + BUNGIE_CDN base URL
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
@@ -150,14 +157,14 @@ frontend/src/
     Icon.tsx                   ← single-path line-icon set
     primitives.tsx             ← Badge, Button, ProgressBar, RadialProgress, StatTile, EmptyState,
                                    Textarea, FilterChip, CountdownChip, DataFreshnessChip, Skeleton…
-    composite.tsx              ← Panel, CategoryTree, ItemDetailDrawer (renders perk columns — label + chips —
-                                   with loading state; props: perkColumns?, perksLoading?, catalysts?; renders a
-                                   "Catalyst" section (name + description) when catalysts is non-empty; old flat
-                                   item.perks block removed), SealCard (renders each triumph via TriumphRow;
-                                   triumphs with a `t.objectives` array get a collapsed-by-default, keyboard-
-                                   accessible disclosure — local expansion state per row — that lists each
-                                   objective's own label/progress; triumphs with no objectives render flat,
-                                   unchanged), Dropdown…
+    composite.tsx              ← PageHead, Panel, Dropdown (+DropdownOption) — and only these. It is the
+                                   shared kit: every export here has 3+ callers. Components used by exactly
+                                   one feature live beside that feature (F5), so do not add a one-caller
+                                   component here; put it in the feature and move it up if a second caller
+                                   appears.
+    MilestoneRow.tsx           ← one weekly milestone <li>; shared because This Week and the Dashboard
+                                   preview both render it. The panel around it differs, so only the row
+                                   is shared. Caller supplies the React key.
     LoadingSpinner.tsx         ← (was components/ui/) shown while data loads
     Toast.tsx                  ← (was components/ui/) ToastProvider / useToast
                                  Import these directly (e.g. "../../../components/primitives") — the
@@ -175,6 +182,14 @@ frontend/src/
                                    shows a full progress bar instead of "Not yet acquired"), Triumphs.tsx
                                    ({ items, fetchedAt } envelopes),
                                    ItemCard.tsx (collection-only item card),
+                                   CategoryTree.tsx (the sidebar tree), ItemDetailDrawer.tsx (renders perk
+                                   columns — label + chips — with loading state; props: perkColumns?,
+                                   perksLoading?, catalysts?; renders a "Catalyst" section when catalysts is
+                                   non-empty), SealCard.tsx (renders each triumph via its private TriumphRow;
+                                   triumphs with a `t.objectives` array get a collapsed-by-default,
+                                   keyboard-accessible disclosure — local expansion state per row — listing
+                                   each objective's own label/progress; triumphs without objectives render
+                                   flat). All three moved out of composite.tsx in F5,
                                    useCollectionsFilters.ts (URL-sourced filter/category state — see
                                    "Collections page features" below)
     cosmetics/                 ← browsable /cosmetics gallery (Road to v1 §1). Cosmetics.tsx (type tabs +
@@ -190,7 +205,9 @@ frontend/src/
                                    (COSMETIC_TYPES: Emblem/Shader/Ghost/Ship/Sparrow/Emote/Ornament/Finisher)
     onboarding/                ← Guardian Tracker user-backed first-run welcome + three-step guided tour
     wishlist/WishList.tsx      ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
-    weekly/ThisWeek.tsx        ← weekly recommendations / Xûr / milestones scoped to active character
+    weekly/ThisWeek.tsx        ← weekly recommendations / Xûr / milestones scoped to active character;
+                                   ActionList.tsx, XurModule.tsx, MilestoneModule.tsx live here too (F5) —
+                                   each has exactly one caller, this page
     dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + active-character weekly
     settings/Settings.tsx      ← Destiny membership info, early-access tier opt-in, appearance prefs, sign out
     admin/                     ← Admin.tsx (admin console: user roster + role mgmt, flag config;
