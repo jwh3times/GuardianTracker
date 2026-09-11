@@ -97,25 +97,39 @@ export function plan({ node, playwright }) {
 }
 
 /**
- * Matches `<image>:<any tag>@sha256:<digest>` so a stale *tag* is corrected too,
- * not just a stale digest — a Node bump invalidates both. The lookbehind keeps
- * `node` from matching the tail of a longer name such as `someorg/node`.
+ * Matches any `<image>:<tag>@sha256:<digest>`, capturing the image name. The
+ * whole reference is matched — not just the digest — so a stale *tag* is
+ * corrected too; a Node bump invalidates both halves.
+ *
+ * The image name is captured and compared as a string rather than interpolated
+ * into this pattern. Building the regex per image would mean escaping a name
+ * that contains dots (`mcr.microsoft.com/...`), where a missed escape turns
+ * each dot into a wildcard and silently widens what the pin matches. Plain
+ * equality cannot be got wrong that way: `someorg/node` is captured whole and
+ * simply does not equal `node`.
+ *
+ * What makes the capture whole is greedy leftmost matching — the engine starts
+ * at the first character of the name and takes all of it. The leading boundary
+ * is therefore redundant today (verified: it changes no match across the real
+ * Dockerfiles and every adversarial prefix), and is kept only so that a later
+ * edit making the name group lazy or alternated cannot quietly reintroduce
+ * suffix matching. Do not read it as the thing doing the work.
  */
-export function pinPattern(image) {
-  const escaped = image.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(
-    `(?<![\\w./-])${escaped}:[^@\\s"']+@sha256:[0-9a-f]{64}`,
-    "g",
-  );
-}
+const PIN = /(?<![\w./-])([\w./-]+):([^@\s"']+)@sha256:([0-9a-f]{64})/g;
 
 /** Replaces every pin of `image` with `tag@digest`. Returns the new text. */
 export function applyPin(contents, image, tag, digest) {
-  return contents.replace(pinPattern(image), `${image}:${tag}@${digest}`);
+  return contents.replace(PIN, (reference, name) =>
+    name === image ? `${image}:${tag}@${digest}` : reference,
+  );
 }
 
 export function countPins(contents, image) {
-  return [...contents.matchAll(pinPattern(image))].length;
+  let found = 0;
+  for (const [, name] of contents.matchAll(PIN)) {
+    if (name === image) found += 1;
+  }
+  return found;
 }
 
 async function dockerHubToken(repository, fetchImpl) {

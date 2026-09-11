@@ -7,7 +7,6 @@ import {
   countPins,
   main,
   parseVersions,
-  pinPattern,
   plan,
   resolveDigest,
 } from "./sync-image-pins.mjs";
@@ -81,15 +80,31 @@ test("a pin pattern does not match an image whose name merely ends in it", () =>
   assert.equal(countPins(`FROM node:1.0.0@${DIGEST_A}`, "node"), 1);
 });
 
-test("the playwright pin pattern treats dots as literals", () => {
-  const source = pinPattern("mcr.microsoft.com/playwright").source;
-  assert.match(source, /mcr\\\.microsoft\\\.com/);
+test("a dot in an image name is never treated as a wildcard", () => {
+  // The name is compared as a string, so a host that differs only where the
+  // real one has dots must not match.
   assert.equal(
     countPins(
       `FROM mcrxmicrosoftxcom/playwright:v1@${DIGEST_A}`,
       "mcr.microsoft.com/playwright",
     ),
     0,
+  );
+  assert.equal(
+    countPins(
+      `FROM mcr.microsoft.com/playwright:v1@${DIGEST_A}`,
+      "mcr.microsoft.com/playwright",
+    ),
+    1,
+  );
+  assert.equal(
+    applyPin(
+      `FROM mcrxmicrosoftxcom/playwright:v1@${DIGEST_A}`,
+      "mcr.microsoft.com/playwright",
+      "v2-noble",
+      DIGEST_B,
+    ),
+    `FROM mcrxmicrosoftxcom/playwright:v1@${DIGEST_A}`,
   );
 });
 
@@ -299,7 +314,9 @@ test("resolveDigest fetches a pull token before asking Docker Hub", async () => 
     },
     async (url, init) => {
       calls.push({ url, init });
-      return url.includes("auth.docker.io")
+      // Match on the parsed host, not a substring: "auth.docker.io" can appear
+      // anywhere in a URL, including in a path or query of some other host.
+      return new URL(url).hostname === "auth.docker.io"
         ? response({ json: { token: "tok" } })
         : response({ digest: DIGEST_B });
     },
