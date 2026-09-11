@@ -9,14 +9,7 @@ import { cosmeticItems, groupByType } from "./cosmeticItems";
 import { CosmeticsGrid } from "./CosmeticsGrid";
 import { CosmeticDetail } from "./CosmeticDetail";
 import type { GTItem } from "../../types/design";
-
-const RARITY_RANK: Record<string, number> = {
-  exotic: 0,
-  legendary: 1,
-  rare: 2,
-  uncommon: 3,
-  common: 4,
-};
+import { RARITY_RANK } from "../../lib/constants";
 
 type Filter = "all" | "owned" | "missing";
 const FILTERS: Filter[] = ["all", "owned", "missing"];

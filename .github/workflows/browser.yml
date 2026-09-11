@@ -184,9 +184,10 @@ jobs:
       # bump of @playwright/test edits neither. So the pin lives in
       # Dockerfile.playwright (ARG PLAYWRIGHT_IMAGE, tag + digest) and
       # scripts/node-version-policy.test.mjs fails format-check whenever it does
-      # not equal the version resolved in the lockfile. A Playwright bump must
-      # carry a hand-written ARG update; the policy test is the drift alarm, not
-      # the fix.
+      # not equal the version resolved in the lockfile. The policy test is the
+      # drift alarm; `npm run sync:image-pins` is the fix, resolving the tag to
+      # its current registry digest and rewriting the ARG. That script needs a
+      # reachable registry, so it stays out of CI and off this required path.
       - name: Build the matching Playwright image with Node 26
         run: |
           docker build --pull \

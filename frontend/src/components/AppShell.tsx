@@ -1,5 +1,5 @@
 import { useToast } from "./Toast";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Brand } from "./Brand";
@@ -10,6 +10,8 @@ import { useCharacters } from "../contexts/CharacterContext";
 import { useFlags } from "../contexts/FlagsContext";
 import { apiFetch } from "../lib/api";
 import type { APISearchResult } from "../types/api";
+import { useOutsideClick } from "../lib/useOutsideClick";
+import { emblemStyle } from "../lib/emblem";
 
 interface NavItem {
   id: string;
@@ -70,14 +72,6 @@ const MOBILE_NAV: NavItem[] = [
 ];
 
 /* ---------------- CHARACTER SWITCHER ---------------- */
-const emblemStyle = (url?: string): React.CSSProperties | undefined =>
-  url
-    ? {
-        backgroundImage: `url(${url})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }
-    : undefined;
 
 function CharacterSwitcher({ displayName }: { displayName?: string }) {
   const {
@@ -87,15 +81,7 @@ function CharacterSwitcher({ displayName }: { displayName?: string }) {
   } = useCharacters();
 
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    };
-    document.addEventListener("click", h);
-    return () => document.removeEventListener("click", h);
-  }, []);
+  const ref = useOutsideClick<HTMLDivElement>(() => setOpen(false));
 
   if (!list.length || !activeCharacter) {
     return (
@@ -177,7 +163,7 @@ function SearchBar() {
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useOutsideClick<HTMLDivElement>(() => setOpen(false));
   const navigate = useNavigate();
 
   // 250ms debounce
@@ -185,16 +171,6 @@ function SearchBar() {
     const id = setTimeout(() => setDebouncedQ(q), 250);
     return () => clearTimeout(id);
   }, [q]);
-
-  // close on outside click
-  useEffect(() => {
-    const h = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setOpen(false);
-    };
-    document.addEventListener("click", h);
-    return () => document.removeEventListener("click", h);
-  }, []);
 
   const {
     data: results = [],

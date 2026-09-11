@@ -6,6 +6,12 @@ import { join } from "node:path";
 const root = join(import.meta.dirname, "..");
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
 
+// Every image pin this file gates is rewritten by one command, so say so at the
+// point of failure rather than leaving the reader to hand-resolve a registry
+// digest. scripts/sync-image-pins.test.mjs keeps the two in step.
+const FIX =
+  "Image pin is stale. Fix: npm run sync:image-pins (from the repo root).";
+
 test("local, CI, and Docker tooling use one exact Node 26 patch", () => {
   const version = read(".nvmrc").trim();
   assert.match(version, /^26\.\d+\.\d+$/);
@@ -31,15 +37,15 @@ test("local, CI, and Docker tooling use one exact Node 26 patch", () => {
     `^FROM node:${version.replaceAll(".", "\\.")}-alpine3\\.24@sha256:[0-9a-f]{64}(?: AS builder)?$`,
     "m",
   );
-  assert.match(read("frontend", "Dockerfile"), imagePattern);
-  assert.match(read("frontend", "Dockerfile.dev"), imagePattern);
+  assert.match(read("frontend", "Dockerfile"), imagePattern, FIX);
+  assert.match(read("frontend", "Dockerfile.dev"), imagePattern, FIX);
 
   const playwrightDockerfile = read("frontend", "Dockerfile.playwright");
   const playwrightNodePattern = new RegExp(
     `^ARG NODE_IMAGE=node:${version.replaceAll(".", "\\.")}-bookworm-slim@sha256:[0-9a-f]{64}$`,
     "m",
   );
-  assert.match(playwrightDockerfile, playwrightNodePattern);
+  assert.match(playwrightDockerfile, playwrightNodePattern, FIX);
   const lockfile = JSON.parse(read("frontend", "package-lock.json"));
   const playwrightVersion =
     lockfile.packages["node_modules/@playwright/test"].version;
@@ -49,6 +55,7 @@ test("local, CI, and Docker tooling use one exact Node 26 patch", () => {
       `^ARG PLAYWRIGHT_IMAGE=mcr\\.microsoft\\.com/playwright:v${playwrightVersion.replaceAll(".", "\\.")}-noble@sha256:[0-9a-f]{64}$`,
       "m",
     ),
+    FIX,
   );
   assert.match(
     playwrightDockerfile,
