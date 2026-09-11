@@ -14,6 +14,36 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.35] - 2026-09-10
+
+### Fixed
+
+- The difficulty badge on This Week's recommended actions now shows its proper
+  colour. Top-ranked suggestions were sending the difficulty in one spelling and
+  the page expected another, so those badges quietly rendered in plain grey
+  instead of the green, amber or red that tells you at a glance how demanding an
+  activity is. Fallback suggestions were unaffected, which is why the page only
+  looked wrong some of the time.
+- The "Challenging" colour itself is now lighter. Once the badge started drawing
+  in that colour, it turned out not to have enough contrast against the row
+  behind it to meet the WCAG AA accessibility standard — it was the only one of
+  the three difficulty colours that fell short. It stays the darkest and hottest
+  of them, and every other place the colour is used simply reads a little
+  brighter.
+
+### Changed
+
+- This Week and the Dashboard now read the weekly data through one shared
+  translation step rather than each trusting the server's response to already be
+  in the shape the page wanted. Both pages already shared a single request; now
+  they also share a single interpretation of it, so a difficulty value the app
+  does not recognise resolves to an honest "Unrated" instead of silently
+  reaching the page as something it cannot display. No content, ordering or
+  timing changes.
+- This completes the acquisition-recommendation ownership split begun in
+  v1.3.4; the recommendation vocabulary is now defined in one place on the
+  server and translated in one place in the browser.
+
 ## [1.3.34] - 2026-09-10
 
 ### Changed
@@ -669,7 +699,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.34...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.35...HEAD
+[1.3.35]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.34...v1.3.35
 [1.3.34]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.33...v1.3.34
 [1.3.33]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.32...v1.3.33
 [1.3.32]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.31...v1.3.32
