@@ -1,6 +1,4 @@
-import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
   Button,
@@ -14,9 +12,13 @@ import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
-import { apiFetch } from "../../lib/api";
-import { toWishlistEntry } from "../../lib/adapters";
-import type { WishListItem } from "../../types/api";
+import {
+  useBulkWishlistAction,
+  useRemoveWishlistItem,
+  useSetWishlistNotes,
+  useSetWishlistPriority,
+  useWishlist,
+} from "../../data/wishlist";
 import type { Priority, WishlistEntry } from "../../types/design";
 
 const PRIORITY_LABEL: Record<Priority, string> = {
@@ -40,96 +42,24 @@ function acquisitionSourceSummary(item: WishlistEntry): string {
 
 export function WishList() {
   const { showToast } = useToast();
-  const queryClient = useQueryClient();
   const [filter, setFilter] = useState<FilterKey>("all");
   const [sort, setSort] = useState<SortKey>("availability");
   // Inline notes editor: id of the row being edited + its draft text.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNotes, setDraftNotes] = useState("");
 
-  const {
-    data: rawItems = [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["wishlist"],
-    queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
+  const { entries: list, isLoading, isError, error, retry } = useWishlist();
+
+  const { remove } = useRemoveWishlistItem({
+    onError: () => showToast("Failed to remove item", "error"),
   });
 
-  const list: WishlistEntry[] = useMemo(
-    () => rawItems.map(toWishlistEntry),
-    [rawItems],
-  );
-
-  const deleteMutation = useIdentityMutation({
-    mutationFn: (id: string) =>
-      apiFetch<void>(`/api/wishlist/${id}`, { method: "DELETE" }),
-    onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
-      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
-      queryClient.setQueryData<WishListItem[]>(
-        ["wishlist"],
-        (old) => old?.filter((i) => i.id !== id) ?? [],
-      );
-      return { previous };
-    },
-    onError: (_err, _id, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(["wishlist"], context.previous);
-      }
-      showToast("Failed to remove item", "error");
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
+  const { setPriority: mutatePriority } = useSetWishlistPriority({
+    onError: () => showToast("Failed to update priority", "error"),
   });
 
-  const updateMutation = useIdentityMutation({
-    mutationFn: ({ id, priority }: { id: string; priority: string }) =>
-      apiFetch<WishListItem>(`/api/wishlist/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ priority }),
-      }),
-    onMutate: async ({ id, priority }) => {
-      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
-      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
-      queryClient.setQueryData<WishListItem[]>(
-        ["wishlist"],
-        (old) => old?.map((i) => (i.id === id ? { ...i, priority } : i)) ?? [],
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(["wishlist"], context.previous);
-      }
-      showToast("Failed to update priority", "error");
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
-  });
-
-  const notesMutation = useIdentityMutation({
-    mutationFn: ({ id, notes }: { id: string; notes: string }) =>
-      apiFetch<WishListItem>(`/api/wishlist/${id}`, {
-        method: "PUT",
-        body: JSON.stringify({ notes }),
-      }),
-    onMutate: async ({ id, notes }) => {
-      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
-      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
-      queryClient.setQueryData<WishListItem[]>(
-        ["wishlist"],
-        (old) => old?.map((i) => (i.id === id ? { ...i, notes } : i)) ?? [],
-      );
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(["wishlist"], context.previous);
-      }
-      showToast("Failed to save notes", "error");
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
+  const { setNotes: mutateNotes } = useSetWishlistNotes({
+    onError: () => showToast("Failed to save notes", "error"),
   });
 
   const startEditNotes = (id: string, current: string) => {
@@ -138,16 +68,16 @@ export function WishList() {
   };
   const saveNotes = () => {
     if (editingId == null) return;
-    notesMutation.mutate({ id: editingId, notes: draftNotes.trim() });
+    mutateNotes({ rowId: editingId, notes: draftNotes.trim() });
     setEditingId(null);
   };
 
   const setPriority = (id: string, p: Priority) => {
-    updateMutation.mutate({ id, priority: p.toUpperCase() });
+    mutatePriority({ rowId: id, priority: p });
   };
 
-  const remove = (id: string, name: string) => {
-    deleteMutation.mutate(id);
+  const removeRow = (id: string, name: string) => {
+    remove({ rowId: id, name });
     showToast(`Removed ${name}`, "info");
   };
 
@@ -166,37 +96,8 @@ export function WishList() {
     setSelected(new Set());
   };
 
-  const bulkMutation = useIdentityMutation({
-    mutationFn: (vars: {
-      action: "delete" | "set_priority";
-      ids: string[];
-      priority?: string;
-    }) =>
-      apiFetch<{ updated: number; skipped: number }>("/api/wishlist/bulk", {
-        method: "POST",
-        body: JSON.stringify({
-          action: vars.action,
-          ids: vars.ids.map(Number),
-          ...(vars.priority ? { priority: vars.priority } : {}),
-        }),
-      }),
-    onMutate: async (vars) => {
-      await queryClient.cancelQueries({ queryKey: ["wishlist"] });
-      const previous = queryClient.getQueryData<WishListItem[]>(["wishlist"]);
-      const ids = new Set(vars.ids);
-      queryClient.setQueryData<WishListItem[]>(["wishlist"], (old) => {
-        if (!old) return [];
-        if (vars.action === "delete") return old.filter((i) => !ids.has(i.id));
-        return old.map((i) =>
-          ids.has(i.id) ? { ...i, priority: vars.priority! } : i,
-        );
-      });
-      return { previous };
-    },
-    onError: (_e, _v, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(["wishlist"], ctx.previous);
-      showToast("Bulk action failed", "error");
-    },
+  const { runBulkAction } = useBulkWishlistAction({
+    onError: () => showToast("Bulk action failed", "error"),
     onSuccess: (res, vars) => {
       const verb = vars.action === "delete" ? "removed" : "updated";
       showToast(
@@ -207,19 +108,18 @@ export function WishList() {
       );
       exitSelectMode();
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["wishlist"] }),
   });
 
   const bulkDelete = () => {
     if (selected.size === 0) return;
-    bulkMutation.mutate({ action: "delete", ids: Array.from(selected) });
+    runBulkAction({ action: "delete", rowIds: Array.from(selected) });
   };
   const bulkSetPriority = (p: Priority) => {
     if (selected.size === 0) return;
-    bulkMutation.mutate({
+    runBulkAction({
       action: "set_priority",
-      ids: Array.from(selected),
-      priority: p.toUpperCase(),
+      rowIds: Array.from(selected),
+      priority: p,
     });
   };
 
@@ -268,12 +168,7 @@ export function WishList() {
     return (
       <div className="gt-page">
         <PageHead title="Wishlist" />
-        <QueryErrorPanel
-          error={error}
-          onRetry={() => {
-            void refetch();
-          }}
-        />
+        <QueryErrorPanel error={error} onRetry={retry} />
       </div>
     );
   }
@@ -498,7 +393,7 @@ export function WishList() {
                 </button>
                 <button
                   className="gt-link gt-link--danger"
-                  onClick={() => remove(i.id, i.name)}
+                  onClick={() => removeRow(i.id, i.name)}
                 >
                   <Icon name="close" size="0.8rem" /> Remove
                 </button>

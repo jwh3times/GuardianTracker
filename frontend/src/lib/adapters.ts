@@ -9,7 +9,13 @@ import type {
   WishlistEntry,
 } from "../types/design";
 
-const RARITY_MAP: Record<string, Rarity> = {
+/**
+ * Shared rarity vocabulary. Exported because the Wish list data-access module
+ * owns its own projection now (ADR 0020) but still maps the same five wire
+ * names. The Characters and Items slices (E7, E8) retire the last local
+ * callers, at which point this belongs with them rather than here.
+ */
+export const RARITY_MAP: Record<string, Rarity> = {
   Exotic: "exotic",
   Legendary: "legendary",
   Rare: "rare",
@@ -53,21 +59,3 @@ export function toGTItemView(v: APIItemView): GTItem {
   };
 }
 
-/** Adapt a REST API WishListItem into the design system's WishlistEntry shape. */
-export function toWishlistEntry(w: WishListItem): WishlistEntry {
-  return {
-    id: w.id,
-    name: w.name,
-    type: w.itemType,
-    rarity: RARITY_MAP[w.rarity] ?? "legendary",
-    icon: w.icon || undefined,
-    priority: PRIORITY_MAP[w.priority] ?? "medium",
-    avail: {
-      now: w.availableNow ?? false,
-      where: w.availableNow ? (w.availableFrom ?? "Xûr") : "",
-    },
-    acquisitionSources: (w.acquisitionSources ?? []).map(toAcquisitionSource),
-    notes: w.notes ?? "",
-    added: relTime(w.dateAdded),
-  };
-}

@@ -21,7 +21,7 @@ import { useCharacters } from "../../contexts/CharacterContext";
 import { apiFetch } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
 import { collectionsQuery, weeklyQuery } from "../../lib/queries";
-import { toWishlistEntry } from "../../lib/adapters";
+import { useWishlist } from "../../data/wishlist";
 import type { SummaryCategory, TodayAction } from "../../types/design";
 import type { WishListItem } from "../../types/api";
 import { emblemStyle } from "../../lib/emblem";
@@ -64,20 +64,13 @@ export function Dashboard() {
   });
 
   const {
-    data: wishlistItems,
+    entries: wishlistEntries,
     isLoading: wishlistLoading,
     isError: wishlistFailed,
-  } = useQuery({
-    queryKey: ["wishlist"],
-    queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
-    enabled: !!user,
-  });
+  } = useWishlist();
 
   const displayName = user?.displayName;
 
-  // Normalize wishlist rows through the adapter so rarity/availability handling
-  // stays in one place (lib/adapters) rather than reading raw API fields here.
-  const wishlistEntries = (wishlistItems ?? []).map(toWishlistEntry);
   const availableNowCount = wishlistEntries.filter((e) => e.avail.now).length;
 
   // The summary shape, its category order and the overall percentage are all
