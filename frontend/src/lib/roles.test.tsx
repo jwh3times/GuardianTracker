@@ -122,7 +122,12 @@ describe("LockedFeature", () => {
 describe("Admin console", () => {
   it("lists members and toggles a feature flag", async () => {
     let flagPutHit = false;
+    let resolvedFlagGets = 0;
     server.use(
+      // Counts, then falls through to the shared fixture.
+      http.get(`${API}/api/flags`, () => {
+        resolvedFlagGets += 1;
+      }),
       http.put(`${API}/api/admin/flags/:key`, ({ params }) => {
         flagPutHit = true;
         return HttpResponse.json({
@@ -147,8 +152,12 @@ describe("Admin console", () => {
     const toggle = await screen.findByRole("switch", {
       name: /Enable Catalyst & Crafting tracker/i,
     });
+    const before = resolvedFlagGets;
     fireEvent.click(toggle);
     await waitFor(() => expect(flagPutHit).toBe(true));
+    // Editing a flag changes what this admin's own navigation should show, so
+    // the resolved flags must actually be fetched again.
+    await waitFor(() => expect(resolvedFlagGets).toBe(before + 1));
   });
 });
 

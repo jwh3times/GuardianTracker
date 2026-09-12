@@ -115,10 +115,12 @@ describe("Settings page", () => {
   it("opts into an early-access tier", async () => {
     // A standard-tier user can self-select Beta; the picker is interactive
     // (it's disabled only for admins, which the default flags handler returns).
+    let flagGets = 0;
     server.use(
-      http.get(`${API}/api/flags`, () =>
-        HttpResponse.json({ role: "standard", flags: [] }),
-      ),
+      http.get(`${API}/api/flags`, () => {
+        flagGets += 1;
+        return HttpResponse.json({ role: "standard", flags: [] });
+      }),
     );
     let optInBody: unknown = null;
     server.use(
@@ -129,7 +131,13 @@ describe("Settings page", () => {
     );
     renderSettings();
     await screen.findByText("Membership & access");
+    await waitFor(() => expect(flagGets).toBe(1));
     fireEvent.click(screen.getByRole("radio", { name: /Beta/ }));
     await waitFor(() => expect(optInBody).toEqual({ role: "beta" }));
+    // The new tier must reach gated navigation, so flags are asked for again —
+    // once. This page used to both refetch and invalidate, firing it twice.
+    await waitFor(() => expect(flagGets).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(flagGets).toBe(2);
   });
 });

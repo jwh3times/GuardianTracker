@@ -1,7 +1,6 @@
 import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React from "react";
 import { useNavigate } from "react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button, DataFreshnessChip } from "../../components/primitives";
 import { PageHead, Panel } from "../../components/composite";
 import { Icon } from "../../components/Icon";
@@ -71,8 +70,6 @@ export function Settings() {
   // loaded. Supplies real fetchedAt (B8).
   const { view: collections } = useCollectionsSummary();
 
-  const queryClient = useQueryClient();
-
   // Self-service early-access opt-in (standard / beta / alpha). The server keeps
   // the session (no token churn) and the new tier propagates on the next request;
   // we refresh resolved flags so gated nav/pages update immediately.
@@ -82,10 +79,7 @@ export function Settings() {
         method: "PUT",
         body: JSON.stringify({ role: tier }),
       }),
-    onSuccess: () => {
-      refreshFlags();
-      void queryClient.invalidateQueries({ queryKey: ["flags"] });
-    },
+    onSuccess: () => refreshFlags(),
     onError: (e) =>
       showToast(
         e instanceof ApiError ? e.message : "Couldn't change access tier",
