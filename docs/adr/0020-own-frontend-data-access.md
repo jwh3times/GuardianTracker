@@ -156,6 +156,14 @@ architecture boundary that is not checked decays between pull requests.
   `BrowserSessionClient`. Data-access modules read the current membership from
   that seam; they do not own authentication, token lifecycle, or identity
   cleanup.
+- A resource that is scoped by more than membership may depend on another
+  context for that narrower scope. `data/weekly.ts` (E6) reads the active
+  character from `CharacterContext` because the payload is character-scoped,
+  not just membership-scoped — the first `data/` module to import a context
+  other than the identity seam. Whether that context should instead dissolve
+  into its own `data/characters.ts` module, or survive as a thin
+  selection-state wrapper over one, is Characters' (E7) decision; this ADR
+  does not resolve it in advance.
 - Preferences synchronization — membership reset, stale-work fencing, write
   serialization, and visible failure state — remains the separate decision in
   the Preferences synchronization ticket.
