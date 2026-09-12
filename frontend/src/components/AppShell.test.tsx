@@ -1,7 +1,7 @@
 import React from "react";
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
@@ -16,6 +16,17 @@ const authed = () => {
   localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
   // Not an onboarding test — mark first-run done so the Dashboard greeting
 };
+
+/** Stands in for the Collections page, exposing the deep link it received. */
+function CollectionsStub() {
+  const { search } = useLocation();
+  return (
+    <>
+      <div>collections-stub</div>
+      <div data-testid="deep-link">{search}</div>
+    </>
+  );
+}
 
 describe("App routing", () => {
   beforeEach(() => {
@@ -115,7 +126,7 @@ describe("AppShell interactions", () => {
           }
         />
         <Route path="/login" element={<div>login-stub</div>} />
-        <Route path="/collections" element={<div>collections-stub</div>} />
+        <Route path="/collections" element={<CollectionsStub />} />
       </Routes>,
       { route },
     );
@@ -213,6 +224,20 @@ describe("AppShell interactions", () => {
     expect(icon.src).toBe("https://www.bungie.net/img/gjally.png");
     fireEvent.click(screen.getByText("Gjallarhorn"));
     expect(await screen.findByText("collections-stub")).toBeInTheDocument();
+    // The deep link must carry the item hash — Collections resolves the drawer
+    // from it, so reaching the page alone proves nothing.
+    expect(screen.getByTestId("deep-link")).toHaveTextContent("?item=555");
+  });
+
+  it("opens no results menu for a single character", async () => {
+    renderShell();
+    fireEvent.change(screen.getByPlaceholderText("Search items…"), {
+      target: { value: "g" },
+    });
+    // Outlast the 250ms debounce, so a menu that was going to open has.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(screen.queryByText(/No items match/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Searching…")).not.toBeInTheDocument();
   });
 
   it("shows the no-match state for an empty search", async () => {
