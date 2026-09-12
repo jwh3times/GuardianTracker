@@ -131,7 +131,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Shared query definitions**
 
-- Collections data must be fetched via `collectionsQuery()` from `lib/queries.ts` — not an ad hoc `queryKey`/`queryFn` pair — so multiple pages share one cache entry. Flag duplicate collections query definitions.
+- Collections data must be fetched via `useCollectionsSummary()`/`useCollections()` from `data/collections.ts` (ADR 0020) — not an ad hoc `queryKey`/`queryFn` pair — so multiple pages share one cache entry. Flag duplicate collections query definitions or a feature module naming the `["collections", ...]` key directly. The cache-refresh endpoint and its cross-resource invalidation fan-out live in `data/membershipRefresh.ts`; flag a page that re-declares that mutation inline.
 
 **Acquisition sources**
 

@@ -98,10 +98,41 @@ frontend/src/
                                    framework-neutral `onSuccess`/`onError`/`onSettled` callbacks
                                    carrying domain values. Collections, Dashboard, and Wish list all
                                    read this module now; none declares its own wishlist query or
-                                   mutation. Remaining resources (Collections, Weekly, Characters,
-                                   Items, Search, Flags, Admin, Catalysts, Crafting, Seals) have not
-                                   migrated yet — see the ADR 0020 note under "Shared query
-                                   definitions" below.
+                                   mutation.
+    collections.ts               ← Second resource landed (E5). Private query key
+                                   `["collections", membershipType, membershipId, "all" | "missing"]`;
+                                   projects `APIMembershipCollections` through `toCollections` /
+                                   `toCollectionsSummary` — those two adapters stay in
+                                   `lib/collectionsView.ts` with their ADR 0018 survivor tests rather
+                                   than moving into this module. Two hooks, not one hook with a
+                                   boolean: `useCollectionsSummary()` (counts-only) and
+                                   `useCollections()` (full item set), because the two variants return
+                                   different view types — asking the counts-only view for items is a
+                                   compile error, not an empty array. Both accept an optional plain
+                                   `{ enabled?: boolean }`, ANDed with the module's own membership
+                                   gate, so React Query's option shape never crosses into a feature
+                                   module; only the onboarding tour (gating on saved preferences) uses
+                                   it. Exports `invalidateCollections(client)` as this resource's
+                                   invalidation entry point — the shape every resource's module is
+                                   expected to expose so the refresh fan-out in
+                                   `data/membershipRefresh.ts` can invalidate it without naming its
+                                   key. Read by Collections, Cosmetics, Dashboard, Settings, and
+                                   OnboardingTour.
+    membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
+                                   (`POST /api/collections/:membershipType/:membershipId/refresh`) and
+                                   the six-resource invalidation fan-out that follows it, replacing two
+                                   verbatim copies previously inline in Collections and Settings. Lives
+                                   in its own module rather than inside `collections.ts` because it
+                                   invalidates six membership-scoped resources and a module owning one
+                                   has no claim on the other five. Calls `invalidateCollections` for
+                                   the one migrated resource; the other five (characters, weekly,
+                                   catalysts, crafting, seals) are raw keys in one `UNMIGRATED_KEYS`
+                                   list, each replaced by that resource's own invalidation entry point
+                                   as its ADR 0020 slice lands. Read no membership argument — it reads
+                                   the signed-in membership from `useAuth()`.
+                                   Remaining resources (Weekly, Characters, Items, Search, Flags,
+                                   Admin, Catalysts, Crafting, Seals) have not migrated yet — see the
+                                   ADR 0020 note under "Shared query definitions" below.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -155,14 +186,7 @@ frontend/src/
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
-    queries.ts                 ← collectionsQuery(membershipType, membershipId) — counts-only collections
-                                   query (select: toCollectionsSummary), used by Dashboard, Settings, and
-                                   OnboardingTour; collectionsFullQuery(membershipType, membershipId) — full
-                                   collections query with items (select: toCollections), used by Collections
-                                   and Cosmetics. Two functions rather than a boolean flag because the variants
-                                   return different view types (see lib/collectionsView.ts); cache keys are
-                                   unchanged: ["collections", type, id, "all" | "missing"].
-                                   itemPerksQuery(itemHash) — lazy perk-pool fetch (staleTime: Infinity);
+    queries.ts                 ← itemPerksQuery(itemHash) — lazy perk-pool fetch (staleTime: Infinity);
                                    itemByHashQuery(itemHash) — minimal item view for deep-link miss resolution
                                    (staleTime: Infinity, retry: false);
                                    weeklyQuery(characterId) — This Week payload (select: toWeekly), shared by
@@ -198,7 +222,7 @@ frontend/src/
                                  or lib/ subfolders)
     auth/                      ← Login.tsx (initial login + authenticated Bungie reconnect),
                                    OAuthCallback.tsx (initial or reconnect code exchange)
-    collections/               ← Collections.tsx (tree + grid/list + detail drawer via collectionsFullQuery;
+    collections/               ← Collections.tsx (tree + grid/list + detail drawer via data/collections.ts's useCollections;
                                    search deep-link ?item=<hash>; add/remove wishlist; the sidebar tree, node
                                    lookups, and the item join all come from lib/collectionsView.ts — this page
                                    only renders them),
@@ -294,8 +318,8 @@ const { data } = useQuery({
 });
 ```
 
-Wish list no longer follows this raw pattern — it is the first resource owned by
-a `src/data/` module (see below); its query and mutations are not declared
+Wish list and Collections no longer follow this raw pattern — they are owned by
+`src/data/` modules (see below); their queries and mutations are not declared
 inline in a feature.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
@@ -311,24 +335,30 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 
 `lib/queries.ts` exports:
 
-- `collectionsQuery(membershipType, membershipId)` — the counts-only collections query (`select: toCollectionsSummary` from `lib/collectionsView.ts`); Dashboard, Settings, and OnboardingTour all use it so they share a single cache entry per membership instead of firing separate requests.
-- `collectionsFullQuery(membershipType, membershipId)` — the full collections query with items (`select: toCollections`); used by Collections and Cosmetics. A separate function rather than a boolean `includeAll` parameter because the two variants return different view types — asking the counts-only view for items is a compile error, not an empty array. Cache keys are unchanged: `["collections", type, id, "all" | "missing"]`.
 - `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
 - `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
 - `weeklyQuery(characterId)` — the This Week payload (`GET /api/weekly/recommendations`), with `select: toWeekly` from `lib/weeklyView.ts`. Dashboard and ThisWeek share one cache entry per selected character on `["weekly", characterId ?? null]`. `enabled` is deliberately left to the caller: the two consumers gate on different identity facts. The `select` reference must stay module-level — React Query memoises it per observer on function identity, so an inline arrow would re-run the adapter every render. Feature modules must not fetch this endpoint directly; casting weekly JSON to a design type is what ADR 0016 removed.
 
+Collections' counts-only and full queries moved out of here into
+`data/collections.ts` as `useCollectionsSummary()` / `useCollections()` (ADR
+0020, E5); see the `data/` section above.
+
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
 resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
-Wish list is the first slice (E4): `data/wishlist.ts` now owns that resource's
-query identity, projection, and all six mutations, and Collections, Dashboard,
-and Wish list read it instead of each declaring their own. The remaining
-resources — Collections, Weekly, Characters, Items, Search, Flags, Admin,
-Catalysts, Crafting, Seals — are sequenced by the #172 handoff and have not
-migrated yet, so for those, `lib/queries.ts`, the per-feature `useQuery` /
+Wish list (E4) and Collections (E5) have landed: `data/wishlist.ts` owns the
+wish list resource's query identity, projection, and all six mutations, and
+`data/collections.ts` owns the collections resource's query identity and
+projection dispatch, plus `data/membershipRefresh.ts` for the cross-resource
+cache-refresh fan-out. Consumers read these modules instead of declaring their
+own. The remaining resources — Weekly, Characters, Items, Search, Flags,
+Admin, Catalysts, Crafting, Seals — are sequenced by the #172 handoff and have
+not migrated yet, so for those, `lib/queries.ts`, the per-feature `useQuery` /
 `useIdentityMutation` calls documented in this file, and the consumer-side
 `toCharacter` projection in `lib/adapters.ts` remain how the code actually
 works today. The ESLint `no-restricted-imports` import-boundary ADR 0020
-specifies has also not landed (E16).
+specifies has also not landed (E16), and so has the fan-out test that would
+fail if a migrated resource were added to `membershipRefresh.ts` without a
+matching invalidation entry point.
 
 ## Authentication
 
