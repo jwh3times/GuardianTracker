@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router";
 import { Button } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
-import { useAuth } from "../../contexts/AuthContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
-import { collectionsQuery } from "../../lib/queries";
+import { useCollectionsSummary } from "../../data/collections";
 import { initialTourState, TOUR_ROUTES, tourReducer } from "./tourState";
 
 const STEPS = [
@@ -27,7 +25,6 @@ const STEPS = [
 ] as const;
 
 export function OnboardingTour() {
-  const { user } = useAuth();
   const { onboardedAt, preferencesReady, completeOnboarding } =
     usePreferences();
   const [state, dispatch] = useReducer(tourReducer, initialTourState);
@@ -36,10 +33,8 @@ export function OnboardingTour() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const query = collectionsQuery(user?.membershipType, user?.membershipId);
-  const { data: collections } = useQuery({
-    ...query,
-    enabled: query.enabled && preferencesReady && onboardedAt === null,
+  const { view: collections } = useCollectionsSummary({
+    enabled: preferencesReady && onboardedAt === null,
   });
 
   const progress = useMemo(() => {

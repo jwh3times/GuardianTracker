@@ -19,7 +19,8 @@ import { Icon } from "../../components/Icon";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
 import { errorState } from "../../lib/errorState";
-import { collectionsQuery, weeklyQuery } from "../../lib/queries";
+import { weeklyQuery } from "../../lib/queries";
+import { useCollectionsSummary } from "../../data/collections";
 import { useWishlist } from "../../data/wishlist";
 import type { SummaryCategory, TodayAction } from "../../types/design";
 import { emblemStyle } from "../../lib/emblem";
@@ -45,12 +46,12 @@ export function Dashboard() {
   // Shares the "missing" collections cache entry with Settings and the
   // Collections page (one fetch across all three) via the shared query helper.
   const {
-    data: real,
+    view: real,
     isLoading: collectionsLoading,
     isError: collectionsFailed,
     error: collectionsError,
-    refetch: refetchCollections,
-  } = useQuery(collectionsQuery(membershipType, membershipId));
+    retry: refetchCollections,
+  } = useCollectionsSummary();
 
   const {
     data: weeklyData,
