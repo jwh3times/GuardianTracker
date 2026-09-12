@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useIdentityMutation } from "../contexts/IdentityMutation";
 import { apiFetch, type ApiError } from "../lib/api";
 import { invalidateCollections } from "./collections";
+import { invalidateWeekly } from "./weekly";
 import type { APICacheRefreshResponse } from "../types/api";
 
 /**
@@ -35,7 +36,6 @@ import type { APICacheRefreshResponse } from "../types/api";
  */
 const UNMIGRATED_KEYS = [
   "characters", // E7
-  "weekly", // E6
   "catalysts", // E12
   "crafting", // E13
   "seals", // E14
@@ -43,6 +43,7 @@ const UNMIGRATED_KEYS = [
 
 function fanOut(client: QueryClient) {
   invalidateCollections(client);
+  invalidateWeekly(client);
   for (const key of UNMIGRATED_KEYS) {
     void client.invalidateQueries({ queryKey: [key] });
   }
