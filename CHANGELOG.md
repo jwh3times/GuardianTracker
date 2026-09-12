@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.46] - 2026-09-12
+
+### Changed
+
+- Consolidated how the item drawer looks up an item's possible perks,
+  catalysts, and the read-only view shown when a search link points at
+  something outside your collections. Nothing the drawer shows or does changes
+  here; this is the fifth of thirteen planned resource migrations.
+
 ## [1.3.45] - 2026-09-12
 
 ### Changed
@@ -837,7 +846,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.45...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.46...HEAD
+[1.3.46]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.45...v1.3.46
 [1.3.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.44...v1.3.45
 [1.3.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.43...v1.3.44
 [1.3.43]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.42...v1.3.43
