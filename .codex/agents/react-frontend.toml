@@ -149,6 +149,20 @@ frontend/src/
                                    (unchanged public API) is still how AppShell, Dashboard, This Week, and
                                    `data/weekly.ts` read the roster plus the active pick; Settings reads
                                    `useCharacterRoster()` directly since it does not need the pick.
+    items.ts                     ← Fifth resource landed (E8). Private per-hash query keys
+                                   `["item-perks", itemHash]` / `["item-view", itemHash]`; projects
+                                   `APIItemPerks` → `ItemPerks` (`{ perkColumns, catalysts }`) and
+                                   `APIItemView` → a view-only `GTItem` (`toGTItemView`, moved here
+                                   from `lib/adapters.ts` and now private, no longer exported).
+                                   `useItemPerks(itemHash)` returns `{ perkColumns, catalysts,
+                                   isLoading }`; `useItemView(itemHash)` returns `{ item, isError }`
+                                   and sets `retry: false` (a 404 means the hash is not in the
+                                   manifest — no value in retrying). Both use `staleTime: Infinity`
+                                   — item data is static for a manifest version. Exports no
+                                   invalidation entry point by design: item data carries no
+                                   membership, so it is not in `data/membershipRefresh.ts`'s fan-out.
+                                   Read by Collections' item detail drawer (perks) and its search
+                                   deep-link fallback (view-only drawer).
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
@@ -162,8 +176,8 @@ frontend/src/
                                    own invalidation entry point as its ADR 0020 slice lands. Read no
                                    membership argument — it reads the signed-in membership from
                                    `useAuth()`.
-                                   Remaining resources (Items, Search, Flags,
-                                   Admin, Catalysts, Crafting, Seals) have not migrated yet — see the
+                                   Remaining resources (Search, Flags, Admin,
+                                   Catalysts, Crafting, Seals) have not migrated yet — see the
                                    ADR 0020 note under "Shared query definitions" below.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
@@ -198,15 +212,14 @@ frontend/src/
                                    types/api.ts → types/design.ts wire-to-domain split is actually enforced for
                                    this payload; no feature module sees APIMembershipCollections or builds a GTItem
                                    from it directly.
-    adapters.ts                ← API response types → design GTItem(view-only):
-                                   toGTItemView(APIItemView) — maps a manifest-only item view to a
-                                   view-only GTItem. toGTItem is NOT exported here — collection
-                                   items only ever come from collectionsView.ts, which alone can join ownership
-                                   and availability. Also exports RARITY_MAP — shared rarity vocabulary,
-                                   used by data/wishlist.ts too — as an interim home until the
-                                   Items slice (E8) retires the last local caller. toWishlistEntry and its
-                                   priority map moved to data/wishlist.ts (ADR 0020, E4); toCharacter moved to
-                                   data/characters.ts (ADR 0020, E7).
+    rarity.ts                  ← toRarity: the one wire rarity name → design Rarity adapter, shared
+                                   by the Items (data/items.ts) and Wish list (data/wishlist.ts)
+                                   data-access modules. Looked up through a Map (mirrors
+                                   difficulty.ts) so an inherited key like "toString" can't resolve
+                                   through the prototype chain; an unrecognised name falls back to
+                                   `legendary`. `lib/collectionsView.ts` keeps its own private
+                                   RARITY_MAP copy — an ADR 0018 survivor, deliberately left
+                                   unchanged.
     format.ts                  ← relTime (guards zero-time)
     emblem.ts                  ← emblemStyle(url) → background CSS for a character emblem, or undefined
                                    so the caller keeps the CSS placeholder (AppShell + Dashboard)
@@ -219,9 +232,6 @@ frontend/src/
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
-    queries.ts                 ← Items-only until E8. itemPerksQuery(itemHash) — lazy perk-pool fetch
-                                   (staleTime: Infinity); itemByHashQuery(itemHash) — minimal item view
-                                   for deep-link miss resolution (staleTime: Infinity, retry: false)
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (navigates to
                                    /collections?item=<hash>); character switcher (reads CharacterContext);
@@ -330,6 +340,10 @@ Deleted files / paths (do not reference):
 - `frontend/src/graphql/` directory
 - `frontend/src/features/collections/collectionTree.ts` and its test — the three helpers
   (`apiNodeToTreeNode`, `gatherItemHashes`, `findNodePath`) are folded into `lib/collectionsView.ts`
+- `frontend/src/lib/queries.ts` — the Items resource's query definitions moved into
+  `data/items.ts` (ADR 0020, E8)
+- `frontend/src/lib/adapters.ts` — `toGTItemView` moved into `data/items.ts` and is now
+  private; `RARITY_MAP` was replaced by `lib/rarity.ts`'s `toRarity`
 
 ## Data fetching
 
@@ -348,7 +362,7 @@ const { data } = useQuery({
 });
 ```
 
-Wish list, Collections, Weekly, and Characters no longer follow this raw
+Wish list, Collections, Weekly, Characters, and Items no longer follow this raw
 pattern — they are owned by `src/data/` modules (see below); their queries and
 mutations are not declared inline in a feature.
 
@@ -363,37 +377,35 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 
 ## Shared query definitions
 
-`lib/queries.ts` exports:
+`data/items.ts` exports the Items resource's two hooks:
 
-- `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
-- `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
-
-`lib/queries.ts` is now Items-only. Collections' counts-only and full queries
-moved out of here into `data/collections.ts` as `useCollectionsSummary()` /
-`useCollections()` (ADR 0020, E5), and the This Week payload moved out into
-`data/weekly.ts` as `useWeekly()` (ADR 0020, E6); see the `data/` section
-above for both.
+- `useItemPerks(itemHash)` — lazy query for weapon perk columns and catalysts (`GET /api/items/:itemHash/perks`); `enabled: !!itemHash`; `staleTime: Infinity` since manifest data doesn't change mid-session. Returns `{ perkColumns, catalysts, isLoading }`. Used by Collections when the item detail drawer opens (click or deep-link).
+- `useItemView(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Returns `{ item, isError }`. Used by Collections when a deep-link hash cannot be found in any collection bucket.
 
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
 resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
-Wish list (E4), Collections (E5), Weekly (E6), and Characters (E7) have
-landed: `data/wishlist.ts` owns the wish list resource's query identity,
+Wish list (E4), Collections (E5), Weekly (E6), Characters (E7), and Items (E8)
+have landed: `data/wishlist.ts` owns the wish list resource's query identity,
 projection, and all six mutations; `data/collections.ts` owns the collections
 resource's query identity and projection dispatch; `data/weekly.ts` owns the
 weekly resource's query identity, endpoint, and the `enabled` gate the two
 consumers previously composed themselves; `data/characters.ts` owns the
 characters resource's query identity, endpoint, and projection (`toCharacter`,
 moved from `lib/adapters.ts`), with `CharacterContext` surviving as a thin
-selection-state wrapper over it; and `data/membershipRefresh.ts` holds the
-cross-resource cache-refresh fan-out. Consumers read these modules instead of
-declaring their own. The remaining resources — Items, Search, Flags, Admin,
-Catalysts, Crafting, Seals — are sequenced by the #172 handoff and have not
-migrated yet, so for those, `lib/queries.ts` and the per-feature `useQuery` /
-`useIdentityMutation` calls documented in this file remain how the code
-actually works today. The ESLint `no-restricted-imports` import-boundary ADR
-0020 specifies has also not landed (E16), and so has the fan-out test that
-would fail if a migrated resource were added to `membershipRefresh.ts`
-without a matching invalidation entry point.
+selection-state wrapper over it; `data/items.ts` owns the two per-hash item
+query identities and projections (`toGTItemView`, moved from `lib/adapters.ts`
+and now private) and, by design, exposes no invalidation entry point — item
+data is static per manifest version and carries no membership, so
+`data/membershipRefresh.ts`'s fan-out has nothing to re-fetch here; and
+`data/membershipRefresh.ts` holds the cross-resource cache-refresh fan-out.
+Consumers read these modules instead of declaring their own. The remaining
+resources — Search, Flags, Admin, Catalysts, Crafting, Seals — are sequenced
+by the #172 handoff and have not migrated yet, so for those, the per-feature
+`useQuery` / `useIdentityMutation` calls documented in this file remain how
+the code actually works today. The ESLint `no-restricted-imports`
+import-boundary ADR 0020 specifies has also not landed (E16), and so has the
+fan-out test that would fail if a migrated resource were added to
+`membershipRefresh.ts` without a matching invalidation entry point.
 
 ## Authentication
 
@@ -506,7 +518,7 @@ works today.
 ## Collections page features
 
 - Loads full data with `?include=all` (collected + missing) and filters display client-side via `missingOnly` toggle — no re-fetch when toggling the filter
-- Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected) and opens the detail drawer; if no collectible entry exists, falls back to `itemByHashQuery` → `toGTItemView` for a read-only view drawer
+- Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected) and opens the detail drawer; if no collectible entry exists, falls back to `data/items.ts`'s `useItemView` for a read-only view drawer
 - Cosmetics is a full top-level category alongside Weapons, Armor, Exotics
 - Add-to-wishlist and remove-from-wishlist use `data/wishlist.ts`'s `useAddWishlistItem`/`useRemoveWishlistItem` (ADR 0020), with a page-local pending-state guard (prevents double-click races) and the row resolved from the projected `WishlistEntry.itemId` rather than reaching into the wire cache. Remove is now optimistic here too — the wish-list star clears on click rather than on the refetch that follows, unifying with the Wish list page's behavior (previously non-optimistic on this page only)
 - Filter/category state (rarity, source difficulty, sort, view, missing-only, "available now", "hide farm-only", the in-page search term, and the selected category) is owned by `useCollectionsFilters` (`features/collections/useCollectionsFilters.ts`), which makes the URL the source of truth: `parseFilters`/`serializeFilters` read and write `?node=&q=&rarity=&diff=&sort=&view=&missing=&avail=&farm=`, keeping the URL shareable and reload-safe. The difficulty predicate matches when any `acquisitionSources` entry has the selected tier. Sort supports rarity, name, and availability; a legacy URL `sort=difficulty` parses as rarity, while `loadStoredFilters` drops that removed value and the next persistence pass writes the rarity default without discarding other valid saved fields. Filter fields also mirror to a `gt.collections.filters` localStorage entry, which supplies defaults only when the URL carries no filter params (e.g. a fresh visit). `node` and `q` are the two keys in `URL_ONLY_KEYS`: never persisted to storage, never read back from it, and re-asserted from the URL everywhere stored/legacy state is merged in — a bare `?node=` or `?q=` deep link still applies the user's stored filter defaults, and a stray `q`/`node` key in a hand-edited or legacy localStorage payload can't leak into state. History behavior differs by field: `setNode` pushes a history entry so Back returns to the previous category; every other setter, including `setQ`, replaces (`{ replace: true }`), so typing a search term or toggling a filter doesn't spam history. Callers that must change multiple fields atomically (e.g. restoring node + missing together from a deep link) go through `setFilters`, not sequential single-field setters — `useSearchParams`'s functional updater snapshots `prev` per call, so two `write` calls in the same tick would clobber each other.
@@ -538,11 +550,11 @@ works today.
 - `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool
 - `APIItemCatalyst`: `{ name: string; description: string }` — one exotic catalyst entry; `description` may be empty (the manifest has at least one blank entry — Duality)
 - `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[]; catalysts: APIItemCatalyst[] }` — response envelope for `/api/items/:itemHash/perks`; `catalysts` is always present (empty array for non-exotics), up to 4 entries for multi-catalyst exotics
-- `GTItem.perks`: REMOVED — the old dead flat perks field no longer exists on the design type; use `PerkColumn[]` from `itemPerksQuery` instead
+- `GTItem.perks`: REMOVED — the old dead flat perks field no longer exists on the design type; use `PerkColumn[]` from `data/items.ts`'s `useItemPerks` instead
 - `GTItem.farmOnly?: boolean` — set when the collectible source indicates "cannot be reacquired"; renders a "Farm only" chip in the item card and drawer
 - `GTItem.acquisitionSources: AcquisitionSource[]`; no aggregate `GTItem.diff`.
   Farm-only semantics are unchanged and must not be redefined from the source union.
-- `APIItemView`: `{ itemHash, name, icon, itemType, tierType, rarity, description }` — response type for `GET /api/items/:itemHash`; used by `itemByHashQuery` + `toGTItemView` for the view-only deep-link drawer
+- `APIItemView`: `{ itemHash, name, icon, itemType, tierType, rarity, description }` — response type for `GET /api/items/:itemHash`; used by `data/items.ts`'s `useItemView` for the view-only deep-link drawer
 - `PerkColumn` (design.ts): `{ role: string; label: string; perks: string[] }` — design-layer parallel to `APIPerkColumn`
 - `ItemCatalyst` (design.ts): `{ name: string; description: string }` — design-layer parallel to `APIItemCatalyst`; passed to `ItemDetailDrawer`'s `catalysts` prop
 - `Catalyst.effect?: string` (design.ts) — catalyst perk/effect text on the `/api/catalysts/...` response; rendered on `Catalysts.tsx` cards when present
