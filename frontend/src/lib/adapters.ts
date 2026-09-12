@@ -58,4 +58,3 @@ export function toGTItemView(v: APIItemView): GTItem {
     viewOnly: true,
   };
 }
-

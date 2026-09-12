@@ -1,5 +1,9 @@
 import { useCallback } from "react";
-import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { useIdentityMutation } from "../contexts/IdentityMutation";
 import { apiFetch, type ApiError } from "../lib/api";
 import { RARITY_MAP } from "../lib/adapters";
@@ -230,7 +234,8 @@ export function useRemoveWishlistItem(
   callbacks?: WishlistMutationCallbacks<RemoveWishlistItemVars>,
 ) {
   const mutation = useOptimisticWishlistMutation<RemoveWishlistItemVars, void>(
-    (vars) => apiFetch<void>(`/api/wishlist/${vars.rowId}`, { method: "DELETE" }),
+    (vars) =>
+      apiFetch<void>(`/api/wishlist/${vars.rowId}`, { method: "DELETE" }),
     (rows, vars) => rows.filter((r) => r.id !== vars.rowId),
     callbacks,
   );
@@ -260,7 +265,9 @@ export function useSetWishlistPriority(
     },
     (rows, vars) =>
       rows.map((r) =>
-        r.id === vars.rowId ? { ...r, priority: wirePriority(vars.priority) } : r,
+        r.id === vars.rowId
+          ? { ...r, priority: wirePriority(vars.priority) }
+          : r,
       ),
     callbacks,
   );

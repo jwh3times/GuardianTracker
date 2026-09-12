@@ -43,6 +43,22 @@ function WishlistProbe({
   );
 }
 
+/** Re-renders on demand, so referential stability can be observed over time. */
+function StabilityProbe({
+  onRender,
+}: {
+  onRender: (entries: ReturnType<typeof useWishlist>["entries"]) => void;
+}) {
+  const [n, setN] = React.useState(0);
+  const { entries } = useWishlist();
+  onRender(entries);
+  return (
+    <button onClick={() => setN(n + 1)} data-count={n}>
+      bump
+    </button>
+  );
+}
+
 describe("useWishlist projection", () => {
   it("projects wire rows to domain entries", async () => {
     renderWithProviders(<WishlistProbe />);
@@ -66,7 +82,11 @@ describe("useWishlist projection", () => {
     server.use(
       http.get(`${API}/api/wishlist`, () =>
         HttpResponse.json([
-          { ...sampleWishlist[0], availableNow: false, availableFrom: undefined },
+          {
+            ...sampleWishlist[0],
+            availableNow: false,
+            availableFrom: undefined,
+          },
         ]),
       ),
     );
@@ -103,12 +123,21 @@ describe("useWishlist projection", () => {
     expect(row).toHaveTextContent("|legendary|medium|");
   });
 
-  it("returns a referentially stable empty list before data arrives", () => {
+  it("returns a referentially stable empty list before data arrives", async () => {
+    // Hang the request so the component stays in its pre-data state, then force
+    // a re-render. One sample proves nothing — this test only discriminates
+    // because it compares the instance across two renders.
+    server.use(http.get(`${API}/api/wishlist`, () => new Promise(() => {})));
     const seen: unknown[] = [];
-    renderWithProviders(<WishlistProbe onRender={(e) => seen.push(e)} />);
+
+    renderWithProviders(<StabilityProbe onRender={(e) => seen.push(e)} />);
+    await waitFor(() => expect(seen.length).toBe(1));
+
+    await userEvent.click(screen.getByText("bump"));
+    await waitFor(() => expect(seen.length).toBeGreaterThan(1));
+
     // Every pre-data render must hand back the same array instance, or the
     // three consumers' useMemo dependencies churn on every render.
-    expect(seen.length).toBeGreaterThan(0);
     expect(new Set(seen).size).toBe(1);
   });
 });
@@ -131,7 +160,9 @@ describe("useWishlist cache identity", () => {
       </>,
     );
 
-    await waitFor(() => expect(screen.getAllByText(/Gjallarhorn/)).toHaveLength(3));
+    await waitFor(() =>
+      expect(screen.getAllByText(/Gjallarhorn/)).toHaveLength(3),
+    );
     // Before this module the three pages declared the key separately; the point
     // of private key ownership is that they cannot drift onto separate entries.
     expect(requests).toBe(1);
@@ -171,18 +202,32 @@ describe("optimistic remove", () => {
     );
 
     renderWithProviders(<RemoveProbe />);
-    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("count")).toHaveTextContent("1"),
+    );
 
     await userEvent.click(screen.getByText("remove"));
     // The request has NOT resolved yet. A non-optimistic remove would still
     // read 1 here, which is exactly what Collections did before this module.
-    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("0"));
+    await waitFor(() =>
+      expect(screen.getByTestId("count")).toHaveTextContent("0"),
+    );
 
     release!();
   });
 
   it("restores the snapshot and reports the failure when the server rejects", async () => {
+    // The settle refetch must not be what restores the row, or this test would
+    // pass with the rollback deleted — it did, until a mutant caught it. The
+    // first GET seeds the cache; every later one hangs, so the only thing that
+    // can put the row back is the rollback itself.
+    let seeded = false;
     server.use(
+      http.get(`${API}/api/wishlist`, async () => {
+        if (seeded) await new Promise(() => {});
+        seeded = true;
+        return HttpResponse.json(sampleWishlist);
+      }),
       http.delete(`${API}/api/wishlist/:id`, () =>
         HttpResponse.json({ message: "nope" }, { status: 500 }),
       ),
@@ -190,13 +235,17 @@ describe("optimistic remove", () => {
     const errors: string[] = [];
 
     renderWithProviders(<RemoveProbe onError={(m) => errors.push(m)} />);
-    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("count")).toHaveTextContent("1"),
+    );
 
     await userEvent.click(screen.getByText("remove"));
 
     await waitFor(() => expect(errors).toHaveLength(1));
     // Rolled back to the pre-mutation snapshot, not left at the optimistic 0.
-    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("count")).toHaveTextContent("1"),
+    );
   });
 
   it("refetches on settle so the server stays authoritative", async () => {
@@ -268,7 +317,11 @@ describe("optimistic priority", () => {
   });
 });
 
-function BulkProbe({ onDone }: { onDone: (updated: number, skipped: number) => void }) {
+function BulkProbe({
+  onDone,
+}: {
+  onDone: (updated: number, skipped: number) => void;
+}) {
   const { entries } = useWishlist();
   const { runBulkAction } = useBulkWishlistAction({
     onSuccess: (res) => onDone(res.updated, res.skipped),
@@ -296,7 +349,9 @@ describe("optimistic bulk action", () => {
     );
 
     renderWithProviders(<BulkProbe onDone={(u, s) => done.push([u, s])} />);
-    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("count")).toHaveTextContent("1"),
+    );
 
     await userEvent.click(screen.getByText("bulk delete"));
 
@@ -314,10 +369,14 @@ describe("optimistic bulk action", () => {
     );
 
     renderWithProviders(<BulkProbe onDone={() => {}} />);
-    await waitFor(() => expect(screen.getByTestId("count")).toHaveTextContent("1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("count")).toHaveTextContent("1"),
+    );
 
     await userEvent.click(screen.getByText("bulk delete"));
 
-    await waitFor(() => expect(bodies).toEqual([{ action: "delete", ids: [1] }]));
+    await waitFor(() =>
+      expect(bodies).toEqual([{ action: "delete", ids: [1] }]),
+    );
   });
 });
