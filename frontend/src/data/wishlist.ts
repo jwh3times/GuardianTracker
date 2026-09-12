@@ -6,9 +6,9 @@ import {
 } from "@tanstack/react-query";
 import { useIdentityMutation } from "../contexts/IdentityMutation";
 import { apiFetch, type ApiError } from "../lib/api";
-import { RARITY_MAP } from "../lib/adapters";
 import { toAcquisitionSource } from "../lib/acquisitionSources";
 import { relTime } from "../lib/format";
+import { toRarity } from "../lib/rarity";
 import type { WishListItem } from "../types/api";
 import type { Priority, WishlistEntry } from "../types/design";
 
@@ -54,7 +54,7 @@ function toWishlistEntry(w: WishListItem): WishlistEntry {
     itemId: String(w.itemHash),
     name: w.name,
     type: w.itemType,
-    rarity: RARITY_MAP[w.rarity] ?? "legendary",
+    rarity: toRarity(w.rarity),
     icon: w.icon || undefined,
     priority: PRIORITY_MAP[w.priority] ?? "medium",
     avail: {

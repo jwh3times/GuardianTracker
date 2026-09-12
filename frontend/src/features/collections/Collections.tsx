@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useQuery } from "@tanstack/react-query";
 import { Dropdown, PageHead } from "../../components/composite";
 import { CategoryTree } from "./CategoryTree";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
@@ -18,8 +17,6 @@ import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
-import { itemPerksQuery, itemByHashQuery } from "../../lib/queries";
-import { toGTItemView } from "../../lib/adapters";
 import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
 import {
   DIFFS,
@@ -30,6 +27,7 @@ import {
 } from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
 import { useCollections } from "../../data/collections";
+import { useItemPerks, useItemView } from "../../data/items";
 import { useMembershipRefresh } from "../../data/membershipRefresh";
 import {
   useAddWishlistItem,
@@ -93,10 +91,15 @@ export function Collections() {
     retry: refetch,
   } = useCollections();
 
-  const perksQuery = useQuery(itemPerksQuery(detail?.id));
+  const {
+    perkColumns,
+    catalysts,
+    isLoading: perksLoading,
+  } = useItemPerks(detail?.id);
 
   const [viewOnlyHash, setViewOnlyHash] = useState<string | null>(null);
-  const itemViewQuery = useQuery(itemByHashQuery(viewOnlyHash));
+  const { item: viewOnlyItem, isError: viewOnlyError } =
+    useItemView(viewOnlyHash);
 
   const { entries: wishlistEntries } = useWishlist();
 
@@ -163,15 +166,15 @@ export function Collections() {
 
   useEffect(() => {
     if (!viewOnlyHash) return;
-    if (itemViewQuery.data) {
-      setDetail(toGTItemView(itemViewQuery.data));
+    if (viewOnlyItem) {
+      setDetail(viewOnlyItem);
       setViewOnlyHash(null);
-    } else if (itemViewQuery.isError) {
+    } else if (viewOnlyError) {
       showToast("That item isn't in your trackable collections", "info");
       setViewOnlyHash(null);
     }
     // oxlint-disable-next-line react/exhaustive-deps
-  }, [viewOnlyHash, itemViewQuery.data, itemViewQuery.isError]);
+  }, [viewOnlyHash, viewOnlyItem, viewOnlyError]);
 
   const hasReal = !!collections;
 
@@ -488,9 +491,9 @@ export function Collections() {
       {detail && (
         <ItemDetailDrawer
           item={detail}
-          perkColumns={perksQuery.data?.perkColumns}
-          perksLoading={perksQuery.isLoading}
-          catalysts={perksQuery.data?.catalysts}
+          perkColumns={perkColumns}
+          perksLoading={perksLoading}
+          catalysts={catalysts}
           onClose={() => setDetail(null)}
           onWish={onWish}
           wished={wished.has(detail.id)}
