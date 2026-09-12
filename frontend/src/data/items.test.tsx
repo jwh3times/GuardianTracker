@@ -2,6 +2,7 @@ import { useState } from "react";
 import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server, API } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
@@ -218,5 +219,113 @@ describe("item view", () => {
     await waitFor(() =>
       expect(screen.getByTestId("view")).toHaveTextContent("failed"),
     );
+  });
+
+  it("keys each hash separately", async () => {
+    server.use(
+      http.get(`${API}/api/items/:hash`, ({ params }) =>
+        HttpResponse.json(
+          viewPayload({
+            itemHash: String(params.hash),
+            name: `Item ${String(params.hash)}`,
+          }),
+        ),
+      ),
+    );
+
+    renderWithProviders(
+      <>
+        <div data-testid="a">
+          <ViewProbe hash="111" />
+        </div>
+        <div data-testid="b">
+          <ViewProbe hash="222" />
+        </div>
+      </>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("b")).toHaveTextContent("222|Item 222"),
+    );
+    // Without the hash in the key, the second deep link would read the first
+    // one's cached item.
+    expect(screen.getByTestId("a")).toHaveTextContent("111|Item 111");
+  });
+
+  it("requests nothing when there is no hash to resolve", async () => {
+    const asked: string[] = [];
+    server.use(
+      http.get(`${API}/api/items/:hash`, ({ params }) => {
+        asked.push(String(params.hash));
+        return HttpResponse.json(viewPayload());
+      }),
+    );
+
+    renderWithProviders(
+      <>
+        <ViewProbe hash={null} />
+        <div data-testid="resolved">
+          <ViewProbe hash="999" />
+        </div>
+      </>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("resolved")).toHaveTextContent("Vendor Mod"),
+    );
+    expect(asked).toEqual(["999"]);
+  });
+
+  it("does not refetch a resolved item on remount", async () => {
+    let requests = 0;
+    server.use(
+      http.get(`${API}/api/items/:hash`, () => {
+        requests += 1;
+        return HttpResponse.json(viewPayload());
+      }),
+    );
+
+    function Toggle() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <button onClick={() => setOpen((v) => !v)}>toggle</button>
+          {open && <ViewProbe hash="999" />}
+        </>
+      );
+    }
+
+    renderWithProviders(<Toggle />);
+    await waitFor(() =>
+      expect(screen.getByTestId("view")).toHaveTextContent("Vendor Mod"),
+    );
+
+    await userEvent.click(screen.getByText("toggle"));
+    await userEvent.click(screen.getByText("toggle"));
+
+    expect(screen.getByTestId("view")).toHaveTextContent("Vendor Mod");
+    expect(requests).toBe(1);
+  });
+
+  it("does not retry a missing item even when the client would", async () => {
+    let requests = 0;
+    server.use(
+      http.get(`${API}/api/items/:hash`, () => {
+        requests += 1;
+        return HttpResponse.json({ error: "not found" }, { status: 404 });
+      }),
+    );
+    // The shared test client disables retries globally, which would hide the
+    // module's own `retry: false`. This client retries by default.
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
+    });
+
+    renderWithProviders(<ViewProbe hash="999" />, { client });
+
+    await waitFor(() =>
+      expect(screen.getByTestId("view")).toHaveTextContent("failed"),
+    );
+    expect(requests).toBe(1);
   });
 });

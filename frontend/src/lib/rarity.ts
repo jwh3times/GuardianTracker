@@ -29,6 +29,5 @@ const RARITY_BY_WIRE = new Map<string, Rarity>(Object.entries(WIRE_RARITIES));
  * ADR 0018 survivor and is deliberately left unchanged.
  */
 export function toRarity(raw: string | undefined | null): Rarity {
-  if (!raw) return "legendary";
-  return RARITY_BY_WIRE.get(raw) ?? "legendary";
+  return RARITY_BY_WIRE.get(raw ?? "") ?? "legendary";
 }

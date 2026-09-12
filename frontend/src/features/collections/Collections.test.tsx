@@ -249,6 +249,21 @@ describe("Collections", () => {
     expect(screen.getByText("Frenzy")).toBeInTheDocument();
   });
 
+  it("shows a perks loading state while the perk pool is in flight", async () => {
+    server.use(
+      treeCollectionsHandler,
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json([])),
+      // Never resolves: the perk pool is still loading.
+      http.get(`${API}/api/items/:hash/perks`, () => new Promise(() => {})),
+    );
+    renderPage(<Collections />, "/collections?item=200");
+
+    expect(
+      await screen.findByRole("dialog", { name: "Imperial Decree" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Loading perks…")).toBeInTheDocument();
+  });
+
   it("shows the privacy error state on PRIVACY_RESTRICTION", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
