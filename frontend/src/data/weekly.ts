@@ -17,6 +17,16 @@ import type { APIWeekly } from "../types/api";
  * As with Collections, the projection is not moved in: `toWeekly` stays in
  * `lib/weeklyView.ts` with the tests that call it directly, which already own
  * the tolerant difficulty vocabulary shipped by C3.
+ *
+ * NOTE FOR E7, which owns the Characters resource: this is the first `data/`
+ * module to depend on a context other than the identity seam. It reads the
+ * selected character from `CharacterContext`, which still declares its own
+ * `["characters", ...]` query and has no invalidation entry point. If E7
+ * dissolves that context into `data/characters.ts`, this import moves with it;
+ * if the context survives as a thin selection-state wrapper over the new
+ * module — plausible, since the persisted pick is UI state rather than query
+ * state — this can stay as it is. Either way the change lands in one place
+ * here rather than in the two features that used to derive it.
  */
 
 /**
@@ -69,6 +79,12 @@ export function useWeekly() {
           characterId ? `?characterId=${encodeURIComponent(characterId)}` : ""
         }`,
       ),
+    // `!!user` is belt-and-braces: ProtectedLayout unmounts this whole subtree
+    // the instant the session goes anonymous, so there is no render in which
+    // this hook runs signed out. It is kept because the module, not the route,
+    // should own its own precondition — and it cannot be covered by a test,
+    // because an unauthenticated tower mounts no CharacterProvider for the
+    // line above to read.
     enabled: !!user && !charactersLoading,
     select: toWeekly,
   });

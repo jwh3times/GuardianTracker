@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { server, API, sampleWeekly } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCharacters } from "../contexts/CharacterContext";
+import { useMembershipRefresh } from "./membershipRefresh";
 import { useWeekly } from "./weekly";
 
 /**
@@ -155,6 +156,43 @@ describe("retry", () => {
     await userEvent.click(screen.getByText("retry"));
 
     await waitFor(() => expect(attempt).toBe(2));
+  });
+});
+
+function RefreshAndWeeklyProbe() {
+  const { refresh } = useMembershipRefresh();
+  const { week } = useWeekly();
+  return (
+    <div>
+      <button onClick={refresh}>refresh</button>
+      <div data-testid="weekly">{week?.resetLabel ?? "none"}</div>
+    </div>
+  );
+}
+
+describe("invalidation", () => {
+  it("a membership refresh actually refetches the week", async () => {
+    let gets = 0;
+    server.use(
+      http.get(`${API}/api/weekly/recommendations`, () => {
+        gets += 1;
+        return HttpResponse.json(sampleWeekly);
+      }),
+      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
+        HttpResponse.json({ success: true, message: "ok" }),
+      ),
+    );
+
+    renderWithProviders(<RefreshAndWeeklyProbe />);
+    await waitFor(() => expect(gets).toBe(1));
+
+    await userEvent.click(screen.getByText("refresh"));
+
+    // Asserting the key head alone does not discriminate: reshaping
+    // WEEKLY_ROOT_KEY to ["weekly", something] still reports a head of
+    // "weekly" while matching no real per-character entry, so the week would
+    // silently go stale after a refresh. Only a real refetch proves the key.
+    await waitFor(() => expect(gets).toBe(2));
   });
 });
 
