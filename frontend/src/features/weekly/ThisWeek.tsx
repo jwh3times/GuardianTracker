@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useReducer } from "react";
 import { useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
 import { CountdownChip } from "../../components/primitives";
 import { PageHead, Panel } from "../../components/composite";
 import { ActionList } from "./ActionList";
@@ -8,9 +7,8 @@ import { MilestoneModule } from "./MilestoneModule";
 import { XurModule } from "./XurModule";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
-import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
-import { weeklyQuery } from "../../lib/queries";
+import { useWeekly } from "../../data/weekly";
 
 const DONE_KEY_PREFIX = "gt_done:";
 
@@ -43,22 +41,10 @@ function purgeOldWeeks(currentResetAt: string) {
 }
 
 export function ThisWeek() {
-  const { user } = useAuth();
-  const { activeCharacter, isLoading: charactersLoading } = useCharacters();
+  const { activeCharacter } = useCharacters();
   const navigate = useNavigate();
 
-  const characterID = activeCharacter?.id;
-
-  const {
-    data: w,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    ...weeklyQuery(characterID),
-    enabled: !!user && !charactersLoading,
-  });
+  const { week: w, isLoading, isError, error, retry } = useWeekly();
 
   const resetAt = w?.resetAt;
 
@@ -115,12 +101,7 @@ export function ThisWeek() {
     return (
       <div className="gt-page" data-onboarding-target="this-week">
         <PageHead title="This Week" sub="Weekly activities" />
-        <QueryErrorPanel
-          error={error}
-          onRetry={() => {
-            void refetch();
-          }}
-        />
+        <QueryErrorPanel error={error} onRetry={retry} />
       </div>
     );
   }

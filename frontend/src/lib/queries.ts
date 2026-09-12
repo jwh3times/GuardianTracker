@@ -1,6 +1,5 @@
 import { apiFetch } from "./api";
-import { toWeekly } from "./weeklyView";
-import type { APIItemPerks, APIItemView, APIWeekly } from "../types/api";
+import type { APIItemPerks, APIItemView } from "../types/api";
 
 /**
  * Per-item perk pool, fetched lazily when the item drawer opens. Perk pools are
@@ -28,29 +27,5 @@ export function itemByHashQuery(itemHash: string | undefined | null) {
     enabled: !!itemHash,
     staleTime: Infinity,
     retry: false,
-  };
-}
-
-/**
- * This week's reset timing, milestones, Xûr inventory and ranked actions.
- * Shared by the Dashboard and the This Week page, which therefore sit on one
- * cache entry per selected character instead of firing two requests.
- *
- * `select` adapts the payload at the seam, so neither page sees the wire shape
- * or the wire difficulty vocabulary. It must stay a stable module-level
- * reference: React Query memoises `select` per observer on function identity,
- * and an inline arrow would re-run the adapter on every render.
- *
- * `enabled` is deliberately left to the caller — the two consumers gate on
- * different identity facts, and one shared guard would be wrong for both.
- */
-export function weeklyQuery(characterId: string | undefined | null) {
-  return {
-    queryKey: ["weekly", characterId ?? null] as const,
-    queryFn: () =>
-      apiFetch<APIWeekly>(
-        `/api/weekly/recommendations${characterId ? `?characterId=${encodeURIComponent(characterId)}` : ""}`,
-      ),
-    select: toWeekly,
   };
 }

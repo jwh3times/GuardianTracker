@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.44] - 2026-09-12
+
+### Changed
+
+- Consolidated this week's reset timing, milestones, Xûr inventory and ranked
+  actions behind a single owner. The Dashboard and This Week each asked for
+  them separately and each decided for itself when it was safe to ask, using
+  two different tests for the same condition. Nothing either page shows or does
+  changes here; this is the third of thirteen planned resource migrations.
+
 ## [1.3.43] - 2026-09-12
 
 ### Changed
@@ -816,7 +826,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.43...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.44...HEAD
+[1.3.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.43...v1.3.44
 [1.3.43]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.42...v1.3.43
 [1.3.42]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.41...v1.3.42
 [1.3.41]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.40...v1.3.41

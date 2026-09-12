@@ -118,19 +118,33 @@ frontend/src/
                                    `data/membershipRefresh.ts` can invalidate it without naming its
                                    key. Read by Collections, Cosmetics, Dashboard, Settings, and
                                    OnboardingTour.
+    weekly.ts                    ← Third resource landed (E6). Private query key
+                                   `["weekly", characterId | null]`; projects `APIWeekly` through
+                                   `toWeekly`, which stays in `lib/weeklyView.ts` with the tests that
+                                   call it directly. `useWeekly()` takes no arguments — it reads the
+                                   selected character from `CharacterContext` and owns its own `enabled`
+                                   gate (`!!user && !charactersLoading`), replacing two differently-worded
+                                   copies of the same guard that Dashboard and This Week used to compose
+                                   onto a shared options object. Exports `invalidateWeekly(client)` as
+                                   this resource's invalidation entry point. This is the first `data/`
+                                   module to depend on a context other than the identity seam
+                                   (`CharacterContext`, for the active-character selection); see the
+                                   module's header comment for what E7 (Characters) should do about that
+                                   dependency. Read by Dashboard and This Week.
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
                                    verbatim copies previously inline in Collections and Settings. Lives
                                    in its own module rather than inside `collections.ts` because it
                                    invalidates six membership-scoped resources and a module owning one
-                                   has no claim on the other five. Calls `invalidateCollections` for
-                                   the one migrated resource; the other five (characters, weekly,
-                                   catalysts, crafting, seals) are raw keys in one `UNMIGRATED_KEYS`
-                                   list, each replaced by that resource's own invalidation entry point
-                                   as its ADR 0020 slice lands. Read no membership argument — it reads
-                                   the signed-in membership from `useAuth()`.
-                                   Remaining resources (Weekly, Characters, Items, Search, Flags,
+                                   has no claim on the other five. Calls `invalidateCollections` and
+                                   `invalidateWeekly` for the two migrated resources; the remaining four
+                                   (characters, catalysts, crafting, seals) are raw keys in one
+                                   `UNMIGRATED_KEYS` list, each replaced by that resource's own
+                                   invalidation entry point as its ADR 0020 slice lands. Read no
+                                   membership argument — it reads the signed-in membership from
+                                   `useAuth()`.
+                                   Remaining resources (Characters, Items, Search, Flags,
                                    Admin, Catalysts, Crafting, Seals) have not migrated yet — see the
                                    ADR 0020 note under "Shared query definitions" below.
   styles/
@@ -186,12 +200,9 @@ frontend/src/
     roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
-    queries.ts                 ← itemPerksQuery(itemHash) — lazy perk-pool fetch (staleTime: Infinity);
-                                   itemByHashQuery(itemHash) — minimal item view for deep-link miss resolution
-                                   (staleTime: Infinity, retry: false);
-                                   weeklyQuery(characterId) — This Week payload (select: toWeekly), shared by
-                                   Dashboard and ThisWeek on cache key ["weekly", characterId ?? null];
-                                   caller supplies enabled
+    queries.ts                 ← Items-only until E8. itemPerksQuery(itemHash) — lazy perk-pool fetch
+                                   (staleTime: Infinity); itemByHashQuery(itemHash) — minimal item view
+                                   for deep-link miss resolution (staleTime: Infinity, retry: false)
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (navigates to
                                    /collections?item=<hash>); character switcher (reads CharacterContext);
@@ -337,22 +348,25 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 
 - `itemPerksQuery(itemHash)` — lazy query for weapon perk columns (`GET /api/items/:itemHash/perks`); `enabled` is controlled by the caller (typically `!!detail?.id`); `staleTime: Infinity` since manifest data doesn't change mid-session. Used by Collections when the item detail drawer opens (click or deep-link).
 - `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
-- `weeklyQuery(characterId)` — the This Week payload (`GET /api/weekly/recommendations`), with `select: toWeekly` from `lib/weeklyView.ts`. Dashboard and ThisWeek share one cache entry per selected character on `["weekly", characterId ?? null]`. `enabled` is deliberately left to the caller: the two consumers gate on different identity facts. The `select` reference must stay module-level — React Query memoises it per observer on function identity, so an inline arrow would re-run the adapter every render. Feature modules must not fetch this endpoint directly; casting weekly JSON to a design type is what ADR 0016 removed.
 
-Collections' counts-only and full queries moved out of here into
-`data/collections.ts` as `useCollectionsSummary()` / `useCollections()` (ADR
-0020, E5); see the `data/` section above.
+`lib/queries.ts` is now Items-only. Collections' counts-only and full queries
+moved out of here into `data/collections.ts` as `useCollectionsSummary()` /
+`useCollections()` (ADR 0020, E5), and the This Week payload moved out into
+`data/weekly.ts` as `useWeekly()` (ADR 0020, E6); see the `data/` section
+above for both.
 
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
 resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
-Wish list (E4) and Collections (E5) have landed: `data/wishlist.ts` owns the
-wish list resource's query identity, projection, and all six mutations, and
-`data/collections.ts` owns the collections resource's query identity and
-projection dispatch, plus `data/membershipRefresh.ts` for the cross-resource
+Wish list (E4), Collections (E5), and Weekly (E6) have landed: `data/wishlist.ts`
+owns the wish list resource's query identity, projection, and all six
+mutations; `data/collections.ts` owns the collections resource's query
+identity and projection dispatch; `data/weekly.ts` owns the weekly resource's
+query identity, endpoint, and the `enabled` gate the two consumers previously
+composed themselves; and `data/membershipRefresh.ts` holds the cross-resource
 cache-refresh fan-out. Consumers read these modules instead of declaring their
-own. The remaining resources — Weekly, Characters, Items, Search, Flags,
-Admin, Catalysts, Crafting, Seals — are sequenced by the #172 handoff and have
-not migrated yet, so for those, `lib/queries.ts`, the per-feature `useQuery` /
+own. The remaining resources — Characters, Items, Search, Flags, Admin,
+Catalysts, Crafting, Seals — are sequenced by the #172 handoff and have not
+migrated yet, so for those, `lib/queries.ts`, the per-feature `useQuery` /
 `useIdentityMutation` calls documented in this file, and the consumer-side
 `toCharacter` projection in `lib/adapters.ts` remain how the code actually
 works today. The ESLint `no-restricted-imports` import-boundary ADR 0020

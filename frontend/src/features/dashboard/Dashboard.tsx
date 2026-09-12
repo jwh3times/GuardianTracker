@@ -1,5 +1,4 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import {
   Badge,
@@ -19,8 +18,8 @@ import { Icon } from "../../components/Icon";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
 import { errorState } from "../../lib/errorState";
-import { weeklyQuery } from "../../lib/queries";
 import { useCollectionsSummary } from "../../data/collections";
+import { useWeekly } from "../../data/weekly";
 import { useWishlist } from "../../data/wishlist";
 import type { SummaryCategory, TodayAction } from "../../types/design";
 import { emblemStyle } from "../../lib/emblem";
@@ -36,12 +35,9 @@ const EMPTY_SUMMARY: SummaryCategory[] = [
 
 export function Dashboard() {
   const { user } = useAuth();
-  const { activeCharacter, isLoading: charactersLoading } = useCharacters();
+  const { activeCharacter } = useCharacters();
   const navigate = useNavigate();
   const go = (path: string) => navigate(path);
-
-  const membershipType = user?.membershipType;
-  const membershipId = user?.membershipId;
 
   // Shares the "missing" collections cache entry with Settings and the
   // Collections page (one fetch across all three) via the shared query helper.
@@ -54,13 +50,10 @@ export function Dashboard() {
   } = useCollectionsSummary();
 
   const {
-    data: weeklyData,
+    week: weeklyData,
     isLoading: weeklyLoading,
     isError: weeklyFailed,
-  } = useQuery({
-    ...weeklyQuery(activeCharacter?.id),
-    enabled: membershipType != null && !!membershipId && !charactersLoading,
-  });
+  } = useWeekly();
 
   const {
     entries: wishlistEntries,

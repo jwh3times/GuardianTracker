@@ -239,6 +239,34 @@ describe("membership refresh", () => {
     ]);
   });
 
+  it("actually refetches collections, not just a matching key head", async () => {
+    let gets = 0;
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () => {
+        gets += 1;
+        return HttpResponse.json(collectionsPayload());
+      }),
+      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
+        HttpResponse.json({ success: true, message: "ok" }),
+      ),
+    );
+
+    renderWithProviders(
+      <>
+        <FullProbe />
+        <RefreshProbe />
+      </>,
+    );
+    await waitFor(() => expect(gets).toBe(1));
+
+    await userEvent.click(screen.getByText("refresh"));
+
+    // The fan-out test above records key heads, which a reshaped
+    // COLLECTIONS_ROOT_KEY would still satisfy while matching no real entry.
+    // A second request is the only thing that proves the key.
+    await waitFor(() => expect(gets).toBe(2));
+  });
+
   it("does not invalidate anything when the refresh fails", async () => {
     server.use(
       http.get(`${API}/api/collections/:type/:id`, () =>
