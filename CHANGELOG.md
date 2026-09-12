@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.45] - 2026-09-12
+
+### Changed
+
+- Consolidated your character list behind a single owner. The character
+  switcher and Settings each asked for it separately and each converted it for
+  display with their own copy of the same code. The switcher keeps remembering
+  which character you picked, and "refresh from Bungie" still reloads the list.
+  Nothing either screen shows or does changes here; this is the fourth of
+  thirteen planned resource migrations.
+
 ## [1.3.44] - 2026-09-12
 
 ### Changed
@@ -826,7 +837,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.44...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.45...HEAD
+[1.3.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.44...v1.3.45
 [1.3.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.43...v1.3.44
 [1.3.43]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.42...v1.3.43
 [1.3.42]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.41...v1.3.42
