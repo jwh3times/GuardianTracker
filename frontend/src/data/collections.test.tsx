@@ -3,7 +3,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { QueryClient } from "@tanstack/react-query";
-import { server, API, sampleCollections } from "../test/testServer";
+import { server, API, sampleCollections, sampleUser } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCollections, useCollectionsSummary } from "./collections";
 import { useMembershipRefresh } from "./membershipRefresh";
@@ -88,6 +88,59 @@ describe("collections query identity", () => {
   });
 });
 
+function RefreshProbe() {
+  const { refresh, isRefreshing } = useMembershipRefresh();
+  return (
+    <div>
+      <button onClick={refresh}>refresh</button>
+      <div data-testid="pending">{isRefreshing ? "yes" : "no"}</div>
+    </div>
+  );
+}
+
+describe("membership routing", () => {
+  it("addresses the signed-in membership, type before id", async () => {
+    // Every other handler here matches the wildcard `:type/:id`, so a swapped,
+    // hard-coded or dropped segment would route identically and pass. This is
+    // the test that reads the path values back.
+    const paths: string[] = [];
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, ({ params }) => {
+        paths.push(`${String(params.type)}/${String(params.id)}`);
+        return HttpResponse.json(collectionsPayload());
+      }),
+    );
+
+    renderWithProviders(<SummaryProbe />);
+
+    await waitFor(() => expect(paths).toHaveLength(1));
+    expect(paths[0]).toBe(
+      `${sampleUser.membershipType}/${sampleUser.membershipId}`,
+    );
+  });
+
+  it("addresses the same membership when refreshing", async () => {
+    const paths: string[] = [];
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, () =>
+        HttpResponse.json(collectionsPayload()),
+      ),
+      http.post(`${API}/api/collections/:type/:id/refresh`, ({ params }) => {
+        paths.push(`${String(params.type)}/${String(params.id)}`);
+        return HttpResponse.json({ success: true, message: "ok" });
+      }),
+    );
+
+    renderWithProviders(<RefreshProbe />);
+    await userEvent.click(screen.getByText("refresh"));
+
+    await waitFor(() => expect(paths).toHaveLength(1));
+    expect(paths[0]).toBe(
+      `${sampleUser.membershipType}/${sampleUser.membershipId}`,
+    );
+  });
+});
+
 describe("caller-composed gate", () => {
   it("does not fetch while the caller's gate is closed", async () => {
     let requests = 0;
@@ -145,16 +198,6 @@ describe("retry", () => {
     await waitFor(() => expect(attempt).toBe(2));
   });
 });
-
-function RefreshProbe() {
-  const { refresh, isRefreshing } = useMembershipRefresh();
-  return (
-    <div>
-      <button onClick={refresh}>refresh</button>
-      <div data-testid="pending">{isRefreshing ? "yes" : "no"}</div>
-    </div>
-  );
-}
 
 describe("membership refresh", () => {
   it("invalidates every membership-scoped resource ADR 0018 names", async () => {
