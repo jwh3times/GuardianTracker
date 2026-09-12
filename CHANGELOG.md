@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.47] - 2026-09-12
+
+### Changed
+
+- Consolidated the header's item search behind a single owner. What you type,
+  how long it waits before searching, the results it offers and where picking
+  one takes you are unchanged; this is the sixth of thirteen planned resource
+  migrations.
+
 ## [1.3.46] - 2026-09-12
 
 ### Changed
@@ -846,7 +855,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.46...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.47...HEAD
+[1.3.47]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.46...v1.3.47
 [1.3.46]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.45...v1.3.46
 [1.3.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.44...v1.3.45
 [1.3.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.43...v1.3.44

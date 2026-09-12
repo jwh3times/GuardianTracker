@@ -160,6 +160,20 @@ frontend/src/
                                    membership, so it is not in `data/membershipRefresh.ts`'s fan-out.
                                    Read by Collections' item detail drawer (perks) and its search
                                    deep-link fallback (view-only drawer).
+    search.ts                    ← Sixth resource landed (E9). Private per-term query key
+                                   `["search", term]`; endpoint `GET /api/items/search?q=<encoded>&limit=20`;
+                                   `enabled` only once `term.length >= MIN_SEARCH_LENGTH` (exported, `2`);
+                                   `staleTime: 30_000`. Projects `APISearchResult[]` → `SearchResult[]`
+                                   via `toRarity` for the rarity field (`lib/rarity.ts`), matching the old
+                                   lowercasing for every tier `bungie.GetTierName` emits and removing an
+                                   `as any` cast. `useItemSearch(term)` returns `{ results, isLoading,
+                                   isError }`, with a stable empty-array reference so `results` keeps
+                                   identity between renders. Exports no invalidation entry point by
+                                   design: search reads the manifest index, not membership data, so it is
+                                   not in `data/membershipRefresh.ts`'s fan-out. Read by `AppShell.tsx`'s
+                                   `SearchBar`, which keeps the 250ms debounce and six-result cap as
+                                   presentation and no longer imports React Query, `apiFetch`, or the
+                                   wire type.
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
@@ -173,9 +187,10 @@ frontend/src/
                                    own invalidation entry point as its ADR 0020 slice lands. Read no
                                    membership argument — it reads the signed-in membership from
                                    `useAuth()`.
-                                   Remaining resources (Search, Flags, Admin,
-                                   Catalysts, Crafting, Seals) have not migrated yet — see the
-                                   ADR 0020 note under "Shared query definitions" below.
+                                   Search (E9) is membership-independent by design, so it was never in
+                                   this fan-out. Remaining resources (Flags, Admin, Catalysts, Crafting,
+                                   Seals) have not migrated yet — see the ADR 0020 note under "Shared
+                                   query definitions" below.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -210,8 +225,8 @@ frontend/src/
                                    this payload; no feature module sees APIMembershipCollections or builds a GTItem
                                    from it directly.
     rarity.ts                  ← toRarity: the one wire rarity name → design Rarity adapter, shared
-                                   by the Items (data/items.ts) and Wish list (data/wishlist.ts)
-                                   data-access modules. Looked up through a Map (mirrors
+                                   by the Items (data/items.ts), Wish list (data/wishlist.ts), and
+                                   Search (data/search.ts) data-access modules. Looked up through a Map (mirrors
                                    difficulty.ts) so an inherited key like "toString" can't resolve
                                    through the prototype chain; an unrecognised name falls back to
                                    `legendary`. `lib/collectionsView.ts` keeps its own private
@@ -230,9 +245,9 @@ frontend/src/
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
-    AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (navigates to
-                                   /collections?item=<hash>); character switcher (reads CharacterContext);
-                                   flag-gated nav + admin nav link
+    AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (reads data/search.ts's
+                                   useItemSearch, navigates to /collections?item=<hash>); character
+                                   switcher (reads CharacterContext); flag-gated nav + admin nav link
     Brand.tsx                  ← Logo mark
     ErrorBoundary.tsx          ← App-wide error boundary
     QueryErrorPanel.tsx        ← Shared failed-fetch panel: errorState() copy + icon, the Bungie privacy
@@ -359,9 +374,9 @@ const { data } = useQuery({
 });
 ```
 
-Wish list, Collections, Weekly, Characters, and Items no longer follow this raw
-pattern — they are owned by `src/data/` modules (see below); their queries and
-mutations are not declared inline in a feature.
+Wish list, Collections, Weekly, Characters, Items, and Search no longer follow
+this raw pattern — they are owned by `src/data/` modules (see below); their
+queries and mutations are not declared inline in a feature.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
@@ -381,23 +396,27 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
 resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
-Wish list (E4), Collections (E5), Weekly (E6), Characters (E7), and Items (E8)
-have landed: `data/wishlist.ts` owns the wish list resource's query identity,
-projection, and all six mutations; `data/collections.ts` owns the collections
-resource's query identity and projection dispatch; `data/weekly.ts` owns the
-weekly resource's query identity, endpoint, and the `enabled` gate the two
-consumers previously composed themselves; `data/characters.ts` owns the
+Wish list (E4), Collections (E5), Weekly (E6), Characters (E7), Items (E8), and
+Search (E9) have landed: `data/wishlist.ts` owns the wish list resource's query
+identity, projection, and all six mutations; `data/collections.ts` owns the
+collections resource's query identity and projection dispatch; `data/weekly.ts`
+owns the weekly resource's query identity, endpoint, and the `enabled` gate the
+two consumers previously composed themselves; `data/characters.ts` owns the
 characters resource's query identity, endpoint, and projection (`toCharacter`,
 moved from `lib/adapters.ts`), with `CharacterContext` surviving as a thin
 selection-state wrapper over it; `data/items.ts` owns the two per-hash item
 query identities and projections (`toGTItemView`, moved from `lib/adapters.ts`
 and now private) and, by design, exposes no invalidation entry point — item
 data is static per manifest version and carries no membership, so
-`data/membershipRefresh.ts`'s fan-out has nothing to re-fetch here; and
+`data/membershipRefresh.ts`'s fan-out has nothing to re-fetch here;
+`data/search.ts` owns the global item search query identity, endpoint, the
+two-character minimum, and projection to `SearchResult` (`toRarity` for the
+rarity field), and by the same design exposes no invalidation entry point —
+search reads the manifest index, not membership data; and
 `data/membershipRefresh.ts` holds the cross-resource cache-refresh fan-out.
 Consumers read these modules instead of declaring their own. The remaining
-resources — Search, Flags, Admin, Catalysts, Crafting, Seals — are sequenced
-by the #172 handoff and have not migrated yet, so for those, the per-feature
+resources — Flags, Admin, Catalysts, Crafting, Seals — are sequenced by the
+#172 handoff and have not migrated yet, so for those, the per-feature
 `useQuery` / `useIdentityMutation` calls documented in this file remain how
 the code actually works today. The ESLint `no-restricted-imports`
 import-boundary ADR 0020 specifies has also not landed (E16), and so has the
