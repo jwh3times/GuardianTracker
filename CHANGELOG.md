@@ -14,6 +14,22 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.42] - 2026-09-11
+
+### Changed
+
+- Removing an item from your wish list using the star on the Collections page
+  now clears the star immediately instead of a moment later, when the refreshed
+  wish list arrives. The Wish list page already behaved this way; the two pages
+  ran different versions of the same removal, and they are now the same one.
+- Consolidated every wish list read and write behind a single owner. Three pages
+  previously asked for the wish list separately and six separate copies of its
+  add, remove, priority, notes and bulk operations were spread across two of
+  them, each repeating the same cache bookkeeping. There is no other change to
+  what any of those pages do; this is the first of thirteen planned resource
+  migrations, and it exists so that a fix to wish list behaviour is made once
+  rather than found by search.
+
 ## [1.3.41] - 2026-09-11
 
 ### Fixed
@@ -787,7 +803,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.41...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.42...HEAD
+[1.3.42]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.41...v1.3.42
 [1.3.41]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.40...v1.3.41
 [1.3.40]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.39...v1.3.40
 [1.3.39]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.38...v1.3.39

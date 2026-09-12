@@ -78,6 +78,27 @@ frontend/src/
                                  All four hooks — useAuth, usePreferences, useFlags/useFlag, and
                                  useCharacters — throw when called outside their provider. There
                                  is no silent default state for any of them.
+  data/                         ← ADR 0020 data-access modules, one per domain resource. A module
+                                   owns that resource's query identity (key private, never
+                                   exported), endpoint paths, projection to a domain type, every
+                                   mutation and its optimistic coordination, and its own
+                                   invalidation. Public surface is hooks only — React Query types
+                                   never reach a feature module.
+    wishlist.ts                  ← First resource landed (E4). Query key `["wishlist"]`; projects
+                                   `WishListItem` → `WishlistEntry` (toWishlistEntry moved here from
+                                   lib/adapters.ts). One shared optimistic recipe
+                                   (`useOptimisticWishlistMutation`) backs remove/setPriority/
+                                   setNotes/bulk; add is invalidate-only because the server assigns
+                                   the row id. Exports six hooks: useWishlist, useAddWishlistItem,
+                                   useRemoveWishlistItem, useSetWishlistPriority,
+                                   useSetWishlistNotes, useBulkWishlistAction. Mutation hooks take
+                                   framework-neutral `onSuccess`/`onError`/`onSettled` callbacks
+                                   carrying domain values. Collections, Dashboard, and Wish list all
+                                   read this module now; none declares its own wishlist query or
+                                   mutation. Remaining resources (Collections, Weekly, Characters,
+                                   Items, Search, Flags, Admin, Catalysts, Crafting, Seals) have not
+                                   migrated yet — see the ADR 0020 note under "Shared query
+                                   definitions" below.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -111,11 +132,14 @@ frontend/src/
                                    types/api.ts → types/design.ts wire-to-domain split is actually enforced for
                                    this payload; no feature module sees APIMembershipCollections or builds a GTItem
                                    from it directly.
-    adapters.ts                ← API response types → design Character/GTItem(view-only)/WishlistEntry:
+    adapters.ts                ← API response types → design Character/GTItem(view-only):
                                    toCharacter, toGTItemView(APIItemView) — maps a manifest-only item view to a
-                                   view-only GTItem, toWishlistEntry. toGTItem is NOT exported here — collection
+                                   view-only GTItem. toGTItem is NOT exported here — collection
                                    items only ever come from collectionsView.ts, which alone can join ownership
-                                   and availability.
+                                   and availability. Also exports RARITY_MAP — shared rarity vocabulary,
+                                   used by data/wishlist.ts too — as an interim home until the Characters and
+                                   Items slices (E7, E8) retire the last local callers. toWishlistEntry and its
+                                   priority map moved to data/wishlist.ts (ADR 0020, E4).
     format.ts                  ← relTime (guards zero-time)
     emblem.ts                  ← emblemStyle(url) → background CSS for a character emblem, or undefined
                                    so the caller keeps the CSS placeholder (AppShell + Dashboard)
@@ -223,7 +247,7 @@ frontend/src/
                                    identical on the wire, as APICatalyst/APISeal already are)
     design.ts                  ← Design-system domain types (GTItem — GTItem.perks field REMOVED, Seal,
                                    Weekly with resetAt/fetchedAt/degraded, Milestone.missing now optional,
-                                   WishlistEntry with icon, PerkColumn, ItemCatalyst, Catalyst.effect,
+                                   WishlistEntry with icon/itemId, PerkColumn, ItemCatalyst, Catalyst.effect,
                                    TriumphObjective, Triumph.objectives?)
   test/                        ← Shared test infra (referenced by vite.config setupFiles)
     setup.ts                   ← Vitest setup file
@@ -259,10 +283,17 @@ Data fetching uses **TanStack React Query** (`useQuery`) with `apiFetch` from `l
 import { apiFetch, ApiError } from "../lib/api";
 
 const { data } = useQuery({
-  queryKey: ["wishlist"],
-  queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
+  queryKey: ["characters", user?.membershipType, membershipId],
+  queryFn: () =>
+    apiFetch<APICharacter[]>(
+      `/api/characters/${membershipType}/${membershipId}`,
+    ),
 });
 ```
+
+Wish list no longer follows this raw pattern — it is the first resource owned by
+a `src/data/` module (see below); its query and mutations are not declared
+inline in a feature.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
@@ -283,14 +314,18 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 - `itemByHashQuery(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Used by Collections when a deep-link hash cannot be found in any collection bucket.
 - `weeklyQuery(characterId)` — the This Week payload (`GET /api/weekly/recommendations`), with `select: toWeekly` from `lib/weeklyView.ts`. Dashboard and ThisWeek share one cache entry per selected character on `["weekly", characterId ?? null]`. `enabled` is deliberately left to the caller: the two consumers gate on different identity facts. The `select` reference must stay module-level — React Query memoises it per observer on function identity, so an inline arrow would re-run the adapter every render. Feature modules must not fetch this endpoint directly; casting weekly JSON to a design type is what ADR 0016 removed.
 
-[ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) accepts moving this
-per-feature pattern to one data-access module per resource under
-`src/data/<resource>.ts` — owning query identity, projection, and mutations,
-with React Query kept out of feature modules. Implementation is sequenced by the #172 handoff and has not
-landed yet, so `lib/queries.ts`, the per-feature `useQuery` /
-`useIdentityMutation` calls documented in this file, and the consumer-side `toCharacter`
-/ `toWishlistEntry` projections in `lib/adapters.ts` remain how the code
-actually works today.
+[ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
+resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
+Wish list is the first slice (E4): `data/wishlist.ts` now owns that resource's
+query identity, projection, and all six mutations, and Collections, Dashboard,
+and Wish list read it instead of each declaring their own. The remaining
+resources — Collections, Weekly, Characters, Items, Search, Flags, Admin,
+Catalysts, Crafting, Seals — are sequenced by the #172 handoff and have not
+migrated yet, so for those, `lib/queries.ts`, the per-feature `useQuery` /
+`useIdentityMutation` calls documented in this file, and the consumer-side
+`toCharacter` projection in `lib/adapters.ts` remain how the code actually
+works today. The ESLint `no-restricted-imports` import-boundary ADR 0020
+specifies has also not landed (E16).
 
 ## Authentication
 
@@ -396,7 +431,7 @@ works today.
 - Loads full data with `?include=all` (collected + missing) and filters display client-side via `missingOnly` toggle — no re-fetch when toggling the filter
 - Supports search deep-link `?item=<hash>`: finds the item in any bucket (missing or collected) and opens the detail drawer; if no collectible entry exists, falls back to `itemByHashQuery` → `toGTItemView` for a read-only view drawer
 - Cosmetics is a full top-level category alongside Weapons, Armor, Exotics
-- Add-to-wishlist and remove-from-wishlist mutations with pending-state guard (prevents double-click races)
+- Add-to-wishlist and remove-from-wishlist use `data/wishlist.ts`'s `useAddWishlistItem`/`useRemoveWishlistItem` (ADR 0020), with a page-local pending-state guard (prevents double-click races) and the row resolved from the projected `WishlistEntry.itemId` rather than reaching into the wire cache. Remove is now optimistic here too — the wish-list star clears on click rather than on the refetch that follows, unifying with the Wish list page's behavior (previously non-optimistic on this page only)
 - Filter/category state (rarity, source difficulty, sort, view, missing-only, "available now", "hide farm-only", the in-page search term, and the selected category) is owned by `useCollectionsFilters` (`features/collections/useCollectionsFilters.ts`), which makes the URL the source of truth: `parseFilters`/`serializeFilters` read and write `?node=&q=&rarity=&diff=&sort=&view=&missing=&avail=&farm=`, keeping the URL shareable and reload-safe. The difficulty predicate matches when any `acquisitionSources` entry has the selected tier. Sort supports rarity, name, and availability; a legacy URL `sort=difficulty` parses as rarity, while `loadStoredFilters` drops that removed value and the next persistence pass writes the rarity default without discarding other valid saved fields. Filter fields also mirror to a `gt.collections.filters` localStorage entry, which supplies defaults only when the URL carries no filter params (e.g. a fresh visit). `node` and `q` are the two keys in `URL_ONLY_KEYS`: never persisted to storage, never read back from it, and re-asserted from the URL everywhere stored/legacy state is merged in — a bare `?node=` or `?q=` deep link still applies the user's stored filter defaults, and a stray `q`/`node` key in a hand-edited or legacy localStorage payload can't leak into state. History behavior differs by field: `setNode` pushes a history entry so Back returns to the previous category; every other setter, including `setQ`, replaces (`{ replace: true }`), so typing a search term or toggling a filter doesn't spam history. Callers that must change multiple fields atomically (e.g. restoring node + missing together from a deep link) go through `setFilters`, not sequential single-field setters — `useSearchParams`'s functional updater snapshots `prev` per call, so two `write` calls in the same tick would clobber each other.
 - Collection cards have no item-level difficulty badge: one acquisition source shows
   its text and multiple sources show a neutral count. `ItemDetailDrawer` lists every
@@ -409,6 +444,7 @@ works today.
 - `WishListItem` includes `icon`, `acquisitionSources`, `availableNow` (live-vendor cross-check), and `availableFrom`
 - `ItemTile` renders the Bungie CDN icon when present
 - Inline notes editor: click to edit, optimistic update with rollback on error, 500 char max
+- All mutations (add, remove, set priority, set notes, bulk) come from `data/wishlist.ts` (ADR 0020); the page supplies only toast copy through each hook's `onSuccess`/`onError`/`onSettled` callbacks — it no longer owns cache reads, writes, or rollback itself
 
 ## API response type changes
 
@@ -434,6 +470,7 @@ works today.
 - `ItemCatalyst` (design.ts): `{ name: string; description: string }` — design-layer parallel to `APIItemCatalyst`; passed to `ItemDetailDrawer`'s `catalysts` prop
 - `Catalyst.effect?: string` (design.ts) — catalyst perk/effect text on the `/api/catalysts/...` response; rendered on `Catalysts.tsx` cards when present
 - `Triumph.objectives?: TriumphObjective[]` (design.ts) — optional per-objective drill-down on `/api/seals/...` triumphs; `TriumphObjective { label, done, cur, max }`; absent (not an empty array) when the triumph has no objective data, so existing triumphs render unchanged
+- `WishlistEntry.itemId: string` (design.ts) — the wished item's hash, matching `GTItem.id`; lets Collections match its tiles against the wish list from the projected entry instead of the wire `WishListItem.itemHash`
 
 ## Styling
 
@@ -451,6 +488,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Framework: Vitest + React Testing Library
 - Setup file: `src/test/setup.ts` (MSW server + fixtures in `src/test/testServer.ts`)
 - Tests are colocated with the code they cover: lib tests in `lib/`, component tests in `components/`, and each feature's page tests inside `features/<feature>/`
+- Data-access modules (`src/data/`) get contract tests colocated as `<resource>.test.tsx` (e.g. `data/wishlist.test.tsx`), exercising the public hooks — not the private projection function — for query identity/shape, projection, and optimistic rollback/settle behavior (ADR 0020). Feature tests for a migrated resource drop wire-shape assertions and keep visible behavior only.
 - `renderWithProviders` (`src/test/renderWithProviders.tsx`) is the standard way to render a page under test — it mounts `ui` inside `AppProviders` + `MemoryRouter`, and, when `authed` (default `true`), also wraps `AuthedProviders` and seeds the atomic browser-session envelope with `seedBrowserSession` (`src/test/browserSession.ts`). Options: `route`, `initialEntries`, `initialIndex`, `authed`, `client` (a fresh retry-disabled `QueryClient` by default). Pass a `<Routes>` element as `ui` when a test needs real route matching. Three test files deliberately keep their own hand-rolled tower instead of `renderWithProviders`: `contexts/contexts.test.tsx` (tests the contexts directly), `features/auth/OAuthCallback.test.tsx` (needs `StrictMode` mounted as a double-invoke regression guard), and `lib/units.test.tsx` (renders providers in isolation). Reach for `renderWithProviders` for any new page test rather than hand-rolling a tower.
 - Run: `npm test` (from `frontend/`)
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests

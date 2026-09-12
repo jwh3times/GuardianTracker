@@ -81,8 +81,8 @@ wire and domain shapes are identical today. No module under `features/` or
 cost of preventing the wire shape from silently becoming the domain shape.
 
 The projections that currently sit in consumers — `toCharacter` in
-`CharacterContext` and Settings, `toWishlistEntry` in Wish list — move to their
-modules.
+`CharacterContext` and Settings, `toWishlistEntry` in `lib/adapters.ts` — move
+to their modules.
 
 ### Cache shape
 

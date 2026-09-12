@@ -48,6 +48,8 @@ src/
 ├── App.tsx          Routes, authentication gate, lazy pages
 ├── components/      Shared app shell and design-system components
 ├── contexts/        Auth, preferences, feature flags, selected character
+├── data/            Data-access modules, one per domain resource (query identity,
+│                    projection, mutations); still per-feature for most resources
 ├── features/        Page-oriented feature slices and their tests
 ├── lib/             API client, query helpers, adapters, constants
 ├── styles/          Design tokens and production component/page CSS
