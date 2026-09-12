@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button, EmptyState, Skeleton } from "../../components/primitives";
-import { useAuth } from "../../contexts/AuthContext";
 import { errorState } from "../../lib/errorState";
-import { collectionsFullQuery } from "../../lib/queries";
+import { useCollections } from "../../data/collections";
 import { COSMETIC_TYPES } from "./cosmeticBuckets";
 import { cosmeticItems, groupByType } from "./cosmeticItems";
 import { CosmeticsGrid } from "./CosmeticsGrid";
@@ -15,10 +13,13 @@ type Filter = "all" | "owned" | "missing";
 const FILTERS: Filter[] = ["all", "owned", "missing"];
 
 export function Cosmetics() {
-  const { user } = useAuth();
-  const { data, isLoading, isError, error, refetch } = useQuery(
-    collectionsFullQuery(user?.membershipType, user?.membershipId),
-  );
+  const {
+    view: data,
+    isLoading,
+    isError,
+    error,
+    retry: refetch,
+  } = useCollections();
 
   const items = useMemo(() => (data ? cosmeticItems(data) : []), [data]);
   const groups = useMemo(() => groupByType(items), [items]);

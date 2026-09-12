@@ -14,6 +14,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.43] - 2026-09-12
+
+### Changed
+
+- Consolidated every read of your collection behind a single owner. Five
+  screens — Collections, Cosmetics, the Dashboard, Settings and the onboarding
+  tour — previously asked for it separately, and the "refresh from Bungie"
+  button existed as two identical copies on two different pages. Nothing about
+  what any of those screens shows or does changes here; this is the second of
+  thirteen planned resource migrations, and it exists so that a fix to how
+  collection data is fetched, cached or refreshed is made once rather than
+  found by search.
+
 ## [1.3.42] - 2026-09-11
 
 ### Changed
@@ -803,7 +816,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.42...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.43...HEAD
+[1.3.43]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.42...v1.3.43
 [1.3.42]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.41...v1.3.42
 [1.3.41]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.40...v1.3.41
 [1.3.40]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.39...v1.3.40

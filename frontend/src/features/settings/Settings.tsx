@@ -11,15 +11,12 @@ import { useFlags } from "../../contexts/FlagsContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useToast } from "../../components/Toast";
 import { apiFetch, ApiError } from "../../lib/api";
-import { collectionsQuery } from "../../lib/queries";
+import { useCollectionsSummary } from "../../data/collections";
+import { useMembershipRefresh } from "../../data/membershipRefresh";
 import { toCharacter } from "../../lib/adapters";
 import { relTime } from "../../lib/format";
 import { MIN_TIERS, ROLE_LABEL, roleColor, type Tier } from "../../lib/roles";
-import type {
-  APICharacter,
-  APICacheRefreshResponse,
-  APIRoleResponse,
-} from "../../types/api";
+import type { APICharacter, APIRoleResponse } from "../../types/api";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 
@@ -81,9 +78,7 @@ export function Settings() {
   // Shared "missing" collections query — react-query dedupes with Dashboard and
   // the Collections page's missing view, so this is free once any of them has
   // loaded. Supplies real fetchedAt (B8).
-  const { data: collections } = useQuery(
-    collectionsQuery(user?.membershipType, user?.membershipId),
-  );
+  const { view: collections } = useCollectionsSummary();
 
   const queryClient = useQueryClient();
 
@@ -107,21 +102,7 @@ export function Settings() {
       ),
   });
 
-  const refreshMutation = useIdentityMutation({
-    mutationFn: () =>
-      apiFetch<APICacheRefreshResponse>(
-        `/api/collections/${user!.membershipType}/${user!.membershipId}/refresh`,
-        { method: "POST" },
-      ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["collections"] });
-      void queryClient.invalidateQueries({ queryKey: ["characters"] });
-      void queryClient.invalidateQueries({ queryKey: ["weekly"] });
-      void queryClient.invalidateQueries({ queryKey: ["catalysts"] });
-      void queryClient.invalidateQueries({ queryKey: ["crafting"] });
-      void queryClient.invalidateQueries({ queryKey: ["seals"] });
-    },
-  });
+  const { refresh, isRefreshing } = useMembershipRefresh();
 
   const handleSignOut = () => {
     void authLogout()
@@ -296,10 +277,10 @@ export function Settings() {
           </p>
           <DataFreshnessChip
             updatedAt={collections?.fetchedAt}
-            refreshing={refreshMutation.isPending}
+            refreshing={isRefreshing}
             onRefresh={() => {
               if (user?.membershipType != null && !!user?.membershipId) {
-                refreshMutation.mutate();
+                refresh();
               }
             }}
           />

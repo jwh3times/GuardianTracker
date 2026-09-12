@@ -1,7 +1,6 @@
-import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Dropdown, PageHead } from "../../components/composite";
 import { CategoryTree } from "./CategoryTree";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
@@ -18,13 +17,8 @@ import { ItemCard } from "./ItemCard";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
-import { apiFetch } from "../../lib/api";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
-import {
-  collectionsFullQuery,
-  itemPerksQuery,
-  itemByHashQuery,
-} from "../../lib/queries";
+import { itemPerksQuery, itemByHashQuery } from "../../lib/queries";
 import { toGTItemView } from "../../lib/adapters";
 import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
 import {
@@ -35,12 +29,13 @@ import {
   RARITY_RANK,
 } from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
+import { useCollections } from "../../data/collections";
+import { useMembershipRefresh } from "../../data/membershipRefresh";
 import {
   useAddWishlistItem,
   useRemoveWishlistItem,
   useWishlist,
 } from "../../data/wishlist";
-import type { APICacheRefreshResponse } from "../../types/api";
 
 export function Collections() {
   const { showToast } = useToast();
@@ -92,18 +87,16 @@ export function Collections() {
   // query key avoids re-fetching when toggling the filter or following a
   // deep-link to a collected item.
   const {
-    data: collections,
+    view: collections,
     isLoading: loading,
     error,
-    refetch,
-  } = useQuery(collectionsFullQuery(membershipType, membershipId));
+    retry: refetch,
+  } = useCollections();
 
   const perksQuery = useQuery(itemPerksQuery(detail?.id));
 
   const [viewOnlyHash, setViewOnlyHash] = useState<string | null>(null);
   const itemViewQuery = useQuery(itemByHashQuery(viewOnlyHash));
-
-  const queryClient = useQueryClient();
 
   const { entries: wishlistEntries } = useWishlist();
 
@@ -138,21 +131,7 @@ export function Collections() {
     onSettled: (vars) => markPending(vars.itemId, false),
   });
 
-  const refreshMutation = useIdentityMutation({
-    mutationFn: () =>
-      apiFetch<APICacheRefreshResponse>(
-        `/api/collections/${membershipType}/${membershipId}/refresh`,
-        { method: "POST" },
-      ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["collections"] });
-      void queryClient.invalidateQueries({ queryKey: ["characters"] });
-      void queryClient.invalidateQueries({ queryKey: ["weekly"] });
-      void queryClient.invalidateQueries({ queryKey: ["catalysts"] });
-      void queryClient.invalidateQueries({ queryKey: ["crafting"] });
-      void queryClient.invalidateQueries({ queryKey: ["seals"] });
-    },
-  });
+  const { refresh, isRefreshing } = useMembershipRefresh();
 
   // Search deep-link (?item=<hash>): once data is loaded, locate the item in
   // the tree, select its owning node, open its drawer, and clear the param.
@@ -300,10 +279,10 @@ export function Collections() {
         right={
           <DataFreshnessChip
             updatedAt={collections?.fetchedAt}
-            refreshing={refreshMutation.isPending}
+            refreshing={isRefreshing}
             onRefresh={() => {
               if (membershipType != null && !!membershipId) {
-                refreshMutation.mutate();
+                refresh();
               } else {
                 void refetch();
               }
