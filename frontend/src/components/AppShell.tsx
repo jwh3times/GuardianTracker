@@ -1,15 +1,13 @@
 import { useToast } from "./Toast";
 import React, { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router";
-import { useQuery } from "@tanstack/react-query";
 import { Brand } from "./Brand";
 import { Icon } from "./Icon";
 import { ItemTile } from "./primitives";
 import { useAuth } from "../contexts/AuthContext";
 import { useCharacters } from "../contexts/CharacterContext";
 import { useFlags } from "../contexts/FlagsContext";
-import { apiFetch } from "../lib/api";
-import type { APISearchResult } from "../types/api";
+import { MIN_SEARCH_LENGTH, useItemSearch } from "../data/search";
 import { useOutsideClick } from "../lib/useOutsideClick";
 import { emblemStyle } from "../lib/emblem";
 
@@ -173,18 +171,10 @@ function SearchBar() {
   }, [q]);
 
   const {
-    data: results = [],
+    results,
     isLoading: searching,
     isError: searchFailed,
-  } = useQuery({
-    queryKey: ["search", debouncedQ],
-    queryFn: () =>
-      apiFetch<APISearchResult[]>(
-        `/api/items/search?q=${encodeURIComponent(debouncedQ)}&limit=20`,
-      ),
-    enabled: debouncedQ.length >= 2,
-    staleTime: 30_000,
-  });
+  } = useItemSearch(debouncedQ);
 
   return (
     <div className="gt-search" ref={ref}>
@@ -201,7 +191,7 @@ function SearchBar() {
         }}
         onFocus={() => setOpen(true)}
       />
-      {open && q.length >= 2 && (
+      {open && q.length >= MIN_SEARCH_LENGTH && (
         <div className="gt-search-menu">
           {searching ? (
             <div className="gt-search-empty mono">Searching…</div>
@@ -213,17 +203,17 @@ function SearchBar() {
           ) : results.length ? (
             results.slice(0, 6).map((i) => (
               <button
-                key={i.hash}
+                key={i.id}
                 className="gt-search-opt"
-                data-rarity={i.rarity.toLowerCase()}
+                data-rarity={i.rarity}
                 onClick={() => {
                   setOpen(false);
                   setQ("");
-                  navigate(`/collections?item=${i.hash}`);
+                  navigate(`/collections?item=${i.id}`);
                 }}
               >
                 <ItemTile
-                  rarity={i.rarity.toLowerCase() as any}
+                  rarity={i.rarity}
                   type={i.type}
                   icon={i.icon}
                   style={{ width: "1.8rem" }}
