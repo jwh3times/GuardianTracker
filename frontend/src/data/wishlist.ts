@@ -132,6 +132,12 @@ function useOptimisticWishlistMutation<TVars, TResult>(
     },
     onSuccess: (result, vars) => callbacks?.onSuccess?.(result, vars),
     onError: (error, vars, context) => {
+      // Restores the whole snapshot rather than reverting just this mutation's
+      // delta. With two mutations in flight, a failure here can momentarily
+      // stomp a sibling that already settled; the unconditional invalidation
+      // below closes that window on the next frame. Accepted, and inherited
+      // from the four hand-rolled copies this replaces — but it is the shape
+      // every later resource will copy, so it is stated rather than implied.
       if (context?.previous) {
         client.setQueryData(WISHLIST_KEY, context.previous);
       }
@@ -216,10 +222,14 @@ export function useAddWishlistItem(
 export interface RemoveWishlistItemVars {
   /** The wish list row id — the `DELETE` path segment. */
   rowId: string;
-  /** The item's hash, for callers tracking per-item pending state. */
-  itemId?: string;
+  /**
+   * The item's hash. Required, though only Collections reads it back, because
+   * both call sites hold it and an optional field here forced a non-null
+   * assertion at the one that needs it.
+   */
+  itemId: string;
   /** The item's name, for caller-owned copy. */
-  name?: string;
+  name: string;
 }
 
 /**

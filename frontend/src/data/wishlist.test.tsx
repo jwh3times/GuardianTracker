@@ -8,6 +8,7 @@ import { renderWithProviders } from "../test/renderWithProviders";
 import {
   useBulkWishlistAction,
   useRemoveWishlistItem,
+  useSetWishlistNotes,
   useSetWishlistPriority,
   useWishlist,
 } from "./wishlist";
@@ -176,7 +177,11 @@ function RemoveProbe({ onError }: { onError?: (m: string) => void }) {
   });
   return (
     <div>
-      <button onClick={() => remove({ rowId: "1", name: "Gjallarhorn" })}>
+      <button
+        onClick={() =>
+          remove({ rowId: "1", itemId: "99999", name: "Gjallarhorn" })
+        }
+      >
         remove
       </button>
       <div data-testid="count">{entries.length}</div>
@@ -312,6 +317,49 @@ describe("optimistic priority", () => {
     // ...while the wire carries the upper-case spelling the API expects. The
     // up-casing used to live in the feature; it belongs to the module now.
     expect(bodies).toEqual([{ priority: "LOW" }]);
+
+    release!();
+  });
+});
+
+function NotesProbe() {
+  const { entries } = useWishlist();
+  const { setNotes } = useSetWishlistNotes();
+  return (
+    <div>
+      <button onClick={() => setNotes({ rowId: "1", notes: "farmed it" })}>
+        save notes
+      </button>
+      <div data-testid="notes">{entries[0]?.notes ?? "-"}</div>
+    </div>
+  );
+}
+
+describe("optimistic notes", () => {
+  it("shows the new notes before the server answers", async () => {
+    // The feature test for notes only asserts the outgoing PUT body, so it
+    // passes with this optimistic write deleted. This is the test that does
+    // not: it reads the rendered value back while the PUT is still in flight.
+    let release: (() => void) | undefined;
+    const blocked = new Promise<void>((r) => (release = r));
+    server.use(
+      http.get(`${API}/api/wishlist`, () => HttpResponse.json(sampleWishlist)),
+      http.put(`${API}/api/wishlist/:id`, async () => {
+        await blocked;
+        return HttpResponse.json(sampleWishlist[0]);
+      }),
+    );
+
+    renderWithProviders(<NotesProbe />);
+    await waitFor(() =>
+      expect(screen.getByTestId("notes")).toHaveTextContent("the classic"),
+    );
+
+    await userEvent.click(screen.getByText("save notes"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("notes")).toHaveTextContent("farmed it"),
+    );
 
     release!();
   });

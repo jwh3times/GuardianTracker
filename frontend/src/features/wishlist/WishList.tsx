@@ -76,9 +76,9 @@ export function WishList() {
     mutatePriority({ rowId: id, priority: p });
   };
 
-  const removeRow = (id: string, name: string) => {
-    remove({ rowId: id, name });
-    showToast(`Removed ${name}`, "info");
+  const removeRow = (entry: WishlistEntry) => {
+    remove({ rowId: entry.id, itemId: entry.itemId, name: entry.name });
+    showToast(`Removed ${entry.name}`, "info");
   };
 
   const [selectMode, setSelectMode] = useState(false);
@@ -393,7 +393,7 @@ export function WishList() {
                 </button>
                 <button
                   className="gt-link gt-link--danger"
-                  onClick={() => removeRow(i.id, i.name)}
+                  onClick={() => removeRow(i)}
                 >
                   <Icon name="close" size="0.8rem" /> Remove
                 </button>

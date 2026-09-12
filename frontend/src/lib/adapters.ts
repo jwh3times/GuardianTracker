@@ -1,13 +1,5 @@
-import { relTime } from "./format";
-import { toAcquisitionSource } from "./acquisitionSources";
-import type { APICharacter, APIItemView, WishListItem } from "../types/api";
-import type {
-  Character,
-  GTItem,
-  Priority,
-  Rarity,
-  WishlistEntry,
-} from "../types/design";
+import type { APICharacter, APIItemView } from "../types/api";
+import type { Character, GTItem, Rarity } from "../types/design";
 
 /**
  * Shared rarity vocabulary. Exported because the Wish list data-access module
@@ -21,12 +13,6 @@ export const RARITY_MAP: Record<string, Rarity> = {
   Rare: "rare",
   Uncommon: "uncommon",
   Common: "common",
-};
-const PRIORITY_MAP: Record<string, Priority> = {
-  URGENT: "urgent",
-  HIGH: "high",
-  MEDIUM: "medium",
-  LOW: "low",
 };
 /** Adapt a REST API character into the design system's Character shape. */
 export function toCharacter(c: APICharacter): Character {

@@ -135,7 +135,7 @@ export function Collections() {
     onSuccess: (_result, vars) => showToast(`Removed ${vars.name}`, "info"),
     onError: (err) =>
       showToast(`Failed to remove item: ${err.message}`, "error"),
-    onSettled: (vars) => markPending(vars.itemId!, false),
+    onSettled: (vars) => markPending(vars.itemId, false),
   });
 
   const refreshMutation = useIdentityMutation({

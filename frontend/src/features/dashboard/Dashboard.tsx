@@ -18,12 +18,10 @@ import { MilestoneRow } from "../../components/MilestoneRow";
 import { Icon } from "../../components/Icon";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
-import { apiFetch } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
 import { collectionsQuery, weeklyQuery } from "../../lib/queries";
 import { useWishlist } from "../../data/wishlist";
 import type { SummaryCategory, TodayAction } from "../../types/design";
-import type { WishListItem } from "../../types/api";
 import { emblemStyle } from "../../lib/emblem";
 
 // Shown until the summary arrives. The adapter always returns all four
