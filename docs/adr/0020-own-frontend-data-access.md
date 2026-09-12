@@ -160,10 +160,13 @@ architecture boundary that is not checked decays between pull requests.
   context for that narrower scope. `data/weekly.ts` (E6) reads the active
   character from `CharacterContext` because the payload is character-scoped,
   not just membership-scoped — the first `data/` module to import a context
-  other than the identity seam. Whether that context should instead dissolve
-  into its own `data/characters.ts` module, or survive as a thin
-  selection-state wrapper over one, is Characters' (E7) decision; this ADR
-  does not resolve it in advance.
+  other than the identity seam. E7 resolved the question this ADR left open:
+  `CharacterContext` survives as a thin selection-state wrapper over
+  `data/characters.ts`, which owns the roster query, endpoint, and projection.
+  The context is retained because the active-character pick is shared UI
+  state — switching it in the AppShell must re-render the Dashboard and
+  `data/weekly.ts` — which a context provides and dissolving it would have
+  required a new external store to replace.
 - Preferences synchronization — membership reset, stale-work fencing, write
   serialization, and visible failure state — remains the separate decision in
   the Preferences synchronization ticket.

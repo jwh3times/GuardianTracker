@@ -72,7 +72,9 @@ frontend/src/
     AuthContext.tsx             ← Declarative browser-session snapshot subscription;
                                    logout (this device) + logoutAll (everywhere)
     PreferencesContext.tsx      ← Card style + "for you" badge prefs; Guardian Tracker user-backed onboarding completion
-    CharacterContext.tsx        ← Characters query + persisted active-character pick; scopes weekly vendors
+    CharacterContext.tsx        ← Thin selection-state wrapper (ADR 0020, E7): persists the active-character
+                                   pick over the roster `data/characters.ts` owns; issues no query itself.
+                                   Scopes weekly vendors
     FlagsContext.tsx            ← GET /api/flags query; useFlag(key) / useFlags() resolved gating
                                    state + role
                                  All four hooks — useAuth, usePreferences, useFlags/useFlag, and
@@ -125,23 +127,39 @@ frontend/src/
                                    onto a shared options object. Exports `invalidateWeekly(client)` as
                                    this resource's invalidation entry point. This is the first `data/`
                                    module to depend on a context other than the identity seam
-                                   (`CharacterContext`, for the active-character selection); see the
-                                   module's header comment for what E7 (Characters) should do about that
-                                   dependency. Read by Dashboard and This Week.
+                                   (`CharacterContext`, for the active-character selection) — see
+                                   `data/characters.ts` above for how E7 resolved that dependency. Read by
+                                   Dashboard and This Week.
+    characters.ts                ← Fourth resource landed (E7). Private query key
+                                   `["characters", membershipType, membershipId]`; projects
+                                   `APICharacter[]` → `Character[]` via `toCharacter` (moved here from
+                                   `lib/adapters.ts`). `useCharacterRoster()` takes no arguments — it
+                                   reads the signed-in membership from `useAuth()` — and returns
+                                   `{ characters, isLoading, isError, error, retry }`. Exports
+                                   `invalidateCharacters(client)` as this resource's invalidation entry
+                                   point. `CharacterContext` (`contexts/CharacterContext.tsx`) survives as
+                                   a thin selection-state wrapper over this hook: it issues no query of
+                                   its own and only persists the active-character pick, because that pick
+                                   is shared UI state that must re-render the AppShell's switcher, the
+                                   Dashboard, and `data/weekly.ts` together — a context provides that,
+                                   dissolving it would need a new external store. `useCharacters()`
+                                   (unchanged public API) is still how AppShell, Dashboard, This Week, and
+                                   `data/weekly.ts` read the roster plus the active pick; Settings reads
+                                   `useCharacterRoster()` directly since it does not need the pick.
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
                                    verbatim copies previously inline in Collections and Settings. Lives
                                    in its own module rather than inside `collections.ts` because it
                                    invalidates six membership-scoped resources and a module owning one
-                                   has no claim on the other five. Calls `invalidateCollections` and
-                                   `invalidateWeekly` for the two migrated resources; the remaining four
-                                   (characters, catalysts, crafting, seals) are raw keys in one
-                                   `UNMIGRATED_KEYS` list, each replaced by that resource's own
-                                   invalidation entry point as its ADR 0020 slice lands. Read no
+                                   has no claim on the other five. Calls `invalidateCollections`,
+                                   `invalidateWeekly`, and `invalidateCharacters` for the three migrated
+                                   resources; the remaining three (catalysts, crafting, seals) are raw
+                                   keys in one `UNMIGRATED_KEYS` list, each replaced by that resource's
+                                   own invalidation entry point as its ADR 0020 slice lands. Read no
                                    membership argument — it reads the signed-in membership from
                                    `useAuth()`.
-                                   Remaining resources (Characters, Items, Search, Flags,
+                                   Remaining resources (Items, Search, Flags,
                                    Admin, Catalysts, Crafting, Seals) have not migrated yet — see the
                                    ADR 0020 note under "Shared query definitions" below.
   styles/
@@ -177,14 +195,15 @@ frontend/src/
                                    types/api.ts → types/design.ts wire-to-domain split is actually enforced for
                                    this payload; no feature module sees APIMembershipCollections or builds a GTItem
                                    from it directly.
-    adapters.ts                ← API response types → design Character/GTItem(view-only):
-                                   toCharacter, toGTItemView(APIItemView) — maps a manifest-only item view to a
+    adapters.ts                ← API response types → design GTItem(view-only):
+                                   toGTItemView(APIItemView) — maps a manifest-only item view to a
                                    view-only GTItem. toGTItem is NOT exported here — collection
                                    items only ever come from collectionsView.ts, which alone can join ownership
                                    and availability. Also exports RARITY_MAP — shared rarity vocabulary,
-                                   used by data/wishlist.ts too — as an interim home until the Characters and
-                                   Items slices (E7, E8) retire the last local callers. toWishlistEntry and its
-                                   priority map moved to data/wishlist.ts (ADR 0020, E4).
+                                   used by data/wishlist.ts too — as an interim home until the
+                                   Items slice (E8) retires the last local caller. toWishlistEntry and its
+                                   priority map moved to data/wishlist.ts (ADR 0020, E4); toCharacter moved to
+                                   data/characters.ts (ADR 0020, E7).
     format.ts                  ← relTime (guards zero-time)
     emblem.ts                  ← emblemStyle(url) → background CSS for a character emblem, or undefined
                                    so the caller keeps the CSS placeholder (AppShell + Dashboard)
@@ -318,17 +337,17 @@ Data fetching uses **TanStack React Query** (`useQuery`) with `apiFetch` from `l
 import { apiFetch, ApiError } from "../lib/api";
 
 const { data } = useQuery({
-  queryKey: ["characters", user?.membershipType, membershipId],
+  queryKey: ["catalysts", membershipType, membershipId],
   queryFn: () =>
-    apiFetch<APICharacter[]>(
-      `/api/characters/${membershipType}/${membershipId}`,
+    apiFetch<APIRecordsEnvelope<Catalyst>>(
+      `/api/catalysts/${membershipType}/${membershipId}`,
     ),
 });
 ```
 
-Wish list and Collections no longer follow this raw pattern — they are owned by
-`src/data/` modules (see below); their queries and mutations are not declared
-inline in a feature.
+Wish list, Collections, Weekly, and Characters no longer follow this raw
+pattern — they are owned by `src/data/` modules (see below); their queries and
+mutations are not declared inline in a feature.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
@@ -354,22 +373,24 @@ above for both.
 
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
 resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
-Wish list (E4), Collections (E5), and Weekly (E6) have landed: `data/wishlist.ts`
-owns the wish list resource's query identity, projection, and all six
-mutations; `data/collections.ts` owns the collections resource's query
-identity and projection dispatch; `data/weekly.ts` owns the weekly resource's
-query identity, endpoint, and the `enabled` gate the two consumers previously
-composed themselves; and `data/membershipRefresh.ts` holds the cross-resource
-cache-refresh fan-out. Consumers read these modules instead of declaring their
-own. The remaining resources — Characters, Items, Search, Flags, Admin,
+Wish list (E4), Collections (E5), Weekly (E6), and Characters (E7) have
+landed: `data/wishlist.ts` owns the wish list resource's query identity,
+projection, and all six mutations; `data/collections.ts` owns the collections
+resource's query identity and projection dispatch; `data/weekly.ts` owns the
+weekly resource's query identity, endpoint, and the `enabled` gate the two
+consumers previously composed themselves; `data/characters.ts` owns the
+characters resource's query identity, endpoint, and projection (`toCharacter`,
+moved from `lib/adapters.ts`), with `CharacterContext` surviving as a thin
+selection-state wrapper over it; and `data/membershipRefresh.ts` holds the
+cross-resource cache-refresh fan-out. Consumers read these modules instead of
+declaring their own. The remaining resources — Items, Search, Flags, Admin,
 Catalysts, Crafting, Seals — are sequenced by the #172 handoff and have not
-migrated yet, so for those, `lib/queries.ts`, the per-feature `useQuery` /
-`useIdentityMutation` calls documented in this file, and the consumer-side
-`toCharacter` projection in `lib/adapters.ts` remain how the code actually
-works today. The ESLint `no-restricted-imports` import-boundary ADR 0020
-specifies has also not landed (E16), and so has the fan-out test that would
-fail if a migrated resource were added to `membershipRefresh.ts` without a
-matching invalidation entry point.
+migrated yet, so for those, `lib/queries.ts` and the per-feature `useQuery` /
+`useIdentityMutation` calls documented in this file remain how the code
+actually works today. The ESLint `no-restricted-imports` import-boundary ADR
+0020 specifies has also not landed (E16), and so has the fan-out test that
+would fail if a migrated resource were added to `membershipRefresh.ts`
+without a matching invalidation entry point.
 
 ## Authentication
 
@@ -430,7 +451,16 @@ authenticated pages go inside this group — do not add inline auth checks or re
 
 ## Character context
 
-`CharacterContext` (`contexts/CharacterContext.tsx`) fetches and caches the character list, and persists the active character selection per Destiny membership. `useCharacters()` returns `{ characters, activeCharacter, setActiveCharacter }` and throws when called outside `CharacterProvider`, matching `useAuth`, `useFlags`, and `usePreferences` — there is no silent `characters: []` default. Collections, catalysts, and seals remain membership-wide; Dashboard and This Week include the active character ID in weekly query keys and requests so authenticated vendor context follows the selected character.
+`CharacterContext` (`contexts/CharacterContext.tsx`) is a thin selection-state
+wrapper (ADR 0020, E7): it issues no query itself, reads the roster from
+`data/characters.ts`'s `useCharacterRoster()`, and persists the active
+character selection per Destiny membership. `useCharacters()` returns
+`{ characters, activeCharacter, setActiveCharacter }` and throws when called
+outside `CharacterProvider`, matching `useAuth`, `useFlags`, and
+`usePreferences` — there is no silent `characters: []` default. Collections,
+catalysts, and seals remain membership-wide; Dashboard and This Week include
+the active character ID in weekly query keys and requests so authenticated
+vendor context follows the selected character.
 
 ## Preferences
 
