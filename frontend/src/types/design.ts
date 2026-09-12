@@ -156,7 +156,13 @@ export interface Weekly {
 }
 
 export interface WishlistEntry {
+  /** The wish list row id, not the item's. Addresses this row's REST endpoint. */
   id: string;
+  /**
+   * The wished item's hash, matching {@link GTItem.id}. Lets Collections match
+   * its tiles against the wish list without reading the wire shape.
+   */
+  itemId: string;
   name: string;
   type: string;
   rarity: Rarity;

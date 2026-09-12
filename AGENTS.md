@@ -42,7 +42,7 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 ### Key directories
 
 - `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/reconnect/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/prefs; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences and Wish list repositories), `services/` (bungie client, manifest, manifeststate, membershipstate, collections, records, weekly, recommendations, search, items, characters, efficiency, sources, preferences, wishlist), `config/`, `cache/`.
-- `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `lib/`, `types/`.
+- `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `data/` (ADR 0020 data-access modules, one per domain resource — owns query identity, projection, mutations, and invalidation; Wish list is the first resource landed, the rest still live inline per feature), `lib/`, `types/`.
 - `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
 - `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
 - `backend/api-service/cmd/fake-bungie/` — Test-only Bungie/manifest fixture service.

@@ -35,7 +35,12 @@ import {
   RARITY_RANK,
 } from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
-import type { APICacheRefreshResponse, WishListItem } from "../../types/api";
+import {
+  useAddWishlistItem,
+  useRemoveWishlistItem,
+  useWishlist,
+} from "../../data/wishlist";
+import type { APICacheRefreshResponse } from "../../types/api";
 
 export function Collections() {
   const { showToast } = useToast();
@@ -100,14 +105,11 @@ export function Collections() {
 
   const queryClient = useQueryClient();
 
-  const { data: wishlistData } = useQuery({
-    queryKey: ["wishlist"],
-    queryFn: () => apiFetch<WishListItem[]>("/api/wishlist"),
-  });
+  const { entries: wishlistEntries } = useWishlist();
 
   const wished = useMemo(
-    () => new Set(wishlistData?.map((w) => String(w.itemHash)) ?? []),
-    [wishlistData],
+    () => new Set(wishlistEntries.map((e) => e.itemId)),
+    [wishlistEntries],
   );
 
   // Items with an add/remove mutation in flight. Guards against a rapid second
@@ -122,31 +124,18 @@ export function Collections() {
       return next;
     });
 
-  const addWishlistMutation = useIdentityMutation({
-    mutationFn: (item: GTItem) =>
-      apiFetch("/api/wishlist", {
-        method: "POST",
-        body: JSON.stringify({ itemHash: Number(item.id) }),
-      }),
-    onSuccess: (_data, item) => {
-      void queryClient.invalidateQueries({ queryKey: ["wishlist"] });
-      showToast(`${item.name} added to wishlist`, "success");
-    },
-    onError: (err: Error) =>
-      showToast(`Failed to add item: ${err.message}`, "error"),
-    onSettled: (_data, _err, item) => markPending(item.id, false),
+  const { add: addToWishlist } = useAddWishlistItem({
+    onSuccess: (_result, vars) =>
+      showToast(`${vars.name} added to wishlist`, "success"),
+    onError: (err) => showToast(`Failed to add item: ${err.message}`, "error"),
+    onSettled: (vars) => markPending(vars.itemId, false),
   });
 
-  const removeWishlistMutation = useIdentityMutation({
-    mutationFn: ({ rowId }: { rowId: string; name: string; itemId: string }) =>
-      apiFetch<void>(`/api/wishlist/${rowId}`, { method: "DELETE" }),
-    onSuccess: (_data, { name }) => {
-      void queryClient.invalidateQueries({ queryKey: ["wishlist"] });
-      showToast(`Removed ${name}`, "info");
-    },
-    onError: (err: Error) =>
+  const { remove: removeFromWishlist } = useRemoveWishlistItem({
+    onSuccess: (_result, vars) => showToast(`Removed ${vars.name}`, "info"),
+    onError: (err) =>
       showToast(`Failed to remove item: ${err.message}`, "error"),
-    onSettled: (_data, _err, { itemId }) => markPending(itemId, false),
+    onSettled: (vars) => markPending(vars.itemId, false),
   });
 
   const refreshMutation = useIdentityMutation({
@@ -278,13 +267,13 @@ export function Collections() {
     if (pendingWish.has(item.id)) return;
     if (!wished.has(item.id)) {
       markPending(item.id, true);
-      addWishlistMutation.mutate(item);
+      addToWishlist({ itemId: item.id, name: item.name });
       return;
     }
-    const row = wishlistData?.find((w) => String(w.itemHash) === item.id);
+    const row = wishlistEntries.find((e) => e.itemId === item.id);
     if (!row) return; // wishlist cache not refreshed yet; wait for it
     markPending(item.id, true);
-    removeWishlistMutation.mutate({
+    removeFromWishlist({
       rowId: row.id,
       name: item.name,
       itemId: item.id,
