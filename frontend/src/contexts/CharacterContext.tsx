@@ -5,15 +5,14 @@ import React, {
   useMemo,
   useReducer,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "./AuthContext";
-import { apiFetch } from "../lib/api";
-import { toCharacter } from "../lib/adapters";
-import type { APICharacter } from "../types/api";
+import { useCharacterRoster } from "../data/characters";
 import type { Character } from "../types/design";
 
 /**
- * Owns the characters query and the user's active-character pick.
+ * Owns the user's active-character pick, over the roster that
+ * `data/characters.ts` owns (ADR 0020, E7). This context issues no query.
+ *
  * The pick persists per Destiny membership in localStorage and survives reloads.
  * Collections/catalysts/seals remain membership-wide. Weekly authenticated vendor
  * inventory follows the active character because Bungie's component 402 is
@@ -41,17 +40,7 @@ const storageKey = (membershipId: string) =>
 export function CharacterProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const membershipId = user?.membershipId;
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["characters", user?.membershipType, membershipId],
-    queryFn: () =>
-      apiFetch<APICharacter[]>(
-        `/api/characters/${user!.membershipType}/${user!.membershipId}`,
-      ),
-    enabled: !!membershipId && user?.membershipType != null,
-  });
-
-  const characters = useMemo(() => (data ?? []).map(toCharacter), [data]);
+  const { characters, isLoading } = useCharacterRoster();
 
   // localStorage is the source of truth for the pick; `version` just forces a
   // re-read after writes. Switching memberships re-derives automatically.

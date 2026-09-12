@@ -1,7 +1,7 @@
 import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React from "react";
 import { useNavigate } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button, DataFreshnessChip } from "../../components/primitives";
 import { PageHead, Panel } from "../../components/composite";
 import { Icon } from "../../components/Icon";
@@ -11,12 +11,12 @@ import { useFlags } from "../../contexts/FlagsContext";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useToast } from "../../components/Toast";
 import { apiFetch, ApiError } from "../../lib/api";
+import { useCharacterRoster } from "../../data/characters";
 import { useCollectionsSummary } from "../../data/collections";
 import { useMembershipRefresh } from "../../data/membershipRefresh";
-import { toCharacter } from "../../lib/adapters";
 import { relTime } from "../../lib/format";
 import { MIN_TIERS, ROLE_LABEL, roleColor, type Tier } from "../../lib/roles";
-import type { APICharacter, APIRoleResponse } from "../../types/api";
+import type { APIRoleResponse } from "../../types/api";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 
@@ -64,16 +64,7 @@ export function Settings() {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  const { data: charsData } = useQuery({
-    queryKey: ["characters", user?.membershipType, user?.membershipId],
-    queryFn: () =>
-      apiFetch<APICharacter[]>(
-        `/api/characters/${user!.membershipType}/${user!.membershipId}`,
-      ),
-    enabled: !!user?.membershipId && user?.membershipType != null,
-  });
-
-  const characterList = (charsData ?? []).map(toCharacter);
+  const { characters: characterList } = useCharacterRoster();
 
   // Shared "missing" collections query — react-query dedupes with Dashboard and
   // the Collections page's missing view, so this is free once any of them has

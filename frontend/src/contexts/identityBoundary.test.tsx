@@ -313,18 +313,6 @@ describe("application identity boundaries", () => {
   it("resets character and onboarding state and ignores late preferences and old setters", async () => {
     seedBrowserSession(sampleUser, "token-A");
     const initial = client();
-    initial.setQueryData(
-      ["characters", sampleUser.membershipType, sampleUser.membershipId],
-      [
-        {
-          characterId: "A-character",
-          classType: 1,
-          className: "Hunter",
-          raceName: "Human",
-          light: 2000,
-        },
-      ],
-    );
     const oldRead = deferred<Response>();
     let writes = 0;
     server.use(
@@ -341,7 +329,23 @@ describe("application identity boundaries", () => {
         writes += 1;
         return HttpResponse.json({});
       }),
-      http.get(`${API}/api/characters/:type/:id`, () => HttpResponse.json([])),
+      // Answered per session rather than seeded into the cache, so this test
+      // does not name the Characters module's private query key.
+      http.get(`${API}/api/characters/:type/:id`, ({ request }) =>
+        HttpResponse.json(
+          request.headers.get("Authorization") === "Bearer token-A"
+            ? [
+                {
+                  characterId: "A-character",
+                  classType: 1,
+                  className: "Hunter",
+                  raceName: "Human",
+                  light: 2000,
+                },
+              ]
+            : [],
+        ),
+      ),
     );
     let oldSetter: ((style: "compact") => void) | undefined;
     function StateProbe() {
@@ -367,7 +371,9 @@ describe("application identity boundaries", () => {
         </AuthedProviders>
       </AppProviders>,
     );
-    expect(screen.getByTestId("state")).toHaveTextContent("A-character");
+    await waitFor(() =>
+      expect(screen.getByTestId("state")).toHaveTextContent("A-character"),
+    );
     act(() => seedBrowserSession(otherUser, "token-B"));
     await waitFor(() =>
       expect(screen.getByTestId("state")).toHaveTextContent(

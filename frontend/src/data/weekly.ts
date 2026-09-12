@@ -18,15 +18,12 @@ import type { APIWeekly } from "../types/api";
  * `lib/weeklyView.ts` with the tests that call it directly, which already own
  * the tolerant difficulty vocabulary shipped by C3.
  *
- * NOTE FOR E7, which owns the Characters resource: this is the first `data/`
- * module to depend on a context other than the identity seam. It reads the
- * selected character from `CharacterContext`, which still declares its own
- * `["characters", ...]` query and has no invalidation entry point. If E7
- * dissolves that context into `data/characters.ts`, this import moves with it;
- * if the context survives as a thin selection-state wrapper over the new
- * module — plausible, since the persisted pick is UI state rather than query
- * state — this can stay as it is. Either way the change lands in one place
- * here rather than in the two features that used to derive it.
+ * This was the first `data/` module to depend on a context other than the
+ * identity seam: it reads the selected character from `CharacterContext`.
+ * Characters (E7) kept that context as a thin selection-state wrapper over
+ * `data/characters.ts` — the persisted pick is shared UI state, not query
+ * state — so this import stays, and the roster query behind it now has a
+ * single owner.
  */
 
 /**
