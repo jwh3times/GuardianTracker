@@ -392,8 +392,12 @@ function renderBrowser(
       </MemoryRouter>
     </QueryClientProvider>
   );
+  // A fresh callback every render, as a page that does not memoize it passes.
   const hook = renderHook(
-    () => useCollectionsBrowser(data ?? undefined, { onItemUnavailable }),
+    () =>
+      useCollectionsBrowser(data ?? undefined, {
+        onItemUnavailable: onItemUnavailable && (() => onItemUnavailable()),
+      }),
     { wrapper },
   );
   return { ...hook, search: () => seen.search };
@@ -455,7 +459,7 @@ describe("useCollectionsBrowser", () => {
       ),
     );
     let reports = 0;
-    const { result } = renderBrowser(
+    const { result, rerender } = renderBrowser(
       "/collections?item=999",
       collections,
       () => {
@@ -465,6 +469,11 @@ describe("useCollectionsBrowser", () => {
 
     await waitFor(() => expect(reports).toBe(1));
     expect(result.current.detail).toBeNull();
+
+    // Later renders re-run the reporting effect; the same failure stays reported once.
+    rerender();
+    rerender();
+    expect(reports).toBe(1);
   });
 
   it("opens and closes the drawer on request", () => {
