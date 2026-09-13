@@ -147,6 +147,40 @@ describe("Admin Audit panel", () => {
   });
 });
 
+describe("Admin in-flight states", () => {
+  it("shows the audit log loading while events are in flight", async () => {
+    server.use(
+      // Never resolves: the audit page is still loading.
+      http.get(`${API}/api/admin/audit`, () => new Promise(() => {})),
+    );
+    renderAdmin();
+    fireEvent.click(screen.getByText(/Audit Log/i));
+
+    expect(
+      await screen.findByText("Loading audit events…"),
+    ).toBeInTheDocument();
+  });
+
+  it("disables flag controls while an update is in flight", async () => {
+    server.use(
+      // Never resolves: the flag update is still in flight.
+      http.put(`${API}/api/admin/flags/:key`, () => new Promise(() => {})),
+    );
+    renderAdmin();
+    fireEvent.click(screen.getByText(/Feature Flags/i));
+
+    const toggle = await screen.findByRole("switch", {
+      name: /Enable Catalyst & Crafting tracker/i,
+    });
+    expect(toggle).toBeEnabled();
+
+    fireEvent.click(toggle);
+
+    // A second click on a half-applied rollout change would race the first.
+    await waitFor(() => expect(toggle).toBeDisabled());
+  });
+});
+
 // Regression: a failed /api/admin/users rendered "No members match. Try a
 // different search or role filter." — an outage disguised as a filter problem,
 // on the one screen where an admin most needs to trust what they see.

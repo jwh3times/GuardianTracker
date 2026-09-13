@@ -489,4 +489,49 @@ describe("update flag", () => {
 
     await waitFor(() => expect(log).toEqual(["err:god-roll"]));
   });
+
+  it("reports pending while the update is in flight", async () => {
+    server.use(
+      // Never resolves: the update is still in flight.
+      http.put(`${API}/api/admin/flags/:key`, () => new Promise(() => {})),
+    );
+
+    renderWithProviders(<UpdateFlagProbe log={[]} />);
+    expect(screen.getByTestId("pending")).toHaveTextContent("false");
+
+    await userEvent.click(screen.getByText("update flag"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pending")).toHaveTextContent("true"),
+    );
+  });
+});
+
+describe("audit details", () => {
+  it("treats null details as none rather than failing to render", async () => {
+    server.use(
+      http.get(`${API}/api/admin/audit`, () =>
+        HttpResponse.json({
+          entries: [
+            {
+              id: "1",
+              eventType: "login.success",
+              outcome: "success",
+              actor: { membershipId: "mid-1", displayName: "Tester" },
+              // Go serializes a nil details map as null.
+              details: null,
+              createdAt: "2026-09-01T00:00:00Z",
+            },
+          ],
+          nextCursor: "",
+        }),
+      ),
+    );
+
+    renderWithProviders(<AuditProbe type="" id="a" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("a")).toHaveTextContent("|no-ip|{}|"),
+    );
+  });
 });
