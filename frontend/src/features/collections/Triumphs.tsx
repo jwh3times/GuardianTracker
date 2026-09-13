@@ -1,36 +1,14 @@
 import React, { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Dropdown, PageHead } from "../../components/composite";
 import { SealCard } from "./SealCard";
-import { useAuth } from "../../contexts/AuthContext";
-import { apiFetch } from "../../lib/api";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
-import type { Seal } from "../../types/design";
-import type { APIRecordsEnvelope } from "../../types/api";
+import { useSeals } from "../../data/seals";
 
 type Sort = "closest" | "name";
 
 export function Triumphs() {
-  const { user } = useAuth();
-  const membershipType = user?.membershipType;
-  const membershipId = user?.membershipId;
-
-  const {
-    data: sealsData,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: ["seals", membershipType, membershipId],
-    queryFn: () =>
-      apiFetch<APIRecordsEnvelope<Seal>>(
-        `/api/seals/${membershipType}/${membershipId}`,
-      ),
-    enabled: membershipType != null && !!membershipId,
-  });
-  const seals = useMemo(() => sealsData?.items ?? [], [sealsData]);
+  const { seals, isLoading, isError, error, retry } = useSeals();
 
   const [sort, setSort] = useState<Sort>("closest");
   // undefined = never interacted (auto-open first); null = user explicitly closed
@@ -69,12 +47,7 @@ export function Triumphs() {
           title="Triumphs & Seals"
           sub={<span className="mono">Seal completion</span>}
         />
-        <QueryErrorPanel
-          error={error}
-          onRetry={() => {
-            void refetch();
-          }}
-        />
+        <QueryErrorPanel error={error} onRetry={retry} />
       </div>
     );
   }

@@ -6,6 +6,7 @@ import { invalidateCatalysts } from "./catalysts";
 import { invalidateCharacters } from "./characters";
 import { invalidateCollections } from "./collections";
 import { invalidateCrafting } from "./crafting";
+import { invalidateSeals } from "./seals";
 import { invalidateWeekly } from "./weekly";
 import type { APICacheRefreshResponse } from "../types/api";
 
@@ -28,29 +29,19 @@ import type { APICacheRefreshResponse } from "../types/api";
  */
 
 /**
- * The membership-scoped resources a refresh invalidates.
- *
- * Each entry becomes a call to that resource's own invalidation entry point as
- * its ADR 0020 slice lands — Collections (E5), Weekly (E6), Characters (E7),
- * Catalysts (E12) and Crafting (E13) already have. Seals (E14) is still a raw
- * key, which is the cross-ownership reach this decision removes, so it is held
- * here, in one greppable list, rather than in the feature module where it used
- * to live. E16 adds the test that fails when a membership-scoped module is
- * added without being wired in.
+ * Every membership-scoped resource a refresh invalidates, each through its own
+ * module's entry point — this module names no other module's key. The list is
+ * explicit and greppable on purpose (ADR 0020 rejected an import-time
+ * registry); E16 adds the test that fails when a membership-scoped module is
+ * added without being wired in here.
  */
-const UNMIGRATED_KEYS = [
-  "seals", // E14
-] as const;
-
 function fanOut(client: QueryClient) {
   invalidateCatalysts(client);
   invalidateCharacters(client);
   invalidateCollections(client);
   invalidateCrafting(client);
+  invalidateSeals(client);
   invalidateWeekly(client);
-  for (const key of UNMIGRATED_KEYS) {
-    void client.invalidateQueries({ queryKey: [key] });
-  }
 }
 
 /**

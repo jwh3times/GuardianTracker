@@ -85,6 +85,35 @@ describe("Triumphs page", () => {
     expect(screen.getByText("No deaths in the run")).toBeInTheDocument();
   });
 
+  it("retries a failed seals load from the error panel", async () => {
+    let attempt = 0;
+    server.use(
+      http.get(`${API}/api/seals/:type/:id`, () => {
+        attempt += 1;
+        return attempt === 1
+          ? HttpResponse.json({ error: "boom" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  id: "seal-back",
+                  name: "Recovered Seal",
+                  pct: 10,
+                  gilded: 0,
+                  left: "9 triumphs left",
+                  triumphs: [],
+                },
+              ],
+              fetchedAt: "",
+            });
+      }),
+    );
+    renderPage(<Triumphs />);
+
+    fireEvent.click(await screen.findByText("Retry"));
+
+    expect(await screen.findByText("Recovered Seal")).toBeInTheDocument();
+  });
+
   it("renders the loading spinner while the query is in flight", async () => {
     server.use(
       http.get(`${API}/api/seals/:type/:id`, async () => {
