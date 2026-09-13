@@ -31,12 +31,12 @@ import type { APICacheRefreshResponse } from "../types/api";
  * The membership-scoped resources a refresh invalidates.
  *
  * Each entry becomes a call to that resource's own invalidation entry point as
- * its ADR 0020 slice lands — Collections (E5), Weekly (E6), Characters (E7)
- * Catalysts (E12) and Crafting (E13) already have. The rest are still raw keys, which is the
- * cross-ownership reach
- * this decision removes, so they are held here, in one greppable list, rather
- * than in the feature modules where they used to live. E16 adds the test that
- * fails when a membership-scoped module is added without being wired in.
+ * its ADR 0020 slice lands — Collections (E5), Weekly (E6), Characters (E7),
+ * Catalysts (E12) and Crafting (E13) already have. Seals (E14) is still a raw
+ * key, which is the cross-ownership reach this decision removes, so it is held
+ * here, in one greppable list, rather than in the feature module where it used
+ * to live. E16 adds the test that fails when a membership-scoped module is
+ * added without being wired in.
  */
 const UNMIGRATED_KEYS = [
   "seals", // E14
