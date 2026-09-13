@@ -10,8 +10,8 @@ import {
   type Role,
   type Tier,
 } from "../../lib/roles";
+import type { AdminFlag } from "../../data/admin";
 import type { Flag } from "../../data/flags";
-import type { APIAdminFlag } from "../../types/api";
 import { useOutsideClick } from "../../lib/useOutsideClick";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
@@ -158,7 +158,7 @@ export function FlagCard({
   onSetMinTier,
   pending,
 }: {
-  flag: APIAdminFlag;
+  flag: AdminFlag;
   reached: number;
   totalUsers: number;
   onToggle: (enabled: boolean) => void;
@@ -190,7 +190,7 @@ export function FlagCard({
         <div className="gt-flag-gate">
           <span className="gt-flag-gate-label">Available to</span>
           <TierSegment
-            value={flag.minTier as Tier}
+            value={flag.minTier}
             onChange={onSetMinTier}
             disabled={pending}
           />

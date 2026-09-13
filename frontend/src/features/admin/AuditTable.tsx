@@ -1,7 +1,7 @@
 import React from "react";
 import { Badge } from "../../components/primitives";
 import { relTime } from "../../lib/format";
-import type { APIAuditEntry } from "../../types/api";
+import type { AuditEntry } from "../../data/admin";
 
 const EVENT_LABEL: Record<string, string> = {
   "login.success": "Login",
@@ -24,7 +24,7 @@ export function AuditTable({
   entries,
   loading,
 }: {
-  entries: APIAuditEntry[];
+  entries: AuditEntry[];
   loading: boolean;
 }) {
   if (loading && entries.length === 0) {
