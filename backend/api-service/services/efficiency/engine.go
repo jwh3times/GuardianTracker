@@ -33,6 +33,9 @@ type Engine struct {
 	ready        bool
 	publication  *manifeststate.Publication
 	building     map[manifeststate.Attempt]struct{}
+	// published is the attempt whose build installed buckets. With builtVersion
+	// it identifies exactly what the current index was built from.
+	published manifeststate.Attempt
 }
 
 // NewEngine constructs an Engine. The index is empty until BuildIndex runs.
@@ -81,13 +84,25 @@ func (e *Engine) OnVersionChanged(version string) error {
 }
 
 // BuildIndex (re)builds the source-bucket index. Safe to call concurrently; a
-// concurrent call in the same generation is coalesced. A newer generation may
-// build while obsolete work finishes; its distinct Attempt keeps the old
-// cleanup from clearing the new generation's state.
+// concurrent call in the same generation is coalesced, and a call that would
+// rebuild the generation and version already published is skipped. A newer
+// generation may build while obsolete work finishes; its distinct Attempt keeps
+// the old cleanup from clearing the new generation's state.
 func (e *Engine) BuildIndex() {
 	if e.source == nil || e.version == nil || e.publication == nil {
 		return
 	}
+	// The generation and the version are read separately, not atomically, and
+	// the manifest service moves them at different moments: it installs the new
+	// version string and reopens the manifest before notifying observers, so this
+	// engine's Advance runs later still. A build kicked in that window pairs the
+	// old generation with the new version and may publish, because the generation
+	// has not moved yet. That is tolerated, not prevented: Advance always follows
+	// and spawns a build under a new generation, which the already-published check
+	// below cannot skip, so whatever the window published is replaced. The check
+	// also compares the version for the reverse case, which nothing rules out: an
+	// index published under the current generation with a version that is no
+	// longer current still rebuilds on the next ensureIndex instead of never.
 	attempt := e.publication.Begin()
 	version := e.version.Version()
 	if version == "" {
@@ -99,6 +114,13 @@ func (e *Engine) BuildIndex() {
 		e.building = make(map[manifeststate.Attempt]struct{})
 	}
 	if _, building := e.building[attempt]; building {
+		e.mu.Unlock()
+		return
+	}
+	// A build kicked by ensureIndex during a swap can be scheduled only after
+	// that generation's build already published. Rebuilding would rescan every
+	// collectible to republish identical data.
+	if e.published == attempt && e.builtVersion == version {
 		e.mu.Unlock()
 		return
 	}
@@ -131,6 +153,7 @@ func (e *Engine) BuildIndex() {
 		e.mu.Lock()
 		e.buckets = buckets
 		e.builtVersion = version
+		e.published = attempt
 		e.ready = true
 		e.mu.Unlock()
 	}) {
