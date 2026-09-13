@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.54] - 2026-09-13
+
+### Changed
+
+- Finished consolidating how the app loads and refreshes your data. A check now
+  fails the build if a new piece of your Destiny data is added without being
+  reloaded by "refresh from Bungie", and the app's pages can no longer reach
+  around those owners to fetch or cache data themselves. Nothing on any page
+  looks or behaves differently.
+
 ## [1.3.53] - 2026-09-13
 
 ### Changed
@@ -928,7 +938,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.53...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.54...HEAD
+[1.3.54]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.53...v1.3.54
 [1.3.53]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.52...v1.3.53
 [1.3.52]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.51...v1.3.52
 [1.3.51]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.50...v1.3.51

@@ -187,19 +187,23 @@ frontend/src/
                                    `useResolvedFlags()` returns `{ role, flags, isLoading, refresh }`;
                                    `role` defaults to `"standard"` and `flags` to a stable empty array
                                    until the response arrives. Exports `refresh` rather than a
-                                   `invalidateFlags(client)` module function — the two callers
-                                   (Settings' self opt-in, Admin's role/flag edits) both act after
-                                   their own mutation succeeds, inside a component, so a hook-returned
-                                   callback is the natural shape; before this module they invalidated
-                                   `["flags"]` directly. Flags follow the signed-in user's role, not
-                                   Destiny membership data, so this resource is deliberately outside
-                                   `data/membershipRefresh.ts`'s fan-out — ADR 0017's identity cleanup
-                                   clears it on user change instead. `FlagsContext.tsx` survives as a
-                                   thin gating wrapper over this hook, the same pattern
-                                   `CharacterContext` uses over `data/characters.ts`: its
-                                   throw-outside-the-provider guard is what stops a page hoisted above
-                                   the auth gate from fetching flags anonymously and failing open to
-                                   "everything accessible".
+                                   `invalidateFlags(client)` module function — Admin's role/flag edits
+                                   call it after their own mutation succeeds, inside a component, so a
+                                   hook-returned callback is the natural shape; before this module they
+                                   invalidated `["flags"]` directly. This module also exports
+                                   `useOptInTier(callbacks)` — self-service early-access opt-in
+                                   (standard/beta/alpha, `PUT /api/account/role`) — which invalidates
+                                   `["flags"]` itself on success rather than returning a callback for
+                                   the caller to invoke; Settings uses it and no longer calls
+                                   `refresh()` itself the way it did before this hook existed. Flags
+                                   follow the signed-in user's role, not Destiny membership data, so
+                                   this resource is deliberately outside `data/membershipRefresh.ts`'s
+                                   fan-out — ADR 0017's identity cleanup clears it on user change
+                                   instead. `FlagsContext.tsx` survives as a thin gating wrapper over
+                                   `useResolvedFlags`, the same pattern `CharacterContext` uses over
+                                   `data/characters.ts`: its throw-outside-the-provider guard is what
+                                   stops a page hoisted above the auth gate from fetching flags
+                                   anonymously and failing open to "everything accessible".
     admin.ts                      ← Eighth resource landed (E11). Three resources behind one console
                                    share this module — the member roster, the flag configuration, and
                                    the audit log — because they share one consumer and one authorization
@@ -258,8 +262,7 @@ frontend/src/
                                    empty-array reference so `seals` keeps identity between renders.
                                    Exports `invalidateSeals(client)` as this resource's invalidation
                                    entry point. Read by `Triumphs.tsx`. This is the last of the eleven
-                                   ADR 0020 resource slices (E4–E14); only E16 (fan-out completeness
-                                   test + no-restricted-imports lint zones) remains.
+                                   ADR 0020 resource slices (E4–E14).
     preferences.ts                ← ADR 0021's framework-neutral Preferences client (E15), landed
                                    outside ADR 0020's eleven-resource list because it deliberately
                                    uses no React Query — one small object with no shared cache base
@@ -299,14 +302,26 @@ frontend/src/
                                    has no claim on the other five. Calls `invalidateCatalysts`,
                                    `invalidateCharacters`, `invalidateCollections`, `invalidateCrafting`,
                                    `invalidateSeals`, and `invalidateWeekly` — one module entry point per
-                                   resource; as of E14 it names no raw query keys of its own.
+                                   resource; it names no raw query keys of its own.
                                    Reads no membership argument — it reads the signed-in membership from
-                                   `useAuth()`.
+                                   `useAuth()`. Also exports `useReloadAfterReconnect()` — a plain
+                                   `client.invalidateQueries()` with no query key, deliberately wider
+                                   than the membership fan-out because any cached resource may have
+                                   failed while the Bungie authorization was expired, not only the six
+                                   membership-scoped ones; `OAuthCallback.tsx` calls it after a
+                                   successful reconnect.
                                    Search (E9), Flags (E10), and Admin (E11) are membership-independent
-                                   by design, so none is in this fan-out — Flags follows the signed-in
-                                   user's role, not Destiny membership data, and Admin data carries no
-                                   membership at all. E16 adds the test that fails when a
-                                   membership-scoped module is added without being wired into `fanOut`.
+                                   by design, so none is in the refresh fan-out — Flags follows the
+                                   signed-in user's role, not Destiny membership data, and Admin data
+                                   carries no membership at all. `membershipRefresh.test.tsx` (E16) is
+                                   this module's contract test, the fan-out completeness guard, and the
+                                   reconnect-reload test: every `data/` module that reads the signed-in
+                                   membership (`useAuth` or the browser session client) must export an
+                                   `invalidate<Resource>` entry point that `fanOut` imports and calls, or
+                                   be named in the test's `REFRESH_EXEMPTIONS` list with a reason —
+                                   `preferences.ts` is that named exemption (ADR 0021). There is no
+                                   import-time registry; the completeness check reads module source with
+                                   `import.meta.glob` instead.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -503,6 +518,12 @@ module's hook instead. Preferences (`data/preferences.ts`, ADR 0021, E15) is a
 twelfth `src/data/` module that owns its resource the same way but deliberately
 uses no React Query — see its entry in "File structure" above.
 
+This boundary is machine-enforced, not just convention (ADR 0020, E16):
+`.oxlintrc.json` makes `no-restricted-imports` an error for `src/features/**`
+and `src/components/**` (their own `.test.{ts,tsx}` files excluded), barring
+both `@tanstack/react-query` and any `types/api` import. A feature or component
+that imports either fails `npm run lint` in the `Test Frontend` job.
+
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
 client. Its browser transport owns `fetch`, credential attachment, and refresh;
@@ -552,10 +573,12 @@ identities (roster, flag configuration, per-type audit log) and both mutations
 (`minTier` through the same `toTier`), and `AuditEntry`; the mutations stay
 non-optimistic and each invalidates only its own key, taking framework-neutral
 `onSuccess`/`onError` callbacks so `Admin.tsx` keeps its own toast copy and its
-`useFlags().refresh()` follow-up outside this module. Settings and Admin both
-call `useFlags().refresh()` after
-their own mutation succeeds rather than invalidating `["flags"]` directly, which
-they both did before these modules existed. `data/catalysts.ts` owns the
+`useFlags().refresh()` follow-up outside this module. Admin's role and flag
+mutations call `useFlags().refresh()` after their own mutation succeeds, rather
+than invalidating `["flags"]` directly, which it did before this module existed;
+Settings' self-service tier opt-in instead uses `data/flags.ts`'s
+`useOptInTier`, which invalidates `["flags"]` itself on success, so Settings
+calls no follow-up refresh. `data/catalysts.ts` owns the
 catalysts resource's query identity, endpoint, and projection (`toCatalyst`),
 exposing `invalidateCatalysts(client)` as its invalidation entry point;
 `data/crafting.ts` mirrors it for the crafting-pattern resource
@@ -568,13 +591,14 @@ resource's query identity, endpoint, and projection (`toSeal`/`toTriumph`/
 cross-resource cache-refresh fan-out over all six membership-scoped resources
 (Catalysts, Characters, Collections, Crafting, Seals, Weekly); Search, Flags,
 and Admin data are not membership-scoped, so none is part of that fan-out.
-Consumers read these modules instead of declaring their own. One slice of
-ADR 0020 remains: E16 adds the ESLint `no-restricted-imports` import-boundary
-the ADR specifies and the fan-out completeness test that fails if a
-membership-scoped module is added without a matching invalidation entry point
-in `membershipRefresh.ts`. `data/preferences.ts` (ADR 0021, E15) landed
-separately and is not part of that fan-out by design — see its "File
-structure" entry above.
+Consumers read these modules instead of declaring their own. ADR 0020 is fully
+implemented as of E16 (`v1.3.54`): the `no-restricted-imports` import boundary
+the ADR specifies is enforced by oxlint (see "Data fetching" below), and
+`membershipRefresh.test.tsx`'s completeness guard fails if a membership-scoped
+module is added without a matching invalidation entry point in
+`membershipRefresh.ts`. `data/preferences.ts` (ADR 0021, E15) landed separately
+and is the guard's one recorded exemption, not part of the fan-out by design —
+see its "File structure" entry above.
 
 ## Authentication
 
@@ -763,7 +787,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Framework: Vitest + React Testing Library
 - Setup file: `src/test/setup.ts` (MSW server + fixtures in `src/test/testServer.ts`)
 - Tests are colocated with the code they cover: lib tests in `lib/`, component tests in `components/`, and each feature's page tests inside `features/<feature>/`
-- Data-access modules (`src/data/`) get contract tests colocated as `<resource>.test.tsx` (e.g. `data/wishlist.test.tsx`), exercising the public hooks — not the private projection function — for query identity/shape, projection, and optimistic rollback/settle behavior (ADR 0020). Feature tests for a migrated resource drop wire-shape assertions and keep visible behavior only.
+- Data-access modules (`src/data/`) get contract tests colocated as `<resource>.test.tsx` (e.g. `data/wishlist.test.tsx`), exercising the public hooks — not the private projection function — for query identity/shape, projection, and optimistic rollback/settle behavior (ADR 0020). Feature tests for a migrated resource drop wire-shape assertions and keep visible behavior only. `data/membershipRefresh.test.tsx` (E16) additionally reads every `data/*.ts` module's source via `import.meta.glob` and fails if a module reading the signed-in membership has neither a matching `invalidate<Resource>` entry point wired into `fanOut` nor a named entry in `REFRESH_EXEMPTIONS`.
 - `renderWithProviders` (`src/test/renderWithProviders.tsx`) is the standard way to render a page under test — it mounts `ui` inside `AppProviders` + `MemoryRouter`, and, when `authed` (default `true`), also wraps `AuthedProviders` and seeds the atomic browser-session envelope with `seedBrowserSession` (`src/test/browserSession.ts`). Options: `route`, `initialEntries`, `initialIndex`, `authed`, `client` (a fresh retry-disabled `QueryClient` by default). Pass a `<Routes>` element as `ui` when a test needs real route matching. Three test files deliberately keep their own hand-rolled tower instead of `renderWithProviders`: `contexts/contexts.test.tsx` (tests the contexts directly), `features/auth/OAuthCallback.test.tsx` (needs `StrictMode` mounted as a double-invoke regression guard), and `lib/units.test.tsx` (renders providers in isolation). Reach for `renderWithProviders` for any new page test rather than hand-rolling a tower.
 - Run: `npm test` (from `frontend/`)
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests

@@ -1,6 +1,6 @@
 # ADR 0020: Own Frontend Data Access
 
-- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Implemented in `v1.3.54`
 - Date: 2026-08-20
 
 ## Context
@@ -140,10 +140,15 @@ another's session. A full clear is correct by construction.
 
 ### Enforced boundary
 
-The import boundary is machine-checked, not documented. ESLint
-`no-restricted-imports` zones bar `features/**` and `components/**` from
-importing `@tanstack/react-query` and `types/api`; only `src/data/**` may. This
-fails `npm run lint` in the `Test Frontend` job.
+The import boundary is machine-checked, not documented. `no-restricted-imports`
+zones bar `features/**` and `components/**` from importing `@tanstack/react-query`
+and `types/api`; only `src/data/**` may. This fails `npm run lint` in the
+`Test Frontend` job.
+
+Implementation note: the repository lints with oxlint rather than ESLint, and
+these zones live in `frontend/.oxlintrc.json` (`no-restricted-imports` as
+`error` for `src/features/**` and `src/components/**`, their own test files
+excluded).
 
 The repository has made this call twice before — the workflow-action pin policy
 and the Node-version policy exist because prose comments did not hold, and the
