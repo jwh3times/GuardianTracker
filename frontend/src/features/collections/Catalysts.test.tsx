@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { http, HttpResponse, delay } from "msw";
 import { API, server } from "../../test/testServer";
 import { renderWithProviders } from "../../test/renderWithProviders";
@@ -238,6 +238,57 @@ describe("Catalysts page", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Bungie privacy settings")).toBeInTheDocument();
     expect(screen.getByText("Retry")).toBeInTheDocument();
+  });
+
+  it("retries a failed catalysts load from the error panel", async () => {
+    let attempt = 0;
+    server.use(
+      http.get(`${API}/api/catalysts/:type/:id`, () => {
+        attempt += 1;
+        return attempt === 1
+          ? HttpResponse.json({ error: "boom" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  id: "c-back",
+                  name: "Recovered Catalyst",
+                  type: "Bow",
+                  icon: "",
+                  status: "missing",
+                  obj: null,
+                  source: "Strikes",
+                },
+              ],
+              fetchedAt: "",
+            });
+      }),
+    );
+    renderPage(<Catalysts />);
+
+    fireEvent.click(await screen.findByText("Retry"));
+
+    // The retry must re-ask for catalysts, not only for crafting.
+    expect(await screen.findByText("Recovered Catalyst")).toBeInTheDocument();
+  });
+
+  it("keeps the spinner up while catalysts alone are still loading", async () => {
+    let craftingAsked = false;
+    server.use(
+      // Never resolves: catalysts are still in flight.
+      http.get(`${API}/api/catalysts/:type/:id`, () => new Promise(() => {})),
+      http.get(`${API}/api/crafting/:type/:id`, () => {
+        craftingAsked = true;
+        return HttpResponse.json({ items: [], fetchedAt: "" });
+      }),
+    );
+    const { container } = renderPage(<Catalysts />);
+
+    // Let crafting finish, so only catalysts can hold the spinner.
+    await waitFor(() => expect(craftingAsked).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(container.querySelector(".gt-page-loading")).not.toBeNull();
+    expect(screen.queryByText("Catalysts & Crafting")).not.toBeInTheDocument();
   });
 
   it("renders the loading spinner while the query is in flight", async () => {
