@@ -265,6 +265,7 @@ export function createPreferencesClient({
   let pending: PreferencesPatch = {};
   let pendingWaiters: Waiter[] = [];
   let inflight: PreferencesPatch | null = null;
+  let inflightWaiters: Waiter[] = [];
   let snapshot: PreferencesSnapshot = {
     values: confirmed,
     resolution,
@@ -384,6 +385,7 @@ export function createPreferencesClient({
     pending = {};
     pendingWaiters = [];
     inflight = patch;
+    inflightWaiters = waiters;
     save = SAVING;
     const writingEpoch = epoch;
     publish();
@@ -394,6 +396,7 @@ export function createPreferencesClient({
           return;
         }
         inflight = null;
+        inflightWaiters = [];
         // A patch response is the server's post-patch state: the newest
         // revision this tab knows, and proof that persistence is available.
         confirmed = toValues(wire);
@@ -416,6 +419,7 @@ export function createPreferencesClient({
         // Roll back: dropping the in-flight patch returns the rendered state
         // to the last one the server confirmed. There is no automatic retry.
         inflight = null;
+        inflightWaiters = [];
         const failure = toPreferenceError(error);
         save = { status: "failed", error: failure };
         rejectAll(waiters, failure);
@@ -502,9 +506,12 @@ export function createPreferencesClient({
 
     reset() {
       epoch += 1;
-      const departedWaiters = pendingWaiters;
+      // Settle every waiter now, including one whose request is still in
+      // flight: a hung request must not leave its caller waiting forever.
+      const departedWaiters = [...inflightWaiters, ...pendingWaiters];
       hydrate();
       pendingWaiters = [];
+      inflightWaiters = [];
       rejectAll(departedWaiters, sessionChanged());
       publish();
     },

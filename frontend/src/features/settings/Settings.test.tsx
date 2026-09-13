@@ -98,6 +98,44 @@ describe("Settings page", () => {
     );
   });
 
+  it("does not repeat an earlier save failure when Settings is opened again", async () => {
+    server.use(
+      http.put(`${API}/api/preferences`, () =>
+        HttpResponse.json(
+          { error: "database unavailable", code: "DB_UNAVAILABLE" },
+          { status: 503 },
+        ),
+      ),
+    );
+    function Reopenable() {
+      const [open, setOpen] = React.useState(true);
+      return (
+        <>
+          <button onClick={() => setOpen((value) => !value)}>
+            toggle settings
+          </button>
+          {open && <Settings />}
+        </>
+      );
+    }
+    renderWithProviders(<Reopenable />, { route: "/settings" });
+    await screen.findByText("Settings");
+    fireEvent.click(screen.getByRole("radio", { name: "Compact" }));
+    expect(
+      await screen.findAllByText(/couldn't save that preference/i),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByText("toggle settings"));
+    fireEvent.click(screen.getByText("toggle settings"));
+    await screen.findByText("Settings");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    // The shared client still holds that failure; reopening must not re-announce it.
+    expect(screen.getAllByText(/couldn't save that preference/i)).toHaveLength(
+      1,
+    );
+  });
+
   it("triggers a data refresh", async () => {
     let refreshed = false;
     server.use(

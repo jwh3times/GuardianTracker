@@ -1,5 +1,5 @@
 import { useIdentityMutation } from "../../contexts/IdentityMutation";
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { Button, DataFreshnessChip } from "../../components/primitives";
 import { PageHead, Panel } from "../../components/composite";
@@ -67,8 +67,13 @@ export function Settings() {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  // A failed save has already rolled the control back; say so once per failure.
+  // A failed save has already rolled the control back; say so once, and only
+  // for a failure that happens while this page is open. The save state lives
+  // in the shared client, so an earlier failure is still there on a later visit.
+  const announcedSave = useRef(preferenceSave);
   useEffect(() => {
+    if (preferenceSave === announcedSave.current) return;
+    announcedSave.current = preferenceSave;
     if (preferenceSave.status === "failed") {
       showToast(
         "Couldn't save that preference, so it was put back. Please try again.",

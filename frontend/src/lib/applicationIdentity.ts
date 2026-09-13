@@ -59,6 +59,9 @@ export function createApplicationIdentity(
   }
 
   // Each registered owner projects the identity this composition starts in.
+  // This runs during render (AppProviders builds the identity in useMemo), so
+  // a reset must be idempotent for an unchanged session: StrictMode may build
+  // the identity twice, and nothing has subscribed yet on either build.
   runBoundaryResets();
 
   function freshClient() {

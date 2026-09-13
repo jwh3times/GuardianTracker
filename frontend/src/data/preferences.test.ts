@@ -575,3 +575,41 @@ describe("onboardingRequired", () => {
     ).toBe(true);
   });
 });
+
+describe("identity boundaries and late reads", () => {
+  it("rejects a completion whose request is still in flight when the identity changes", async () => {
+    const h = harness();
+    const outcome = h.client
+      .completeOnboarding()
+      .catch((error: unknown) => error);
+    // Dispatched, and the request never answers.
+    expect(h.writes).toHaveLength(1);
+
+    h.setSession(signedIn(memberB));
+    h.client.reset();
+
+    expect(await outcome).toBeInstanceOf(PreferenceError);
+  });
+
+  it("keeps a write's resolution when an older read settles after it", async () => {
+    const h = harness();
+    h.client.ensureRead();
+    const completion = h.client.completeOnboarding();
+    h.writes[0].reply.resolve({
+      cardStyle: "framed",
+      personalize: true,
+      onboardedAt: "2026-09-13T10:00:00Z",
+    });
+    await completion;
+
+    // Issued before the write, so it predates the server-stamped completion.
+    h.reads[0].resolve(serverValues({ onboardedAt: null }));
+    await flush();
+
+    expect(h.client.getSnapshot().resolution).toEqual({
+      status: "resolved",
+      persisted: true,
+      onboarding: { completedAt: "2026-09-13T10:00:00Z" },
+    });
+  });
+});
