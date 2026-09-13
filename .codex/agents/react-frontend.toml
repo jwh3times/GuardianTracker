@@ -57,13 +57,16 @@ treat those as separate cleanup rather than a compiler-upgrade regression.
 ```
 frontend/src/
   App.tsx                      ← Router, lazy-loaded pages, ProtectedLayout (AuthedProviders + AppShell + auth gate)
-  index.tsx                    ← Root: AuthProvider, PreferencesProvider; imports styles/*.css
+  index.tsx                    ← Root: BrowserRouter; imports styles/*.css
   contexts/
     AppProviders.tsx             ← The single definition of the context tower. `AppProviders`
-                                   (keyed IdentityContext > QueryClientProvider > AuthProvider > PreferencesProvider >
+                                   (keyed IdentityContext > QueryClientProvider > AuthProvider >
                                    ToastProvider; optional `client` prop, defaults to the
                                    lib/api initial client) wraps the whole app in App.tsx; identity boundaries
-                                   replace the client and remount this subtree.
+                                   replace the client and remount this subtree, and run the registered
+                                   `boundaryResets` — currently just `preferencesClient.reset` (ADR 0021)
+                                   — alongside the remount. Preferences is not a provider in this tower;
+                                   `data/preferences.ts` is a module-level client outside React state.
                                    `AuthedProviders` (FlagsProvider > CharacterProvider) mounts
                                    only below ProtectedLayout's auth gate. Deliberately excludes
                                    the router (index.tsx owns BrowserRouter; tests use
@@ -74,7 +77,6 @@ frontend/src/
                                    nest providers inline in App.tsx or a test.
     AuthContext.tsx             ← Declarative browser-session snapshot subscription;
                                    logout (this device) + logoutAll (everywhere)
-    PreferencesContext.tsx      ← Card style + "for you" badge prefs; Guardian Tracker user-backed onboarding completion
     CharacterContext.tsx        ← Thin selection-state wrapper (ADR 0020, E7): persists the active-character
                                    pick over the roster `data/characters.ts` owns; issues no query itself.
                                    Scopes weekly vendors
@@ -82,8 +84,9 @@ frontend/src/
                                    useResolvedFlags(): issues no query itself, exposes
                                    useFlag(key) / useFlags() resolved gating state + role
                                  All four hooks — useAuth, usePreferences, useFlags/useFlag, and
-                                 useCharacters — throw when called outside their provider. There
-                                 is no silent default state for any of them.
+                                 useCharacters — throw when called outside their provider (usePreferences
+                                 outside `AppProviders`, since Preferences is not itself a provider).
+                                 There is no silent default state for any of them.
   data/                         ← ADR 0020 data-access modules, one per domain resource. A module
                                    owns that resource's query identity (key private, never
                                    exported), endpoint paths, projection to a domain type, every
@@ -258,9 +261,38 @@ frontend/src/
                                    empty-array reference so `seals` keeps identity between renders.
                                    Exports `invalidateSeals(client)` as this resource's invalidation
                                    entry point. Read by `Triumphs.tsx`. This is the last of the eleven
-                                   ADR 0020 resource slices (E4–E14); only E15 (Preferences client,
-                                   ADR 0021) and E16 (fan-out completeness test + no-restricted-imports
-                                   lint zones) remain.
+                                   ADR 0020 resource slices (E4–E14); only E16 (fan-out completeness
+                                   test + no-restricted-imports lint zones) remains.
+    preferences.ts                ← ADR 0021's framework-neutral Preferences client (E15), landed
+                                   outside ADR 0020's eleven-resource list because it deliberately
+                                   uses no React Query — one small object with no shared cache base
+                                   and no invalidation fan-out. `createPreferencesClient({ transport,
+                                   persistence, session, now? })` builds it from injected ports; the
+                                   production singleton `preferencesClient` wires `apiFetch` transport,
+                                   a `localStorage`-backed persistence port keyed by the versioned
+                                   `guardian_preferences` envelope (single slot, re-keyed per Destiny
+                                   membership; the pre-ADR-0021 global `guardian_prefs` key is deleted
+                                   on load rather than migrated), and `browserSessionClient` as the
+                                   membership source. `usePreferences()` (`useSyncExternalStore`) throws
+                                   outside `AppProviders`, matching `useAuth`/`useFlags`/`useCharacters`;
+                                   its actions are fenced by `IdentityContext`'s scope, so a setter
+                                   captured before a membership change is a no-op after one. The
+                                   snapshot is `{ values, resolution, save }`: `resolution` is
+                                   `anonymous | unresolved(cache|defaults) | resolved(persisted,
+                                   onboarding)`, and `save` is `idle | saving | failed(PreferenceError)`
+                                   with codes `UNAVAILABLE | REJECTED | FAILED`. One read per resolved
+                                   membership (a degraded `persisted:false` read resolves unpersisted but
+                                   keeps displayed/cached values; a failed read stays unresolved with no
+                                   retry); writes are optimistic, single-flight, and coalescing, with
+                                   rollback and no automatic retry; onboarding completion goes through
+                                   the same queue but is never optimistic. `onboardingRequired(resolution)`
+                                   is the fail-closed gate — only `resolved && persisted && onboarding
+                                   === "required"` shows the tour. Cross-tab convergence adopts newer
+                                   same-membership envelopes by monotonic revision. `reset()` is the
+                                   identity-boundary hook `AppProviders` registers (see above); it is not
+                                   part of the membership-refresh fan-out — a Bungie data refresh cannot
+                                   change a Guardian Tracker setting. Exports no invalidation entry point
+                                   for the same reason. Read by Settings, Collections, and OnboardingTour.
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
@@ -454,6 +486,10 @@ Deleted files / paths (do not reference):
   `data/items.ts` (ADR 0020, E8)
 - `frontend/src/lib/adapters.ts` — `toGTItemView` moved into `data/items.ts` and is now
   private; `RARITY_MAP` was replaced by `lib/rarity.ts`'s `toRarity`
+- `frontend/src/contexts/PreferencesContext.tsx` — replaced by `data/preferences.ts`'s
+  `usePreferences()` (ADR 0021, E15); the global `guardian_prefs` localStorage key, the
+  `preferencesReady` readiness flag, and the `onboardedAt: undefined` "unresolved or
+  failed" sentinel went with it
 
 ## Data fetching
 
@@ -466,10 +502,9 @@ owns that resource's query identity (key private, never exported), endpoint
 path, projection to a domain type, every mutation, and its own invalidation.
 **Do not declare a raw inline `useQuery`/`useIdentityMutation` call in a
 feature for a resource that already has a `src/data/` module** — read the
-module's hook instead. The one exception is `PreferencesContext.tsx`, which
-still fetches `/api/preferences` directly with `apiFetch` inside a `useEffect`
-rather than through `useQuery`; [ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md)
-(E15) is what replaces it with a `src/data/preferences.ts` module.
+module's hook instead. Preferences (`data/preferences.ts`, ADR 0021, E15) is a
+twelfth `src/data/` module that owns its resource the same way but deliberately
+uses no React Query — see its entry in "File structure" above.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
@@ -536,12 +571,13 @@ resource's query identity, endpoint, and projection (`toSeal`/`toTriumph`/
 cross-resource cache-refresh fan-out over all six membership-scoped resources
 (Catalysts, Characters, Collections, Crafting, Seals, Weekly); Search, Flags,
 and Admin data are not membership-scoped, so none is part of that fan-out.
-Consumers read these modules instead of declaring their own. Two slices of
-ADR 0020 remain: E15 replaces `PreferencesContext`'s direct `apiFetch` with a
-`src/data/preferences.ts` module (ADR 0021); E16 adds the ESLint
-`no-restricted-imports` import-boundary the ADR specifies and the fan-out
-completeness test that fails if a membership-scoped module is added without a
-matching invalidation entry point in `membershipRefresh.ts`.
+Consumers read these modules instead of declaring their own. One slice of
+ADR 0020 remains: E16 adds the ESLint `no-restricted-imports` import-boundary
+the ADR specifies and the fan-out completeness test that fails if a
+membership-scoped module is added without a matching invalidation entry point
+in `membershipRefresh.ts`. `data/preferences.ts` (ADR 0021, E15) landed
+separately and is not part of that fan-out by design — see its "File
+structure" entry above.
 
 ## Authentication
 
@@ -564,13 +600,15 @@ storage. JavaScript must never read the refresh cookie.
 
 `AppProviders` composes the `applicationIdentity` observer outside the keyed
 provider subtree. A transition to anonymous or a different Destiny membership
-type/ID cancels and clears the old QueryClient, creates a replacement, and
-remounts the subtree, resetting preferences, onboarding, flags, character state,
-and page drafts. Same-membership refresh retains caches and mounted state.
-`useIdentityMutation` guards delayed mutation starts and completion callbacks;
-late cache work remains isolated in the retired client. Use the current client
-from `useQueryClient()` for cache operations rather than importing the initial
-client singleton.
+type/ID cancels and clears the old QueryClient, creates a replacement, remounts
+the subtree (resetting onboarding, flags, character state, and page drafts),
+and runs the registered `boundaryResets` — `preferencesClient.reset` (ADR 0021)
+— so Preferences resets alongside the remount without itself being a provider.
+Same-membership refresh retains caches and mounted state and runs no boundary
+resets. `useIdentityMutation` guards delayed mutation starts and completion
+callbacks; late cache work remains isolated in the retired client. Use the
+current client from `useQueryClient()` for cache operations rather than
+importing the initial client singleton.
 
 ## Roles and feature flags
 
@@ -617,22 +655,34 @@ vendor context follows the selected character.
 
 ## Preferences
 
-`PreferencesContext` (`contexts/PreferencesContext.tsx`) holds card style, the
+`usePreferences()` (`data/preferences.ts`) is the sole owner of card style, the
 "for you" badge preference, and Guardian Tracker user-backed onboarding
-completion, mirroring card style and personalization into the global
-`guardian_prefs` localStorage key. Composition resets this snapshot at identity
-boundaries; the new provider starts with defaults, and identity guards discard
-departed reads, onboarding results, and setter calls.
+completion — [ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md),
+landed in E15 (v1.3.53). It is a framework-neutral client (`createPreferencesClient`),
+not a React context: no `PreferencesProvider` exists, and `usePreferences()`
+throws outside `AppProviders` instead of outside a preferences-specific provider.
 
-[ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md) accepts
-replacing it with a framework-neutral preferences client at
-`src/data/preferences.ts` — membership-keyed single-slot hydration, one read per
-resolved membership, single-flight coalescing writes that roll back and surface
-a typed error instead of the current silent `.catch(() => {})`, same-membership
-cross-tab adoption, and a fail-closed onboarding gate. Implementation is sequenced by the
-#172 handoff and has not landed yet, so the context described above, its
-global storage key, and its `preferencesReady` flag remain how the code actually
-works today.
+The client synchronously hydrates one schema-versioned, revisioned localStorage
+envelope (`guardian_preferences`) holding a single slot keyed by the current
+Destiny membership; a membership change replaces the slot and anonymous removes
+it (the pre-ADR-0021 global `guardian_prefs` key is deleted on load rather than
+migrated). It reads exactly once per resolved membership, plus cross-tab
+adoption of newer same-membership envelopes by monotonic revision. Writes are
+optimistic, single-flight, and coalescing: at most one PUT is in flight, further
+field changes coalesce into one queued patch, a failed patch rolls back and
+surfaces a typed `PreferenceError` (`UNAVAILABLE | REJECTED | FAILED`) instead of
+the old silent `.catch(() => {})`, and there is no automatic retry. Onboarding
+completion goes through the same queue but is never optimistic — it resolves
+only once the server confirms it. `onboardingRequired(resolution)` is the
+fail-closed gate: only `resolved && persisted && onboarding === "required"`
+shows the tour, so anonymous, unresolved, failed, and degraded reads never do.
+
+`AppProviders` registers `preferencesClient.reset` as one of `createApplicationIdentity`'s
+`boundaryResets`, so it resets exactly at identity boundaries (anonymous ↔
+membership, or a different membership) the same way the QueryClient does, without
+being remounted itself; same-membership refresh runs no boundary resets.
+Preferences is exempt from `data/membershipRefresh.ts`'s fan-out by design — a
+Bungie data refresh cannot change a Guardian Tracker setting.
 
 ## OAuth callback flow
 
@@ -682,7 +732,8 @@ works today.
 - `APIRecordsEnvelope<T>`: `{ items: T[]; fetchedAt: string }` — envelope for catalysts/crafting/seals
 - `Weekly`: `+ resetAt`, `+ fetchedAt`, `+ degraded?`
 - `XurItem.className?: string` — manifest-defined armor class; the Xûr module labels it and highlights a match with the active character
-- `APIPreferences.onboardedAt: string | null` — server-authoritative onboarding completion; `PreferencesContext.completeOnboarding()` persists it with `onboardingComplete:true`
+- `APIPreferences.onboardedAt: string | null` — server-authoritative onboarding completion; `usePreferences().completeOnboarding()` (`data/preferences.ts`) persists it with `onboardingComplete:true`
+- `APIPreferencesRead extends APIPreferences` — `+ persisted: boolean` on `GET /api/preferences` (ADR 0021); `false` marks unstored defaults returned because persistence is unavailable, distinguishing that from a genuinely new account (`persisted: true` with `onboardedAt: null`)
 - `Milestone.missing`: `number | undefined` — populated for raid/dungeon milestones;
   verified current non-raid rewards contain no collectible-linked items, so others omit it.
 - `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool

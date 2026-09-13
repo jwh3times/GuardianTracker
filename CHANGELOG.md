@@ -14,6 +14,26 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.53] - 2026-09-13
+
+### Changed
+
+- Your card style and "for you" badge settings now have a single owner that
+  keeps each Destiny account's settings separate, keeps other open tabs in step,
+  and sends only one save at a time — combining quick successive changes into
+  one.
+
+### Fixed
+
+- Changing a setting when it could not be saved no longer looks like it worked:
+  the control goes back to your saved value and Settings tells you it did not
+  save.
+- Signing in with a different Destiny account no longer briefly shows the
+  previous account's card style and badge settings.
+- The welcome tour no longer depends on a previous account's onboarding, and no
+  longer appears when your settings could not be loaded or were loaded while
+  saving was unavailable.
+
 ## [1.3.52] - 2026-09-13
 
 ### Changed
@@ -908,7 +928,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.52...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.53...HEAD
+[1.3.53]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.52...v1.3.53
 [1.3.52]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.51...v1.3.52
 [1.3.51]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.50...v1.3.51
 [1.3.50]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.49...v1.3.50

@@ -84,14 +84,18 @@ reauthorization retains its separate route and authenticated reconnect request.
 Application composition observes the browser session through
 `lib/applicationIdentity.ts`. Becoming anonymous or changing the Destiny
 membership type/ID cancels and clears the departing QueryClient, supplies a fresh
-client, and remounts the keyed provider subtree. This resets preferences,
-onboarding, flags, character state, and page-local drafts; same-membership refresh
-retains the client and mounted state. Identity boundaries also best-effort clear
-the global `gt_done:` weekly checklist storage so completion marks do not carry
-into another account. `useIdentityMutation` fences mutation starts
-and callbacks from a departed identity, while late cache work remains isolated
-in the retired client. Preferences also guard asynchronous completion and reset
-the global local preference snapshot at identity boundaries. See
+client, and remounts the keyed provider subtree. This resets onboarding, flags,
+character state, and page-local drafts; same-membership refresh retains the
+client and mounted state and runs no boundary resets. Identity boundaries also
+best-effort clear the global `gt_done:` weekly checklist storage so completion
+marks do not carry into another account. `useIdentityMutation` fences mutation
+starts and callbacks from a departed identity, while late cache work remains
+isolated in the retired client. Preferences (`data/preferences.ts`,
+[ADR 0021](./adr/0021-own-preferences-synchronization.md)) is a
+framework-neutral client outside this provider tree: it fences its own
+asynchronous completions by an internal epoch, and application composition
+resets its membership-keyed local envelope through a registered
+identity-boundary callback rather than a provider remount. See
 [ADR 0017](./adr/0017-own-the-browser-session-projection.md).
 
 Without a configured database, login still succeeds without a session row; a
