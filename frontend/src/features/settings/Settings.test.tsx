@@ -176,6 +176,51 @@ describe("Settings page", () => {
     await waitFor(() => expect(calledAll).toBe(true));
   });
 
+  it("locks the tier picker while an opt-in is in flight", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({ role: "standard", flags: [] }),
+      ),
+      // Never resolves: the opt-in is still in flight.
+      http.put(`${API}/api/account/role`, () => new Promise(() => {})),
+    );
+    renderSettings();
+    await screen.findByText("Membership & access");
+    const beta = await screen.findByRole("radio", { name: /Beta/ });
+    await waitFor(() => expect(beta).toBeEnabled());
+
+    fireEvent.click(beta);
+
+    // A second pick before the first lands would race it on the server.
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Alpha/ })).toBeDisabled(),
+    );
+  });
+
+  it("says why an opt-in was refused", async () => {
+    server.use(
+      http.get(`${API}/api/flags`, () =>
+        HttpResponse.json({ role: "standard", flags: [] }),
+      ),
+      http.put(`${API}/api/account/role`, () =>
+        HttpResponse.json(
+          { error: "Early access is closed right now" },
+          { status: 403 },
+        ),
+      ),
+    );
+    renderSettings();
+    await screen.findByText("Membership & access");
+    const beta = await screen.findByRole("radio", { name: /Beta/ });
+    await waitFor(() => expect(beta).toBeEnabled());
+
+    fireEvent.click(beta);
+
+    expect(
+      await screen.findByText("Early access is closed right now"),
+    ).toBeInTheDocument();
+  });
+
   it("opts into an early-access tier", async () => {
     // A standard-tier user can self-select Beta; the picker is interactive
     // (it's disabled only for admins, which the default flags handler returns).
