@@ -11,7 +11,7 @@ import { QueryClient, useQueryClient, useQuery } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { AppProviders, AuthedProviders } from "./AppProviders";
 import { useAuth } from "./AuthContext";
-import { usePreferences } from "./PreferencesContext";
+import { usePreferences } from "../data/preferences";
 import { useCharacters } from "./CharacterContext";
 import { useIdentityMutation } from "./IdentityMutation";
 import { seedBrowserSession } from "../test/browserSession";
@@ -52,7 +52,7 @@ function Probe({
   const [draft, setDraft] = useState("");
   if (!clients.includes(cache)) clients.push(cache);
   renders?.push(
-    `${user?.membershipId}:${cache.getQueryData<string>(["private"])}:${preferences.cardStyle}:${draft}`,
+    `${user?.membershipId}:${cache.getQueryData<string>(["private"])}:${preferences.values.cardStyle}:${draft}`,
   );
   return (
     <>
@@ -60,7 +60,7 @@ function Probe({
       <div data-testid="private">
         {cache.getQueryData<string>(["private"]) ?? "empty"}
       </div>
-      <div data-testid="style">{preferences.cardStyle}</div>
+      <div data-testid="style">{preferences.values.cardStyle}</div>
       <input
         aria-label="Draft"
         value={draft}
@@ -82,9 +82,18 @@ describe("application identity boundaries", () => {
       initial.setQueryData(["private"], "A private rows");
       localStorage.setItem("gt_done:reset-time", '["A-action"]');
       localStorage.setItem("gt.collections.filters", '{"sort":"name"}');
+      // Member A's cached preference slot (ADR 0021).
       localStorage.setItem(
-        "guardian_prefs",
-        JSON.stringify({ cardStyle: "compact", personalize: "off" }),
+        "guardian_preferences",
+        JSON.stringify({
+          version: 1,
+          membership: JSON.stringify([
+            sampleUser.membershipType,
+            sampleUser.membershipId,
+          ]),
+          revision: 1,
+          values: { cardStyle: "compact", personalize: "off" },
+        }),
       );
       server.use(
         http.get(`${API}/api/preferences`, () => new Promise(() => {})),
@@ -96,6 +105,7 @@ describe("application identity boundaries", () => {
           <Probe clients={clients} renders={renders} />
         </AppProviders>,
       );
+      expect(screen.getByTestId("style")).toHaveTextContent("compact");
       fireEvent.change(screen.getByLabelText("Draft"), {
         target: { value: "A draft" },
       });
@@ -107,6 +117,8 @@ describe("application identity boundaries", () => {
       expect(initial.getQueryCache().getAll()).toHaveLength(0);
       expect(clients).toHaveLength(2);
       expect(localStorage.getItem("gt_done:reset-time")).toBeNull();
+      // The composition's cleanup consumer reset Preferences: A's slot is gone.
+      expect(localStorage.getItem("guardian_preferences")).toBeNull();
       expect(localStorage.getItem("gt.collections.filters")).toBe(
         '{"sort":"name"}',
       );
@@ -323,6 +335,7 @@ describe("application identity boundaries", () => {
               cardStyle: "framed",
               personalize: true,
               onboardedAt: null,
+              persisted: true,
             }),
       ),
       http.put(`${API}/api/preferences`, () => {
@@ -358,9 +371,15 @@ describe("application identity boundaries", () => {
       }, [user?.membershipId, preferences.setCardStyle]);
       return (
         <div data-testid="state">
-          {activeCharacter?.id ?? "no-character"}/{preferences.cardStyle}/
-          {String(preferences.onboardedAt)}/
-          {String(preferences.preferencesReady)}
+          {activeCharacter?.id ?? "no-character"}/{preferences.values.cardStyle}
+          /
+          {preferences.resolution.status === "resolved"
+            ? `${String(preferences.resolution.persisted)}:${
+                preferences.resolution.onboarding === "required"
+                  ? "required"
+                  : preferences.resolution.onboarding.completedAt
+              }`
+            : preferences.resolution.status}
         </div>
       );
     }
@@ -377,7 +396,7 @@ describe("application identity boundaries", () => {
     act(() => seedBrowserSession(otherUser, "token-B"));
     await waitFor(() =>
       expect(screen.getByTestId("state")).toHaveTextContent(
-        "no-character/framed/null/true",
+        "no-character/framed/true:required",
       ),
     );
     await act(async () => {
@@ -391,8 +410,9 @@ describe("application identity boundaries", () => {
       );
       await oldRead.promise;
     });
+    // A's late read and A's captured setter both landed after the boundary.
     expect(screen.getByTestId("state")).toHaveTextContent(
-      "no-character/framed/null/true",
+      "no-character/framed/true:required",
     );
     expect(writes).toBe(0);
   });

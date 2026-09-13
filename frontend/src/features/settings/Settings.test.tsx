@@ -72,6 +72,32 @@ describe("Settings page", () => {
     await waitFor(() => expect(prefBody).toEqual({ cardStyle: "compact" }));
   });
 
+  it("puts a preference back and says so when saving fails", async () => {
+    server.use(
+      http.put(`${API}/api/preferences`, () =>
+        HttpResponse.json(
+          { error: "database unavailable", code: "DB_UNAVAILABLE" },
+          { status: 503 },
+        ),
+      ),
+    );
+    renderSettings();
+    await screen.findByText("Settings");
+    const compact = screen.getByRole("radio", { name: "Compact" });
+
+    fireEvent.click(compact);
+
+    expect(
+      await screen.findByText(/couldn't save that preference/i),
+    ).toBeInTheDocument();
+    // The control shows what the server has, not what was clicked.
+    expect(compact).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Framed" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
   it("triggers a data refresh", async () => {
     let refreshed = false;
     server.use(

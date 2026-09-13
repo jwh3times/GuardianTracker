@@ -181,6 +181,12 @@ export interface APIPreferences {
   onboardedAt: string | null;
 }
 
+/** GET /api/preferences — the values plus their provenance (ADR 0021). */
+export interface APIPreferencesRead extends APIPreferences {
+  /** False when persistence is unavailable and the values are unstored defaults. */
+  persisted: boolean;
+}
+
 /** GET /api/items/search?q=<term>&limit=20 */
 export interface APISearchResult {
   hash: number;

@@ -9,16 +9,10 @@ import {
   act,
   waitFor,
 } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
-import { API, sampleUser, server } from "../test/testServer";
 import { ApiError } from "./api";
 import { errorState } from "./errorState";
 import { ItemCard } from "../features/collections/ItemCard";
 import { ToastProvider, useToast } from "../components/Toast";
-import {
-  PreferencesProvider,
-  usePreferences,
-} from "../contexts/PreferencesContext";
 import { AuthProvider, useAuth } from "../contexts/AuthContext";
 import type { GTItem } from "../types/design";
 
@@ -166,113 +160,6 @@ describe("Toast", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(() => renderHook(() => useToast())).toThrow(
       /within a ToastProvider/,
-    );
-    spy.mockRestore();
-  });
-});
-
-/* ---------------- PreferencesContext ---------------- */
-function PrefsView() {
-  const { cardStyle, personalize, setCardStyle, setPersonalize } =
-    usePreferences();
-  return (
-    <div>
-      <span data-testid="card">{cardStyle}</span>
-      <span data-testid="pers">{personalize}</span>
-      <button onClick={() => setCardStyle("compact")}>card</button>
-      <button onClick={() => setPersonalize("off")}>pers</button>
-    </div>
-  );
-}
-
-function PreferencesTestRoot({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <PreferencesProvider>{children}</PreferencesProvider>
-    </AuthProvider>
-  );
-}
-
-describe("PreferencesContext", () => {
-  it("defaults when no preferences are stored", () => {
-    render(
-      <PreferencesTestRoot>
-        <PrefsView />
-      </PreferencesTestRoot>,
-    );
-    expect(screen.getByTestId("card")).toHaveTextContent("framed");
-    expect(screen.getByTestId("pers")).toHaveTextContent("normal");
-  });
-
-  it("loads compact/off from localStorage and survives invalid JSON", () => {
-    localStorage.setItem(
-      "guardian_prefs",
-      JSON.stringify({ cardStyle: "compact", personalize: "off" }),
-    );
-    const { unmount } = render(
-      <PreferencesTestRoot>
-        <PrefsView />
-      </PreferencesTestRoot>,
-    );
-    expect(screen.getByTestId("card")).toHaveTextContent("compact");
-    expect(screen.getByTestId("pers")).toHaveTextContent("off");
-    unmount();
-
-    localStorage.setItem("guardian_prefs", "{not json");
-    render(
-      <PreferencesTestRoot>
-        <PrefsView />
-      </PreferencesTestRoot>,
-    );
-    expect(screen.getByTestId("card")).toHaveTextContent("framed");
-  });
-
-  it("syncs from the API on mount when a token is present", async () => {
-    localStorage.setItem("guardian_token", "tok");
-    localStorage.setItem("guardian_user", JSON.stringify(sampleUser));
-    server.use(
-      http.get(`${API}/api/preferences`, () =>
-        HttpResponse.json({ cardStyle: "compact", personalize: false }),
-      ),
-    );
-    render(
-      <PreferencesTestRoot>
-        <PrefsView />
-      </PreferencesTestRoot>,
-    );
-    await waitFor(() =>
-      expect(screen.getByTestId("card")).toHaveTextContent("compact"),
-    );
-    expect(screen.getByTestId("pers")).toHaveTextContent("off");
-  });
-
-  it("persists changes via PUT", async () => {
-    const bodies: unknown[] = [];
-    server.use(
-      http.put(`${API}/api/preferences`, async ({ request }) => {
-        bodies.push(await request.json());
-        return HttpResponse.json({ cardStyle: "compact", personalize: true });
-      }),
-    );
-    render(
-      <PreferencesTestRoot>
-        <PrefsView />
-      </PreferencesTestRoot>,
-    );
-    fireEvent.click(screen.getByText("card"));
-    fireEvent.click(screen.getByText("pers"));
-    expect(screen.getByTestId("card")).toHaveTextContent("compact");
-    expect(screen.getByTestId("pers")).toHaveTextContent("off");
-    await waitFor(() =>
-      expect(bodies).toContainEqual({ cardStyle: "compact" }),
-    );
-    expect(bodies).toContainEqual({ personalize: false });
-  });
-
-  it("throws when used outside a provider", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(() => renderHook(() => usePreferences())).toThrow(
-      /within a PreferencesProvider/,
     );
     spy.mockRestore();
   });

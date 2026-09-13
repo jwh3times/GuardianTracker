@@ -1,5 +1,5 @@
 import { useIdentityMutation } from "../../contexts/IdentityMutation";
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router";
 import { Button, DataFreshnessChip } from "../../components/primitives";
 import { PageHead, Panel } from "../../components/composite";
@@ -7,7 +7,7 @@ import { Icon } from "../../components/Icon";
 import { RoleBadge } from "../admin/AdminKit";
 import { useAuth } from "../../contexts/AuthContext";
 import { useFlags } from "../../contexts/FlagsContext";
-import { usePreferences } from "../../contexts/PreferencesContext";
+import { usePreferences } from "../../data/preferences";
 import { useToast } from "../../components/Toast";
 import { apiFetch, ApiError } from "../../lib/api";
 import { useCharacterRoster } from "../../data/characters";
@@ -58,10 +58,25 @@ function Segmented<T extends string>({
 export function Settings() {
   const { user, logout: authLogout, logoutAll: authLogoutAll } = useAuth();
   const { role, isAdmin, refresh: refreshFlags } = useFlags();
-  const { cardStyle, personalize, setCardStyle, setPersonalize } =
-    usePreferences();
+  const {
+    values: { cardStyle, personalize },
+    save: preferenceSave,
+    setCardStyle,
+    setPersonalize,
+  } = usePreferences();
   const { showToast } = useToast();
   const navigate = useNavigate();
+
+  // A failed save has already rolled the control back; say so once per failure.
+  useEffect(() => {
+    if (preferenceSave.status === "failed") {
+      showToast(
+        "Couldn't save that preference, so it was put back. Please try again.",
+        "error",
+      );
+    }
+    // oxlint-disable-next-line react/exhaustive-deps -- one toast per failed save, not per toast-context render
+  }, [preferenceSave]);
 
   const { characters: characterList } = useCharacterRoster();
 
