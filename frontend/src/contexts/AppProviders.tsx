@@ -4,7 +4,7 @@ import { createApplicationIdentity } from "../lib/applicationIdentity";
 import { IdentityContext } from "./IdentityMutation";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./AuthContext";
-import { PreferencesProvider } from "./PreferencesContext";
+import { preferencesClient } from "../data/preferences";
 import { FlagsProvider } from "./FlagsContext";
 import { CharacterProvider } from "./CharacterContext";
 import { ToastProvider } from "../components/Toast";
@@ -15,7 +15,8 @@ import { queryClient as defaultQueryClient } from "../lib/api";
  *
  * The ordering is not arbitrary and the providers are not interchangeable:
  *
- * - `PreferencesProvider` reads `useAuth`, so it must sit inside `AuthProvider`.
+ * - Preferences are not a provider: `data/preferences.ts` is a module-level
+ *   client (ADR 0021) that this composition resets at every identity boundary.
  * - An identity boundary replaces the QueryClient and remounts the provider tree.
  *   Same-membership refresh retains both; late mutation work stays with its old client.
  *
@@ -37,7 +38,10 @@ export function AppProviders({
   client?: QueryClient;
 }) {
   const identities = useMemo(
-    () => createApplicationIdentity(browserSessionClient, client),
+    () =>
+      createApplicationIdentity(browserSessionClient, client, [
+        preferencesClient.reset,
+      ]),
     [client],
   );
   const scope = useSyncExternalStore(
@@ -48,12 +52,7 @@ export function AppProviders({
     <IdentityContext.Provider value={scope} key={scope.revision}>
       <QueryClientProvider client={scope.client}>
         <AuthProvider>
-          <PreferencesProvider
-            resetLocal={scope.revision > 0}
-            isCurrent={scope.isCurrent}
-          >
-            <ToastProvider>{children}</ToastProvider>
-          </PreferencesProvider>
+          <ToastProvider>{children}</ToastProvider>
         </AuthProvider>
       </QueryClientProvider>
     </IdentityContext.Provider>

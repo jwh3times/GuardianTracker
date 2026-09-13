@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { Button } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
-import { usePreferences } from "../../contexts/PreferencesContext";
+import { onboardingRequired, usePreferences } from "../../data/preferences";
 import { useCollectionsSummary } from "../../data/collections";
 import { initialTourState, TOUR_ROUTES, tourReducer } from "./tourState";
 
@@ -25,8 +25,10 @@ const STEPS = [
 ] as const;
 
 export function OnboardingTour() {
-  const { onboardedAt, preferencesReady, completeOnboarding } =
-    usePreferences();
+  const { resolution, completeOnboarding } = usePreferences();
+  // Fail-closed: only stored evidence that onboarding has not happened shows
+  // the tour — never an unresolved, failed or degraded read.
+  const showTour = onboardingRequired(resolution);
   const [state, dispatch] = useReducer(tourReducer, initialTourState);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(false);
@@ -34,7 +36,7 @@ export function OnboardingTour() {
   const location = useLocation();
 
   const { view: collections } = useCollectionsSummary({
-    enabled: preferencesReady && onboardedAt === null,
+    enabled: showTour,
   });
 
   const progress = useMemo(() => {
@@ -78,7 +80,7 @@ export function OnboardingTour() {
     };
   }, [state]);
 
-  if (!preferencesReady || onboardedAt !== null) return null;
+  if (!showTour) return null;
 
   const finish = async () => {
     setSaving(true);

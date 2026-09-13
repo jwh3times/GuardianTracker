@@ -7,9 +7,21 @@
 - Implementation note (2026-08-24): the backend provenance slice is complete.
   `preferences.Service` now distinguishes authoritative reads from degraded
   defaults, and `PreferencesHandler` serializes the additive `persisted` field
-  while preserving GET's `200` and PUT's `503`. The frontend Preferences client
-  and synchronization slice E15 remains pending, so this ADR remains Accepted
-  with sequenced implementation rather than Implemented.
+  while preserving GET's `200` and PUT's `503`.
+- Implementation note (2026-09-13): the frontend Preferences client (E15) is
+  complete in v1.3.53. `frontend/src/data/preferences.ts` replaces
+  `PreferencesContext.tsx` with `createPreferencesClient` and the production
+  singleton `preferencesClient`, membership-keyed single-slot hydration behind
+  the versioned `guardian_preferences` localStorage envelope (the global
+  `guardian_prefs` key is deleted rather than migrated), single-flight
+  coalescing writes with rollback and a typed `PreferenceError`, same-membership
+  cross-tab adoption, and the fail-closed `onboardingRequired` gate.
+  `AppProviders` registers `preferencesClient.reset` as one of
+  `createApplicationIdentity`'s boundary resets. The one remaining migration
+  item — recording the Preferences exemption in ADR 0020's membership-refresh
+  fan-out test — is that test's own change, so it moves to E16 rather than
+  landing here. This ADR remains Accepted rather than Implemented until E16
+  closes that item.
 
 ## Context
 

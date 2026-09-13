@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { screen, fireEvent, renderHook } from "@testing-library/react";
 import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "./AuthContext";
-import { usePreferences } from "./PreferencesContext";
+import { usePreferences } from "../data/preferences";
 import { useFlags } from "./FlagsContext";
 import { useCharacters } from "./CharacterContext";
 import { useToast } from "../components/Toast";

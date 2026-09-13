@@ -29,7 +29,7 @@ interface CharacterContextValue {
 // provider fails loudly. A default of `characters: []` made that mistake
 // indistinguishable from a real empty roster: a page hoisted above
 // ProtectedLayout would quietly ship an empty character list forever. Matches
-// AuthContext, FlagsContext and PreferencesContext.
+// AuthContext and FlagsContext.
 const CharacterContext = createContext<CharacterContextValue | undefined>(
   undefined,
 );

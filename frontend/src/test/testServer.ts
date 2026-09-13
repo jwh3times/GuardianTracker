@@ -261,6 +261,7 @@ export const defaultHandlers = [
       cardStyle: "framed",
       personalize: true,
       onboardedAt: "2026-07-12T15:30:00Z",
+      persisted: true,
     }),
   ),
   http.put(`${API}/api/preferences`, () =>

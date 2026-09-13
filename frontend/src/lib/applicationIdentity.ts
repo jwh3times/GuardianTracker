@@ -24,10 +24,17 @@ export interface ApplicationIdentity {
   isCurrent(): boolean;
 }
 
-/** Application composition owns caches and provider lifetimes, never session transitions. */
+/**
+ * Application composition owns caches and provider lifetimes, never session
+ * transitions. `boundaryResets` are the identity-bound owners that live outside
+ * the QueryClient (ADR 0021's preferences client): each runs once when this
+ * composition starts, and again at every identity boundary alongside the
+ * QueryClient clear. Same-membership refresh runs none of them.
+ */
 export function createApplicationIdentity(
   session: BrowserSessionClient,
   initialClient: QueryClient,
+  boundaryResets: ReadonlyArray<() => void> = [],
 ) {
   const initialSnapshot = session.getSnapshot();
   let identity = membership(initialSnapshot);
@@ -40,6 +47,22 @@ export function createApplicationIdentity(
   let pendingRetirement = staleInitialClient ? initialClient : undefined;
   const listeners = new Set<() => void>();
   let unsubscribe: (() => void) | undefined;
+
+  function runBoundaryResets() {
+    for (const reset of boundaryResets) {
+      try {
+        reset();
+      } catch {
+        // A module's reset must not retain the departing provider tree.
+      }
+    }
+  }
+
+  // Each registered owner projects the identity this composition starts in.
+  // This runs during render (AppProviders builds the identity in useMemo), so
+  // a reset must be idempotent for an unchanged session: StrictMode may build
+  // the identity twice, and nothing has subscribed yet on either build.
+  runBoundaryResets();
 
   function freshClient() {
     return new QueryClient({
@@ -84,7 +107,6 @@ export function createApplicationIdentity(
       /* Storage failure cannot retain the departing provider tree. */
     }
     try {
-      localStorage.removeItem("guardian_prefs");
       // Weekly action completion is an identity fact; its legacy keys contain
       // only a reset timestamp. Browser appearance/filter preferences stay put.
       for (let index = localStorage.length - 1; index >= 0; index -= 1) {
@@ -94,6 +116,7 @@ export function createApplicationIdentity(
     } catch {
       // Storage cleanup must not retain the departing provider tree.
     }
+    runBoundaryResets();
     for (const listener of listeners) listener();
   }
 

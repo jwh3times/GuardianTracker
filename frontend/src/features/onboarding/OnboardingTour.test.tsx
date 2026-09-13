@@ -1,12 +1,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { PreferencesResolution } from "../../data/preferences";
 import { OnboardingTour } from "./OnboardingTour";
 
+const REQUIRED: PreferencesResolution = {
+  status: "resolved",
+  persisted: true,
+  onboarding: "required",
+};
+
 const mocks = vi.hoisted(() => ({
-  complete: vi.fn(async () => {}),
-  preferencesReady: true,
-  onboardedAt: null as string | null,
+  complete: vi.fn<() => Promise<void>>(async () => {}),
+  resolution: null as unknown as PreferencesResolution,
 }));
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
@@ -35,27 +41,35 @@ vi.mock("../../contexts/AuthContext", () => ({
   }),
 }));
 
-vi.mock("../../contexts/PreferencesContext", () => ({
-  usePreferences: () => ({
-    onboardedAt: mocks.onboardedAt,
-    preferencesReady: mocks.preferencesReady,
-    completeOnboarding: mocks.complete,
-  }),
-}));
+// Only the hook is replaced; the real fail-closed gate decides visibility.
+vi.mock("../../data/preferences", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../data/preferences")>();
+  return {
+    ...actual,
+    usePreferences: () => ({
+      resolution: mocks.resolution,
+      completeOnboarding: mocks.complete,
+    }),
+  };
+});
+
+function renderTour() {
+  return render(
+    <MemoryRouter initialEntries={["/dashboard"]}>
+      <OnboardingTour />
+    </MemoryRouter>,
+  );
+}
 
 describe("OnboardingTour", () => {
   beforeEach(() => {
     mocks.complete.mockClear();
-    mocks.preferencesReady = true;
-    mocks.onboardedAt = null;
+    mocks.resolution = REQUIRED;
   });
 
   it("frames the collection snapshot and walks through three steps", async () => {
-    render(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <OnboardingTour />
-      </MemoryRouter>,
-    );
+    renderTour();
 
     expect(
       screen.getByRole("dialog", { name: /your collection, with a plan/i }),
@@ -75,22 +89,39 @@ describe("OnboardingTour", () => {
     await waitFor(() => expect(mocks.complete).toHaveBeenCalledOnce());
   });
 
-  it("does not render before preferences resolve or after completion", () => {
-    mocks.preferencesReady = false;
-    const { rerender } = render(
-      <MemoryRouter>
-        <OnboardingTour />
-      </MemoryRouter>,
-    );
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  it("shows the save error and stays open when completion fails", async () => {
+    mocks.complete.mockRejectedValueOnce(new Error("down"));
+    renderTour();
 
-    mocks.preferencesReady = true;
-    mocks.onboardedAt = "2026-07-12T15:30:00Z";
-    rerender(
-      <MemoryRouter>
-        <OnboardingTour />
-      </MemoryRouter>,
+    fireEvent.click(screen.getByRole("button", { name: /skip tour/i }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /could not save that choice/i,
     );
+    expect(
+      screen.getByRole("dialog", { name: /your collection, with a plan/i }),
+    ).toBeInTheDocument();
+  });
+
+  it.each<[string, PreferencesResolution]>([
+    ["anonymous", { status: "anonymous" }],
+    ["unresolved from cache", { status: "unresolved", source: "cache" }],
+    ["unresolved from defaults", { status: "unresolved", source: "defaults" }],
+    [
+      "degraded",
+      { status: "resolved", persisted: false, onboarding: "required" },
+    ],
+    [
+      "already completed",
+      {
+        status: "resolved",
+        persisted: true,
+        onboarding: { completedAt: "2026-07-12T15:30:00Z" },
+      },
+    ],
+  ])("does not render when preferences are %s", (_label, resolution) => {
+    mocks.resolution = resolution;
+    renderTour();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

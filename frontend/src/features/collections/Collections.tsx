@@ -15,7 +15,7 @@ import { Icon } from "../../components/Icon";
 import { ItemCard } from "./ItemCard";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
-import { usePreferences } from "../../contexts/PreferencesContext";
+import { usePreferences } from "../../data/preferences";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
 import {
@@ -37,7 +37,9 @@ import {
 
 export function Collections() {
   const { showToast } = useToast();
-  const { cardStyle, personalize } = usePreferences();
+  const {
+    values: { cardStyle, personalize },
+  } = usePreferences();
 
   // Ancestor node-hash path to reveal in the sidebar tree (deep-link seed, or a
   // node restored from a persisted/URL selection).

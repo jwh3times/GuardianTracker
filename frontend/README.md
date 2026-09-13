@@ -47,9 +47,9 @@ it is read by `vite.config.ts` but is not exposed to the browser. See
 src/
 ├── App.tsx          Routes, authentication gate, lazy pages
 ├── components/      Shared app shell and design-system components
-├── contexts/        Auth, preferences, feature flags, selected character
+├── contexts/        Auth, feature flags, selected character
 ├── data/            Data-access modules, one per domain resource (query identity,
-│                    projection, mutations); still per-feature for most resources
+│                    projection, mutations), including preferences
 ├── features/        Page-oriented feature slices and their tests
 ├── lib/             API client, query helpers, adapters, constants
 ├── styles/          Design tokens and production component/page CSS
@@ -67,9 +67,10 @@ See [its README](./design/README.md) before using any of its assets.
 ## Runtime Structure
 
 `AppProviders` owns the authenticated-independent context tower: query client,
-authentication, preferences, and toasts. `AuthedProviders` adds feature flags
-and selected-character state below the authentication gate. Their order is
-load-bearing and documented in `src/contexts/AppProviders.tsx`.
+authentication, and toasts, and resets the module-level preferences client at
+identity boundaries (preferences is not itself a provider). `AuthedProviders`
+adds feature flags and selected-character state below the authentication gate.
+Their order is load-bearing and documented in `src/contexts/AppProviders.tsx`.
 
 Authenticated routes render inside `AppShell`, which provides desktop and
 mobile navigation, global search, settings access, and the selected-character
@@ -108,20 +109,26 @@ expired Bungie authorization redirects to `/reauthorize` without ending the
 Guardian Tracker session.
 
 On logout or a Destiny membership change, application composition cancels and
-clears the old query cache, replaces its QueryClient, and remounts the provider
-subtree. Preferences, onboarding, flags, character state, and page drafts reset
-before the next identity uses them. Stored weekly checklist marks are also cleared
-on logout or account switch. Same-membership refresh retains that state.
+clears the old query cache, replaces its QueryClient, remounts the provider
+subtree, and runs registered identity-boundary resets. Onboarding, flags,
+character state, and page drafts reset with the remount; the preferences client
+resets through its own registered callback before the next identity uses it.
+Stored weekly checklist marks are also cleared on logout or account switch.
+Same-membership refresh retains that state and runs no boundary resets.
 Authenticated mutations use `useIdentityMutation` so work delayed past an identity
 change cannot start a request or apply its old completion callbacks.
 
 ## Preferences
 
-`PreferencesContext` manages collection card density, personalization badges,
-and onboarding state. For an authenticated user it loads and writes
-`/api/preferences`; localStorage provides an immediate local value and a
-fallback when the API is unavailable. Settings exposes the card and
-personalization controls.
+`usePreferences()` (`src/data/preferences.ts`, [ADR 0021](../docs/adr/0021-own-preferences-synchronization.md))
+is a framework-neutral client, not a React context. It hydrates one
+membership-keyed localStorage envelope synchronously, reads `/api/preferences`
+once per resolved membership, and writes through an optimistic, single-flight,
+coalescing queue that rolls back and surfaces a typed error on failure — never a
+silently-swallowed one. Onboarding completion goes through the same queue but is
+never optimistic, and the onboarding tour gates on a fail-closed resolution
+state rather than a raw flag. Settings exposes the card and personalization
+controls.
 
 ## Container build inputs
 
