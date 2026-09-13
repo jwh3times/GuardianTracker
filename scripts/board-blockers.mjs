@@ -18,6 +18,11 @@
  * "Shipped" has been cleared and names its finished blocker on purpose, so it is
  * not checked. Prose conditions with no label or number cannot be checked.
  *
+ * A label counts as a slice label only when its letter is one some title's
+ * suffix already uses, so ordinary shorthand ("S3 bucket", "Q1 budget") is not
+ * reported as a missing blocker. A label in a letter no chain uses yet cannot be
+ * told apart from shorthand, and is not reported either.
+ *
  * It reads the private board through the local `gh` session, so it runs on a
  * maintainer machine rather than in CI. Exit status: 0 clean, 1 stale text
  * found, 2 the board could not be read.
@@ -33,7 +38,8 @@ export const PROJECT_OWNER = "jwh3times";
 const CLEARED = /^\s*(?:ready|unblocked|shipped)\b/iu;
 const TITLE_LABEL = /\(([A-Z]\d{1,2})\)\s*$/u;
 const LABEL_REFERENCE = /\b([A-Z]\d{1,2})\b/gu;
-const NUMBER_REFERENCE = /#(\d+)\b/gu;
+// Not after a word character or "/", so a URL's "#1357" anchor is not an issue.
+const NUMBER_REFERENCE = /(?<![\w/])#(\d+)\b/gu;
 
 export function parseArgs(argv) {
   const options = { input: null };
@@ -82,6 +88,7 @@ function indexBy(items, keyOf) {
 export function findStaleBlockers(items) {
   const byLabel = indexBy(items, (item) => TITLE_LABEL.exec(item.title)?.[1]);
   const byNumber = indexBy(items, (item) => item.number);
+  const chainLetters = new Set([...byLabel.keys()].map((label) => label[0]));
   const findings = [];
 
   for (const item of items) {
@@ -98,8 +105,11 @@ export function findStaleBlockers(items) {
 
     for (const [, label] of text.matchAll(LABEL_REFERENCE)) {
       const owners = byLabel.get(label) ?? [];
-      if (owners.length === 0) report(label, "unknown");
-      else if (owners.every(isDone)) report(label, "done");
+      if (owners.length === 0) {
+        if (chainLetters.has(label[0])) report(label, "unknown");
+      } else if (owners.every(isDone)) {
+        report(label, "done");
+      }
     }
     for (const [, digits] of text.matchAll(NUMBER_REFERENCE)) {
       // Issue numbers repeat across the public and private repositories, so

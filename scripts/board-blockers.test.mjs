@@ -75,6 +75,26 @@ test("only a title's closing suffix names its slice, not a mention mid-title", (
   ]);
 });
 
+test("does not mistake shorthand in a letter no chain uses for a missing slice", () => {
+  const findings = findStaleBlockers([
+    item("own the Wish list resource (E4)", "Done", "", 284),
+    item(
+      "waiting",
+      "Todo",
+      "S3 bucket policy and Q1 budget sign-off; then E17",
+    ),
+  ]);
+  assert.deepEqual(references(findings), [["waiting", "E17", "unknown"]]);
+});
+
+test("does not read a URL's numeric anchor as an issue reference", () => {
+  const findings = findStaleBlockers([
+    item("an unrelated finished issue", "Done", "", 1357),
+    item("waiting", "Todo", "see https://example.com/docs#1357 and page/#1357"),
+  ]);
+  assert.deepEqual(findings, []);
+});
+
 test("leaves a blocker that is still open alone", () => {
   const findings = findStaleBlockers([
     item("make AuthProvider declarative (E3)", "In Progress", "", 239),
