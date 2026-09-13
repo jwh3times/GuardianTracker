@@ -92,14 +92,17 @@ func (e *Engine) BuildIndex() {
 	if e.source == nil || e.version == nil || e.publication == nil {
 		return
 	}
-	// The generation and the version are read separately, not atomically. That
-	// is safe because the manifest service installs a new version string before
-	// it notifies observers, and so before Advance moves the generation: a build
-	// straddling the swap pairs an old generation with the new version and fails
-	// closed at Publish. Nothing enforces that order. If it were reversed, a build
-	// could publish a stale version under the new generation — which is why the
-	// already-published check below compares the version as well as the attempt,
-	// so such an index still rebuilds on the next ensureIndex instead of never.
+	// The generation and the version are read separately, not atomically, and
+	// the manifest service moves them at different moments: it installs the new
+	// version string and reopens the manifest before notifying observers, so this
+	// engine's Advance runs later still. A build kicked in that window pairs the
+	// old generation with the new version and may publish, because the generation
+	// has not moved yet. That is tolerated, not prevented: Advance always follows
+	// and spawns a build under a new generation, which the already-published check
+	// below cannot skip, so whatever the window published is replaced. The check
+	// also compares the version for the reverse case, which nothing rules out: an
+	// index published under the current generation with a version that is no
+	// longer current still rebuilds on the next ensureIndex instead of never.
 	attempt := e.publication.Begin()
 	version := e.version.Version()
 	if version == "" {
