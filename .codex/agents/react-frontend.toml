@@ -181,8 +181,9 @@ frontend/src/
     flags.ts                     ← Seventh resource landed (E10). Private query key `["flags"]`;
                                    endpoint `GET /api/flags`; `staleTime: 60_000`. Projects
                                    `APIFlagsResponse` → `{ role, flags }` via `toFlag`, mapping each
-                                   `APIResolvedFlag.minTier` to the domain `Tier` (unrecognised
-                                   values fall back to `standard`, matching `lib/roles.ts`).
+                                   `APIResolvedFlag.minTier` to the domain `Tier` through `lib/roles.ts`'s
+                                   `toTier` (moved there in E11 so `data/admin.ts` could share it; this
+                                   module kept its own private copy through E10).
                                    `useResolvedFlags()` returns `{ role, flags, isLoading, refresh }`;
                                    `role` defaults to `"standard"` and `flags` to a stable empty array
                                    until the response arrives. Exports `refresh` rather than a
@@ -199,6 +200,30 @@ frontend/src/
                                    throw-outside-the-provider guard is what stops a page hoisted above
                                    the auth gate from fetching flags anonymously and failing open to
                                    "everything accessible".
+    admin.ts                      ← Eighth resource landed (E11). Three resources behind one console
+                                   share this module — the member roster, the flag configuration, and
+                                   the audit log — because they share one consumer and one authorization
+                                   boundary (the server's `RequireAdmin`). Private query keys
+                                   `["admin", "users"]`, `["admin", "flags"]`, and a per-type
+                                   `["admin", "audit", type]`; projects `APIAdminUser[]` → `AdminUser[]`,
+                                   `APIAdminFlag[]` → `AdminFlag[]` (`minTier` through `lib/roles.ts`'s
+                                   `toTier`), and `APIAuditPage` → `AuditEntry[]`. `useAdminUsers()` and
+                                   `useAdminFlags()` return `{ users | flags, isLoading, isError, error,
+                                   retry }`; `useAuditLog(type, { enabled })` fetches
+                                   `GET /api/admin/audit?limit=100[&type=]` and takes a plain
+                                   `{ enabled?: boolean }` so the console can gate the query to only
+                                   while its Audit tab is open. `useSetMemberRole(callbacks)` and
+                                   `useUpdateFlag(callbacks)` are deliberately not optimistic, matching
+                                   the console before this module — a role or rollout change should be
+                                   seen to have been accepted by the server — and each invalidates only
+                                   its own resource's key; both take framework-neutral
+                                   `onSuccess`/`onError` callbacks so `Admin.tsx` keeps its own toast
+                                   copy and its `useFlags().refresh()` follow-up outside this module,
+                                   which never names the Flags module's key. Admin data is not
+                                   membership-scoped, so it is not part of the membership-refresh
+                                   fan-out. Read by `features/admin/Admin.tsx`, whose `FlagCard` and
+                                   `AuditTable` now take `AdminFlag` and `AuditEntry[]` instead of wire
+                                   types.
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
@@ -212,11 +237,12 @@ frontend/src/
                                    own invalidation entry point as its ADR 0020 slice lands. Read no
                                    membership argument — it reads the signed-in membership from
                                    `useAuth()`.
-                                   Search (E9) and Flags (E10) are membership-independent by design, so
-                                   neither is in this fan-out — Flags follows the signed-in user's role,
-                                   not Destiny membership data. Remaining resources (Admin, Catalysts,
-                                   Crafting, Seals) have not migrated yet — see the ADR 0020 note under
-                                   "Shared query definitions" below.
+                                   Search (E9), Flags (E10), and Admin (E11) are membership-independent
+                                   by design, so none is in this fan-out — Flags follows the signed-in
+                                   user's role, not Destiny membership data, and Admin data carries no
+                                   membership at all. Remaining resources (Catalysts, Crafting, Seals)
+                                   have not migrated yet — see the ADR 0020 note under "Shared query
+                                   definitions" below.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -267,7 +293,10 @@ frontend/src/
                                    onOutside would resubscribe every render, as callers pass inline arrows
     constants.ts               ← Label constants (RARITIES, RARITY_LABEL, RARITY_RANK sort order, DIFFS,
                                    DIFF_LABEL, glyphs) + BUNGIE_CDN base URL
-    roles.ts                   ← Role/tier constants, labels, colors (used by admin kit + Settings)
+    roles.ts                   ← Role/tier constants, labels, colors, and `toTier` (wire tier name →
+                                   `Tier`, looked up through a Map, unrecognised values fall back to
+                                   `standard`; moved here from a private copy in `data/flags.ts` in E11
+                                   so `data/admin.ts` could share it) (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
     errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
@@ -337,8 +366,13 @@ frontend/src/
     dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + active-character weekly
     settings/Settings.tsx      ← Destiny membership info, early-access tier opt-in, appearance prefs, sign out
     admin/                     ← Admin.tsx (admin console: user roster + role mgmt, flag config;
-                                   admin-gated route), AdminKit.tsx (RoleBadge, Switch, RoleSelect,
-                                   TierSegment, FlagCard, UserRow, LockedFeature), AuditTable.tsx
+                                   admin-gated route; reads `data/admin.ts`'s useAdminUsers/useAdminFlags/
+                                   useAuditLog/useSetMemberRole/useUpdateFlag — no React Query or
+                                   `types/api` import — and keeps its own toast copy plus a
+                                   `useFlags().refresh()` follow-up through the mutation callbacks),
+                                   AdminKit.tsx (RoleBadge, Switch, RoleSelect, TierSegment, FlagCard
+                                   (takes `data/admin.ts`'s `AdminFlag`), UserRow, LockedFeature),
+                                   AuditTable.tsx (takes `data/admin.ts`'s `AuditEntry[]`)
                                (Tests colocate per feature, e.g. features/dashboard/Dashboard.test.tsx,
                                 features/collections/Collections.test.tsx.)
   types/
@@ -400,9 +434,9 @@ const { data } = useQuery({
 });
 ```
 
-Wish list, Collections, Weekly, Characters, Items, Search, and Flags no longer
-follow this raw pattern — they are owned by `src/data/` modules (see below);
-their queries and mutations are not declared inline in a feature.
+Wish list, Collections, Weekly, Characters, Items, Search, Flags, and Admin no
+longer follow this raw pattern — they are owned by `src/data/` modules (see
+below); their queries and mutations are not declared inline in a feature.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
@@ -423,7 +457,7 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
 resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
 Wish list (E4), Collections (E5), Weekly (E6), Characters (E7), Items (E8),
-Search (E9), and Flags (E10) have landed: `data/wishlist.ts` owns the wish list
+Search (E9), Flags (E10), and Admin (E11) have landed: `data/wishlist.ts` owns the wish list
 resource's query identity, projection, and all six mutations; `data/collections.ts`
 owns the collections resource's query identity and projection dispatch; `data/weekly.ts`
 owns the weekly resource's query identity, endpoint, and the `enabled` gate the
@@ -439,17 +473,26 @@ data is static per manifest version and carries no membership, so
 two-character minimum, and projection to `SearchResult` (`toRarity` for the
 rarity field), and by the same design exposes no invalidation entry point —
 search reads the manifest index, not membership data; `data/flags.ts` owns the
-resolved-flags query identity, endpoint, and projection (`toFlag`), exposing a
+resolved-flags query identity, endpoint, and projection (`toFlag`, through
+`lib/roles.ts`'s `toTier`), exposing a
 `refresh` callback rather than a module-level invalidation entry point, and by
 the same design is outside `data/membershipRefresh.ts`'s fan-out — flags follow
 the signed-in user's role, not Destiny membership data, and ADR 0017's identity
 cleanup clears them on user change; `FlagsContext` survives as a thin gating
 wrapper over it, the same pattern `CharacterContext` uses over
-`data/characters.ts`. Settings and Admin both call `useFlags().refresh()` after
+`data/characters.ts`. `data/admin.ts` owns the admin console's three query
+identities (roster, flag configuration, per-type audit log) and both mutations
+(`useSetMemberRole`, `useUpdateFlag`), projecting to `AdminUser`, `AdminFlag`
+(`minTier` through the same `toTier`), and `AuditEntry`; the mutations stay
+non-optimistic and each invalidates only its own key, taking framework-neutral
+`onSuccess`/`onError` callbacks so `Admin.tsx` keeps its own toast copy and its
+`useFlags().refresh()` follow-up outside this module. Settings and Admin both
+call `useFlags().refresh()` after
 their own mutation succeeds rather than invalidating `["flags"]` directly, which
-they both did before this module existed. `data/membershipRefresh.ts` holds the
-cross-resource cache-refresh fan-out. Consumers read these modules instead of
-declaring their own. The remaining resources — Admin, Catalysts, Crafting,
+they both did before these modules existed. `data/membershipRefresh.ts` holds the
+cross-resource cache-refresh fan-out; Admin data is not membership-scoped, so it
+is not part of that fan-out. Consumers read these modules instead of
+declaring their own. The remaining resources — Catalysts, Crafting, and
 Seals — are sequenced by the #172 handoff and have not migrated yet, so for
 those, the per-feature `useQuery` / `useIdentityMutation` calls documented in
 this file remain how the code actually works today. The ESLint `no-restricted-imports`

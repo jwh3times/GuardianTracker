@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.49] - 2026-09-12
+
+### Changed
+
+- Consolidated the Admin Console's member roster, flag configuration and audit
+  log behind a single owner. Changing a member's role, enabling or re-gating a
+  flag, and filtering the audit log work exactly as before; this is the eighth
+  of thirteen planned resource migrations.
+
 ## [1.3.48] - 2026-09-12
 
 ### Changed
@@ -865,7 +874,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.48...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.49...HEAD
+[1.3.49]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.48...v1.3.49
 [1.3.48]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.47...v1.3.48
 [1.3.47]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.46...v1.3.47
 [1.3.46]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.45...v1.3.46
