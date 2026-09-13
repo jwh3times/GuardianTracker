@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.57] - 2026-09-13
+
+### Added
+
+- `npm run board:blockers` lists project-board items whose `Blocked By` text
+  still names a blocker that has finished, or a slice label no item carries.
+  That text never clears itself when a blocker closes, and a stale entry hides
+  the item from the computed ready frontier. The maintainer issue-tracker guide
+  and the end-session skill now run it after a slice closes. Its parsing is
+  tested in CI; the check itself reads the private board locally.
+
 ## [1.3.56] - 2026-09-13
 
 ### Fixed
@@ -964,7 +975,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.56...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.57...HEAD
+[1.3.57]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.56...v1.3.57
 [1.3.56]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.55...v1.3.56
 [1.3.55]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.54...v1.3.55
 [1.3.54]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.53...v1.3.54
