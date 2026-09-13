@@ -1,6 +1,6 @@
 # ADR 0021: Own Preferences Synchronization
 
-- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Implemented in `v1.3.54`
 - Date: 2026-08-20
 - Supersedes in part: [ADR 0019](./0019-own-wish-list-and-preferences.md); see
   [Supersession](#supersession)
@@ -17,11 +17,11 @@
   coalescing writes with rollback and a typed `PreferenceError`, same-membership
   cross-tab adoption, and the fail-closed `onboardingRequired` gate.
   `AppProviders` registers `preferencesClient.reset` as one of
-  `createApplicationIdentity`'s boundary resets. The one remaining migration
-  item — recording the Preferences exemption in ADR 0020's membership-refresh
-  fan-out test — is that test's own change, so it moves to E16 rather than
-  landing here. This ADR remains Accepted rather than Implemented until E16
-  closes that item.
+  `createApplicationIdentity`'s boundary resets. E16 (`v1.3.54`) closed the one
+  remaining migration item: `frontend/src/data/membershipRefresh.test.tsx`
+  records the Preferences membership-refresh exemption as a named exclusion,
+  with its own reason and a test that fails if the exempted module stops
+  reading the membership or disappears.
 
 ## Context
 

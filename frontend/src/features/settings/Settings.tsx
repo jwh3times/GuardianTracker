@@ -1,4 +1,3 @@
-import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { Button, DataFreshnessChip } from "../../components/primitives";
@@ -9,13 +8,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useFlags } from "../../contexts/FlagsContext";
 import { usePreferences } from "../../data/preferences";
 import { useToast } from "../../components/Toast";
-import { apiFetch, ApiError } from "../../lib/api";
+import { ApiError } from "../../lib/api";
 import { useCharacterRoster } from "../../data/characters";
 import { useCollectionsSummary } from "../../data/collections";
+import { useOptInTier } from "../../data/flags";
 import { useMembershipRefresh } from "../../data/membershipRefresh";
 import { relTime } from "../../lib/format";
-import { MIN_TIERS, ROLE_LABEL, roleColor, type Tier } from "../../lib/roles";
-import type { APIRoleResponse } from "../../types/api";
+import { MIN_TIERS, ROLE_LABEL, roleColor } from "../../lib/roles";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
 
@@ -57,7 +56,7 @@ function Segmented<T extends string>({
 
 export function Settings() {
   const { user, logout: authLogout, logoutAll: authLogoutAll } = useAuth();
-  const { role, isAdmin, refresh: refreshFlags } = useFlags();
+  const { role, isAdmin } = useFlags();
   const {
     values: { cardStyle, personalize },
     save: preferenceSave,
@@ -90,16 +89,9 @@ export function Settings() {
   // loaded. Supplies real fetchedAt (B8).
   const { view: collections } = useCollectionsSummary();
 
-  // Self-service early-access opt-in (standard / beta / alpha). The server keeps
-  // the session (no token churn) and the new tier propagates on the next request;
-  // we refresh resolved flags so gated nav/pages update immediately.
-  const roleMutation = useIdentityMutation({
-    mutationFn: (tier: Tier) =>
-      apiFetch<APIRoleResponse>("/api/account/role", {
-        method: "PUT",
-        body: JSON.stringify({ role: tier }),
-      }),
-    onSuccess: () => refreshFlags(),
+  // Self-service early-access opt-in (standard / beta / alpha). The Flags module
+  // refreshes resolved flags itself, so gated nav/pages update immediately.
+  const tierOptIn = useOptInTier({
     onError: (e) =>
       showToast(
         e instanceof ApiError ? e.message : "Couldn't change access tier",
@@ -164,9 +156,9 @@ export function Settings() {
                 role="radio"
                 aria-checked={role === r}
                 data-on={role === r}
-                disabled={isAdmin || roleMutation.isPending}
+                disabled={isAdmin || tierOptIn.isPending}
                 style={{ "--bdg": roleColor(r) } as CSS}
-                onClick={() => roleMutation.mutate(r)}
+                onClick={() => tierOptIn.optIn(r)}
               >
                 {r === "alpha" ? (
                   <Icon name="bolt" size="0.9em" />

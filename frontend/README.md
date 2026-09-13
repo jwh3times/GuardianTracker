@@ -49,7 +49,9 @@ src/
 ├── components/      Shared app shell and design-system components
 ├── contexts/        Auth, feature flags, selected character
 ├── data/            Data-access modules, one per domain resource (query identity,
-│                    projection, mutations), including preferences
+│                    projection, mutations), including preferences. Oxlint bars
+│                    `features/` and `components/` from importing React Query or
+│                    wire (`types/api`) types, so only `data/` may (ADR 0020).
 ├── features/        Page-oriented feature slices and their tests
 ├── lib/             API client, query helpers, adapters, constants
 ├── styles/          Design tokens and production component/page CSS

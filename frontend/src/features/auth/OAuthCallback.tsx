@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../../contexts/AuthContext";
 import { Brand } from "../../components/Brand";
 import { Icon } from "../../components/Icon";
+import { useReloadAfterReconnect } from "../../data/membershipRefresh";
 import { apiFetch } from "../../lib/api";
 import {
   bungieReconnectReturnTo,
@@ -14,7 +14,7 @@ import { browserSessionClient } from "../../lib/browserSessionBrowser";
 
 export const OAuthCallback: React.FC = () => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const reloadAfterReconnect = useReloadAfterReconnect();
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +73,7 @@ export const OAuthCallback: React.FC = () => {
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: formBody,
           });
-          await queryClient.invalidateQueries();
+          await reloadAfterReconnect();
           clearBungieReconnect();
           void navigate(returnTo, { replace: true });
           return;
@@ -97,7 +97,7 @@ export const OAuthCallback: React.FC = () => {
     };
 
     void handleCallback();
-  }, [searchParams, navigate, isAuthenticated, queryClient]);
+  }, [searchParams, navigate, isAuthenticated, reloadAfterReconnect]);
 
   return (
     <div className="gt-login">
