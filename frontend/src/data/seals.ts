@@ -42,8 +42,9 @@ function toObjective(o: TriumphObjective): TriumphObjective {
 
 /**
  * `objectives` stays absent when the wire omits it, rather than becoming `[]`:
- * the design type documents absence as "no objective data", and the seal card
- * offers a drill-down only when the list is present.
+ * the design type documents absence as "no objective data". (The seal card
+ * treats absent and empty alike today; the projection keeps the documented
+ * contract rather than a looser one the card happens to tolerate.)
  */
 function toTriumph(t: APISeal["triumphs"][number]): Triumph {
   const triumph: Triumph = {
@@ -68,7 +69,10 @@ function toSeal(s: APISeal): Seal {
     pct: s.pct,
     gilded: s.gilded,
     left: s.left,
-    triumphs: s.triumphs.map(toTriumph),
+    // A seal with no triumph records reaches the wire as `"triumphs": null`:
+    // the records service leaves the per-seal slice nil and does not
+    // normalise it, so a missing list is an empty one.
+    triumphs: (s.triumphs ?? []).map(toTriumph),
   };
 }
 

@@ -146,6 +146,24 @@ describe("projection", () => {
       expect(screen.getByTestId("seals")).toHaveTextContent("none"),
     );
   });
+
+  it("treats a seal whose triumph list is null as having none", async () => {
+    server.use(
+      http.get(`${API}/api/seals/:type/:id`, () =>
+        // The records service leaves a seal with no triumph records as a nil
+        // slice, which serializes as null.
+        HttpResponse.json(envelope([seal("a", { triumphs: null })])),
+      ),
+    );
+
+    renderWithProviders(<SealsProbe />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("seals")).toHaveTextContent(
+        "a|Seal a|50|1|3 triumphs left|[]",
+      ),
+    );
+  });
 });
 
 describe("retry", () => {
