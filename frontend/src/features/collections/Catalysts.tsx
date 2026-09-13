@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import {
   Badge,
   Button,
@@ -9,13 +8,11 @@ import {
 } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
 import { PageHead } from "../../components/composite";
-import { useAuth } from "../../contexts/AuthContext";
-import { apiFetch } from "../../lib/api";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
 import { useCatalysts } from "../../data/catalysts";
+import { useCraftingPatterns } from "../../data/crafting";
 import type { Catalyst, CraftPattern } from "../../types/design";
-import type { APIRecordsEnvelope } from "../../types/api";
 
 function CatalystCard({ c }: { c: Catalyst }) {
   const color =
@@ -111,10 +108,6 @@ type Tab = "catalysts" | "crafting";
 type Filter = "all" | "missing" | "in-progress" | "complete";
 
 export function Catalysts() {
-  const { user } = useAuth();
-  const membershipType = user?.membershipType;
-  const membershipId = user?.membershipId;
-
   const {
     catalysts,
     isLoading: catsLoading,
@@ -124,20 +117,12 @@ export function Catalysts() {
   } = useCatalysts();
 
   const {
-    data: craftingData,
+    patterns: crafting,
     isLoading: craftLoading,
     isError: craftError,
     error: craftErr,
-    refetch: refetchCraft,
-  } = useQuery({
-    queryKey: ["crafting", membershipType, membershipId],
-    queryFn: () =>
-      apiFetch<APIRecordsEnvelope<CraftPattern>>(
-        `/api/crafting/${membershipType}/${membershipId}`,
-      ),
-    enabled: membershipType != null && !!membershipId,
-  });
-  const crafting = craftingData?.items ?? [];
+    retry: retryCraft,
+  } = useCraftingPatterns();
 
   const [tab, setTab] = useState<Tab>("catalysts");
   const [filter, setFilter] = useState<Filter>("all");
@@ -165,7 +150,7 @@ export function Catalysts() {
           error={catsErr ?? craftErr}
           onRetry={() => {
             retryCats();
-            void refetchCraft();
+            retryCraft();
           }}
         />
       </div>

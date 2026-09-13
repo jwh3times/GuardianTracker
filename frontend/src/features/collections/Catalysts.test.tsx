@@ -291,6 +291,66 @@ describe("Catalysts page", () => {
     expect(screen.queryByText("Catalysts & Crafting")).not.toBeInTheDocument();
   });
 
+  it("surfaces a failed crafting load in the error panel", async () => {
+    server.use(http.get(`${API}/api/crafting/:type/:id`, privacy403));
+    renderPage(<Catalysts />);
+    expect(
+      await screen.findByText("Your Destiny profile is private"),
+    ).toBeInTheDocument();
+  });
+
+  it("retries a failed crafting load from the error panel", async () => {
+    let attempt = 0;
+    server.use(
+      http.get(`${API}/api/crafting/:type/:id`, () => {
+        attempt += 1;
+        return attempt === 1
+          ? HttpResponse.json({ error: "boom" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  id: "cr-back",
+                  name: "Recovered Pattern",
+                  type: "Glaive",
+                  patterns: { cur: 1, max: 5 },
+                  note: "4 to go",
+                  source: "Crafting",
+                },
+              ],
+              fetchedAt: "",
+            });
+      }),
+    );
+    renderPage(<Catalysts />);
+
+    fireEvent.click(await screen.findByText("Retry"));
+    await screen.findByText("Sunshot Catalyst");
+    fireEvent.click(screen.getByRole("button", { name: "Crafting Patterns" }));
+
+    // The retry must re-ask for crafting, not only for catalysts.
+    expect(await screen.findByText("Recovered Pattern")).toBeInTheDocument();
+  });
+
+  it("keeps the spinner up while crafting alone is still loading", async () => {
+    let catalystsAsked = false;
+    server.use(
+      // Never resolves: crafting is still in flight.
+      http.get(`${API}/api/crafting/:type/:id`, () => new Promise(() => {})),
+      http.get(`${API}/api/catalysts/:type/:id`, () => {
+        catalystsAsked = true;
+        return HttpResponse.json({ items: [], fetchedAt: "" });
+      }),
+    );
+    const { container } = renderPage(<Catalysts />);
+
+    // Let catalysts finish, so only crafting can hold the spinner.
+    await waitFor(() => expect(catalystsAsked).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(container.querySelector(".gt-page-loading")).not.toBeNull();
+    expect(screen.queryByText("Catalysts & Crafting")).not.toBeInTheDocument();
+  });
+
   it("renders the loading spinner while the query is in flight", async () => {
     server.use(
       http.get(`${API}/api/catalysts/:type/:id`, async () => {
