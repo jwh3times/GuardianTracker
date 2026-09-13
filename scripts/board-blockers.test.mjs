@@ -65,6 +65,16 @@ test("flags a slice label that no board item carries (a phantom blocker)", () =>
   ]);
 });
 
+test("only a title's closing suffix names its slice, not a mention mid-title", () => {
+  const findings = findStaleBlockers([
+    item("Notes on the (E3) cleanup, kept for reference", "Done", ""),
+    item("own the Wish list resource (E4)", "Todo", "E3"),
+  ]);
+  assert.deepEqual(references(findings), [
+    ["own the Wish list resource (E4)", "E3", "unknown"],
+  ]);
+});
+
 test("leaves a blocker that is still open alone", () => {
   const findings = findStaleBlockers([
     item("make AuthProvider declarative (E3)", "In Progress", "", 239),

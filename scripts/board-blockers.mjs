@@ -86,7 +86,7 @@ export function findStaleBlockers(items) {
 
   for (const item of items) {
     const text = item.blockedBy.trim();
-    if (isDone(item) || !text || text === "None" || CLEARED.test(text)) {
+    if (isDone(item) || !text || CLEARED.test(text)) {
       continue;
     }
     const seen = new Set();
