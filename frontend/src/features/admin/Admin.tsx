@@ -1,6 +1,4 @@
-import { useIdentityMutation } from "../../contexts/IdentityMutation";
 import React, { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AuditTable } from "./AuditTable";
 import { EmptyState, FilterChip, StatTile } from "../../components/primitives";
 import { PageHead } from "../../components/composite";
@@ -10,21 +8,21 @@ import { FlagCard, UserRow } from "./AdminKit";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { useFlags } from "../../contexts/FlagsContext";
-import { apiFetch, ApiError } from "../../lib/api";
+import { ApiError } from "../../lib/api";
 import { relTime } from "../../lib/format";
+import { ROLES, ROLE_LABEL, tierOf, type Role } from "../../lib/roles";
 import {
-  ROLES,
-  ROLE_LABEL,
-  tierOf,
-  type Role,
-  type Tier,
-} from "../../lib/roles";
-import type { APIAdminFlag, APIAdminUser, APIAuditPage } from "../../types/api";
+  useAdminFlags,
+  useAdminUsers,
+  useAuditLog,
+  useSetMemberRole,
+  useUpdateFlag,
+  type AdminFlag,
+} from "../../data/admin";
 
 type Tab = "users" | "flags" | "audit";
 
 export function Admin() {
-  const qc = useQueryClient();
   const { showToast } = useToast();
   const { user } = useAuth();
   const { refresh: refreshFlags } = useFlags();
@@ -32,38 +30,31 @@ export function Admin() {
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
 
-  const usersQuery = useQuery({
-    queryKey: ["admin", "users"],
-    queryFn: () => apiFetch<APIAdminUser[]>("/api/admin/users"),
-  });
-  const flagsQuery = useQuery({
-    queryKey: ["admin", "flags"],
-    queryFn: () => apiFetch<APIAdminFlag[]>("/api/admin/flags"),
-  });
+  const {
+    users,
+    isLoading: usersLoading,
+    isError: usersFailed,
+    error: usersError,
+    retry: retryUsers,
+  } = useAdminUsers();
+  const {
+    flags,
+    isLoading: flagsLoading,
+    isError: flagsFailed,
+    error: flagsError,
+    retry: retryFlags,
+  } = useAdminFlags();
 
   const [auditType, setAuditType] = useState<string>("");
-  const auditQuery = useQuery({
-    queryKey: ["admin", "audit", auditType],
-    queryFn: () =>
-      apiFetch<APIAuditPage>(
-        `/api/admin/audit?limit=100${auditType ? `&type=${encodeURIComponent(auditType)}` : ""}`,
-      ),
-    enabled: tab === "audit",
-  });
+  const { entries: auditEntries, isLoading: auditLoading } = useAuditLog(
+    auditType,
+    { enabled: tab === "audit" },
+  );
 
-  const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
-  const flags = flagsQuery.data ?? [];
-
-  const roleMutation = useIdentityMutation({
-    mutationFn: ({ id, role }: { id: string; role: Role }) =>
-      apiFetch(`/api/admin/users/${id}/role`, {
-        method: "PUT",
-        body: JSON.stringify({ role }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin", "users"] });
-      refreshFlags();
-    },
+  // A role or rollout change can change this admin's own gating, so each
+  // also refreshes the signed-in user's resolved flags.
+  const { setRole } = useSetMemberRole({
+    onSuccess: () => refreshFlags(),
     onError: (e) =>
       showToast(
         e instanceof ApiError ? e.message : "Couldn't change role",
@@ -71,22 +62,8 @@ export function Admin() {
       ),
   });
 
-  const flagMutation = useIdentityMutation({
-    mutationFn: ({
-      key,
-      patch,
-    }: {
-      key: string;
-      patch: { enabled?: boolean; minTier?: Tier };
-    }) =>
-      apiFetch<APIAdminFlag>(`/api/admin/flags/${key}`, {
-        method: "PUT",
-        body: JSON.stringify(patch),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin", "flags"] });
-      refreshFlags();
-    },
+  const { updateFlag, isPending: flagPending } = useUpdateFlag({
+    onSuccess: () => refreshFlags(),
     onError: (e) =>
       showToast(
         e instanceof ApiError ? e.message : "Couldn't update flag",
@@ -111,7 +88,7 @@ export function Admin() {
 
   const flagOn = flags.filter((f) => f.enabled).length;
   const totalUsers = users.length;
-  const reach = (f: APIAdminFlag) =>
+  const reach = (f: AdminFlag) =>
     f.enabled
       ? users.filter((u) => tierOf(u.role) >= tierOf(f.minTier)).length
       : 0;
@@ -222,19 +199,14 @@ export function Admin() {
                 Role
               </span>
             </div>
-            {usersQuery.isLoading ? (
+            {usersLoading ? (
               <div style={{ padding: "var(--s-6)" }}>
                 <EmptyState icon="users" title="Loading members…" />
               </div>
-            ) : usersQuery.isError ? (
+            ) : usersFailed ? (
               // Without this branch a failed /api/admin/users renders "No
               // members match" — an empty roster reads as a filter problem.
-              <QueryErrorPanel
-                error={usersQuery.error}
-                onRetry={() => {
-                  void usersQuery.refetch();
-                }}
-              />
+              <QueryErrorPanel error={usersError} onRetry={retryUsers} />
             ) : filtered.length === 0 ? (
               <div style={{ padding: "var(--s-6)" }}>
                 <EmptyState
@@ -253,7 +225,7 @@ export function Admin() {
                   platform={u.platform}
                   active={relTime(u.lastActive)}
                   me={u.membershipId === user?.membershipId}
-                  onPick={(r) => roleMutation.mutate({ id: u.id, role: r })}
+                  onPick={(r) => setRole({ id: u.id, role: r })}
                 />
               ))
             )}
@@ -287,15 +259,10 @@ export function Admin() {
               Changes apply live across the app
             </div>
           </div>
-          {flagsQuery.isLoading ? (
+          {flagsLoading ? (
             <EmptyState icon="flag" title="Loading feature flags…" />
-          ) : flagsQuery.isError ? (
-            <QueryErrorPanel
-              error={flagsQuery.error}
-              onRetry={() => {
-                void flagsQuery.refetch();
-              }}
-            />
+          ) : flagsFailed ? (
+            <QueryErrorPanel error={flagsError} onRetry={retryFlags} />
           ) : (
             <div className="gt-flag-grid">
               {flags.map((f) => (
@@ -304,12 +271,12 @@ export function Admin() {
                   flag={f}
                   reached={reach(f)}
                   totalUsers={totalUsers}
-                  pending={flagMutation.isPending}
+                  pending={flagPending}
                   onToggle={(enabled) =>
-                    flagMutation.mutate({ key: f.key, patch: { enabled } })
+                    updateFlag({ key: f.key, patch: { enabled } })
                   }
                   onSetMinTier={(minTier) =>
-                    flagMutation.mutate({ key: f.key, patch: { minTier } })
+                    updateFlag({ key: f.key, patch: { minTier } })
                   }
                 />
               ))}
@@ -338,10 +305,7 @@ export function Admin() {
               ))}
             </div>
           </div>
-          <AuditTable
-            entries={auditQuery.data?.entries ?? []}
-            loading={auditQuery.isLoading}
-          />
+          <AuditTable entries={auditEntries} loading={auditLoading} />
         </>
       )}
     </div>

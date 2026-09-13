@@ -16,6 +16,16 @@ export const ROLE_TIER: Record<Role, number> = {
   admin: 3,
 };
 
+const TIER_BY_WIRE = new Map<string, Tier>(MIN_TIERS.map((t) => [t, t]));
+
+/**
+ * A wire tier name as a {@link Tier}; unknown or missing values resolve to
+ * standard, matching {@link tierOf} and {@link roleColor}. Looked up through a
+ * Map so inherited keys like `toString` cannot answer.
+ */
+export const toTier = (raw: string | undefined): Tier =>
+  TIER_BY_WIRE.get(raw ?? "") ?? "standard";
+
 /** Numeric tier for a role; unknown strings resolve to standard (0). */
 export const tierOf = (role: string | undefined): number =>
   ROLE_TIER[(role ?? "standard") as Role] ?? 0;

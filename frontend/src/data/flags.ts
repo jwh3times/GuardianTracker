@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api";
-import type { Role, Tier } from "../lib/roles";
+import { toTier, type Role, type Tier } from "../lib/roles";
 import type { APIFlagsResponse, APIResolvedFlag } from "../types/api";
 
 /**
@@ -41,21 +41,6 @@ export interface Flag {
 interface ResolvedFlags {
   role: Role;
   flags: Flag[];
-}
-
-const TIERS = new Map<string, Tier>([
-  ["standard", "standard"],
-  ["beta", "beta"],
-  ["alpha", "alpha"],
-]);
-
-/**
- * Wire tier to domain tier. An unrecognised value becomes `standard`, the same
- * fallback `lib/roles.ts` uses for colours and ordering. Looked up through a
- * Map so inherited keys like `toString` cannot answer.
- */
-function toTier(raw: string): Tier {
-  return TIERS.get(raw) ?? "standard";
 }
 
 function toFlag(f: APIResolvedFlag): Flag {
