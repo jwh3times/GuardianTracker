@@ -14,6 +14,23 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.55] - 2026-09-13
+
+### Changed
+
+- The Collections page keeps its category, filters, search, and item links in
+  step through one owner. Changes made in quick succession now always all land,
+  instead of relying on a rule that no two could happen at once.
+- The category tree now opens down to the selected category whenever it
+  changes — including on Back and Forward — rather than only the first time.
+  It opens that category's parents; a category with its own subcategories is
+  no longer expanded automatically.
+
+### Fixed
+
+- Opening an item while a linked item is still loading no longer gets replaced
+  by the linked item when it arrives.
+
 ## [1.3.54] - 2026-09-13
 
 ### Changed
@@ -938,7 +955,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.54...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.55...HEAD
+[1.3.55]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.54...v1.3.55
 [1.3.54]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.53...v1.3.54
 [1.3.53]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.52...v1.3.53
 [1.3.52]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.51...v1.3.52

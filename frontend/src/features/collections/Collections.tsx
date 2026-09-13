@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { Dropdown, PageHead } from "../../components/composite";
 import { CategoryTree } from "./CategoryTree";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
@@ -17,17 +16,11 @@ import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePreferences } from "../../data/preferences";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
-import { useCollectionsFilters, type SortKey } from "./useCollectionsFilters";
-import {
-  DIFFS,
-  DIFF_LABEL,
-  RARITIES,
-  RARITY_LABEL,
-  RARITY_RANK,
-} from "../../lib/constants";
+import { useCollectionsBrowser, type SortKey } from "./useCollectionsBrowser";
+import { DIFFS, DIFF_LABEL, RARITIES, RARITY_LABEL } from "../../lib/constants";
 import type { GTItem, Rarity, Difficulty, TreeNode } from "../../types/design";
 import { useCollections } from "../../data/collections";
-import { useItemPerks, useItemView } from "../../data/items";
+import { useItemPerks } from "../../data/items";
 import { useMembershipRefresh } from "../../data/membershipRefresh";
 import {
   useAddWishlistItem,
@@ -41,50 +34,13 @@ export function Collections() {
     values: { cardStyle, personalize },
   } = usePreferences();
 
-  // Ancestor node-hash path to reveal in the sidebar tree (deep-link seed, or a
-  // node restored from a persisted/URL selection).
-  const [expandPath, setExpandPath] = useState<string[]>([]);
-  const [detail, setDetail] = useState<GTItem | null>(null);
-
-  const {
-    node: active,
-    q,
-    rarity,
-    diff,
-    sort,
-    view,
-    missing: missingOnly,
-    avail,
-    farm,
-    setNode: setActive,
-    setQ,
-    setRarity,
-    setDiff,
-    setSort,
-    setView,
-    setMissing: setMissingOnly,
-    setAvail,
-    setFarm,
-    setFilters,
-    clearFilters,
-    hasFilters,
-  } = useCollectionsFilters();
-
-  // Whitespace-only search input behaves as no search at all — both for item
-  // matching below and for the empty-state branch (see hasFilters in
-  // useCollectionsFilters, which applies the same trim).
-  const qTrimmed = q.trim().toLowerCase();
-
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
-  const itemParam = searchParams.get("item");
-
   const membershipType = user?.membershipType;
   const membershipId = user?.membershipId;
 
   // The collections browser always loads the full dataset (collected + missing)
-  // and filters the display client-side via `missingOnly`. Using one stable
-  // query key avoids re-fetching when toggling the filter or following a
+  // and filters the display client-side via the missing-only filter. Using one
+  // stable query key avoids re-fetching when toggling the filter or following a
   // deep-link to a collected item.
   const {
     view: collections,
@@ -93,15 +49,31 @@ export function Collections() {
     retry: refetch,
   } = useCollections();
 
+  const onItemUnavailable = useCallback(
+    () => showToast("That item isn't in your trackable collections", "info"),
+    [showToast],
+  );
+  const {
+    filters: { node: active, q, rarity, diff, sort, view, avail, farm },
+    filters: { missing: missingOnly },
+    items,
+    activeNode,
+    expandPath,
+    detail,
+    searching,
+    hasFilters,
+    selectNode,
+    setFilter,
+    clearFilters,
+    openItem,
+    closeDetail,
+  } = useCollectionsBrowser(collections, { onItemUnavailable });
+
   const {
     perkColumns,
     catalysts,
     isLoading: perksLoading,
   } = useItemPerks(detail?.id);
-
-  const [viewOnlyHash, setViewOnlyHash] = useState<string | null>(null);
-  const { item: viewOnlyItem, isError: viewOnlyError } =
-    useItemView(viewOnlyHash);
 
   const { entries: wishlistEntries } = useWishlist();
 
@@ -138,111 +110,11 @@ export function Collections() {
 
   const { refresh, isRefreshing } = useMembershipRefresh();
 
-  // Search deep-link (?item=<hash>): once data is loaded, locate the item in
-  // the tree, select its owning node, open its drawer, and clear the param.
-  // The URL is the external system being synchronized here; the one-off
-  // cascading render on deep-link navigation is intentional.
-  useEffect(() => {
-    if (!itemParam || !collections) return;
-    const item = collections.itemByHash(itemParam);
-    const path = collections.pathToItem(itemParam);
-    if (item && path) {
-      const owningNode = path[path.length - 1];
-      setExpandPath(path);
-      const isCollected = item.collected;
-      setDetail(item);
-      // One atomic URL write: select the owning node (reveal collected items too)
-      // and consume the item param, preserving existing filters.
-      setFilters(
-        isCollected
-          ? { node: owningNode, missing: false }
-          : { node: owningNode },
-        { replace: true, drop: ["item"] },
-      );
-    } else {
-      setViewOnlyHash(itemParam);
-      setFilters({}, { replace: true, drop: ["item"] });
-    }
-    // oxlint-disable-next-line react/exhaustive-deps
-  }, [itemParam, collections]);
-
-  useEffect(() => {
-    if (!viewOnlyHash) return;
-    if (viewOnlyItem) {
-      setDetail(viewOnlyItem);
-      setViewOnlyHash(null);
-    } else if (viewOnlyError) {
-      showToast("That item isn't in your trackable collections", "info");
-      setViewOnlyHash(null);
-    }
-    // oxlint-disable-next-line react/exhaustive-deps
-  }, [viewOnlyHash, viewOnlyItem, viewOnlyError]);
-
   const hasReal = !!collections;
 
   // The sidebar tree, the node lookup and the per-item collected state are all
   // derived once by the collections adapter — this page just reads them.
   const treeNodes: TreeNode[] = collections?.roots ?? [];
-
-  // Default the selection to the first root once data arrives. Guarded on
-  // `itemParam` so this doesn't race the deep-link effect above: without the
-  // guard, both effects can fire on the same bare `?item=` load, and since
-  // react-router's functional updater snapshots `prev` per call, whichever
-  // effect's `setSearchParams` call runs second wins with a stale snapshot —
-  // silently reintroducing `item=` after the deep-link effect already
-  // consumed it. Uses `setFilters(..., { replace: true })` (not `setActive`,
-  // which pushes) because seeding a default is URL canonicalization, not a
-  // user navigation — it shouldn't create a Back-button stop.
-  useEffect(() => {
-    if (itemParam || !collections?.rootHashes.length) return;
-    // Seed the first root when nothing is selected, OR when a restored/shared
-    // `?node=` points at a hash that isn't in the current tree (stale or tampered
-    // URL) — otherwise the grid would be stuck empty with no way to recover.
-    if (!active || !collections.node(active)) {
-      setFilters({ node: collections.rootHashes[0] }, { replace: true });
-    }
-    // oxlint-disable-next-line react/exhaustive-deps
-  }, [collections, active, itemParam]);
-
-  // Reveal a node restored directly from a `?node=` URL (a bookmarked link, or
-  // a persisted/shared filter state) so the sidebar opens down to it — mirrors
-  // the deep-link effect's own `setExpandPath(path)`. Root-level selections
-  // (including the "default to first root" effect above) need no reveal since
-  // roots are already visible without opening anything.
-  useEffect(() => {
-    if (!active || expandPath.length > 0 || !collections) return;
-    const path = collections.pathToNode(active);
-    if (path && path.length > 1) setExpandPath(path);
-  }, [active, expandPath, collections]);
-
-  const activeNode = active ? collections?.node(active) : undefined;
-
-  // Items arrive fully joined; the only thing left here is the state-dependent
-  // missing-only filter, which belongs with the other filters below.
-  const baseItems: GTItem[] = useMemo(() => {
-    if (!collections || !active) return [];
-    const all = collections.itemsUnder(active);
-    return missingOnly ? all.filter((i) => !i.collected) : all;
-  }, [collections, active, missingOnly]);
-
-  const items = useMemo(() => {
-    let list = baseItems.slice();
-    if (rarity) list = list.filter((i) => i.rarity === rarity);
-    if (diff)
-      list = list.filter((i) =>
-        i.acquisitionSources.some((source) => source.difficulty === diff),
-      );
-    if (avail) list = list.filter((i) => i.availableNow);
-    if (farm) list = list.filter((i) => !i.farmOnly);
-    if (qTrimmed)
-      list = list.filter((i) => i.name.toLowerCase().includes(qTrimmed));
-    if (sort === "rarity")
-      list.sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]);
-    else if (sort === "name") list.sort((a, b) => a.name.localeCompare(b.name));
-    else if (sort === "avail")
-      list.sort((a, b) => (b.availableNow ? 1 : 0) - (a.availableNow ? 1 : 0));
-    return list;
-  }, [baseItems, rarity, diff, avail, farm, qTrimmed, sort]);
 
   const onWish = (item: GTItem) => {
     // Ignore clicks while a mutation for this item is still settling — `wished`
@@ -308,7 +180,7 @@ export function Collections() {
           <CategoryTree
             nodes={treeNodes}
             activeId={active}
-            onSelect={setActive}
+            onSelect={selectNode}
             expand={expandPath}
           />
         </aside>
@@ -331,32 +203,35 @@ export function Collections() {
                   placeholder="Search this category…"
                   maxLength={100}
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => setFilter({ q: e.target.value })}
                 />
               </div>
               <FilterChip
                 on={missingOnly}
-                onClick={() => setMissingOnly(!missingOnly)}
+                onClick={() => setFilter({ missing: !missingOnly })}
               >
                 Missing only
               </FilterChip>
-              <FilterChip on={avail} onClick={() => setAvail(!avail)}>
+              <FilterChip
+                on={avail}
+                onClick={() => setFilter({ avail: !avail })}
+              >
                 Available now
               </FilterChip>
-              <FilterChip on={farm} onClick={() => setFarm(!farm)}>
+              <FilterChip on={farm} onClick={() => setFilter({ farm: !farm })}>
                 Hide farm-only
               </FilterChip>
               <Dropdown
                 label="Rarity"
                 value={rarity ? RARITY_LABEL[rarity] : null}
                 options={RARITIES.map((r) => ({ v: r, l: RARITY_LABEL[r] }))}
-                onPick={(v) => setRarity(v as Rarity | null)}
+                onPick={(v) => setFilter({ rarity: v as Rarity | null })}
               />
               <Dropdown
                 label="Difficulty"
                 value={diff ? DIFF_LABEL[diff] : null}
                 options={DIFFS.map((d) => ({ v: d, l: DIFF_LABEL[d] }))}
-                onPick={(v) => setDiff(v as Difficulty | null)}
+                onPick={(v) => setFilter({ diff: v as Difficulty | null })}
                 note="estimate"
               />
               <Dropdown
@@ -373,7 +248,7 @@ export function Collections() {
                   { v: "name", l: "Name" },
                   { v: "avail", l: "Availability" },
                 ]}
-                onPick={(v) => v && setSort(v as SortKey)}
+                onPick={(v) => v && setFilter({ sort: v as SortKey })}
                 noClear
               />
             </div>
@@ -381,7 +256,7 @@ export function Collections() {
               <button
                 className="gt-iconbtn"
                 data-on={view === "grid"}
-                onClick={() => setView("grid")}
+                onClick={() => setFilter({ view: "grid" })}
                 aria-label="Grid"
               >
                 <Icon name="grid" size="1rem" />
@@ -389,7 +264,7 @@ export function Collections() {
               <button
                 className="gt-iconbtn"
                 data-on={view === "list"}
-                onClick={() => setView("list")}
+                onClick={() => setFilter({ view: "list" })}
                 aria-label="List"
               >
                 <Icon name="list" size="1rem" />
@@ -434,14 +309,14 @@ export function Collections() {
                 icon={hasFilters ? "filter" : "check"}
                 color={hasFilters ? "var(--c-text-3)" : "var(--c-complete)"}
                 title={
-                  qTrimmed
+                  searching
                     ? `No items match "${q}"`
                     : hasFilters
                       ? "No items match these filters"
                       : "All caught up!"
                 }
                 body={
-                  qTrimmed
+                  searching
                     ? "Try a different search term, or clear the search to see this category's full list."
                     : hasFilters
                       ? "Try loosening a filter to see more of this category."
@@ -467,7 +342,7 @@ export function Collections() {
                   showCollected={!missingOnly}
                   wished={wished.has(it.id)}
                   onWish={onWish}
-                  onOpen={setDetail}
+                  onOpen={openItem}
                 />
               ))}
             </div>
@@ -482,7 +357,7 @@ export function Collections() {
                   showCollected={!missingOnly}
                   wished={wished.has(it.id)}
                   onWish={onWish}
-                  onOpen={setDetail}
+                  onOpen={openItem}
                 />
               ))}
             </div>
@@ -496,7 +371,7 @@ export function Collections() {
           perkColumns={perkColumns}
           perksLoading={perksLoading}
           catalysts={catalysts}
-          onClose={() => setDetail(null)}
+          onClose={closeDetail}
           onWish={onWish}
           wished={wished.has(detail.id)}
         />
