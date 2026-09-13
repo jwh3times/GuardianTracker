@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { useIdentityMutation } from "../contexts/IdentityMutation";
@@ -72,4 +73,15 @@ export function useMembershipRefresh(callbacks?: {
     refresh: () => mutation.mutate(),
     isRefreshing: mutation.isPending,
   };
+}
+
+/**
+ * Re-fetch everything this session has cached, once a Bungie authorization is
+ * restored. Deliberately wider than the membership fan-out: while authorization
+ * was expired any Bungie-backed request may have failed, whichever resource it
+ * belonged to. It names no query key, so it reaches into no module's identity.
+ */
+export function useReloadAfterReconnect(): () => Promise<void> {
+  const client = useQueryClient();
+  return useCallback(() => client.invalidateQueries(), [client]);
 }

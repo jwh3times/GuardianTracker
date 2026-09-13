@@ -1,8 +1,13 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIdentityMutation } from "../contexts/IdentityMutation";
 import { apiFetch } from "../lib/api";
 import { toTier, type Role, type Tier } from "../lib/roles";
-import type { APIFlagsResponse, APIResolvedFlag } from "../types/api";
+import type {
+  APIFlagsResponse,
+  APIResolvedFlag,
+  APIRoleResponse,
+} from "../types/api";
 
 /**
  * The Flags data-access module (ADR 0020). It owns this resource's query
@@ -93,5 +98,31 @@ export function useResolvedFlags() {
     flags: data?.flags ?? NO_FLAGS,
     isLoading,
     refresh,
+  };
+}
+
+/**
+ * Self-service early-access opt-in: standard, beta or alpha. The server keeps
+ * the session (no token churn) and resolves the new tier on the next request,
+ * so this refreshes the resolved flags itself and gated navigation updates at
+ * once. The feature owns the failure copy.
+ */
+export function useOptInTier(callbacks?: { onError?: (error: Error) => void }) {
+  const client = useQueryClient();
+  const mutation = useIdentityMutation<APIRoleResponse, Error, Tier>({
+    mutationFn: (tier) =>
+      apiFetch<APIRoleResponse>("/api/account/role", {
+        method: "PUT",
+        body: JSON.stringify({ role: tier }),
+      }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: FLAGS_KEY });
+    },
+    onError: (error) => callbacks?.onError?.(error),
+  });
+
+  return {
+    optIn: (tier: Tier) => mutation.mutate(tier),
+    isPending: mutation.isPending,
   };
 }

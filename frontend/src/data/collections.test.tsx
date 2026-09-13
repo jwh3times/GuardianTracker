@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { QueryClient } from "@tanstack/react-query";
 import { server, API, sampleCollections, sampleUser } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCollections, useCollectionsSummary } from "./collections";
@@ -11,7 +10,8 @@ import { useMembershipRefresh } from "./membershipRefresh";
 /**
  * Contract tests for the Collections and membership-refresh data-access
  * modules (ADR 0020) — key identity, the variant split, the caller-composed
- * gate, and the refresh fan-out.
+ * gate, and the Collections root key a refresh must reach. The fan-out itself
+ * is tested in `membershipRefresh.test.tsx`.
  *
  * Projection is NOT retested here. `toCollections` and `toCollectionsSummary`
  * stay in `lib/collectionsView.ts` with the ADR 0018 survivor tests that own
@@ -200,45 +200,6 @@ describe("retry", () => {
 });
 
 describe("membership refresh", () => {
-  it("invalidates every membership-scoped resource ADR 0018 names", async () => {
-    const refetched = new Set<string>();
-    const track = (name: string) => () => {
-      refetched.add(name);
-      return HttpResponse.json(collectionsPayload());
-    };
-    server.use(
-      http.get(`${API}/api/collections/:type/:id`, track("collections")),
-      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
-        HttpResponse.json({ refreshed: true }),
-      ),
-    );
-
-    const client = trackingClient();
-    renderWithProviders(
-      <>
-        <FullProbe />
-        <RefreshProbe />
-      </>,
-      { client },
-    );
-    await waitFor(() => expect(refetched.has("collections")).toBe(true));
-    client.invalidated.length = 0;
-
-    await userEvent.click(screen.getByText("refresh"));
-
-    await waitFor(() => expect(client.invalidated.length).toBeGreaterThan(0));
-    // Dropping any of these silently leaves a stale page after a refresh —
-    // the exact failure ADR 0018 cares about.
-    expect([...client.invalidated].sort()).toEqual([
-      "catalysts",
-      "characters",
-      "collections",
-      "crafting",
-      "seals",
-      "weekly",
-    ]);
-  });
-
   it("actually refetches collections, not just a matching key head", async () => {
     let gets = 0;
     server.use(
@@ -266,50 +227,7 @@ describe("membership refresh", () => {
     // A second request is the only thing that proves the key.
     await waitFor(() => expect(gets).toBe(2));
   });
-
-  it("does not invalidate anything when the refresh fails", async () => {
-    server.use(
-      http.get(`${API}/api/collections/:type/:id`, () =>
-        HttpResponse.json(collectionsPayload()),
-      ),
-      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
-        HttpResponse.json({ message: "nope" }, { status: 500 }),
-      ),
-    );
-
-    const client = trackingClient();
-    renderWithProviders(<RefreshProbe />, { client });
-
-    await userEvent.click(screen.getByText("refresh"));
-
-    await waitFor(() =>
-      expect(screen.getByTestId("pending")).toHaveTextContent("no"),
-    );
-    expect(client.invalidated).toEqual([]);
-  });
 });
-
-/**
- * A QueryClient that records the key families it was asked to invalidate.
- * Asserting on invalidation directly is the only way to see the fan-out: the
- * unmigrated resources have no mounted observer here, so nothing refetches.
- */
-function trackingClient() {
-  const client = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
-    },
-  });
-  const invalidated: string[] = [];
-  const original = client.invalidateQueries.bind(client);
-  client.invalidateQueries = ((filters?: { queryKey?: readonly unknown[] }) => {
-    const head = filters?.queryKey?.[0];
-    if (typeof head === "string") invalidated.push(head);
-    return original(filters as never);
-  }) as typeof client.invalidateQueries;
-  return Object.assign(client, { invalidated });
-}
 
 /** The shared fixture; this module owns transport, not payload shape. */
 function collectionsPayload() {

@@ -6,7 +6,7 @@ import { http, HttpResponse } from "msw";
 import { server, API } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useFlags } from "../contexts/FlagsContext";
-import { useResolvedFlags } from "./flags";
+import { useOptInTier, useResolvedFlags } from "./flags";
 
 /**
  * Contract tests for the Flags data-access module (ADR 0020) — key identity,
@@ -220,5 +220,73 @@ describe("refresh", () => {
       expect(screen.getByTestId("resolved")).toHaveTextContent("beta:"),
     );
     expect(requests).toBe(2);
+  });
+});
+
+function OptInProbe({ errors }: { errors: string[] }) {
+  const { role } = useResolvedFlags();
+  const { optIn } = useOptInTier({
+    onError: (error) => errors.push(error.message),
+  });
+  return (
+    <div>
+      <button onClick={() => optIn("beta")}>opt in</button>
+      <div data-testid="role">{role}</div>
+    </div>
+  );
+}
+
+describe("tier opt-in", () => {
+  it("sends the tier and re-fetches resolved flags once", async () => {
+    let role = "standard";
+    let flagGets = 0;
+    let body: unknown = null;
+    server.use(
+      http.get(`${API}/api/flags`, () => {
+        flagGets += 1;
+        return HttpResponse.json({ role, flags: [] });
+      }),
+      http.put(`${API}/api/account/role`, async ({ request }) => {
+        body = await request.json();
+        role = "beta";
+        return HttpResponse.json({ role: "beta" });
+      }),
+    );
+
+    renderWithProviders(<OptInProbe errors={[]} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("role")).toHaveTextContent("standard"),
+    );
+
+    await userEvent.click(screen.getByText("opt in"));
+
+    // The new tier must reach gated navigation, which only a re-fetch shows.
+    await waitFor(() =>
+      expect(screen.getByTestId("role")).toHaveTextContent("beta"),
+    );
+    expect(body).toEqual({ role: "beta" });
+    expect(flagGets).toBe(2);
+  });
+
+  it("reports a failure without re-fetching flags", async () => {
+    let flagGets = 0;
+    server.use(
+      http.get(`${API}/api/flags`, () => {
+        flagGets += 1;
+        return HttpResponse.json({ role: "standard", flags: [] });
+      }),
+      http.put(`${API}/api/account/role`, () =>
+        HttpResponse.json({ error: "Admins cannot opt in" }, { status: 403 }),
+      ),
+    );
+    const errors: string[] = [];
+
+    renderWithProviders(<OptInProbe errors={errors} />);
+    await waitFor(() => expect(flagGets).toBe(1));
+
+    await userEvent.click(screen.getByText("opt in"));
+
+    await waitFor(() => expect(errors).toEqual(["Admins cannot opt in"]));
+    expect(flagGets).toBe(1);
   });
 });

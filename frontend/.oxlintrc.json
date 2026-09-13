@@ -203,6 +203,37 @@
           }
         ]
       }
+    },
+    {
+      "files": ["src/features/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@tanstack/react-query",
+                "message": "Features and components read data through a src/data module's hooks; React Query stays inside src/data (ADR 0020)."
+              }
+            ],
+            "patterns": [
+              {
+                "regex": "(^|/)types/api$",
+                "message": "Wire types stay inside src/data; import the data module's domain type instead (ADR 0020)."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/features/**/*.test.{ts,tsx}",
+        "src/components/**/*.test.{ts,tsx}"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
     }
   ]
 }
