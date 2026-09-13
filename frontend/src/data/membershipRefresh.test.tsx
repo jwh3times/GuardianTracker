@@ -100,7 +100,7 @@ describe("membership refresh fan-out", () => {
  * through its own invalidation entry point, or be exempt by name with a reason.
  */
 const DATA_MODULES = import.meta.glob<string>(
-  ["./*.ts", "./*.tsx", "!./*.test.ts", "!./*.test.tsx"],
+  ["./**/*.ts", "./**/*.tsx", "!./**/*.test.ts", "!./**/*.test.tsx"],
   { query: "?raw", import: "default", eager: true },
 );
 
@@ -116,15 +116,53 @@ function readsMembership(source: string): boolean {
   return /\buseAuth\b|\bbrowserSessionClient\b/.test(source);
 }
 
-function specifierOf(path: string): string {
-  return path.replace(/\.tsx?$/, "");
+/** The import specifiers a module can be reached by: "./x", or "./x" for "./x/index". */
+function specifiersOf(path: string): string[] {
+  const bare = path.replace(/\.tsx?$/, "");
+  return bare.endsWith("/index")
+    ? [bare, bare.slice(0, -"/index".length)]
+    : [bare];
 }
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** True when `source` imports `name` by name from one of `specifiers`. */
+function importsByName(
+  source: string,
+  name: string,
+  specifiers: string[],
+): boolean {
+  return specifiers.some((specifier) =>
+    new RegExp(
+      `import\\s*\\{[^}]*\\b${escapeRegExp(name)}\\b[^}]*\\}\\s*from\\s*"${escapeRegExp(specifier)}"`,
+    ).test(source),
+  );
+}
+
+/** The body of `fanOut`, with line comments removed so a commented-out call does not count. */
+function fanOutBody(source: string): string {
+  const start = source.indexOf("function fanOut(");
+  if (start < 0) return "";
+  const open = source.indexOf("{", start);
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}") depth -= 1;
+    if (depth === 0) {
+      return source
+        .slice(open + 1, index)
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("//"))
+        .join("\n");
+    }
+  }
+  return "";
+}
+
 const refreshSource = DATA_MODULES[REFRESH_MODULE] ?? "";
+const fanOutSource = fanOutBody(refreshSource);
 const membershipScoped = Object.keys(DATA_MODULES)
   .filter(
     (path) =>
@@ -136,6 +174,10 @@ const mustBeRefreshed = membershipScoped.filter(
 );
 
 describe("membership refresh completeness", () => {
+  it("finds fanOut, so the call checks cannot pass vacuously", () => {
+    expect(fanOutSource).toMatch(/\(client\);/);
+  });
+
   it("detects the membership-scoped modules, so the checks below guard something", () => {
     expect(membershipScoped).toEqual(
       expect.arrayContaining([
@@ -160,12 +202,13 @@ describe("membership refresh completeness", () => {
         entry,
         `${path} reads the membership but exports no invalidate<Resource> entry point`,
       ).not.toBe("(none)");
-      expect(refreshSource).toMatch(
-        new RegExp(
-          `import \\{ ${entry} \\} from "${escapeRegExp(specifierOf(path))}";`,
-        ),
+      expect(
+        importsByName(refreshSource, entry, specifiersOf(path)),
+        `membershipRefresh.ts does not import ${entry} from ${path}`,
+      ).toBe(true);
+      expect(fanOutSource, `fanOut() does not call ${entry}(client)`).toMatch(
+        new RegExp(`^\\s*${entry}\\(client\\);\\s*$`, "m"),
       );
-      expect(refreshSource).toMatch(new RegExp(`\\b${entry}\\(client\\);`));
     },
   );
 
@@ -177,7 +220,9 @@ describe("membership refresh completeness", () => {
         `${path} no longer exists; remove its exemption`,
       ).toBeDefined();
       expect(readsMembership(DATA_MODULES[path] ?? "")).toBe(true);
-      expect(refreshSource).not.toContain(`from "${specifierOf(path)}"`);
+      for (const specifier of specifiersOf(path)) {
+        expect(refreshSource).not.toContain(`from "${specifier}"`);
+      }
     },
   );
 });
