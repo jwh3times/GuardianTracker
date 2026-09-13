@@ -343,6 +343,9 @@ export interface CollectionsBrowserOptions {
  * latest params rather than the render's snapshot — react-router's functional
  * updater would hand each same-tick write the same stale `prev`, so the second
  * silently undid the first. Here intents compose, however many run in a tick.
+ * History is still per navigation: a replace lands on the current entry, so a
+ * filter change followed by `selectNode` in one handler also rewrites the entry
+ * Back returns to.
  */
 export function useCollectionsBrowser(
   collections: CollectionsView | undefined,

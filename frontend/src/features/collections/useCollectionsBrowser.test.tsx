@@ -384,13 +384,17 @@ function renderBrowser(
     });
     return null;
   }
+  // StrictMode double-invokes effects: a deep link must still write once and
+  // report once.
   const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[route]}>
-        <Probe />
-        {children}
-      </MemoryRouter>
-    </QueryClientProvider>
+    <React.StrictMode>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={[route]}>
+          <Probe />
+          {children}
+        </MemoryRouter>
+      </QueryClientProvider>
+    </React.StrictMode>
   );
   // A fresh callback every render, as a page that does not memoize it passes.
   const hook = renderHook(
