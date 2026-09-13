@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.51] - 2026-09-13
+
+### Changed
+
+- Consolidated weapon crafting pattern progress behind a single owner. The
+  Crafting Patterns tab shows the same patterns, filters and states, and
+  "refresh from Bungie" still reloads them; this is the tenth of thirteen
+  planned resource migrations.
+
 ## [1.3.50] - 2026-09-12
 
 ### Changed
@@ -883,7 +892,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.50...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.51...HEAD
+[1.3.51]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.50...v1.3.51
 [1.3.50]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.49...v1.3.50
 [1.3.49]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.48...v1.3.49
 [1.3.48]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.47...v1.3.48
