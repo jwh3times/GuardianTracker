@@ -108,7 +108,10 @@ Confirm `gh auth status`, then for this session:
 `Blocked By` where the session proved sequencing wrong, and convert a claimed draft
 to an issue. The ready frontier is _computed_ — open items with no open blocker and
 no assignee — so keeping `Blocked By` honest is what makes "what's next" answerable
-without a status document.
+without a status document. Run `npm run board:blockers` and clear every item it
+reports: `Blocked By` is free text that does not clear itself when a blocker
+closes, and a sweep scoped to the chain you worked on has already missed a row in
+another chain.
 
 **Memory.** One fact per file in the per-project memory directory (its absolute path
 is in the memory section of your system prompt), with `name`, `description`, and

@@ -256,11 +256,12 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs`,
+   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs scripts/board-blockers.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
    main-branch synchronization, local documentation-link, jest-dom-shim, and
-   changelog-footer policies. The Node policy keeps
+   changelog-footer policies, and tests the parsing behind `npm run board:blockers`
+   (which itself reads the private board locally, not in CI). The Node policy keeps
    `.nvmrc`, both workflows, both frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as

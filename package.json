@@ -5,6 +5,7 @@
   "scripts": {
     "test:docker-context": "node --test scripts/docker-context-isolation.test.mjs",
     "bootstrap:private": "node scripts/bootstrap-private.mjs",
+    "board:blockers": "node scripts/board-blockers.mjs",
     "sync:main": "node scripts/sync-main.mjs",
     "sync:agents": "node scripts/sync-agent-configs.mjs",
     "sync:image-pins": "node scripts/sync-image-pins.mjs",

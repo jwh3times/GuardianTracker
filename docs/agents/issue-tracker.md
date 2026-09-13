@@ -57,6 +57,16 @@ status. A draft has no repository or number, so **native dependencies cannot
 attach to it** — carry the order in the `Blocked By` field and wire real
 `blocked_by` edges after converting the draft to an issue.
 
+**Stale blockers.** Nothing clears `Blocked By` text when its blocker closes, and
+an open item still naming a finished blocker drops silently out of the computed
+ready frontier. After a merge closes a slice, run `npm run board:blockers` from
+the repository root. It lists every open item whose `Blocked By` names a slice
+label (a title's `(E3)` suffix) or an issue number that is already Done, or a
+slice label no item carries, and exits non-zero when it finds any. Clear each to
+`Ready — <blocker> completed <date> (#<n>)`: text starting with `Ready`,
+`Unblocked`, or `Shipped` is treated as cleared. It reads the private board
+through your `gh` session, so it runs locally; CI tests only its parsing.
+
 **Which repository.** File public by default. Use the private companion
 (`jwh3times/GuardianTracker-private`) only when the body would need a
 credential, a real provider/cost/account identifier, or exploitable security
