@@ -244,25 +244,37 @@ frontend/src/
                                    Exports `invalidateCrafting(client)` as this resource's invalidation
                                    entry point. Read by the Catalysts & Crafting page, beside
                                    `catalysts.ts`.
+    seals.ts                      ← Eleventh and final resource landed (E14). Private query key
+                                   `["seals", membershipType, membershipId]`; endpoint
+                                   `GET /api/seals/:membershipType/:membershipId`; projects
+                                   `APIRecordsEnvelope<APISeal>` → `Seal[]` via `toSeal`/`toTriumph`/
+                                   `toObjective`, deliberately keeping a triumph's `objectives` absent
+                                   (not `[]`) when the wire omits it. `useSeals()` takes no arguments —
+                                   it reads the signed-in membership from `useAuth()` — and returns
+                                   `{ seals, isLoading, isError, error, retry }`, with a stable
+                                   empty-array reference so `seals` keeps identity between renders.
+                                   Exports `invalidateSeals(client)` as this resource's invalidation
+                                   entry point. Read by `Triumphs.tsx`. This is the last of the eleven
+                                   ADR 0020 resource slices (E4–E14); only E15 (Preferences client,
+                                   ADR 0021) and E16 (fan-out completeness test + no-restricted-imports
+                                   lint zones) remain.
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
                                    verbatim copies previously inline in Collections and Settings. Lives
                                    in its own module rather than inside `collections.ts` because it
                                    invalidates six membership-scoped resources and a module owning one
-                                   has no claim on the other five. Calls `invalidateCollections`,
-                                   `invalidateWeekly`, `invalidateCharacters`, `invalidateCatalysts`, and
-                                   `invalidateCrafting` for the five migrated resources; the remaining
-                                   one (seals) is a raw key in one `UNMIGRATED_KEYS` list, replaced by
-                                   that resource's own invalidation entry point once its ADR 0020 slice
-                                   lands.
-                                   Read no membership argument — it reads the signed-in membership from
+                                   has no claim on the other five. Calls `invalidateCatalysts`,
+                                   `invalidateCharacters`, `invalidateCollections`, `invalidateCrafting`,
+                                   `invalidateSeals`, and `invalidateWeekly` — one module entry point per
+                                   resource; as of E14 it names no raw query keys of its own.
+                                   Reads no membership argument — it reads the signed-in membership from
                                    `useAuth()`.
                                    Search (E9), Flags (E10), and Admin (E11) are membership-independent
                                    by design, so none is in this fan-out — Flags follows the signed-in
                                    user's role, not Destiny membership data, and Admin data carries no
-                                   membership at all. The remaining resource (Seals) has not migrated
-                                   yet — see the ADR 0020 note under "Shared query definitions" below.
+                                   membership at all. E16 adds the test that fails when a
+                                   membership-scoped module is added without being wired into `fanOut`.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -357,8 +369,8 @@ frontend/src/
                                    crafting patterns via `data/crafting.ts`'s useCraftingPatterns; no
                                    inline queries; cards render `effect` text when
                                    present; "complete" status shows a full progress bar instead of "Not yet
-                                   acquired"), Triumphs.tsx
-                                   ({ items, fetchedAt } envelopes),
+                                   acquired"), Triumphs.tsx (seals via `data/seals.ts`'s useSeals; no
+                                   inline queries),
                                    ItemCard.tsx (collection-only item card),
                                    CategoryTree.tsx (the sidebar tree), ItemDetailDrawer.tsx (renders perk
                                    columns — label + chips — with loading state; props: perkColumns?,
@@ -444,23 +456,17 @@ Deleted files / paths (do not reference):
 
 Data fetching uses **TanStack React Query** (`useQuery`) with `apiFetch` from `lib/api.ts`; authenticated mutations use `useIdentityMutation` from `contexts/IdentityMutation.ts`, which wraps React Query mutation lifecycle callbacks with the originating identity guard. There is no Apollo Client.
 
-```typescript
-// apiFetch injects Authorization: Bearer <token> automatically and throws ApiError on non-2xx
-import { apiFetch, ApiError } from "../lib/api";
-
-const { data } = useQuery({
-  queryKey: ["seals", membershipType, membershipId],
-  queryFn: () =>
-    apiFetch<APIRecordsEnvelope<Seal>>(
-      `/api/seals/${membershipType}/${membershipId}`,
-    ),
-});
-```
-
-Wish list, Collections, Weekly, Characters, Items, Search, Flags, Admin,
-Catalysts, and Crafting no longer follow this raw pattern — they are owned by
-`src/data/` modules (see below); their queries and mutations are not declared
-inline in a feature.
+All eleven membership/console-scoped resources (Wish list, Collections, Weekly,
+Characters, Items, Search, Flags, Admin, Catalysts, Crafting, and Seals) are
+owned by `src/data/` modules (see "Shared query definitions" below): a module
+owns that resource's query identity (key private, never exported), endpoint
+path, projection to a domain type, every mutation, and its own invalidation.
+**Do not declare a raw inline `useQuery`/`useIdentityMutation` call in a
+feature for a resource that already has a `src/data/` module** — read the
+module's hook instead. The one exception is `PreferencesContext.tsx`, which
+still fetches `/api/preferences` directly with `apiFetch` inside a `useEffect`
+rather than through `useQuery`; [ADR 0021](../../docs/adr/0021-own-preferences-synchronization.md)
+(E15) is what replaces it with a `src/data/preferences.ts` module.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
@@ -478,11 +484,10 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 - `useItemPerks(itemHash)` — lazy query for weapon perk columns and catalysts (`GET /api/items/:itemHash/perks`); `enabled: !!itemHash`; `staleTime: Infinity` since manifest data doesn't change mid-session. Returns `{ perkColumns, catalysts, isLoading }`. Used by Collections when the item detail drawer opens (click or deep-link).
 - `useItemView(itemHash)` — minimal item view (`GET /api/items/:itemHash`); resolves a deep-link miss — a `?item=<hash>` URL with no collectible entry — into a read-only drawer. `enabled: !!itemHash`; `staleTime: Infinity`; `retry: false` (a 404 means the hash is not in the manifest — no value in retrying). Returns `{ item, isError }`. Used by Collections when a deep-link hash cannot be found in any collection bucket.
 
-[ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
-resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
-Wish list (E4), Collections (E5), Weekly (E6), Characters (E7), Items (E8),
-Search (E9), Flags (E10), Admin (E11), Catalysts (E12), and Crafting (E13)
-have landed:
+[ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) has landed all
+eleven resources it identified, one PR per resource: Wish list (E4),
+Collections (E5), Weekly (E6), Characters (E7), Items (E8), Search (E9), Flags
+(E10), Admin (E11), Catalysts (E12), Crafting (E13), and Seals (E14).
 `data/wishlist.ts` owns the wish list
 resource's query identity, projection, and all six mutations; `data/collections.ts`
 owns the collections resource's query identity and projection dispatch; `data/weekly.ts`
@@ -520,17 +525,20 @@ catalysts resource's query identity, endpoint, and projection (`toCatalyst`),
 exposing `invalidateCatalysts(client)` as its invalidation entry point;
 `data/crafting.ts` mirrors it for the crafting-pattern resource
 (`toCraftPattern`), exposing `invalidateCrafting(client)` — the two share the
-Catalysts & Crafting page but not a resource.
+Catalysts & Crafting page but not a resource. `data/seals.ts` owns the seals
+resource's query identity, endpoint, and projection (`toSeal`/`toTriumph`/
+`toObjective`), exposing `invalidateSeals(client)`; it is read by
+`Triumphs.tsx`.
 `data/membershipRefresh.ts` holds the
-cross-resource cache-refresh fan-out; Admin data is not membership-scoped, so it
-is not part of that fan-out. Consumers read these modules instead of
-declaring their own. The remaining resource — Seals — is
-sequenced by the #172 handoff and has not migrated yet, so for it, the
-per-feature `useQuery` / `useIdentityMutation` calls documented in this file
-remain how the code actually works today. The ESLint `no-restricted-imports`
-import-boundary ADR 0020 specifies has also not landed (E16), and so has the
-fan-out test that would fail if a migrated resource were added to
-`membershipRefresh.ts` without a matching invalidation entry point.
+cross-resource cache-refresh fan-out over all six membership-scoped resources
+(Catalysts, Characters, Collections, Crafting, Seals, Weekly); Search, Flags,
+and Admin data are not membership-scoped, so none is part of that fan-out.
+Consumers read these modules instead of declaring their own. Two slices of
+ADR 0020 remain: E15 replaces `PreferencesContext`'s direct `apiFetch` with a
+`src/data/preferences.ts` module (ADR 0021); E16 adds the ESLint
+`no-restricted-imports` import-boundary the ADR specifies and the fan-out
+completeness test that fails if a membership-scoped module is added without a
+matching invalidation entry point in `membershipRefresh.ts`.
 
 ## Authentication
 

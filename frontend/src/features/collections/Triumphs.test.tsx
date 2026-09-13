@@ -85,6 +85,62 @@ describe("Triumphs page", () => {
     expect(screen.getByText("No deaths in the run")).toBeInTheDocument();
   });
 
+  it("retries a failed seals load from the error panel", async () => {
+    let attempt = 0;
+    server.use(
+      http.get(`${API}/api/seals/:type/:id`, () => {
+        attempt += 1;
+        return attempt === 1
+          ? HttpResponse.json({ error: "boom" }, { status: 500 })
+          : HttpResponse.json({
+              items: [
+                {
+                  id: "seal-back",
+                  name: "Recovered Seal",
+                  pct: 10,
+                  gilded: 0,
+                  left: "9 triumphs left",
+                  triumphs: [],
+                },
+              ],
+              fetchedAt: "",
+            });
+      }),
+    );
+    renderPage(<Triumphs />);
+
+    fireEvent.click(await screen.findByText("Retry"));
+
+    expect(await screen.findByText("Recovered Seal")).toBeInTheDocument();
+  });
+
+  it("renders a seal whose triumph list arrives as null", async () => {
+    server.use(
+      http.get(`${API}/api/seals/:type/:id`, () =>
+        HttpResponse.json({
+          items: [
+            {
+              id: "seal-empty",
+              name: "Empty Seal",
+              pct: 0,
+              gilded: 0,
+              left: "No triumphs",
+              // A nil Go slice with no omitempty: the records service sends this
+              // for a seal with no triumph records.
+              triumphs: null,
+            },
+          ],
+          fetchedAt: "",
+        }),
+      ),
+    );
+    renderPage(<Triumphs />);
+
+    // Previously the card threw mapping null, taking the whole page with it.
+    expect(await screen.findByText("Empty Seal")).toBeInTheDocument();
+    expect(screen.getByText("1 seals · 0 gilded")).toBeInTheDocument();
+  });
+
   it("renders the loading spinner while the query is in flight", async () => {
     server.use(
       http.get(`${API}/api/seals/:type/:id`, async () => {

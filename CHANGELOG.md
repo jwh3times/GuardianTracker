@@ -14,6 +14,22 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.52] - 2026-09-13
+
+### Changed
+
+- Consolidated seal and triumph progress behind a single owner. The Triumphs &
+  Seals page shows the same seals, sorting and objective drill-downs, and
+  "refresh from Bungie" still reloads them. This is the last of the planned
+  resource migrations: every piece of your Destiny data a refresh reloads now
+  goes through its own owner rather than being named from outside.
+
+### Fixed
+
+- A seal with no triumphs no longer breaks the Triumphs & Seals page. The server
+  can send such a seal's triumph list as empty-by-omission, which the page did
+  not expect; it now shows the seal with no triumphs listed.
+
 ## [1.3.51] - 2026-09-13
 
 ### Changed
@@ -892,7 +908,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.51...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.52...HEAD
+[1.3.52]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.51...v1.3.52
 [1.3.51]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.50...v1.3.51
 [1.3.50]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.49...v1.3.50
 [1.3.49]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.48...v1.3.49
