@@ -102,6 +102,101 @@ func TestBuildIndexCoalescesConcurrentSameGenerationCalls(t *testing.T) {
 	}
 }
 
+type countingSource struct {
+	mu    sync.Mutex
+	calls int
+}
+
+func (s *countingSource) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls++
+	return generationRows(1), nil
+}
+
+func (s *countingSource) callCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.calls
+}
+
+// A build that starts after its generation already published the same version —
+// the goroutine ensureIndex kicks during a swap, scheduled late — must not
+// rescan every collectible to republish identical data. Issue #312.
+func TestBuildIndexSkipsGenerationAndVersionAlreadyPublished(t *testing.T) {
+	versions := &mutableVersion{v: "v1"}
+	source := &countingSource{}
+	engine := NewEngine(source, versions)
+
+	engine.BuildIndex()
+	engine.BuildIndex()
+	if got := source.callCount(); got != 1 {
+		t.Fatalf("source reads after a repeat build of a published generation = %d, want 1", got)
+	}
+
+	versions.set("v2")
+	if err := engine.publication.Advance("v2"); err != nil {
+		t.Fatalf("Advance(v2): %v", err)
+	}
+	engine.BuildIndex()
+	if got := source.callCount(); got != 2 {
+		t.Fatalf("source reads after a new generation = %d, want 2", got)
+	}
+	engine.BuildIndex()
+	if got := source.callCount(); got != 2 {
+		t.Fatalf("source reads after a repeat build of the new generation = %d, want 2", got)
+	}
+}
+
+// The skip needs the version to match as well as the generation. An index
+// published under the current generation but labelled with a version that is no
+// longer current must still rebuild, or ensureIndex would kick a no-op build on
+// every Rank forever.
+func TestBuildIndexRebuildsWhenVersionMovesWithinGeneration(t *testing.T) {
+	versions := &mutableVersion{v: "v1"}
+	source := &countingSource{}
+	engine := NewEngine(source, versions)
+	engine.BuildIndex()
+
+	versions.set("v2") // the version moved; the generation did not
+	engine.BuildIndex()
+
+	if got := source.callCount(); got != 2 {
+		t.Fatalf("source reads = %d, want a rebuild for the moved version", got)
+	}
+	engine.mu.RLock()
+	built := engine.builtVersion
+	engine.mu.RUnlock()
+	if built != "v2" {
+		t.Fatalf("builtVersion = %q, want v2", built)
+	}
+}
+
+// The skip needs the generation to match as well as the version. A version
+// string that comes back around belongs to a new generation, and an index built
+// under an older one must not pass as current just because the strings agree —
+// the rule manifeststate.Publication.Advance states for every owner.
+func TestBuildIndexRebuildsWhenVersionReturnsUnderNewGeneration(t *testing.T) {
+	versions := &mutableVersion{v: "v1"}
+	source := &countingSource{}
+	engine := NewEngine(source, versions)
+	engine.BuildIndex()
+
+	versions.set("v2")
+	if err := engine.publication.Advance("v2"); err != nil {
+		t.Fatalf("Advance(v2): %v", err)
+	}
+	versions.set("v1")
+	if err := engine.publication.Advance("v1"); err != nil {
+		t.Fatalf("Advance(v1): %v", err)
+	}
+	engine.BuildIndex()
+
+	if got := source.callCount(); got != 2 {
+		t.Fatalf("source reads = %d, want a rebuild under the new generation", got)
+	}
+}
+
 type recoveringSource struct {
 	mu          sync.Mutex
 	calls       int
@@ -251,10 +346,10 @@ func (s *generationSource) seal() {
 // version installed when the call is made, exactly as a real manifest-backed
 // source does.
 //
-// It deliberately does not key rows on a call counter. The engine may rebuild
-// the same generation more than once — a Rank during a version change kicks
-// ensureIndex, and whether that goroutine coalesces with the in-flight build or
-// runs after it depends on scheduling. Counter-keyed rows made the fixture hand
+// It deliberately does not key rows on a call counter. The engine may read the
+// same generation more than once — a Rank during a version change kicks
+// ensureIndex, and that goroutine can start while the current version is not
+// yet the one the in-flight build captured. Counter-keyed rows made the fixture hand
 // a legitimate second v3 build a fourth generation's data, which then published
 // under the current generation and looked exactly like a fence failure. See
 // issue #231.
