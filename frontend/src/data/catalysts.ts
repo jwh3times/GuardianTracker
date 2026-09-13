@@ -59,8 +59,9 @@ function toCatalyst(c: APICatalyst): Catalyst {
 
 /**
  * The query's `select`. Stable module-level reference so React Query's
- * per-observer `select` memoisation holds. A nil Go slice serializes as null,
- * so a missing list is an empty one.
+ * per-observer `select` memoisation holds. The records service always builds a
+ * non-nil list today, so `items` arrives as `[]`; the fallback only guards a
+ * future nil Go slice, which would serialize as null.
  */
 function toCatalysts(envelope: APIRecordsEnvelope<APICatalyst>): Catalyst[] {
   return (envelope.items ?? []).map(toCatalyst);
