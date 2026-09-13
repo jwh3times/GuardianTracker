@@ -13,6 +13,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { apiFetch } from "../../lib/api";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import { LoadingSpinner } from "../../components/LoadingSpinner";
+import { useCatalysts } from "../../data/catalysts";
 import type { Catalyst, CraftPattern } from "../../types/design";
 import type { APIRecordsEnvelope } from "../../types/api";
 
@@ -115,20 +116,12 @@ export function Catalysts() {
   const membershipId = user?.membershipId;
 
   const {
-    data: catalystsData,
+    catalysts,
     isLoading: catsLoading,
     isError: catsError,
     error: catsErr,
-    refetch: refetchCats,
-  } = useQuery({
-    queryKey: ["catalysts", membershipType, membershipId],
-    queryFn: () =>
-      apiFetch<APIRecordsEnvelope<Catalyst>>(
-        `/api/catalysts/${membershipType}/${membershipId}`,
-      ),
-    enabled: membershipType != null && !!membershipId,
-  });
-  const catalysts = catalystsData?.items ?? [];
+    retry: retryCats,
+  } = useCatalysts();
 
   const {
     data: craftingData,
@@ -171,7 +164,7 @@ export function Catalysts() {
         <QueryErrorPanel
           error={catsErr ?? craftErr}
           onRetry={() => {
-            void refetchCats();
+            retryCats();
             void refetchCraft();
           }}
         />
