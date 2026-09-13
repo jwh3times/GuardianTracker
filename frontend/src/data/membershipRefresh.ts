@@ -2,6 +2,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { useIdentityMutation } from "../contexts/IdentityMutation";
 import { apiFetch, type ApiError } from "../lib/api";
+import { invalidateCatalysts } from "./catalysts";
 import { invalidateCharacters } from "./characters";
 import { invalidateCollections } from "./collections";
 import { invalidateWeekly } from "./weekly";
@@ -29,19 +30,20 @@ import type { APICacheRefreshResponse } from "../types/api";
  * The membership-scoped resources a refresh invalidates.
  *
  * Each entry becomes a call to that resource's own invalidation entry point as
- * its ADR 0020 slice lands — Collections (E5), Weekly (E6) and Characters (E7)
- * already have. The rest are still raw keys, which is the cross-ownership reach
+ * its ADR 0020 slice lands — Collections (E5), Weekly (E6), Characters (E7)
+ * and Catalysts (E12) already have. The rest are still raw keys, which is the
+ * cross-ownership reach
  * this decision removes, so they are held here, in one greppable list, rather
  * than in the feature modules where they used to live. E16 adds the test that
  * fails when a membership-scoped module is added without being wired in.
  */
 const UNMIGRATED_KEYS = [
-  "catalysts", // E12
   "crafting", // E13
   "seals", // E14
 ] as const;
 
 function fanOut(client: QueryClient) {
+  invalidateCatalysts(client);
   invalidateCharacters(client);
   invalidateCollections(client);
   invalidateWeekly(client);
