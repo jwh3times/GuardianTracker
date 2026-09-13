@@ -10,7 +10,8 @@ import {
   type Role,
   type Tier,
 } from "../../lib/roles";
-import type { APIAdminFlag, APIResolvedFlag } from "../../types/api";
+import type { Flag } from "../../data/flags";
+import type { APIAdminFlag } from "../../types/api";
 import { useOutsideClick } from "../../lib/useOutsideClick";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
@@ -271,11 +272,11 @@ export function LockedFeature({
   onChangeTier,
   onBack,
 }: {
-  flag: APIResolvedFlag;
+  flag: Flag;
   onChangeTier: () => void;
   onBack: () => void;
 }) {
-  const need = flag.minTier as Tier;
+  const need = flag.minTier;
   return (
     <div className="gt-page">
       <div className="gt-card gt-locked">

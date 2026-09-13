@@ -5,9 +5,7 @@ import React, {
   useMemo,
   ReactNode,
 } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "../lib/api";
-import type { APIFlagsResponse, APIResolvedFlag } from "../types/api";
+import { useResolvedFlags, type Flag } from "../data/flags";
 import type { Role } from "../lib/roles";
 
 /**
@@ -20,7 +18,7 @@ import type { Role } from "../lib/roles";
  * enabled + accessible, so shipped features are never hidden by a missing flag.
  */
 export interface FlagState {
-  flag: APIResolvedFlag | null;
+  flag: Flag | null;
   enabled: boolean;
   accessible: boolean;
   locked: boolean;
@@ -45,22 +43,21 @@ const UNKNOWN: FlagState = {
 
 const FlagsContext = createContext<FlagsContextType | undefined>(undefined);
 
+/**
+ * Gating over the flags `data/flags.ts` owns (ADR 0020, E10). This provider
+ * issues no query of its own; it exists so a consumer rendered above the auth
+ * gate throws instead of silently failing open.
+ */
 export const FlagsProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ["flags"],
-    queryFn: () => apiFetch<APIFlagsResponse>("/api/flags"),
-    staleTime: 60_000,
-  });
-
-  const role: Role = data?.role ?? "standard";
+  const { role, flags, isLoading, refresh } = useResolvedFlags();
 
   const byKey = useMemo(() => {
-    const m = new Map<string, APIResolvedFlag>();
-    (data?.flags ?? []).forEach((f) => m.set(f.key, f));
+    const m = new Map<string, Flag>();
+    flags.forEach((f) => m.set(f.key, f));
     return m;
-  }, [data]);
+  }, [flags]);
 
   const flagState = useCallback(
     (key: string): FlagState => {
@@ -87,7 +84,7 @@ export const FlagsProvider: React.FC<{ children: ReactNode }> = ({
     isLoading,
     flagState,
     accessible,
-    refresh: () => void refetch(),
+    refresh,
   };
 
   return (

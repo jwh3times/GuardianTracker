@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.48] - 2026-09-12
+
+### Changed
+
+- Consolidated feature flags and your access tier behind a single owner.
+  Changing your early-access tier in Settings, or an admin changing a role or a
+  flag, still updates which features you can see straight away — and Settings
+  now asks the server for that once instead of twice. This is the seventh of
+  thirteen planned resource migrations.
+
 ## [1.3.47] - 2026-09-12
 
 ### Changed
@@ -855,7 +865,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.47...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.48...HEAD
+[1.3.48]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.47...v1.3.48
 [1.3.47]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.46...v1.3.47
 [1.3.46]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.45...v1.3.46
 [1.3.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.44...v1.3.45

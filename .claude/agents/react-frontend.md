@@ -75,8 +75,9 @@ frontend/src/
     CharacterContext.tsx        ← Thin selection-state wrapper (ADR 0020, E7): persists the active-character
                                    pick over the roster `data/characters.ts` owns; issues no query itself.
                                    Scopes weekly vendors
-    FlagsContext.tsx            ← GET /api/flags query; useFlag(key) / useFlags() resolved gating
-                                   state + role
+    FlagsContext.tsx            ← Thin gating wrapper (ADR 0020, E10) over `data/flags.ts`'s
+                                   useResolvedFlags(): issues no query itself, exposes
+                                   useFlag(key) / useFlags() resolved gating state + role
                                  All four hooks — useAuth, usePreferences, useFlags/useFlag, and
                                  useCharacters — throw when called outside their provider. There
                                  is no silent default state for any of them.
@@ -174,6 +175,27 @@ frontend/src/
                                    `SearchBar`, which keeps the 250ms debounce and six-result cap as
                                    presentation and no longer imports React Query, `apiFetch`, or the
                                    wire type.
+    flags.ts                     ← Seventh resource landed (E10). Private query key `["flags"]`;
+                                   endpoint `GET /api/flags`; `staleTime: 60_000`. Projects
+                                   `APIFlagsResponse` → `{ role, flags }` via `toFlag`, mapping each
+                                   `APIResolvedFlag.minTier` to the domain `Tier` (unrecognised
+                                   values fall back to `standard`, matching `lib/roles.ts`).
+                                   `useResolvedFlags()` returns `{ role, flags, isLoading, refresh }`;
+                                   `role` defaults to `"standard"` and `flags` to a stable empty array
+                                   until the response arrives. Exports `refresh` rather than a
+                                   `invalidateFlags(client)` module function — the two callers
+                                   (Settings' self opt-in, Admin's role/flag edits) both act after
+                                   their own mutation succeeds, inside a component, so a hook-returned
+                                   callback is the natural shape; before this module they invalidated
+                                   `["flags"]` directly. Flags follow the signed-in user's role, not
+                                   Destiny membership data, so this resource is deliberately outside
+                                   `data/membershipRefresh.ts`'s fan-out — ADR 0017's identity cleanup
+                                   clears it on user change instead. `FlagsContext.tsx` survives as a
+                                   thin gating wrapper over this hook, the same pattern
+                                   `CharacterContext` uses over `data/characters.ts`: its
+                                   throw-outside-the-provider guard is what stops a page hoisted above
+                                   the auth gate from fetching flags anonymously and failing open to
+                                   "everything accessible".
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
                                    the six-resource invalidation fan-out that follows it, replacing two
@@ -187,10 +209,11 @@ frontend/src/
                                    own invalidation entry point as its ADR 0020 slice lands. Read no
                                    membership argument — it reads the signed-in membership from
                                    `useAuth()`.
-                                   Search (E9) is membership-independent by design, so it was never in
-                                   this fan-out. Remaining resources (Flags, Admin, Catalysts, Crafting,
-                                   Seals) have not migrated yet — see the ADR 0020 note under "Shared
-                                   query definitions" below.
+                                   Search (E9) and Flags (E10) are membership-independent by design, so
+                                   neither is in this fan-out — Flags follows the signed-in user's role,
+                                   not Destiny membership data. Remaining resources (Admin, Catalysts,
+                                   Crafting, Seals) have not migrated yet — see the ADR 0020 note under
+                                   "Shared query definitions" below.
   styles/
     tokens.css                 ← Design tokens (color, type, spacing, rarity/difficulty maps)
     kit.css                    ← Component styles
@@ -374,9 +397,9 @@ const { data } = useQuery({
 });
 ```
 
-Wish list, Collections, Weekly, Characters, Items, and Search no longer follow
-this raw pattern — they are owned by `src/data/` modules (see below); their
-queries and mutations are not declared inline in a feature.
+Wish list, Collections, Weekly, Characters, Items, Search, and Flags no longer
+follow this raw pattern — they are owned by `src/data/` modules (see below);
+their queries and mutations are not declared inline in a feature.
 
 Use `apiFetch` for authenticated REST operations, including Bungie reconnect.
 The OAuth starter and initial callback delegate to the shared browser session
@@ -396,10 +419,10 @@ client. Its browser transport owns `fetch`, credential attachment, and refresh;
 
 [ADR 0020](../../docs/adr/0020-own-frontend-data-access.md) is landing
 resource-by-resource under `src/data/<resource>.ts`, one PR per resource.
-Wish list (E4), Collections (E5), Weekly (E6), Characters (E7), Items (E8), and
-Search (E9) have landed: `data/wishlist.ts` owns the wish list resource's query
-identity, projection, and all six mutations; `data/collections.ts` owns the
-collections resource's query identity and projection dispatch; `data/weekly.ts`
+Wish list (E4), Collections (E5), Weekly (E6), Characters (E7), Items (E8),
+Search (E9), and Flags (E10) have landed: `data/wishlist.ts` owns the wish list
+resource's query identity, projection, and all six mutations; `data/collections.ts`
+owns the collections resource's query identity and projection dispatch; `data/weekly.ts`
 owns the weekly resource's query identity, endpoint, and the `enabled` gate the
 two consumers previously composed themselves; `data/characters.ts` owns the
 characters resource's query identity, endpoint, and projection (`toCharacter`,
@@ -412,13 +435,21 @@ data is static per manifest version and carries no membership, so
 `data/search.ts` owns the global item search query identity, endpoint, the
 two-character minimum, and projection to `SearchResult` (`toRarity` for the
 rarity field), and by the same design exposes no invalidation entry point —
-search reads the manifest index, not membership data; and
-`data/membershipRefresh.ts` holds the cross-resource cache-refresh fan-out.
-Consumers read these modules instead of declaring their own. The remaining
-resources — Flags, Admin, Catalysts, Crafting, Seals — are sequenced by the
-#172 handoff and have not migrated yet, so for those, the per-feature
-`useQuery` / `useIdentityMutation` calls documented in this file remain how
-the code actually works today. The ESLint `no-restricted-imports`
+search reads the manifest index, not membership data; `data/flags.ts` owns the
+resolved-flags query identity, endpoint, and projection (`toFlag`), exposing a
+`refresh` callback rather than a module-level invalidation entry point, and by
+the same design is outside `data/membershipRefresh.ts`'s fan-out — flags follow
+the signed-in user's role, not Destiny membership data, and ADR 0017's identity
+cleanup clears them on user change; `FlagsContext` survives as a thin gating
+wrapper over it, the same pattern `CharacterContext` uses over
+`data/characters.ts`. Settings and Admin both call `useFlags().refresh()` after
+their own mutation succeeds rather than invalidating `["flags"]` directly, which
+they both did before this module existed. `data/membershipRefresh.ts` holds the
+cross-resource cache-refresh fan-out. Consumers read these modules instead of
+declaring their own. The remaining resources — Admin, Catalysts, Crafting,
+Seals — are sequenced by the #172 handoff and have not migrated yet, so for
+those, the per-feature `useQuery` / `useIdentityMutation` calls documented in
+this file remain how the code actually works today. The ESLint `no-restricted-imports`
 import-boundary ADR 0020 specifies has also not landed (E16), and so has the
 fan-out test that would fail if a migrated resource were added to
 `membershipRefresh.ts` without a matching invalidation entry point.
@@ -454,7 +485,9 @@ client singleton.
 
 ## Roles and feature flags
 
-`FlagsContext` (`contexts/FlagsContext.tsx`) queries `GET /api/flags` and exposes:
+`FlagsContext` (`contexts/FlagsContext.tsx`) is a thin gating wrapper (ADR 0020,
+E10) over `data/flags.ts`'s `useResolvedFlags()` — it issues no query itself —
+and exposes:
 
 - `useFlag(key)` — returns `{ enabled, accessible, locked }` for a single flag key
 - `useFlags()` — returns the full resolved flag map + caller's role

@@ -1,6 +1,12 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { http, HttpResponse } from "msw";
 import { API, sampleUser, server } from "../test/testServer";
@@ -122,7 +128,12 @@ describe("LockedFeature", () => {
 describe("Admin console", () => {
   it("lists members and toggles a feature flag", async () => {
     let flagPutHit = false;
+    let resolvedFlagGets = 0;
     server.use(
+      // Counts, then falls through to the shared fixture.
+      http.get(`${API}/api/flags`, () => {
+        resolvedFlagGets += 1;
+      }),
       http.put(`${API}/api/admin/flags/:key`, ({ params }) => {
         flagPutHit = true;
         return HttpResponse.json({
@@ -147,8 +158,44 @@ describe("Admin console", () => {
     const toggle = await screen.findByRole("switch", {
       name: /Enable Catalyst & Crafting tracker/i,
     });
+    const before = resolvedFlagGets;
     fireEvent.click(toggle);
     await waitFor(() => expect(flagPutHit).toBe(true));
+    // Editing a flag changes what this admin's own navigation should show, so
+    // the resolved flags must actually be fetched again.
+    await waitFor(() => expect(resolvedFlagGets).toBe(before + 1));
+  });
+
+  it("re-fetches resolved flags after changing a member's role", async () => {
+    let rolePutHit = false;
+    let resolvedFlagGets = 0;
+    server.use(
+      // Counts, then falls through to the shared fixture.
+      http.get(`${API}/api/flags`, () => {
+        resolvedFlagGets += 1;
+      }),
+      http.put(`${API}/api/admin/users/:id/role`, () => {
+        rolePutHit = true;
+        return HttpResponse.json({
+          id: "2",
+          role: "alpha",
+          previousRole: "beta",
+        });
+      }),
+    );
+    wrap(<Admin />);
+
+    const vega = await screen.findByText("Vega");
+    const row = vega.closest(".gt-userrow") as HTMLElement;
+    await waitFor(() => expect(resolvedFlagGets).toBe(1));
+
+    fireEvent.click(within(row).getByRole("button", { name: /Beta/ }));
+    fireEvent.click(within(row).getByRole("button", { name: /Alpha/ }));
+
+    await waitFor(() => expect(rolePutHit).toBe(true));
+    // A role change can change the admin's own gating, so the resolved flags
+    // must actually be fetched again.
+    await waitFor(() => expect(resolvedFlagGets).toBe(2));
   });
 });
 

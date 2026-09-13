@@ -9,6 +9,7 @@ import { Icon } from "../../components/Icon";
 import { FlagCard, UserRow } from "./AdminKit";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../contexts/AuthContext";
+import { useFlags } from "../../contexts/FlagsContext";
 import { apiFetch, ApiError } from "../../lib/api";
 import { relTime } from "../../lib/format";
 import {
@@ -26,6 +27,7 @@ export function Admin() {
   const qc = useQueryClient();
   const { showToast } = useToast();
   const { user } = useAuth();
+  const { refresh: refreshFlags } = useFlags();
   const [tab, setTab] = useState<Tab>("users");
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"all" | Role>("all");
@@ -60,7 +62,7 @@ export function Admin() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "users"] });
-      void qc.invalidateQueries({ queryKey: ["flags"] });
+      refreshFlags();
     },
     onError: (e) =>
       showToast(
@@ -83,7 +85,7 @@ export function Admin() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin", "flags"] });
-      void qc.invalidateQueries({ queryKey: ["flags"] });
+      refreshFlags();
     },
     onError: (e) =>
       showToast(
