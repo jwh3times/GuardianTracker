@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.56] - 2026-09-13
+
+### Fixed
+
+- The weekly recommendations index no longer rescans every collectible to
+  rebuild data it already has. A request arriving during a manifest update could
+  start a rebuild that ran only after the update's own rebuild had finished,
+  repeating a full scan for an identical result.
+
 ## [1.3.55] - 2026-09-13
 
 ### Changed
@@ -955,7 +964,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.55...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.56...HEAD
+[1.3.56]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.55...v1.3.56
 [1.3.55]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.54...v1.3.55
 [1.3.54]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.53...v1.3.54
 [1.3.53]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.52...v1.3.53
