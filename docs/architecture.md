@@ -140,7 +140,8 @@ The API talks to Bungie for:
 
 - public-client OAuth authorization-code exchange and authenticated reconnect
 - Bungie account and Destiny membership data
-- collections, records, characters, and weekly public data
+- collections, records, characters, owner-authenticated character equipment, and
+  weekly public data
 - manifest version and manifest database download
 
 The app does not treat Bungie data as live. User-facing surfaces should show
@@ -152,8 +153,8 @@ On startup and periodic checks, the API downloads the current Destiny manifest,
 extracts the SQLite database, opens it through the manifest provider, and notifies
 dependent services to rebuild manifest-derived indexes.
 
-Collections, cosmetics, catalysts, crafting, triumphs, search, and item detail
-views all depend on the manifest. The search index restores a matching versioned
+Collections, cosmetics, catalysts, crafting, triumphs, search, item detail, and
+Guardian equipment views all depend on the manifest. The search index restores a matching versioned
 snapshot from beside the manifest on startup, then rebuilds asynchronously when
 the snapshot is missing or the manifest changes. A build that fails is retried by
 the next search request rather than waiting for the next manifest swap, throttled
@@ -263,7 +264,8 @@ Primary route groups:
 - wishlist: user-scoped CRUD
 - preferences: user preferences plus irreversible first-run onboarding completion
 - records: catalysts, crafting, seals
-- characters: Destiny membership characters
+- characters: Destiny membership characters and owner-only equipped-item detail
+  for one character
 - admin: users, roles, flags, audit log
 - health: `/health` liveness and `/ready` readiness; readiness requires the
   manifest and, when a database pool is configured, a successful database ping

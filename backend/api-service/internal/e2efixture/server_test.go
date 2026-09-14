@@ -111,6 +111,15 @@ func TestManifestProfileVendorMilestoneAndSettingsRoutes(t *testing.T) {
 	if _, ok := characterData[CharacterID]; !ok {
 		t.Fatalf("component 200 = %+v", characters)
 	}
+	equipment := getBungie(t, server, profileBase+"200,205,300", true)
+	equippedItems := equipment["characterEquipment"].(map[string]any)["data"].(map[string]any)[CharacterID].(map[string]any)["items"].([]any)
+	if len(equippedItems) != 3 {
+		t.Fatalf("components 200,205,300 equipped item count = %d", len(equippedItems))
+	}
+	instances := equipment["itemComponents"].(map[string]any)["instances"].(map[string]any)["data"].(map[string]any)
+	if len(instances) != 3 {
+		t.Fatalf("components 200,205,300 instance count = %d", len(instances))
+	}
 	records := getBungie(t, server, profileBase+"900", true)
 	recordData := records["profileRecords"].(map[string]any)["data"].(map[string]any)["records"].(map[string]any)
 	if len(recordData) != 5 {

@@ -272,6 +272,9 @@ export const defaultHandlers = [
     }),
   ),
   http.get(`${API}/api/characters/:type/:id`, () => HttpResponse.json([])),
+  http.get(`${API}/api/characters/:type/:id/:characterId/equipment`, () =>
+    HttpResponse.json({ characterId: "", state: "ready", items: [] }),
+  ),
   http.get(`${API}/api/collections/:type/:id`, () =>
     HttpResponse.json(sampleCollections),
   ),

@@ -26,6 +26,11 @@ type ManifestResponse struct {
 // including collectibles (component 800).
 type ProfileResponse struct {
 	Response struct {
+		Characters         ComponentEnvelope[map[string]CharacterComponent]          `json:"characters"`
+		CharacterEquipment ComponentEnvelope[map[string]CharacterEquipmentComponent] `json:"characterEquipment"`
+		ItemComponents     struct {
+			Instances ComponentEnvelope[map[string]DestinyItemInstanceComponent] `json:"instances"`
+		} `json:"itemComponents"`
 		ProfileCollectibles struct {
 			Data struct {
 				Collectibles map[string]CollectibleComponent `json:"collectibles"`
@@ -41,6 +46,17 @@ type ProfileResponse struct {
 	ErrorCode   int    `json:"ErrorCode"`
 	ErrorStatus string `json:"ErrorStatus"`
 	Message     string `json:"Message"`
+}
+
+// ComponentEnvelope is Bungie's wrapper around one requested profile
+// component. Data is a pointer so callers can distinguish an absent or null
+// component from a successful component whose map is genuinely empty.
+// Disabled is also a pointer because the live API omits it when the component
+// is enabled rather than returning false.
+type ComponentEnvelope[T any] struct {
+	Data     *T    `json:"data"`
+	Privacy  int   `json:"privacy"`
+	Disabled *bool `json:"disabled"`
 }
 
 // CharactersResponse contains a user's characters (component 200).
@@ -74,6 +90,34 @@ type CharacterComponent struct {
 	EmblemPath           string `json:"emblemPath"`
 	EmblemBackgroundPath string `json:"emblemBackgroundPath"`
 	DateLastPlayed       string `json:"dateLastPlayed"`
+}
+
+// CharacterEquipmentComponent is component 205 for one character.
+type CharacterEquipmentComponent struct {
+	Items []DestinyItemComponent `json:"items"`
+}
+
+// DestinyItemComponent is the identity and placement of one equipped item.
+// ItemInstanceID is a string on the wire even though Bungie's schema describes
+// the underlying value as int64.
+type DestinyItemComponent struct {
+	ItemHash       uint32 `json:"itemHash"`
+	ItemInstanceID string `json:"itemInstanceId"`
+	BucketHash     uint32 `json:"bucketHash"`
+}
+
+// DestinyItemInstanceComponent is the subset of component 300 used by
+// character equipment. PrimaryStat is optional for equipped cosmetics and
+// other items that do not carry a Power value.
+type DestinyItemInstanceComponent struct {
+	PrimaryStat *DestinyStatComponent `json:"primaryStat"`
+}
+
+// DestinyStatComponent is one hash/value stat pair embedded in item-instance
+// and character data.
+type DestinyStatComponent struct {
+	StatHash uint32 `json:"statHash"`
+	Value    int    `json:"value"`
 }
 
 // CollectibleDefinition is a Bungie manifest collectible entry.

@@ -192,7 +192,7 @@ func TestSearchHandler_NotReadyKicksIndexBuild(t *testing.T) {
 
 func charactersHandler(t *testing.T, bungieURL string, ts *auth.TokenStore) *CharactersHandler {
 	t.Helper()
-	svc := characters.NewService(bungie.NewClient("k", bungieURL, 100, 100), cache.NewMemoryCache(time.Minute, 0), time.Minute)
+	svc := characters.NewService(bungie.NewClient("k", bungieURL, 100, 100), nil, cache.NewMemoryCache(time.Minute, 0), time.Minute)
 	return NewCharactersHandler(svc, ts)
 }
 
@@ -236,6 +236,48 @@ func TestCharacters_ExpiredRefreshToken(t *testing.T) {
 		t.Errorf("expired refresh = %d, want 401", w.Code)
 	} else if !strings.Contains(w.Body.String(), "BUNGIE_REAUTH_REQUIRED") {
 		t.Errorf("expired refresh body = %s, want BUNGIE_REAUTH_REQUIRED", w.Body.String())
+	}
+}
+
+func TestCharacterEquipment_BadCharacterID(t *testing.T) {
+	h := charactersHandler(t, "http://x", newTokenStore(t))
+	r := authedRouter(http.MethodGet, "/api/characters/:membershipType/:membershipId/:characterId/equipment", testUserID, h.GetEquipment)
+	if w := do(r, http.MethodGet, "/api/characters/3/"+testUserID+"/not-a-character/equipment"); w.Code != http.StatusBadRequest {
+		t.Errorf("bad character id = %d, want 400", w.Code)
+	}
+}
+
+func TestCharacterEquipment_NoToken(t *testing.T) {
+	h := charactersHandler(t, "http://x", newTokenStore(t))
+	r := authedRouter(http.MethodGet, "/api/characters/:membershipType/:membershipId/:characterId/equipment", testUserID, h.GetEquipment)
+	path := "/api/characters/3/" + testUserID + "/2305843009263456789/equipment"
+	if w := do(r, http.MethodGet, path); w.Code != http.StatusUnauthorized {
+		t.Errorf("no token = %d, want 401", w.Code)
+	} else if !strings.Contains(w.Body.String(), "BUNGIE_REAUTH_REQUIRED") {
+		t.Errorf("no token body = %s, want BUNGIE_REAUTH_REQUIRED", w.Body.String())
+	}
+}
+
+func TestCharacterEquipment_NotFound(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{
+			"characters":{"privacy":1,"data":{"2305843009263456789":{"characterId":"2305843009263456789"}}},
+			"characterEquipment":{"privacy":1,"data":{}}
+		}}`)
+	}))
+	defer upstream.Close()
+
+	ts := newTokenStore(t)
+	storeValidToken(ts, testUserID)
+	h := charactersHandler(t, upstream.URL, ts)
+	r := authedRouter(http.MethodGet, "/api/characters/:membershipType/:membershipId/:characterId/equipment", testUserID, h.GetEquipment)
+	path := "/api/characters/3/" + testUserID + "/2305843009000000000/equipment"
+	w := do(r, http.MethodGet, path)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("missing character = %d, want 404: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "CHARACTER_NOT_FOUND") {
+		t.Errorf("missing character body = %s, want CHARACTER_NOT_FOUND", w.Body.String())
 	}
 }
 
@@ -338,7 +380,7 @@ func collectionsHandler(t *testing.T, ts *auth.TokenStore) *CollectionsHandler {
 	t.Helper()
 	c := cache.NewMemoryCache(time.Minute, 0)
 	analysis := collections.NewMembershipAnalysis(bungie.NewClient("k", "http://x", 100, 100), nil, nil, nil, c, time.Minute)
-	charSvc := characters.NewService(bungie.NewClient("k", "http://x", 100, 100), c, time.Minute)
+	charSvc := characters.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, c, time.Minute)
 	recSvc := records.NewService(bungie.NewClient("k", "http://x", 100, 100), nil, c, time.Minute)
 	return NewCollectionsHandler(collections.NewService(analysis, &mockLiveVendors{}, charSvc, recSvc), ts)
 }
@@ -364,6 +406,7 @@ func TestMembershipRoutes_RejectAPlatformMismatch(t *testing.T) {
 		"collections":         collections.GetCollections,
 		"collections refresh": collections.RefreshCollections,
 		"characters":          charactersHandler(t, "http://x", ts).GetCharacters,
+		"character equipment": charactersHandler(t, "http://x", ts).GetEquipment,
 		"catalysts":           records.GetCatalysts,
 		"crafting":            records.GetCrafting,
 		"seals":               records.GetSeals,
@@ -372,8 +415,14 @@ func TestMembershipRoutes_RejectAPlatformMismatch(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// The context membership id matches; only the platform differs from
 			// the type the router set (3).
-			r := authedRouter(http.MethodGet, "/api/x/:membershipType/:membershipId", testUserID, fn)
-			w := do(r, http.MethodGet, "/api/x/2/"+testUserID)
+			path := "/api/x/:membershipType/:membershipId"
+			target := "/api/x/2/" + testUserID
+			if name == "character equipment" {
+				path += "/:characterId"
+				target += "/2305843009263456789"
+			}
+			r := authedRouter(http.MethodGet, path, testUserID, fn)
+			w := do(r, http.MethodGet, target)
 			if w.Code != http.StatusForbidden {
 				t.Errorf("%s with a mismatched platform = %d, want 403", name, w.Code)
 			}

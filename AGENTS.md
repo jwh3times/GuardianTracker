@@ -233,7 +233,10 @@ deployed frontend runtime is nginx.
 - Refresh token revocation is backed by PostgreSQL.
 - Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
 - Single-device logout preserves Bungie authorization; logout-all evicts it.
-- Membership-scoped routes (collections, collections refresh, characters, catalysts, crafting, seals) authorize the caller's whole Destiny membership pair — platform type and ID, not ID alone — and abort the request on mismatch before any Bungie call or cache access.
+- Membership-scoped routes (collections, collections refresh, characters,
+  character equipment, catalysts, crafting, seals) authorize the caller's whole
+  Destiny membership pair — platform type and ID, not ID alone — and abort the
+  request on mismatch before any Bungie call or cache access.
 - Admin access is controlled by explicit membership ID configuration. Self-service role updates lock the current database row, reject admins, and commit `role.optin` audit events atomically without session/token-version changes. Successful bootstrap admin upserts evict the local authorization cache; cross-replica cache propagation retains its 60-second window.
 
 See `SECURITY.md` for public security posture and reporting guidance.
@@ -554,7 +557,8 @@ Single-context layout: root `CONTEXT.md` (created lazily) + existing `docs/adr/`
 
 - Collections data remains membership-wide. The character switcher scopes
   authenticated weekly vendor inventory, today actions, availability ranking,
-  and Xûr location to the selected character; deeper character surfaces remain P2.
+  Xûr location, and the Guardian equipment view to the selected character.
+  Progression and activity surfaces remain P2.
 - Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready). A build that fails is retried by the next search request (throttled to one attempt per 30s) instead of waiting for the next hourly manifest swap.
 - Xûr location is best-effort: the authenticated character-vendor component's
   location index resolves through the manifest to "The Tower"; failures omit the field.

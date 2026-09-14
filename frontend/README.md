@@ -65,8 +65,8 @@ src/
 ```
 
 The production feature slices are `admin`, `auth`, `collections`, `cosmetics`,
-`dashboard`, `onboarding`, `settings`, `weekly`, and `wishlist`. Tests are
-colocated with the source they cover.
+`dashboard`, `guardian`, `onboarding`, `settings`, `weekly`, and `wishlist`.
+Tests are colocated with the source they cover.
 
 `design/` is a frozen historical prototype, not a second implementation source.
 See [its README](./design/README.md) before using any of its assets.
@@ -84,7 +84,9 @@ mobile navigation, global search, settings access, and the selected-character
 control. Page routes include Dashboard, Collections, Cosmetics, Wishlist, This
 Week, Catalysts & Crafting, Triumphs & Seals, Settings, and the admin-only
 console. Feature-flag and admin checks in the UI supplement server-side
-authorization; they do not replace it.
+authorization; they do not replace it. The Guardian route shows only the
+selected character's current equipment; collection ownership remains
+membership-wide.
 
 ## Authentication
 

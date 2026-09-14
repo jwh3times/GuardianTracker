@@ -201,6 +201,8 @@ func (s *Server) profile(w http.ResponseWriter, r *http.Request) {
 		writeBungie(w, collectibleProfile())
 	case "200":
 		writeBungie(w, characterProfile())
+	case "200,205,300":
+		writeBungie(w, equipmentProfile())
 	case "900":
 		writeBungie(w, recordsProfile())
 	default:
@@ -238,6 +240,29 @@ func characterProfile() map[string]any {
 			},
 		}},
 	}
+}
+
+func equipmentProfile() map[string]any {
+	profile := characterProfile()
+	profile["characterEquipment"] = map[string]any{
+		"privacy": 1,
+		"data": map[string]any{CharacterID: map[string]any{"items": []any{
+			map[string]any{"itemHash": fatebringerHash, "itemInstanceId": "fatebringer-instance", "bucketHash": uint32(1498876634)},
+			map[string]any{"itemHash": testHelmetHash, "itemInstanceId": "helmet-instance", "bucketHash": uint32(3448274439)},
+			map[string]any{"itemHash": testShipHash, "itemInstanceId": "ship-instance", "bucketHash": uint32(284967655)},
+		}}},
+	}
+	profile["itemComponents"] = map[string]any{
+		"instances": map[string]any{
+			"privacy": 2,
+			"data": map[string]any{
+				"fatebringer-instance": map[string]any{"primaryStat": map[string]any{"statHash": uint32(1480404414), "value": 2010}},
+				"helmet-instance":      map[string]any{"primaryStat": map[string]any{"statHash": uint32(3897883278), "value": 2008}},
+				"ship-instance":        map[string]any{},
+			},
+		},
+	}
+	return profile
 }
 
 func recordsProfile() map[string]any {

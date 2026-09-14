@@ -62,6 +62,7 @@ test.beforeEach(async ({ scenario }) => {
 
 const authenticatedPages = [
   ["dashboard", "/dashboard", /Welcome,/],
+  ["guardian", "/guardian", "Warlock"],
   ["collections", "/collections", "Collections"],
   ["cosmetics", "/cosmetics", "Cosmetics"],
   ["wishlist", "/wishlist", "Wishlist"],

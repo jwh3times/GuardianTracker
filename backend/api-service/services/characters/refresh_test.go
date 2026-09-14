@@ -54,7 +54,7 @@ func TestGetCharacters_ALoadInFlightDuringARefreshIsNotReused(t *testing.T) {
 
 	c := cache.NewMemoryCache(time.Minute, 0)
 	defer c.Close()
-	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), c, time.Minute)
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), nil, c, time.Minute)
 
 	type result struct {
 		chars []Character
@@ -100,7 +100,7 @@ func TestGetCharacters_ARefreshDoesNotRetireAnotherMembershipsLoad(t *testing.T)
 
 	c := cache.NewMemoryCache(time.Minute, 0)
 	defer c.Close()
-	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), c, time.Minute)
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), nil, c, time.Minute)
 
 	done := make(chan error, 1)
 	go func() {
