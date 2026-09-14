@@ -14,6 +14,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.3.58] - 2026-09-13
+
+### Fixed
+
+- Local development sign-in through an HTTPS tunnel works again. When sign-in
+  starts on `http://localhost:5273` but Bungie redirects to a tunnel callback,
+  setting `VITE_OAUTH_COMPLETION_ORIGIN=http://localhost:5273` makes the callback
+  forward itself to the local origin before completing. Since `1.3.11`, completing
+  on the tunnel origin failed with "Invalid or expired state", because the
+  browser withholds the API's `SameSite=Lax` sign-in cookie from that cross-site
+  request. Reconnecting Bungie is fixed the same way. The setting is a Docker
+  build argument and is empty by default, so production builds are unchanged.
+
 ## [1.3.57] - 2026-09-13
 
 ### Added
@@ -975,7 +988,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.57...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.58...HEAD
+[1.3.58]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.57...v1.3.58
 [1.3.57]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.56...v1.3.57
 [1.3.56]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.55...v1.3.56
 [1.3.55]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.54...v1.3.55

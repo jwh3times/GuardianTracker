@@ -34,12 +34,17 @@ Vite exposes only `VITE_`-prefixed values to browser code:
 
 ```env
 VITE_API_URL=http://localhost:8081
-VITE_AUTH_REDIRECT_URI=http://localhost:5273/auth/callback
+# Optional, development only — see SETUP.md.
+VITE_OAUTH_COMPLETION_ORIGIN=http://localhost:5273
 ```
 
 `NGROK_HOST` is an optional Vite-server setting for an HTTPS development tunnel;
-it is read by `vite.config.ts` but is not exposed to the browser. See
-[SETUP.md](../SETUP.md) for the complete OAuth and environment procedure.
+it is read by `vite.config.ts` but is not exposed to the browser.
+`VITE_OAUTH_COMPLETION_ORIGIN` makes an OAuth callback that lands on such a
+tunnel forward to the local origin sign-in started on; leave it unset otherwise.
+The OAuth redirect URI itself is configured on the API (`AUTH_REDIRECT_URI`), not
+in the frontend. See [SETUP.md](../SETUP.md) for the complete OAuth and
+environment procedure.
 
 ## Source Layout
 

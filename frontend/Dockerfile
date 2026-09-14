@@ -7,10 +7,15 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+# Development-only tunnel OAuth callback handoff (issue #317). Env files are
+# excluded from the build context, so it arrives as a build argument; empty by
+# default, which leaves the callback unchanged.
+ARG VITE_OAUTH_COMPLETION_ORIGIN=
+ENV VITE_OAUTH_COMPLETION_ORIGIN=${VITE_OAUTH_COMPLETION_ORIGIN}
 RUN npm run build
 
 # Production stage — nginx serves the static dist/
-FROM nginxinc/nginx-unprivileged:1.31.5-alpine3.24@sha256:2ddec616f1cb58bcac057aa388f28cb81e35137641ef4226d321714499329bd1
+FROM nginxinc/nginx-unprivileged:1.31.5-alpine3.24@sha256:19c132c9ab02d3b783f478743dafc7a7f42e27aa7d2bdcbec1bb1128ca8f2a07
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
