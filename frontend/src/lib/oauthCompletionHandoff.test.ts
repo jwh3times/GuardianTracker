@@ -44,8 +44,12 @@ describe("completionHandoffTarget", () => {
     { name: "unset", configured: undefined },
     { name: "empty", configured: "" },
     { name: "whitespace", configured: "   " },
-  ])("does nothing when the setting is $name", ({ configured }) => {
+  ])("does nothing, silently, when the setting is $name", ({ configured }) => {
+    // Every Docker build without the setting receives an empty string, so an
+    // unset value must not warn on each sign-in.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(completionHandoffTarget(configured, tunnelCallback)).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("does nothing when the callback is already on the completion origin", () => {
@@ -60,6 +64,8 @@ describe("completionHandoffTarget", () => {
   it.each([
     { name: "not a URL", configured: "localhost:5273" },
     { name: "not http(s)", configured: "javascript:alert(1)" },
+    // ws: keeps a real origin, so only the protocol rule can reject it.
+    { name: "a non-http(s) origin", configured: "ws://localhost:5273" },
     { name: "carrying a path", configured: "http://localhost:5273/evil" },
     { name: "carrying a query", configured: "http://localhost:5273?x=1" },
     { name: "carrying credentials", configured: "http://user@localhost:5273" },
