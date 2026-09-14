@@ -46,11 +46,16 @@ If you use a public HTTPS tunnel for OAuth testing, add that tunnel callback URL
 to the Bungie application too, then update the local environment values to match.
 
 When sign-in starts on `http://localhost:5273` but Bungie redirects to the tunnel,
-also set `VITE_OAUTH_COMPLETION_ORIGIN=http://localhost:5273`: in the root `.env`
-for the Docker frontend (it is passed as a build argument, so rebuild with
-`docker compose up -d --build frontend`), or in `frontend/.env.local` for the Vite
-dev server. The callback page then forwards itself to that origin before
-completing. Without it, completion would run on the tunnel origin, where the
+also set `VITE_OAUTH_COMPLETION_ORIGIN=http://localhost:5273`:
+
+- For the Docker frontend, put it in the **root** `.env` and rebuild with
+  `docker compose up -d --build frontend`. It reaches the build only as a build
+  argument; the Docker frontend never reads `frontend/.env.local`, which the build
+  context excludes, so a value there is silently ignored.
+- For the Vite dev server (`npm start`), put it in `frontend/.env.local`.
+
+Only a loopback origin (`localhost`, `127.0.0.1`, or `[::1]`) is accepted. The
+callback page then forwards itself to that origin before completing. Without it, completion would run on the tunnel origin, where the
 browser withholds the API's `SameSite=Lax` transaction cookie from the cross-site
 request and sign-in fails with "Invalid or expired state".
 
