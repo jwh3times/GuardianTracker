@@ -11,6 +11,7 @@ import {
   hasBungieReconnectIntent,
 } from "../../lib/bungieReauthorization";
 import { browserSessionClient } from "../../lib/browserSessionBrowser";
+import { handOffOAuthCompletion } from "../../lib/oauthCompletionHandoff";
 
 export const OAuthCallback: React.FC = () => {
   const navigate = useNavigate();
@@ -25,6 +26,11 @@ export const OAuthCallback: React.FC = () => {
   useEffect(() => {
     if (submitted.current) return;
     submitted.current = true;
+
+    // Development tunnel: complete on the origin sign-in started on, where the
+    // transaction cookie and any reconnect intent live (issue #317). This must
+    // run before anything reads or clears that state.
+    if (handOffOAuthCompletion()) return;
 
     const handleCallback = async () => {
       const reconnect = hasBungieReconnectIntent() && isAuthenticated;

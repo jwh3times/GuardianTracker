@@ -1,6 +1,6 @@
 import { browserSessionClient } from "../../lib/browserSessionBrowser";
 import React from "react";
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -9,7 +9,15 @@ import { API, sampleUser, server } from "../../test/testServer";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { OAuthCallback } from "./OAuthCallback";
 
+// The handoff's own URL rules are tested in oauthCompletionHandoff.test.ts;
+// here only its contract with the page matters.
+const handoff = vi.hoisted(() => ({ navigated: false }));
+vi.mock("../../lib/oauthCompletionHandoff", () => ({
+  handOffOAuthCompletion: () => handoff.navigated,
+}));
+
 beforeEach(() => {
+  handoff.navigated = false;
   localStorage.clear();
   sessionStorage.clear();
   localStorage.setItem("guardian_token", "test-token");
@@ -175,5 +183,51 @@ describe("OAuthCallback", () => {
     expect(reconnectPosts).toBe(0);
     expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
     expect(browserSessionClient.getSnapshot().status).toBe("authenticated");
+  });
+
+  // Issue #317: when the callback hands off to the origin sign-in started on,
+  // this copy must neither spend the single-use code nor touch reconnect state.
+  it("does nothing else when the callback hands off to the completion origin", async () => {
+    handoff.navigated = true;
+    sessionStorage.setItem("guardian_bungie_reconnect", "1");
+    let callbackPosts = 0;
+    let reconnectPosts = 0;
+    server.use(
+      http.post(`${API}/api/auth/bungie/callback`, () => {
+        callbackPosts++;
+        return HttpResponse.json({ token: "new-token", user: sampleUser });
+      }),
+      http.post(`${API}/api/auth/bungie/reconnect`, () => {
+        reconnectPosts++;
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider>
+          <MemoryRouter
+            initialEntries={["/auth/callback?code=onetime&state=sig"]}
+          >
+            <Routes>
+              <Route path="/auth/callback" element={<OAuthCallback />} />
+              <Route path="/dashboard" element={<div>dashboard-stub</div>} />
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByText(/Reconnecting|Completing/),
+    ).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(callbackPosts).toBe(0);
+    expect(reconnectPosts).toBe(0);
+    expect(screen.queryByText("dashboard-stub")).not.toBeInTheDocument();
+    expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBe("1");
   });
 });
