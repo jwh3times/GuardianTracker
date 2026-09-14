@@ -90,6 +90,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Development-only tunnel OAuth callback handoff (SETUP.md, issue #317).
+        # Empty unless set in the root .env; empty leaves the callback unchanged.
+        VITE_OAUTH_COMPLETION_ORIGIN: ${VITE_OAUTH_COMPLETION_ORIGIN:-}
     ports:
       # Host port 5273 (was 3000). This host port doubles as the OAuth redirect
       # origin — keep it in sync with AUTH_REDIRECT_URI / CORS and the Bungie app.
