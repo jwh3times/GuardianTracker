@@ -18,6 +18,9 @@
 export const OAUTH_COMPLETION_ORIGIN: string | undefined = import.meta.env
   .VITE_OAUTH_COMPLETION_ORIGIN;
 
+// URL.hostname forms of the loopback hosts a local frontend can run on.
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
 type CallbackLocation = Pick<
   Location,
   "origin" | "pathname" | "search" | "hash"
@@ -26,9 +29,11 @@ type CallbackLocation = Pick<
 /**
  * The URL to forward the callback to, or null when it should complete here.
  *
- * Only a bare http(s) origin is accepted. Anything else is ignored with a
- * warning rather than followed: a path, query, or credentials in the setting
- * would let configuration steer the authorization code somewhere unexpected.
+ * Only a bare http(s) loopback origin is accepted. Anything else is ignored with
+ * a warning rather than followed: a path, query, or credentials in the setting
+ * would let configuration steer the authorization code somewhere unexpected,
+ * and a non-loopback host would send every visitor's one-time code to that host
+ * if a real deployment were ever built with the setting by mistake.
  */
 export function completionHandoffTarget(
   configured: string | undefined,
@@ -55,6 +60,12 @@ export function completionHandoffTarget(
   if (value.replace(/\/$/, "") !== target.origin) {
     console.warn(
       `Ignoring VITE_OAUTH_COMPLETION_ORIGIN: "${value}" must be a bare origin such as ${target.origin}.`,
+    );
+    return null;
+  }
+  if (!LOOPBACK_HOSTS.has(target.hostname)) {
+    console.warn(
+      `Ignoring VITE_OAUTH_COMPLETION_ORIGIN: "${value}" is not a loopback origin; the handoff is for local development only.`,
     );
     return null;
   }

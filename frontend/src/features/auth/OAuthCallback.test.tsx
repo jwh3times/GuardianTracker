@@ -189,6 +189,9 @@ describe("OAuthCallback", () => {
   // this copy must neither spend the single-use code nor touch reconnect state.
   it("does nothing else when the callback hands off to the completion origin", async () => {
     handoff.navigated = true;
+    // Signed out, with a reconnect intent: without the handoff returning first,
+    // the page would clear that intent and complete a login here instead.
+    localStorage.clear();
     sessionStorage.setItem("guardian_bungie_reconnect", "1");
     let callbackPosts = 0;
     let reconnectPosts = 0;

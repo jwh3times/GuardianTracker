@@ -40,6 +40,15 @@ describe("completionHandoffTarget", () => {
     ).toBe("http://localhost:5273/auth/callback?code=onetime&state=v2.signed");
   });
 
+  it.each(["http://127.0.0.1:5273", "http://[::1]:5273"])(
+    "accepts the loopback origin %s",
+    (configured) => {
+      expect(completionHandoffTarget(configured, tunnelCallback)).toBe(
+        `${configured}/auth/callback?code=onetime&state=v2.signed`,
+      );
+    },
+  );
+
   it.each([
     { name: "unset", configured: undefined },
     { name: "empty", configured: "" },
@@ -69,6 +78,11 @@ describe("completionHandoffTarget", () => {
     { name: "carrying a path", configured: "http://localhost:5273/evil" },
     { name: "carrying a query", configured: "http://localhost:5273?x=1" },
     { name: "carrying credentials", configured: "http://user@localhost:5273" },
+    { name: "not a loopback host", configured: "https://app.example" },
+    // Fails closed: the parsed origin is lowercased, so it no longer matches.
+    { name: "uppercase", configured: "HTTP://LOCALHOST:5273" },
+    // Fails closed: the parsed origin drops the default port.
+    { name: "an explicit default port", configured: "http://localhost:80" },
   ])("ignores a setting that is $name, with a warning", ({ configured }) => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(completionHandoffTarget(configured, tunnelCallback)).toBeNull();
