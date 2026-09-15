@@ -39,6 +39,11 @@ const ThisWeek = lazy(() =>
     default: m.ThisWeek,
   })),
 );
+const Guardian = lazy(() =>
+  import("./features/guardian/Guardian").then((m) => ({
+    default: m.Guardian,
+  })),
+);
 const Catalysts = lazy(() =>
   import("./features/collections/Catalysts").then((m) => ({
     default: m.Catalysts,
@@ -160,6 +165,7 @@ const AppContent: React.FC = () => {
 
         <Route element={<ProtectedLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/guardian" element={<Guardian />} />
           <Route path="/collections" element={<Collections />} />
           <Route
             path="/cosmetics"

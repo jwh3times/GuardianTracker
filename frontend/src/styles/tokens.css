@@ -165,6 +165,10 @@
   --rarity: var(--c-common);
   --rarity-dim: var(--c-common-dim);
 }
+[data-rarity="unresolved"] {
+  --rarity: var(--c-text-3);
+  --rarity-dim: var(--c-line-soft);
+}
 
 [data-diff="easy"] {
   --diff: var(--c-easy);

@@ -134,7 +134,7 @@ frontend/src/
                                    (`CharacterContext`, for the active-character selection) — see
                                    `data/characters.ts` above for how E7 resolved that dependency. Read by
                                    Dashboard and This Week.
-    characters.ts                ← Fourth resource landed (E7). Private query key
+    characters.ts                ← Fourth resource landed (E7). Roster query key
                                    `["characters", membershipType, membershipId]`; projects
                                    `APICharacter[]` → `Character[]` via `toCharacter` (moved here from
                                    `lib/adapters.ts`). `useCharacterRoster()` takes no arguments — it
@@ -147,9 +147,17 @@ frontend/src/
                                    is shared UI state that must re-render the AppShell's switcher, the
                                    Dashboard, and `data/weekly.ts` together — a context provides that,
                                    dissolving it would need a new external store. `useCharacters()`
-                                   (unchanged public API) is still how AppShell, Dashboard, This Week, and
-                                   `data/weekly.ts` read the roster plus the active pick; Settings reads
-                                   `useCharacterRoster()` directly since it does not need the pick.
+                                   (unchanged public API) is still how AppShell, Dashboard, Guardian, This
+                                   Week, and `data/weekly.ts` read the roster plus the active pick; Settings
+                                   reads `useCharacterRoster()` directly since it does not need the pick.
+                                   The same module owns per-character equipment under
+                                   `["characters", membershipType, membershipId, "equipment", characterId]`.
+                                   `useGuardianEquipment(characterId)` reads membership from `useAuth()`,
+                                   calls the owner-only equipment endpoint, and projects
+                                   `APIEquipmentDetail` to `GuardianEquipment`; its placement below the
+                                   characters root means `invalidateCharacters(client)` refreshes roster
+                                   and equipment together. CharacterContext also carries roster query errors
+                                   so the Guardian page cannot confuse a failed roster with an empty one.
     items.ts                     ← Fifth resource landed (E8). Private per-hash query keys
                                    `["item-perks", itemHash]` / `["item-view", itemHash]`; projects
                                    `APIItemPerks` → `ItemPerks` (`{ perkColumns, catalysts }`) and
@@ -447,6 +455,10 @@ frontend/src/
                                    ActionList.tsx, XurModule.tsx, MilestoneModule.tsx live here too (F5) —
                                    each has exactly one caller, this page
     dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + active-character weekly
+    guardian/Guardian.tsx      ← selected-Guardian identity, freshness, and current equipment grouped into
+                                   weapons, armor, and equipment via `data/characters.ts`'s
+                                   `useGuardianEquipment`; distinguishes unavailable, failed-roster, and
+                                   ready-but-empty states and renders unresolved item facts neutrally
     settings/Settings.tsx      ← Destiny membership info, early-access tier opt-in, appearance prefs, sign out
     admin/                     ← Admin.tsx (admin console: user roster + role mgmt, flag config;
                                    admin-gated route; reads `data/admin.ts`'s useAdminUsers/useAdminFlags/
@@ -653,6 +665,7 @@ wraps `AuthedProviders` (see `contexts/AppProviders.tsx` above), `AppShell`, and
 ```tsx
 <Route element={<ProtectedLayout />}>
   <Route path="/dashboard" element={<Dashboard />} />
+  <Route path="/guardian" element={<Guardian />} />
   <Route path="/collections" element={<Collections />} />
   {/* …this-week, catalysts, triumphs, wishlist, settings, admin */}
 </Route>
@@ -671,9 +684,11 @@ character selection per Destiny membership. `useCharacters()` returns
 `{ characters, activeCharacter, setActiveCharacter }` and throws when called
 outside `CharacterProvider`, matching `useAuth`, `useFlags`, and
 `usePreferences` — there is no silent `characters: []` default. Collections,
-catalysts, and seals remain membership-wide; Dashboard and This Week include
+catalysts, and seals remain membership-wide. Dashboard and This Week include
 the active character ID in weekly query keys and requests so authenticated
-vendor context follows the selected character.
+vendor context follows the selected character. Guardian passes the active
+character ID to `useGuardianEquipment`; the data module supplies the signed-in
+membership pair, so pages cannot select another membership.
 
 ## Preferences
 

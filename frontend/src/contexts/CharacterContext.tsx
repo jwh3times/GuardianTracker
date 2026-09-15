@@ -23,6 +23,9 @@ interface CharacterContextValue {
   activeCharacter: Character | null;
   setActiveCharacter: (id: string) => void;
   isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  retry: () => void;
 }
 
 // Undefined rather than a default value, so a consumer rendered outside the
@@ -40,7 +43,7 @@ const storageKey = (membershipId: string) =>
 export function CharacterProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const membershipId = user?.membershipId;
-  const { characters, isLoading } = useCharacterRoster();
+  const { characters, isLoading, isError, error, retry } = useCharacterRoster();
 
   // localStorage is the source of truth for the pick; `version` just forces a
   // re-read after writes. Switching memberships re-derives automatically.
@@ -65,8 +68,24 @@ export function CharacterProvider({ children }: { children: React.ReactNode }) {
     characters.find((c) => c.id === pickedId) ?? characters[0] ?? null;
 
   const value = useMemo(
-    () => ({ characters, activeCharacter, setActiveCharacter, isLoading }),
-    [characters, activeCharacter, setActiveCharacter, isLoading],
+    () => ({
+      characters,
+      activeCharacter,
+      setActiveCharacter,
+      isLoading,
+      isError,
+      error,
+      retry,
+    }),
+    [
+      characters,
+      activeCharacter,
+      setActiveCharacter,
+      isLoading,
+      isError,
+      error,
+      retry,
+    ],
   );
 
   return (

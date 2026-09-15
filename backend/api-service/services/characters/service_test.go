@@ -2,6 +2,7 @@ package characters
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 
 	"guardian-tracker/api-service/cache"
 	"guardian-tracker/api-service/services/bungie"
+	"guardian-tracker/api-service/services/items"
 )
 
 func newTestService(t *testing.T, handler http.HandlerFunc) (*Service, func()) {
@@ -17,7 +19,18 @@ func newTestService(t *testing.T, handler http.HandlerFunc) (*Service, func()) {
 	srv := httptest.NewServer(handler)
 	client := bungie.NewClient("k", srv.URL, 100, 100)
 	c := cache.NewMemoryCache(time.Minute, 0)
-	return NewService(client, c, time.Minute), srv.Close
+	return NewService(client, nil, c, time.Minute), srv.Close
+}
+
+type fakeEquipmentItems struct {
+	facts  map[uint32]items.AcquisitionFacts
+	err    error
+	hashes []uint32
+}
+
+func (f *fakeEquipmentItems) Lookup(_ context.Context, hashes []uint32) (map[uint32]items.AcquisitionFacts, error) {
+	f.hashes = append([]uint32(nil), hashes...)
+	return f.facts, f.err
 }
 
 func TestGetCharacters_MapsAndSortsMostRecentFirst(t *testing.T) {
@@ -90,5 +103,149 @@ func TestGetCharacters_PropagatesUpstreamError(t *testing.T) {
 
 	if _, err := svc.GetCharacters(context.Background(), 3, "id", "tok"); err == nil {
 		t.Fatal("expected error from upstream ErrorCode 5")
+	}
+}
+
+func TestGetEquipment_ProjectsVerifiedComponentsAndOrdersSlots(t *testing.T) {
+	const characterID = "2305843009263456789"
+	var components string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		components = r.URL.Query().Get("components")
+		fmt.Fprintf(w, `{"ErrorCode":1,"Response":{
+			"characters":{"privacy":1,"data":{"%s":{"characterId":"%s"}}},
+			"characterEquipment":{"privacy":1,"data":{"%s":{"items":[
+				{"itemHash":20,"itemInstanceId":"instance-20","bucketHash":3448274439},
+				{"itemHash":10,"itemInstanceId":"instance-10","bucketHash":1498876634},
+				{"itemHash":30,"bucketHash":999}
+			]}}},
+			"itemComponents":{"instances":{"privacy":2,"data":{
+				"instance-10":{"primaryStat":{"statHash":1480404414,"value":550}},
+				"instance-20":{"primaryStat":{"statHash":3897883278,"value":551}}
+			}}}
+		}}`, characterID, characterID, characterID)
+	}))
+	defer srv.Close()
+
+	reader := &fakeEquipmentItems{facts: map[uint32]items.AcquisitionFacts{
+		10: {ItemHash: 10, Name: "Kinetic weapon", ItemType: "Hand Cannon", Rarity: "Legendary", Icon: "/10.png"},
+		20: {ItemHash: 20, Name: "Helmet", ItemType: "Helmet", Rarity: "Exotic", Icon: "/20.png"},
+		30: {ItemHash: 30, Name: "Future slot", ItemType: "Item", Rarity: "Rare", Icon: "/30.png"},
+	}}
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), reader, cache.NewNoOpCache(), time.Minute)
+
+	detail, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
+	if err != nil {
+		t.Fatalf("GetEquipment: %v", err)
+	}
+	if components != "200,205,300" {
+		t.Errorf("components = %q, want 200,205,300", components)
+	}
+	if detail.State != EquipmentReady || len(detail.Items) != 3 {
+		t.Fatalf("detail = %+v, want ready with 3 items", detail)
+	}
+	if detail.FetchedAt.IsZero() {
+		t.Error("fetchedAt is zero")
+	}
+	if got := reader.hashes; fmt.Sprint(got) != "[20 10 30]" {
+		t.Errorf("Lookup hashes = %v, want equipment order", got)
+	}
+	if got := detail.Items[0]; got.ItemHash != "10" || got.Slot != "Kinetic" || got.Group != "Weapons" || got.Power == nil || *got.Power != 550 {
+		t.Errorf("first item = %+v, want resolved Kinetic weapon at 550", got)
+	}
+	if got := detail.Items[1]; got.ItemHash != "20" || got.Slot != "Helmet" || got.Group != "Armor" || got.Power == nil || *got.Power != 551 {
+		t.Errorf("second item = %+v, want resolved Helmet at 551", got)
+	}
+	if got := detail.Items[2]; got.Slot != "Item" || got.Group != "Equipment" || got.Power != nil {
+		t.Errorf("unknown-bucket item = %+v, want visible Equipment fallback without Power", got)
+	}
+}
+
+func TestGetEquipment_QualifiesAnUnresolvedManifestItem(t *testing.T) {
+	const characterID = "2305843009263456789"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"ErrorCode":1,"Response":{
+			"characters":{"privacy":1,"data":{"%s":{"characterId":"%s"}}},
+			"characterEquipment":{"privacy":1,"data":{"%s":{"items":[{"itemHash":99,"bucketHash":1498876634}]}}}
+		}}`, characterID, characterID, characterID)
+	}))
+	defer srv.Close()
+
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{facts: map[uint32]items.AcquisitionFacts{}}, cache.NewNoOpCache(), time.Minute)
+	detail, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
+	if err != nil {
+		t.Fatalf("GetEquipment: %v", err)
+	}
+	if len(detail.Items) != 1 {
+		t.Fatalf("items = %+v, want one unresolved item", detail.Items)
+	}
+	got := detail.Items[0]
+	if got.Resolved || got.Name != "Unknown item" || got.Rarity != "" || got.Icon != "" {
+		t.Errorf("unresolved item = %+v, want qualified unknown without fabricated manifest facts", got)
+	}
+}
+
+func TestGetEquipment_DistinguishesUnavailableFromEmpty(t *testing.T) {
+	const characterID = "2305843009263456789"
+	tests := []struct {
+		name      string
+		equipment string
+		wantState EquipmentState
+	}{
+		{"absent data", `{"privacy":1}`, EquipmentUnavailable},
+		{"disabled data", `{"privacy":1,"disabled":true,"data":{"` + characterID + `":{"items":[]}}}`, EquipmentUnavailable},
+		{"ready empty", `{"privacy":1,"data":{"` + characterID + `":{"items":[]}}}`, EquipmentReady},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				fmt.Fprintf(w, `{"ErrorCode":1,"Response":{
+					"characters":{"privacy":1,"data":{"%s":{"characterId":"%s"}}},
+					"characterEquipment":%s
+				}}`, characterID, characterID, tc.equipment)
+			}))
+			defer srv.Close()
+
+			svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{}, cache.NewNoOpCache(), time.Minute)
+			detail, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
+			if err != nil {
+				t.Fatalf("GetEquipment: %v", err)
+			}
+			if detail.State != tc.wantState || detail.Items == nil || len(detail.Items) != 0 {
+				t.Errorf("detail = %+v, want state %q and allocated empty items", detail, tc.wantState)
+			}
+		})
+	}
+}
+
+func TestGetEquipment_RejectsCharacterOutsideMembership(t *testing.T) {
+	svc, closeSrv := newTestService(t, func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{
+			"characters":{"privacy":1,"data":{"2305843009263456789":{"characterId":"2305843009263456789"}}},
+			"characterEquipment":{"privacy":1,"data":{}}
+		}}`)
+	})
+	defer closeSrv()
+
+	_, err := svc.GetEquipment(context.Background(), 3, "membership", "2305843009000000000", "token")
+	if !errors.Is(err, ErrCharacterNotFound) {
+		t.Fatalf("GetEquipment error = %v, want ErrCharacterNotFound", err)
+	}
+}
+
+func TestGetEquipment_PropagatesItemLookupFailure(t *testing.T) {
+	const characterID = "2305843009263456789"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"ErrorCode":1,"Response":{
+			"characters":{"privacy":1,"data":{"%s":{"characterId":"%s"}}},
+			"characterEquipment":{"privacy":1,"data":{"%s":{"items":[{"itemHash":10,"bucketHash":1498876634}]}}}
+		}}`, characterID, characterID, characterID)
+	}))
+	defer srv.Close()
+
+	want := errors.New("manifest unavailable")
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{err: want}, cache.NewNoOpCache(), time.Minute)
+	_, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
+	if !errors.Is(err, want) {
+		t.Fatalf("GetEquipment error = %v, want wrapped item lookup error", err)
 	}
 }

@@ -34,6 +34,12 @@ test("Dashboard", async ({ page }) => {
   await capture(page, "dashboard.png");
 });
 
+test("Guardian", async ({ page }) => {
+  await page.goto("/guardian");
+  await expect(page.getByRole("heading", { name: "Warlock" })).toBeVisible();
+  await capture(page, "guardian.png");
+});
+
 test("Collections", async ({ page }) => {
   await page.goto("/collections");
   await expect(

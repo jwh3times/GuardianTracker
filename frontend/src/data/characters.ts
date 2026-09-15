@@ -2,8 +2,9 @@ import { useCallback } from "react";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
-import type { APICharacter } from "../types/api";
-import type { Character } from "../types/design";
+import { toRarity } from "../lib/rarity";
+import type { APICharacter, APIEquipmentDetail } from "../types/api";
+import type { Character, GuardianEquipment } from "../types/design";
 
 /**
  * The Characters data-access module (ADR 0020). It owns this resource's query
@@ -32,6 +33,20 @@ function charactersKey(
   return ["characters", membershipType, membershipId] as const;
 }
 
+function equipmentKey(
+  membershipType: number | undefined,
+  membershipId: string | undefined,
+  characterId: string | undefined,
+) {
+  return [
+    "characters",
+    membershipType,
+    membershipId,
+    "equipment",
+    characterId,
+  ] as const;
+}
+
 /** Matches every membership's entry. Used only by the refresh seam. */
 const CHARACTERS_ROOT_KEY = ["characters"] as const;
 
@@ -53,6 +68,25 @@ function toCharacter(c: APICharacter): Character {
     power: c.light,
     emblem: 0,
     emblemUrl: c.emblemPath || undefined,
+    emblemBackgroundUrl: c.emblemBackgroundPath || undefined,
+  };
+}
+
+function toEquipment(detail: APIEquipmentDetail): GuardianEquipment {
+  return {
+    characterId: detail.characterId,
+    state: detail.state,
+    fetchedAt: detail.fetchedAt,
+    items: detail.items.map((item) => ({
+      id: item.itemHash,
+      slot: item.slot,
+      group: item.group,
+      name: item.name,
+      type: item.itemType,
+      rarity: item.resolved ? toRarity(item.rarity) : undefined,
+      icon: item.icon || undefined,
+      power: item.power,
+    })),
   };
 }
 
@@ -95,6 +129,39 @@ export function useCharacterRoster() {
 
   return {
     characters: data ?? NO_CHARACTERS,
+    isLoading,
+    isError,
+    error,
+    retry,
+  };
+}
+
+/**
+ * Equipment for one Guardian in the signed-in membership. The membership
+ * comes from the browser session; only the shared active-character pick is an
+ * argument.
+ */
+export function useGuardianEquipment(characterId: string | undefined) {
+  const { user } = useAuth();
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: equipmentKey(membershipType, membershipId, characterId),
+    queryFn: () =>
+      apiFetch<APIEquipmentDetail>(
+        `/api/characters/${membershipType}/${membershipId}/${characterId}/equipment`,
+      ),
+    enabled: membershipType != null && !!membershipId && characterId != null,
+    select: toEquipment,
+  });
+
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
+  return {
+    equipment: data,
     isLoading,
     isError,
     error,

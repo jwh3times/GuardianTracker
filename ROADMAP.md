@@ -23,20 +23,21 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ### Deeper Character-Scoped Surfaces
 
-**Status:** Not implemented
-**Gate:** Bungie response-shape verification
+**Status:** In progress
+**Gate:** Progression curation and live-activity response verification
 **Likely size:** Large
 
 The character switcher now drives authenticated weekly vendor context, including
-inventory that can vary by class. Collections remain membership-wide. Future
-character-scoped surfaces should use verified Bungie equipment, progression,
-and activity data rather than reinterpreting membership-wide collection data.
+inventory that can vary by class. The owner-only Guardian view adds current
+weapons, armor, and equipment for one character. Collections remain
+membership-wide. Further character-scoped surfaces should use verified Bungie
+progression and activity data rather than reinterpreting collection data.
 
-Expected shape:
+Remaining shape:
 
-- character detail endpoints
-- character-scoped UI routes or panels
-- clear distinction between membership-wide collection data and per-character data
+- curated per-Guardian progression summaries
+- recent Guardian activity history
+- live Guardian activity only after an active-session response is captured and verified
 
 ### God-Roll and Owned-Roll Insights
 

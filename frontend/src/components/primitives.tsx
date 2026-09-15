@@ -332,6 +332,21 @@ export function DataFreshnessChip({
       ? `Updated ${relTime(updatedAt)}`
       : "Updated —";
 
+  const content = (
+    <>
+      <Icon name="refresh" size="0.85rem" className="gt-fresh-icon" />
+      {label}
+    </>
+  );
+
+  if (!onRefresh) {
+    return (
+      <span className="gt-chip gt-fresh" data-state="fresh">
+        {content}
+      </span>
+    );
+  }
+
   return (
     <button
       className="gt-chip gt-fresh"
@@ -339,13 +354,11 @@ export function DataFreshnessChip({
       onClick={() => {
         if (!refreshing) onRefresh?.();
       }}
-      disabled={!onRefresh}
+      disabled={refreshing}
       aria-label="Refresh data"
-      title={onRefresh ? "Refresh data" : undefined}
-      style={onRefresh ? undefined : { cursor: "default" }}
+      title="Refresh data"
     >
-      <Icon name="refresh" size="0.85rem" className="gt-fresh-icon" />
-      {label}
+      {content}
     </button>
   );
 }

@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { server, API, sampleUser } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCharacters } from "../contexts/CharacterContext";
-import { useCharacterRoster } from "./characters";
+import { useCharacterRoster, useGuardianEquipment } from "./characters";
 import { useMembershipRefresh } from "./membershipRefresh";
 
 /**
@@ -39,6 +39,30 @@ function RosterProbe() {
 function PickProbe() {
   const { activeCharacter } = useCharacters();
   return <div data-testid="pick">{activeCharacter?.id ?? "none"}</div>;
+}
+
+function EquipmentProbe({ characterId = "char-a" }: { characterId?: string }) {
+  const { equipment, isLoading, isError, retry } =
+    useGuardianEquipment(characterId);
+  return (
+    <div>
+      <button onClick={retry}>retry equipment</button>
+      <div data-testid="equipment">
+        {isLoading
+          ? "loading"
+          : isError
+            ? "failed"
+            : equipment
+              ? `${equipment.characterId}|${equipment.state}|${equipment.fetchedAt}|${equipment.items
+                  .map(
+                    (item) =>
+                      `${item.id}:${item.slot}:${item.group}:${item.name}:${item.type}:${item.rarity}:${item.power ?? "no-power"}:${item.icon ?? "no-icon"}`,
+                  )
+                  .join(",")}`
+              : "none"}
+      </div>
+    </div>
+  );
 }
 
 describe("characters query identity", () => {
@@ -107,6 +131,58 @@ describe("projection", () => {
       ),
     );
   });
+
+  it("projects equipment and requests the signed-in membership plus Guardian", async () => {
+    const sent: string[] = [];
+    server.use(
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/equipment`,
+        ({ params }) => {
+          sent.push(
+            `${String(params.type)}/${String(params.id)}/${String(params.characterId)}`,
+          );
+          return HttpResponse.json({
+            characterId: "char-a",
+            state: "ready",
+            fetchedAt: "2026-09-14T00:00:00Z",
+            items: [
+              {
+                itemHash: "10",
+                slot: "Kinetic",
+                group: "Weapons",
+                name: "Fatebringer",
+                itemType: "Hand Cannon",
+                rarity: "Exotic",
+                icon: "/fatebringer.png",
+                resolved: true,
+                power: 550,
+              },
+              {
+                itemHash: "11",
+                slot: "Energy",
+                group: "Weapons",
+                name: "Unknown item",
+                itemType: "Energy",
+                icon: "",
+                resolved: false,
+              },
+            ],
+          });
+        },
+      ),
+    );
+
+    renderWithProviders(<EquipmentProbe />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("equipment")).toHaveTextContent(
+        "char-a|ready|2026-09-14T00:00:00Z|10:Kinetic:Weapons:Fatebringer:Hand Cannon:exotic:550:/fatebringer.png,11:Energy:Weapons:Unknown item:Energy:undefined:no-power:no-icon",
+      ),
+    );
+    expect(sent).toEqual([
+      `${sampleUser.membershipType}/${sampleUser.membershipId}/char-a`,
+    ]);
+  });
 });
 
 describe("retry", () => {
@@ -145,6 +221,19 @@ function RefreshAndRosterProbe() {
   );
 }
 
+function RefreshAndEquipmentProbe() {
+  const { refresh } = useMembershipRefresh();
+  const { equipment } = useGuardianEquipment("char-a");
+  return (
+    <div>
+      <button onClick={refresh}>refresh equipment</button>
+      <div data-testid="equipment-state">
+        {equipment?.items.map((item) => item.name).join(",") ?? "loading"}
+      </div>
+    </div>
+  );
+}
+
 describe("invalidation", () => {
   it("a membership refresh actually refetches the roster", async () => {
     let gets = 0;
@@ -170,6 +259,50 @@ describe("invalidation", () => {
     // entry. Only the refetched roster reaching the screen proves the key.
     await waitFor(() =>
       expect(screen.getByTestId("roster")).toHaveTextContent("char-2"),
+    );
+  });
+
+  it("a membership refresh refetches Guardian equipment", async () => {
+    let gets = 0;
+    server.use(
+      http.get(`${API}/api/characters/:type/:id/:characterId/equipment`, () => {
+        gets += 1;
+        return HttpResponse.json({
+          characterId: "char-a",
+          state: "ready",
+          fetchedAt: "2026-09-14T00:00:00Z",
+          items: [
+            {
+              itemHash: String(gets),
+              slot: "Kinetic",
+              group: "Weapons",
+              name: `Weapon ${gets}`,
+              itemType: "Hand Cannon",
+              rarity: "Legendary",
+              icon: "",
+              resolved: true,
+            },
+          ],
+        });
+      }),
+      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
+        HttpResponse.json({ success: true, message: "ok" }),
+      ),
+    );
+
+    renderWithProviders(<RefreshAndEquipmentProbe />);
+    await waitFor(() =>
+      expect(screen.getByTestId("equipment-state")).toHaveTextContent(
+        "Weapon 1",
+      ),
+    );
+
+    await userEvent.click(screen.getByText("refresh equipment"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("equipment-state")).toHaveTextContent(
+        "Weapon 2",
+      ),
     );
   });
 });

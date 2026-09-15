@@ -148,6 +148,27 @@ export interface APICharacter {
   dateLastPlayed: string;
 }
 
+/** One equipped item in GET .../:characterId/equipment. */
+export interface APIEquippedItem {
+  itemHash: string;
+  slot: string;
+  group: "Weapons" | "Armor" | "Equipment";
+  name: string;
+  itemType: string;
+  rarity?: string;
+  icon: string;
+  resolved: boolean;
+  power?: number;
+}
+
+/** GET /api/characters/:membershipType/:membershipId/:characterId/equipment */
+export interface APIEquipmentDetail {
+  characterId: string;
+  state: "ready" | "unavailable";
+  items: APIEquippedItem[];
+  fetchedAt: string;
+}
+
 // --- Misc ---
 
 /** POST /api/collections/:type/:id/refresh */

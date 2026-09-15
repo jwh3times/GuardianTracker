@@ -12,6 +12,9 @@ export const FIXTURES = {
   adminMembershipId: "4611686018400000001",
   collectionItemHash: "100",
   collectionItemName: "Fatebringer",
+  guardianWeaponName: "Fatebringer",
+  guardianArmorName: "Helm of Tests",
+  guardianEquipmentName: "Test Ship",
   wishlistItemName: "Fatebringer",
   catalystName: "Sunshot Catalyst",
 } as const;

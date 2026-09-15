@@ -24,6 +24,21 @@ test("Dashboard and Collections render deterministic account data", async ({
   await expect(drawer).toBeHidden();
 });
 
+test("Guardian renders the selected character's current equipment", async ({
+  page,
+}) => {
+  await page.goto("/guardian");
+  await expect(page.getByRole("heading", { name: "Warlock" })).toBeVisible();
+  await expect(page.getByText("Human Guardian")).toBeVisible();
+  await expect(page.getByText(FIXTURES.guardianWeaponName)).toBeVisible();
+  await expect(page.getByText(FIXTURES.guardianArmorName)).toBeVisible();
+  await expect(page.getByText(FIXTURES.guardianEquipmentName)).toBeVisible();
+  await expect(page.getByLabel("2010 Power")).toBeVisible();
+  await expect(
+    page.getByText(/Collections remain shared across your Destiny membership/),
+  ).toBeVisible();
+});
+
 test("Catalysts, Crafting, Triumphs, Settings, and Cosmetics load", async ({
   page,
 }) => {

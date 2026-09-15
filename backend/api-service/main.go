@@ -152,7 +152,7 @@ func main() {
 
 	// Services — all manifest consumers share manifestProvider (lazy open,
 	// reconnects across manifest swaps).
-	charactersService := characters.NewService(bungieClient, appCache, cfg.CacheTTLCollections)
+	charactersService := characters.NewService(bungieClient, itemsService, appCache, cfg.CacheTTLCollections)
 	collectionsAnalysis := collections.NewMembershipAnalysis(bungieClient, manifestService, itemsService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
 	// Wish list core — constructed before Weekly, which reads saved item hashes

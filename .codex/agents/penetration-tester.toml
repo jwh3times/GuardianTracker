@@ -140,7 +140,7 @@ JWT-gated. NOT membership-scoped — returns public manifest-derived data only (
 
 ### `GET /api/collections/:membershipType/:membershipId`
 
-The path `membershipType`/`membershipId` pair must be validated together against the JWT's `membership_type`/`membership_id` claims — `ownershipCheck` (`api/handlers/common.go`) checks both, not `membershipId` alone. The same helper guards `GET /api/characters/:membershipType/:membershipId` and the catalysts/crafting/seals routes.
+The path `membershipType`/`membershipId` pair must be validated together against the JWT's `membership_type`/`membership_id` claims — `ownershipCheck` (`api/handlers/common.go`) checks both, not `membershipId` alone. The same helper guards both character routes and the catalysts/crafting/seals routes.
 
 - Test: authenticate as user A, then request `/api/collections/3/<user_B_membershipId>` — must be rejected (403), not return user B's data
 - Test: call without a JWT — must return 401
@@ -150,6 +150,22 @@ The path `membershipType`/`membershipId` pair must be validated together against
 ### `POST /api/collections/:membershipType/:membershipId/refresh`
 
 Same data-isolation check — must enforce ownership of the full membership pair before invalidating cache.
+
+## Character endpoints — data isolation
+
+### `GET /api/characters/:membershipType/:membershipId/:characterId/equipment`
+
+This route returns owner-specific equipped state. It must validate the complete
+path membership pair before reading the stored Bungie authorization or making a
+Bungie request, and the requested character must belong to that membership.
+
+- Test: authenticate as user A, then request equipment under user B's membership
+  ID or platform type — must return 403 before any Bungie call
+- Test: request a well-formed character ID absent from the authenticated
+  membership — must return 404 `CHARACTER_NOT_FOUND`
+- Test: call without a JWT — must return 401
+- Test: inspect a successful response — it may include manifest item facts and
+  optional Power, but must not expose Bungie item-instance IDs
 
 ## Wishlist endpoints — data isolation
 

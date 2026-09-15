@@ -512,10 +512,12 @@
   font-weight: var(--w-med);
 }
 .gt-fresh {
-  cursor: pointer;
   transition: all var(--dur) var(--ease);
 }
-.gt-fresh:hover {
+button.gt-fresh {
+  cursor: pointer;
+}
+button.gt-fresh:hover {
   background: var(--c-surface-3);
   color: var(--c-text);
 }

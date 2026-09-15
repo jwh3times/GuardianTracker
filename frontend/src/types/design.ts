@@ -56,6 +56,28 @@ export interface Character {
   emblem: number;
   /** Full URL to the character's emblem icon (real data only; mock omits it). */
   emblemUrl?: string;
+  /** Full URL to the character's wide emblem background. */
+  emblemBackgroundUrl?: string;
+}
+
+export type EquipmentGroup = "Weapons" | "Armor" | "Equipment";
+
+export interface EquippedItem {
+  id: string;
+  slot: string;
+  group: EquipmentGroup;
+  name: string;
+  type: string;
+  rarity?: Rarity;
+  icon?: string;
+  power?: number;
+}
+
+export interface GuardianEquipment {
+  characterId: string;
+  state: "ready" | "unavailable";
+  items: EquippedItem[];
+  fetchedAt: string;
 }
 
 export interface TreeNode {

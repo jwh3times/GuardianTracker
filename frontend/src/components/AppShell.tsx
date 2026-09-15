@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
     icon: "dashboard",
     path: "/dashboard",
   },
+  { id: "guardian", label: "Guardian", icon: "guardian", path: "/guardian" },
   { id: "week", label: "This Week", icon: "week", path: "/this-week" },
   {
     id: "collections",
@@ -363,9 +364,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ))}
         <button
           className="gt-bottomtab"
-          data-active={["/catalysts", "/triumphs", "/settings", "/admin"].some(
-            (p) => isActive(p),
-          )}
+          data-active={[
+            "/guardian",
+            "/catalysts",
+            "/triumphs",
+            "/settings",
+            "/admin",
+          ].some((p) => isActive(p))}
           onClick={() => setMobileNav(true)}
         >
           <Icon name="menu" size="1.3rem" />

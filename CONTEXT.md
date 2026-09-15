@@ -78,6 +78,10 @@ not use it for the Bungie account, Destiny membership, or Guardian Tracker user.
 Collections are **membership-wide**; vendor inventory, time-sensitive actions,
 and Xûr's location can be **character-scoped**.
 
+**Equipped item** — an item currently placed in one character's equipment slot.
+Equipped state is character-scoped and does not imply membership-wide collection
+ownership.
+
 ---
 
 ## Guardian Tracker concepts
