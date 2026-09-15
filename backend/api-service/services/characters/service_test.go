@@ -2,10 +2,12 @@ package characters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,13 +21,24 @@ func newTestService(t *testing.T, handler http.HandlerFunc) (*Service, func()) {
 	srv := httptest.NewServer(handler)
 	client := bungie.NewClient("k", srv.URL, 100, 100)
 	c := cache.NewMemoryCache(time.Minute, 0)
-	return NewService(client, nil, c, time.Minute), srv.Close
+	return NewService(client, nil, nil, c, time.Minute), srv.Close
 }
 
 type fakeEquipmentItems struct {
 	facts  map[uint32]items.AcquisitionFacts
 	err    error
 	hashes []uint32
+}
+
+type fakeActivityDefinitions struct {
+	definitions map[uint32]*bungie.ActivityDefinition
+	err         error
+	hashes      []uint32
+}
+
+func (f *fakeActivityDefinitions) GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error) {
+	f.hashes = append([]uint32(nil), hashes...)
+	return f.definitions, f.err
 }
 
 func (f *fakeEquipmentItems) Lookup(_ context.Context, hashes []uint32) (map[uint32]items.AcquisitionFacts, error) {
@@ -131,7 +144,7 @@ func TestGetEquipment_ProjectsVerifiedComponentsAndOrdersSlots(t *testing.T) {
 		20: {ItemHash: 20, Name: "Helmet", ItemType: "Helmet", Rarity: "Exotic", Icon: "/20.png"},
 		30: {ItemHash: 30, Name: "Future slot", ItemType: "Item", Rarity: "Rare", Icon: "/30.png"},
 	}}
-	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), reader, cache.NewNoOpCache(), time.Minute)
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), reader, nil, cache.NewNoOpCache(), time.Minute)
 
 	detail, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
 	if err != nil {
@@ -170,7 +183,7 @@ func TestGetEquipment_QualifiesAnUnresolvedManifestItem(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{facts: map[uint32]items.AcquisitionFacts{}}, cache.NewNoOpCache(), time.Minute)
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{facts: map[uint32]items.AcquisitionFacts{}}, nil, cache.NewNoOpCache(), time.Minute)
 	detail, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
 	if err != nil {
 		t.Fatalf("GetEquipment: %v", err)
@@ -205,7 +218,7 @@ func TestGetEquipment_DistinguishesUnavailableFromEmpty(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{}, cache.NewNoOpCache(), time.Minute)
+			svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{}, nil, cache.NewNoOpCache(), time.Minute)
 			detail, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
 			if err != nil {
 				t.Fatalf("GetEquipment: %v", err)
@@ -243,9 +256,156 @@ func TestGetEquipment_PropagatesItemLookupFailure(t *testing.T) {
 	defer srv.Close()
 
 	want := errors.New("manifest unavailable")
-	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{err: want}, cache.NewNoOpCache(), time.Minute)
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{err: want}, nil, cache.NewNoOpCache(), time.Minute)
 	_, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
 	if !errors.Is(err, want) {
 		t.Fatalf("GetEquipment error = %v, want wrapped item lookup error", err)
 	}
+}
+
+func TestGetActivityHistory_ProjectsBoundedVerifiedFacts(t *testing.T) {
+	const characterID = "2305843009263456789"
+	const knownHash uint32 = 3637500864
+	var historyRequests int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/Destiny2/3/Profile/membership/":
+			fmt.Fprintf(w, `{"ErrorCode":1,"Response":{"characters":{"data":{"%s":{"characterId":"%s"}}}}}`, characterID, characterID)
+		case r.URL.Path == "/Destiny2/3/Account/membership/Character/"+characterID+"/Stats/Activities/":
+			historyRequests++
+			if got := r.URL.Query().Get("page"); got != "0" {
+				t.Errorf("page = %q, want 0", got)
+			}
+			if got := r.URL.Query().Get("count"); got != "5" {
+				t.Errorf("count = %q, want 5", got)
+			}
+			if got := r.Header.Get("Authorization"); got != "Bearer token" {
+				t.Errorf("Authorization = %q", got)
+			}
+			fmt.Fprintf(w, `{"ErrorCode":1,"Response":{"activities":[
+				{"period":"2026-09-14T20:15:00Z","activityDetails":{"referenceId":%d,"instanceId":"private-instance","isPrivate":false},"values":{"completed":{"basic":{"displayValue":"Yes","value":1}},"timePlayedSeconds":{"basic":{"displayValue":"11m 12s","value":672}}}},
+				{"activityDetails":{"referenceId":99,"instanceId":"another-instance","isPrivate":true},"values":{"completed":{"basic":{"displayValue":"Yes","value":1}}}},
+				{"period":"2026-09-14T19:00:00Z","activityDetails":{"referenceId":100,"instanceId":"abandoned-instance","isPrivate":false},"values":{"completed":{"basic":{"displayValue":"No","value":0}}}}
+			]}}`, knownHash)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	definitions := &fakeActivityDefinitions{definitions: map[uint32]*bungie.ActivityDefinition{
+		knownHash: {Hash: knownHash, DisplayProperties: bungie.DisplayProperties{Name: "The Insight Terminus"}},
+	}}
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), nil, definitions, cache.NewMemoryCache(time.Minute, 0), time.Minute)
+	history, err := svc.GetActivityHistory(context.Background(), 3, "membership", characterID, "token")
+	if err != nil {
+		t.Fatalf("GetActivityHistory: %v", err)
+	}
+	if historyRequests != 1 {
+		t.Fatalf("history requests = %d, want 1", historyRequests)
+	}
+	if history.State != ActivityHistoryReady || history.CharacterID != characterID || len(history.Activities) != 2 {
+		t.Fatalf("history = %+v", history)
+	}
+	first := history.Activities[0]
+	if first.ActivityHash != "3637500864" || first.Name != "The Insight Terminus" || first.OccurredAt != "2026-09-14T20:15:00Z" || first.Duration != "11m 12s" || first.PrivateMatch || !first.Resolved {
+		t.Errorf("first activity = %+v", first)
+	}
+	second := history.Activities[1]
+	if second.Name != "Unknown activity" || !second.PrivateMatch || second.Resolved || second.OccurredAt != "" || second.Duration != "" {
+		t.Errorf("second activity = %+v", second)
+	}
+	if len(definitions.hashes) != 2 || definitions.hashes[0] != knownHash || definitions.hashes[1] != 99 {
+		t.Errorf("definition hashes = %v", definitions.hashes)
+	}
+	encoded, err := json.Marshal(history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(encoded) == "" || containsAny(string(encoded), "private-instance", "another-instance", "abandoned-instance", "instanceId") {
+		t.Errorf("history leaked an activity instance identifier: %s", encoded)
+	}
+}
+
+func TestGetActivityHistory_DistinguishesUnavailableFromEmpty(t *testing.T) {
+	const characterID = "2305843009263456789"
+	tests := []struct {
+		name      string
+		response  string
+		wantState ActivityHistoryState
+	}{
+		{"absent response", `{"ErrorCode":1}`, ActivityHistoryUnavailable},
+		{"ready empty", `{"ErrorCode":1,"Response":{"activities":[]}}`, ActivityHistoryReady},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Query().Get("components") == "200" {
+					fmt.Fprintf(w, `{"ErrorCode":1,"Response":{"characters":{"data":{"%s":{"characterId":"%s"}}}}}`, characterID, characterID)
+					return
+				}
+				fmt.Fprint(w, tc.response)
+			}))
+			defer srv.Close()
+
+			svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), nil, nil, cache.NewNoOpCache(), time.Minute)
+			history, err := svc.GetActivityHistory(context.Background(), 3, "membership", characterID, "token")
+			if err != nil {
+				t.Fatalf("GetActivityHistory: %v", err)
+			}
+			if history.State != tc.wantState || history.Activities == nil || len(history.Activities) != 0 {
+				t.Errorf("history = %+v, want state %q and allocated empty activities", history, tc.wantState)
+			}
+		})
+	}
+}
+
+func TestGetActivityHistory_RejectsCharacterBeforeHistoryRequest(t *testing.T) {
+	var historyRequested bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("components") == "200" {
+			fmt.Fprint(w, `{"ErrorCode":1,"Response":{"characters":{"data":{"2305843009263456789":{"characterId":"2305843009263456789"}}}}}`)
+			return
+		}
+		historyRequested = true
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"activities":[]}}`)
+	}))
+	defer srv.Close()
+
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), nil, nil, cache.NewNoOpCache(), time.Minute)
+	_, err := svc.GetActivityHistory(context.Background(), 3, "membership", "2305843009000000000", "token")
+	if !errors.Is(err, ErrCharacterNotFound) {
+		t.Fatalf("GetActivityHistory error = %v, want ErrCharacterNotFound", err)
+	}
+	if historyRequested {
+		t.Fatal("history request crossed Bungie seam before character validation")
+	}
+}
+
+func TestGetActivityHistory_PropagatesManifestFailure(t *testing.T) {
+	const characterID = "2305843009263456789"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("components") == "200" {
+			fmt.Fprintf(w, `{"ErrorCode":1,"Response":{"characters":{"data":{"%s":{"characterId":"%s"}}}}}`, characterID, characterID)
+			return
+		}
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"activities":[{"period":"2026-09-14T20:15:00Z","activityDetails":{"referenceId":10},"values":{"completed":{"basic":{"displayValue":"Yes","value":1}}}}]}}`)
+	}))
+	defer srv.Close()
+
+	want := errors.New("manifest unavailable")
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), nil, &fakeActivityDefinitions{err: want}, cache.NewNoOpCache(), time.Minute)
+	_, err := svc.GetActivityHistory(context.Background(), 3, "membership", characterID, "token")
+	if !errors.Is(err, want) {
+		t.Fatalf("GetActivityHistory error = %v, want wrapped manifest error", err)
+	}
+}
+
+func containsAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }

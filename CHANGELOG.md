@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.5.0] - 2026-09-14
+
+### Added
+
+- The owner-only Guardian page now shows completed activities from one bounded
+  five-entry recent page for the selected character, with manifest-backed names
+  and optional activity time, duration, and private-match context. Independent
+  empty, unavailable, reconnect, and request-failure states keep this
+  best-effort history from blocking the existing character summary and equipment.
+
 ## [1.4.0] - 2026-09-14
 
 ### Added
@@ -1012,7 +1022,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.60...v1.4.0
 [1.3.60]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.59...v1.3.60
 [1.3.59]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.58...v1.3.59

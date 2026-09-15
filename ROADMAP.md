@@ -29,14 +29,14 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 The character switcher now drives authenticated weekly vendor context, including
 inventory that can vary by class. The owner-only Guardian view adds current
-weapons, armor, and equipment for one character. Collections remain
-membership-wide. Further character-scoped surfaces should use verified Bungie
-progression and activity data rather than reinterpreting collection data.
+weapons, armor, and equipment plus one bounded page of recent completed activity
+for one character. Collections remain membership-wide. Further character-scoped
+surfaces should use verified Bungie progression and activity data rather than
+reinterpreting collection data.
 
 Remaining shape:
 
 - curated per-Guardian progression summaries
-- recent Guardian activity history
 - live Guardian activity only after an active-session response is captured and verified
 
 ### God-Roll and Owned-Roll Insights

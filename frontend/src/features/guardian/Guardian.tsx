@@ -1,10 +1,19 @@
 import { useMemo, useState } from "react";
 import { useCharacters } from "../../contexts/CharacterContext";
-import { useGuardianEquipment } from "../../data/characters";
-import type { EquipmentGroup, EquippedItem } from "../../types/design";
+import {
+  useGuardianActivityHistory,
+  useGuardianEquipment,
+} from "../../data/characters";
+import type {
+  EquipmentGroup,
+  EquippedItem,
+  GuardianActivity,
+  GuardianActivityHistory,
+} from "../../types/design";
 import { Icon } from "../../components/Icon";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import {
+  Badge,
   DataFreshnessChip,
   EmptyState,
   ItemTile,
@@ -12,6 +21,10 @@ import {
 } from "../../components/primitives";
 
 const GROUPS: EquipmentGroup[] = ["Weapons", "Armor", "Equipment"];
+const activityTime = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 function GuardianHeroArt({ src }: { src: string | undefined }) {
   const [failed, setFailed] = useState(false);
@@ -93,6 +106,111 @@ function EquipmentLoading() {
   );
 }
 
+function ActivityTimestamp({ value }: { value: string | undefined }) {
+  if (!value) return <span>Time unavailable</span>;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return <span>Time unavailable</span>;
+  return <time dateTime={value}>{activityTime.format(parsed)}</time>;
+}
+
+function ActivityRow({ activity }: { activity: GuardianActivity }) {
+  return (
+    <li className="gt-guardian-activity" data-resolved={activity.resolved}>
+      <div className="gt-guardian-activity-time">
+        <ActivityTimestamp value={activity.occurredAt} />
+      </div>
+      <span className="gt-guardian-activity-trace" aria-hidden="true" />
+      <article className="gt-guardian-activity-main">
+        <div>
+          <h3>{activity.name}</h3>
+        </div>
+        <div className="gt-guardian-activity-facts">
+          {activity.duration && <span>{activity.duration} played</span>}
+          {activity.privateMatch && <Badge kind="private">Private match</Badge>}
+        </div>
+      </article>
+    </li>
+  );
+}
+
+function ActivityHistoryLoading() {
+  return (
+    <div
+      className="gt-guardian-activity-list"
+      aria-label="Loading recent activity"
+    >
+      {[0, 1, 2].map((row) => (
+        <div className="gt-guardian-activity" key={row}>
+          <Skeleton w="8rem" h="0.75rem" />
+          <span className="gt-guardian-activity-trace" aria-hidden="true" />
+          <div className="gt-guardian-activity-main">
+            <Skeleton w="45%" h="1rem" />
+            <Skeleton w="7rem" h="0.7rem" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActivityHistoryPanel({
+  history,
+  isLoading,
+  isError,
+  error,
+  retry,
+}: {
+  history: GuardianActivityHistory | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  retry: () => void;
+}) {
+  return (
+    <section
+      className="gt-guardian-history"
+      aria-labelledby="recent-activity-title"
+    >
+      <div className="gt-guardian-history-head">
+        <div>
+          <h2 id="recent-activity-title">Recent activity</h2>
+          <p>
+            The latest completed activities Bungie returned for this Guardian.
+          </p>
+        </div>
+        <DataFreshnessChip updatedAt={history?.fetchedAt} />
+      </div>
+
+      {isError ? (
+        <QueryErrorPanel error={error} onRetry={retry} />
+      ) : isLoading || !history ? (
+        <ActivityHistoryLoading />
+      ) : history.state === "unavailable" ? (
+        <EmptyState
+          icon="info"
+          title="Recent activity is unavailable"
+          body="Bungie did not return activity history for this Guardian. Reconnect your account or try again later."
+        />
+      ) : history.activities.length === 0 ? (
+        <EmptyState
+          icon="guardian"
+          title="No recent completed activity returned"
+          body="Complete an activity with this Guardian, then check back here."
+        />
+      ) : (
+        <ol className="gt-guardian-activity-list">
+          {history.activities.map((activity, index) => (
+            <ActivityRow
+              activity={activity}
+              key={`${activity.activityHash}:${activity.occurredAt ?? "unknown"}:${index}`}
+            />
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 export function Guardian() {
   const {
     activeCharacter,
@@ -108,6 +226,13 @@ export function Guardian() {
     error,
     retry,
   } = useGuardianEquipment(activeCharacter?.id);
+  const {
+    history,
+    isLoading: historyLoading,
+    isError: historyIsError,
+    error: historyError,
+    retry: retryHistory,
+  } = useGuardianActivityHistory(activeCharacter?.id);
 
   const grouped = useMemo(() => {
     const result = new Map<EquipmentGroup, EquippedItem[]>();
@@ -218,6 +343,14 @@ export function Guardian() {
           })}
         </div>
       )}
+
+      <ActivityHistoryPanel
+        history={history}
+        isLoading={historyLoading}
+        isError={historyIsError}
+        error={historyError}
+        retry={retryHistory}
+      />
     </div>
   );
 }

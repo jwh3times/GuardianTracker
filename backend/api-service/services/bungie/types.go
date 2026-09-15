@@ -1,5 +1,7 @@
 package bungie
 
+const activityHistoryPathFormat = "%s/Destiny2/%d/Account/%s/Character/%s/Stats/Activities/?page=%d&count=%d"
+
 // BungieResponse is the standard wrapper for all Bungie API responses.
 type BungieResponse struct {
 	Response        any    `json:"Response"`
@@ -69,6 +71,45 @@ type CharactersResponse struct {
 	ErrorCode   int    `json:"ErrorCode"`
 	ErrorStatus string `json:"ErrorStatus"`
 	Message     string `json:"Message"`
+}
+
+// ActivityHistoryResponse contains one bounded page of a character's recent
+// activity history. Response is a pointer because Bungie can successfully
+// answer while omitting the history payload; callers must not confuse that
+// unavailable state with an allocated, genuinely empty activities list.
+type ActivityHistoryResponse struct {
+	Response *struct {
+		Activities []HistoricalActivity `json:"activities"`
+	} `json:"Response"`
+	ErrorCode   int    `json:"ErrorCode"`
+	ErrorStatus string `json:"ErrorStatus"`
+	Message     string `json:"Message"`
+}
+
+// HistoricalActivity is the verified subset of one
+// DestinyHistoricalStatsPeriodGroup returned by GetActivityHistory.
+type HistoricalActivity struct {
+	Period          string                    `json:"period"`
+	ActivityDetails HistoricalActivityDetails `json:"activityDetails"`
+	Values          map[string]HistoricalStat `json:"values"`
+}
+
+// HistoricalActivityDetails identifies the manifest activity. InstanceID is
+// deliberately absent: the product does not expose PGCR links in this slice.
+type HistoricalActivityDetails struct {
+	ReferenceID uint32 `json:"referenceId"`
+	IsPrivate   bool   `json:"isPrivate"`
+}
+
+// HistoricalStat is the display-safe portion of one history stat. Bungie's
+// own localized display value avoids reconstructing stat-specific formatting.
+type HistoricalStat struct {
+	Basic HistoricalStatValue `json:"basic"`
+}
+
+type HistoricalStatValue struct {
+	DisplayValue string  `json:"displayValue"`
+	Value        float64 `json:"value"`
 }
 
 // CollectibleComponent is the per-item collectible state from the API.

@@ -80,6 +80,22 @@ export interface GuardianEquipment {
   fetchedAt: string;
 }
 
+export interface GuardianActivity {
+  activityHash: string;
+  name: string;
+  occurredAt?: string;
+  duration?: string;
+  privateMatch: boolean;
+  resolved: boolean;
+}
+
+export interface GuardianActivityHistory {
+  characterId: string;
+  state: "ready" | "unavailable";
+  activities: GuardianActivity[];
+  fetchedAt: string;
+}
+
 export interface TreeNode {
   id: string;
   label: string;
