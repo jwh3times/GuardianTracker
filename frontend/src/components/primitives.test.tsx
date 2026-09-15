@@ -47,7 +47,11 @@ describe("DataFreshnessChip", () => {
 
   it("shows a placeholder when no timestamp exists", () => {
     render(<DataFreshnessChip />);
-    expect(screen.getByText("Updated —")).toBeInTheDocument();
+    const chip = screen.getByText("Updated —");
+    expect(chip).toBeInTheDocument();
+    expect(chip.tagName).toBe("SPAN");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(chip).not.toHaveAccessibleName("Refresh data");
   });
 
   it("shows the refreshing state while a refresh is in flight", () => {

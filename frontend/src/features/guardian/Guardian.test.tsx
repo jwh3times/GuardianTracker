@@ -77,6 +77,15 @@ describe("Guardian equipment", () => {
                 icon: "",
                 resolved: true,
               },
+              {
+                itemHash: "40",
+                slot: "Artifact",
+                group: "Equipment",
+                name: "Unknown item",
+                itemType: "Artifact",
+                icon: "",
+                resolved: false,
+              },
             ],
           });
         },
@@ -101,6 +110,10 @@ describe("Guardian equipment", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Fatebringer")).toBeInTheDocument();
     expect(screen.getByText("Celestial Nighthawk")).toBeInTheDocument();
+    expect(screen.getByText("Unknown item").closest("article")).toHaveAttribute(
+      "data-rarity",
+      "unresolved",
+    );
     expect(screen.getByLabelText("551 Power")).toBeInTheDocument();
     expect(screen.getByText(/^Updated /)).toBeInTheDocument();
     expect(container.querySelector(".gt-guardian-hero-art")).toHaveAttribute(
