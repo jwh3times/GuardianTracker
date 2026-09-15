@@ -18,11 +18,11 @@ No unreleased changes.
 
 ### Added
 
-- The owner-only Guardian page now shows up to five of the selected character's
-  most recent completed activities, with manifest-backed names and optional
-  completion time, duration, and private-match context. Independent empty,
-  unavailable, reconnect, and request-failure states keep this best-effort
-  history from blocking the existing character summary and equipment.
+- The owner-only Guardian page now shows completed activities from one bounded
+  five-entry recent page for the selected character, with manifest-backed names
+  and optional activity time, duration, and private-match context. Independent
+  empty, unavailable, reconnect, and request-failure states keep this
+  best-effort history from blocking the existing character summary and equipment.
 
 ## [1.4.0] - 2026-09-14
 
