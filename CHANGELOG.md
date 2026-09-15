@@ -14,6 +14,30 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.4.0] - 2026-09-14
+
+### Added
+
+- An owner-only Guardian page follows the selected character and groups their
+  current weapons, armor, and equipment with manifest-backed names, icons,
+  rarities, and equipped Power when Bungie provides it. Its API validates the
+  caller's complete Destiny membership and character roster before returning
+  data, and never exposes Bungie item-instance identifiers.
+
+## [1.3.60] - 2026-09-14
+
+### Changed
+
+- Updated React and React DOM from 19.2.8 to 19.3.0, their TypeScript types to
+  19.3.0, `@types/node` from 26.5.0 to 26.5.1, and Vite from 8.2.2 to 8.3.0.
+
+## [1.3.59] - 2026-09-14
+
+### Changed
+
+- Refreshed the pinned `nginxinc/nginx-unprivileged:1.31.5-alpine3.24`
+  production-image digest.
+
 ## [1.3.58] - 2026-09-13
 
 ### Fixed
@@ -988,7 +1012,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.58...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.60...v1.4.0
+[1.3.60]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.59...v1.3.60
+[1.3.59]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.58...v1.3.59
 [1.3.58]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.57...v1.3.58
 [1.3.57]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.56...v1.3.57
 [1.3.56]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.55...v1.3.56
