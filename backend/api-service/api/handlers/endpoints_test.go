@@ -442,13 +442,14 @@ func TestMembershipRoutes_RejectAPlatformMismatch(t *testing.T) {
 	collections := collectionsHandler(t, ts)
 
 	routes := map[string]gin.HandlerFunc{
-		"collections":         collections.GetCollections,
-		"collections refresh": collections.RefreshCollections,
-		"characters":          charactersHandler(t, "http://x", ts).GetCharacters,
-		"character equipment": charactersHandler(t, "http://x", ts).GetEquipment,
-		"catalysts":           records.GetCatalysts,
-		"crafting":            records.GetCrafting,
-		"seals":               records.GetSeals,
+		"collections":                collections.GetCollections,
+		"collections refresh":        collections.RefreshCollections,
+		"characters":                 charactersHandler(t, "http://x", ts).GetCharacters,
+		"character equipment":        charactersHandler(t, "http://x", ts).GetEquipment,
+		"character activity history": charactersHandler(t, "http://x", ts).GetActivityHistory,
+		"catalysts":                  records.GetCatalysts,
+		"crafting":                   records.GetCrafting,
+		"seals":                      records.GetSeals,
 	}
 	for name, fn := range routes {
 		t.Run(name, func(t *testing.T) {
@@ -456,7 +457,7 @@ func TestMembershipRoutes_RejectAPlatformMismatch(t *testing.T) {
 			// the type the router set (3).
 			path := "/api/x/:membershipType/:membershipId"
 			target := "/api/x/2/" + testUserID
-			if name == "character equipment" {
+			if strings.HasPrefix(name, "character ") {
 				path += "/:characterId"
 				target += "/2305843009263456789"
 			}
