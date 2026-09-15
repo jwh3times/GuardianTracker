@@ -14,6 +14,22 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.5.1] - 2026-09-15
+
+### Added
+
+- The new `/lets-go` agent skill resumes a repository's active handoff from the
+  maintainer's synced handoff folder and marks it consumed, so work picks up on
+  another machine exactly once.
+
+### Changed
+
+- The `/handoff` agent skill now warns about work not merged to `main`, publishes
+  the handoff document to the synced handoff folder, registers it as the
+  repository's active handoff, and closes out with `end-session`. It is now
+  maintained in this repository rather than tracked from the upstream skill
+  source.
+
 ## [1.5.0] - 2026-09-14
 
 ### Added
@@ -1022,7 +1038,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.60...v1.4.0
 [1.3.60]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.59...v1.3.60
