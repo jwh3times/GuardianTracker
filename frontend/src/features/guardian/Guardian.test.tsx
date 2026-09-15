@@ -30,6 +30,7 @@ function renderGuardian() {
 describe("Guardian equipment", () => {
   it("renders the selected Guardian identity and grouped equipment", async () => {
     const requested: string[] = [];
+    const activityRequested: string[] = [];
     server.use(
       http.get(`${API}/api/characters/:type/:id`, () =>
         HttpResponse.json([character]),
@@ -90,6 +91,29 @@ describe("Guardian equipment", () => {
           });
         },
       ),
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/activity-history`,
+        ({ params }) => {
+          activityRequested.push(
+            `${String(params.type)}/${String(params.id)}/${String(params.characterId)}`,
+          );
+          return HttpResponse.json({
+            characterId: character.characterId,
+            state: "ready",
+            fetchedAt: new Date().toISOString(),
+            activities: [
+              {
+                activityHash: "3637500864",
+                name: "The Insight Terminus",
+                occurredAt: "2026-09-13T22:15:00Z",
+                duration: "11m 12s",
+                privateMatch: true,
+                resolved: true,
+              },
+            ],
+          });
+        },
+      ),
     );
 
     const { container } = renderGuardian();
@@ -115,7 +139,16 @@ describe("Guardian equipment", () => {
       "unresolved",
     );
     expect(screen.getByLabelText("551 Power")).toBeInTheDocument();
-    expect(screen.getByText(/^Updated /)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Recent activity" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("The Insight Terminus")).toBeInTheDocument();
+    expect(screen.getByText("11m 12s played")).toBeInTheDocument();
+    expect(screen.getByText("Private match")).toBeInTheDocument();
+    expect(
+      container.querySelector('time[datetime="2026-09-13T22:15:00Z"]'),
+    ).not.toBeNull();
+    expect(screen.getAllByText(/^Updated /)).toHaveLength(2);
     expect(container.querySelector(".gt-guardian-hero-art")).toHaveAttribute(
       "src",
       character.emblemBackgroundPath,
@@ -125,6 +158,9 @@ describe("Guardian equipment", () => {
       "https://www.bungie.net/fatebringer.png",
     );
     expect(requested).toEqual([
+      `${sampleUser.membershipType}/${sampleUser.membershipId}/${character.characterId}`,
+    ]);
+    expect(activityRequested).toEqual([
       `${sampleUser.membershipType}/${sampleUser.membershipId}/${character.characterId}`,
     ]);
   });
@@ -225,6 +261,117 @@ describe("Guardian equipment", () => {
     await waitFor(() =>
       expect(
         screen.getByText("No equipped items returned"),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it("distinguishes unavailable activity history from an empty history", async () => {
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json([character]),
+      ),
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/activity-history`,
+        () =>
+          HttpResponse.json({
+            characterId: character.characterId,
+            state: "unavailable",
+            activities: [],
+            fetchedAt: "2026-09-14T00:00:00Z",
+          }),
+      ),
+    );
+
+    const first = renderGuardian();
+    expect(
+      await screen.findByText("Recent activity is unavailable"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("No recent completed activity returned"),
+    ).not.toBeInTheDocument();
+    first.unmount();
+
+    server.use(
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/activity-history`,
+        () =>
+          HttpResponse.json({
+            characterId: character.characterId,
+            state: "ready",
+            activities: [],
+            fetchedAt: "2026-09-14T00:00:00Z",
+          }),
+      ),
+    );
+    renderGuardian();
+    expect(
+      await screen.findByText("No recent completed activity returned"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders partially populated activity rows honestly", async () => {
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json([character]),
+      ),
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/activity-history`,
+        () =>
+          HttpResponse.json({
+            characterId: character.characterId,
+            state: "ready",
+            activities: [
+              {
+                activityHash: "99",
+                name: "Unknown activity",
+                privateMatch: false,
+                resolved: false,
+              },
+            ],
+            fetchedAt: "2026-09-14T00:00:00Z",
+          }),
+      ),
+    );
+
+    const { container } = renderGuardian();
+    expect(await screen.findByText("Unknown activity")).toBeInTheDocument();
+    expect(screen.getByText("Time unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Unknown activity").closest("li")).toHaveAttribute(
+      "data-resolved",
+      "false",
+    );
+    expect(container.querySelector("time")).toBeNull();
+  });
+
+  it("surfaces an activity-history failure and retries", async () => {
+    let attempts = 0;
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json([character]),
+      ),
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/activity-history`,
+        () => {
+          attempts += 1;
+          return attempts === 1
+            ? HttpResponse.json({ error: "down" }, { status: 500 })
+            : HttpResponse.json({
+                characterId: character.characterId,
+                state: "ready",
+                activities: [],
+                fetchedAt: "2026-09-14T00:00:00Z",
+              });
+        },
+      ),
+    );
+
+    renderGuardian();
+
+    expect(await screen.findByText("Couldn't load data")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(
+        screen.getByText("No recent completed activity returned"),
       ).toBeInTheDocument(),
     );
   });

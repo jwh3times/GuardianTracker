@@ -24,7 +24,7 @@ test("Dashboard and Collections render deterministic account data", async ({
   await expect(drawer).toBeHidden();
 });
 
-test("Guardian renders the selected character's current equipment", async ({
+test("Guardian renders the selected character's equipment and recent activity", async ({
   page,
 }) => {
   await page.goto("/guardian");
@@ -33,6 +33,8 @@ test("Guardian renders the selected character's current equipment", async ({
   await expect(page.getByText(FIXTURES.guardianWeaponName)).toBeVisible();
   await expect(page.getByText(FIXTURES.guardianArmorName)).toBeVisible();
   await expect(page.getByText(FIXTURES.guardianEquipmentName)).toBeVisible();
+  await expect(page.getByText(FIXTURES.guardianActivityName)).toBeVisible();
+  await expect(page.getByText("12m 34s played")).toBeVisible();
   await expect(page.getByLabel("2010 Power")).toBeVisible();
   await expect(
     page.getByText(/Collections remain shared across your Destiny membership/),

@@ -16,12 +16,15 @@ import (
 
 const bungieBaseURL = "https://www.bungie.net"
 
+const recentActivityCount = 5
+
 // Service fetches and shapes a user's Destiny 2 characters.
 type Service struct {
-	bungieClient *bungie.Client
-	itemFacts    EquipmentItemReader
-	cache        cache.Cache
-	cacheTTL     time.Duration
+	bungieClient  *bungie.Client
+	itemFacts     EquipmentItemReader
+	activityFacts ActivityDefinitionReader
+	cache         cache.Cache
+	cacheTTL      time.Duration
 
 	// refresh fences this owner's per-membership cache against a membership
 	// data refresh: a roster loaded before the refresh may answer its own
@@ -36,8 +39,15 @@ type EquipmentItemReader interface {
 	Lookup(ctx context.Context, hashes []uint32) (map[uint32]items.AcquisitionFacts, error)
 }
 
-func NewService(bungieClient *bungie.Client, itemFacts EquipmentItemReader, c cache.Cache, cacheTTL time.Duration) *Service {
-	s := &Service{bungieClient: bungieClient, itemFacts: itemFacts, cache: c, cacheTTL: cacheTTL}
+// ActivityDefinitionReader is the entire Manifest seam Characters consumes for
+// history. The provider owns signed SQLite row-key conversion and lifecycle;
+// Characters owns the owner-specific recent-activity projection.
+type ActivityDefinitionReader interface {
+	GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error)
+}
+
+func NewService(bungieClient *bungie.Client, itemFacts EquipmentItemReader, activityFacts ActivityDefinitionReader, c cache.Cache, cacheTTL time.Duration) *Service {
+	s := &Service{bungieClient: bungieClient, itemFacts: itemFacts, activityFacts: activityFacts, cache: c, cacheTTL: cacheTTL}
 	// The callback runs inside the publication's critical section, so it only
 	// deletes the entry and never calls back into the publication.
 	s.refresh = membershipstate.New(func(membershipType int, membershipID string) {
@@ -87,6 +97,35 @@ type EquipmentItem struct {
 	Power    *int   `json:"power,omitempty"`
 
 	order int
+}
+
+// ActivityHistoryState distinguishes a returned empty page from a successful
+// Bungie envelope whose Response payload is absent.
+type ActivityHistoryState string
+
+const (
+	ActivityHistoryReady       ActivityHistoryState = "ready"
+	ActivityHistoryUnavailable ActivityHistoryState = "unavailable"
+)
+
+// ActivityHistory is one bounded, owner-only page. Pagination and PGCR
+// instance identifiers are deliberately outside this interface.
+type ActivityHistory struct {
+	CharacterID string               `json:"characterId"`
+	State       ActivityHistoryState `json:"state"`
+	Activities  []RecentActivity     `json:"activities"`
+	FetchedAt   time.Time            `json:"fetchedAt"`
+}
+
+// RecentActivity contains only facts verified in the live owner capture and
+// official GetActivityHistory interface.
+type RecentActivity struct {
+	ActivityHash string `json:"activityHash"`
+	Name         string `json:"name"`
+	OccurredAt   string `json:"occurredAt,omitempty"`
+	Duration     string `json:"duration,omitempty"`
+	PrivateMatch bool   `json:"privateMatch"`
+	Resolved     bool   `json:"resolved"`
 }
 
 type equipmentSlot struct {
@@ -266,6 +305,97 @@ func (s *Service) GetEquipment(ctx context.Context, membershipType int, membersh
 		return detail.Items[i].ItemHash < detail.Items[j].ItemHash
 	})
 	return detail, nil
+}
+
+// GetActivityHistory returns one bounded recent page for a current character
+// in the authenticated membership. Roster validation happens before the
+// history request so an arbitrary character ID cannot cross the Bungie seam.
+func (s *Service) GetActivityHistory(ctx context.Context, membershipType int, membershipID, characterID, accessToken string) (*ActivityHistory, error) {
+	characters, err := s.GetCharacters(ctx, membershipType, membershipID, accessToken)
+	if err != nil {
+		return nil, fmt.Errorf("validate activity-history character: %w", err)
+	}
+	found := false
+	for _, character := range characters {
+		if character.CharacterID == characterID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, ErrCharacterNotFound
+	}
+
+	resp, err := s.bungieClient.GetActivityHistory(ctx, membershipType, membershipID, characterID, accessToken, 0, recentActivityCount)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch character activity history: %w", err)
+	}
+
+	history := &ActivityHistory{
+		CharacterID: characterID,
+		State:       ActivityHistoryUnavailable,
+		Activities:  []RecentActivity{},
+		FetchedAt:   time.Now().UTC(),
+	}
+	if resp.Response == nil {
+		return history, nil
+	}
+
+	history.State = ActivityHistoryReady
+	completedRows := make([]bungie.HistoricalActivity, 0, len(resp.Response.Activities))
+	for _, row := range resp.Response.Activities {
+		completed, ok := row.Values["completed"]
+		if ok && completed.Basic.Value == 1 {
+			completedRows = append(completedRows, row)
+		}
+	}
+	if len(completedRows) == 0 {
+		return history, nil
+	}
+	if s.activityFacts == nil {
+		return nil, errors.New("characters: activity definition reader is unavailable")
+	}
+
+	hashSet := make(map[uint32]struct{}, len(completedRows))
+	hashes := make([]uint32, 0, len(completedRows))
+	for _, row := range completedRows {
+		hash := row.ActivityDetails.ReferenceID
+		if hash == 0 {
+			continue
+		}
+		if _, exists := hashSet[hash]; exists {
+			continue
+		}
+		hashSet[hash] = struct{}{}
+		hashes = append(hashes, hash)
+	}
+	definitions, err := s.activityFacts.GetActivityDefinitions(hashes)
+	if err != nil {
+		return nil, fmt.Errorf("resolve recent activities: %w", err)
+	}
+
+	history.Activities = make([]RecentActivity, 0, len(completedRows))
+	for _, row := range completedRows {
+		hash := row.ActivityDetails.ReferenceID
+		activity := RecentActivity{
+			ActivityHash: strconv.FormatUint(uint64(hash), 10),
+			Name:         "Unknown activity",
+			OccurredAt:   row.Period,
+			PrivateMatch: row.ActivityDetails.IsPrivate,
+		}
+		if definition, ok := definitions[hash]; ok && definition != nil {
+			activity.Resolved = true
+			activity.Name = definition.DisplayProperties.Name
+			if activity.Name == "" {
+				activity.Name = "Unnamed activity"
+			}
+		}
+		if duration, ok := row.Values["timePlayedSeconds"]; ok {
+			activity.Duration = duration.Basic.DisplayValue
+		}
+		history.Activities = append(history.Activities, activity)
+	}
+	return history, nil
 }
 
 func componentAvailable[T any](data *T, disabled *bool) bool {

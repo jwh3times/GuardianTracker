@@ -190,6 +190,26 @@ func (c *Client) GetCharacters(ctx context.Context, membershipType int, membersh
 	return parseResponse[CharactersResponse](resp)
 }
 
+// GetActivityHistory retrieves one bounded page of a character's raw activity-
+// history entries, most recent first. Page is zero-based, matching Bungie's
+// GetActivityHistory interface; callers decide which entries their product uses.
+func (c *Client) GetActivityHistory(ctx context.Context, membershipType int, membershipID, characterID, accessToken string, page, count int) (*ActivityHistoryResponse, error) {
+	url := fmt.Sprintf(activityHistoryPathFormat,
+		c.baseURL, membershipType, membershipID, characterID, page, count)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("GetActivityHistory: %w", err)
+	}
+	if accessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+	}
+	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	if err != nil {
+		return nil, err
+	}
+	return parseResponse[ActivityHistoryResponse](resp)
+}
+
 // GetPublicMilestones fetches current weekly milestone definitions (no auth needed).
 func (c *Client) GetPublicMilestones(ctx context.Context) (map[string]PublicMilestone, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/Destiny2/Milestones/", c.baseURL), nil)

@@ -169,6 +169,24 @@ export interface APIEquipmentDetail {
   fetchedAt: string;
 }
 
+/** One row in GET .../:characterId/activity-history. */
+export interface APIRecentActivity {
+  activityHash: string;
+  name: string;
+  occurredAt?: string;
+  duration?: string;
+  privateMatch: boolean;
+  resolved: boolean;
+}
+
+/** GET /api/characters/:membershipType/:membershipId/:characterId/activity-history */
+export interface APIActivityHistory {
+  characterId: string;
+  state: "ready" | "unavailable";
+  activities: APIRecentActivity[];
+  fetchedAt: string;
+}
+
 // --- Misc ---
 
 /** POST /api/collections/:type/:id/refresh */

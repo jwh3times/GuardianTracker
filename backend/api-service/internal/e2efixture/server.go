@@ -88,6 +88,8 @@ func (s *Server) routes() http.Handler {
 
 	profilePath := fmt.Sprintf("/Platform/Destiny2/%d/Profile/%s/", MembershipType, MembershipID)
 	mux.HandleFunc("GET "+profilePath, s.profile)
+	activityHistoryPath := fmt.Sprintf("/Platform/Destiny2/%d/Account/%s/Character/%s/Stats/Activities/", MembershipType, MembershipID, CharacterID)
+	mux.HandleFunc("GET "+activityHistoryPath, s.activityHistory)
 	vendorPath := fmt.Sprintf("/Platform/Destiny2/%d/Profile/%s/Character/%s/Vendors/", MembershipType, MembershipID, CharacterID)
 	mux.HandleFunc("GET "+vendorPath, s.characterVendors)
 	mux.HandleFunc("GET /Platform/Destiny2/Vendors/", s.publicVendors)
@@ -263,6 +265,40 @@ func equipmentProfile() map[string]any {
 		},
 	}
 	return profile
+}
+
+func (s *Server) activityHistory(w http.ResponseWriter, r *http.Request) {
+	if !validAccessToken(r) {
+		writeBungieError(w, http.StatusUnauthorized, 99, "WebAuthRequired", "Authentication required")
+		return
+	}
+	if r.URL.Query().Get("page") != "0" || r.URL.Query().Get("count") != "5" {
+		writeBungieError(w, http.StatusBadRequest, 5, "InvalidParameters", "Unsupported activity-history page")
+		return
+	}
+	writeBungie(w, map[string]any{
+		"activities": []any{
+			map[string]any{
+				"period": "2026-07-17T20:30:00Z",
+				"activityDetails": map[string]any{
+					"referenceId":    weeklyActivityHash,
+					"instanceId":     "e2e-activity-instance",
+					"isPrivate":      false,
+					"membershipType": MembershipType,
+				},
+				"values": map[string]any{
+					"completed": map[string]any{
+						"statId": "completed",
+						"basic":  map[string]any{"value": 1, "displayValue": "Yes"},
+					},
+					"timePlayedSeconds": map[string]any{
+						"statId": "timePlayedSeconds",
+						"basic":  map[string]any{"value": 754, "displayValue": "12m 34s"},
+					},
+				},
+			},
+		},
+	})
 }
 
 func recordsProfile() map[string]any {

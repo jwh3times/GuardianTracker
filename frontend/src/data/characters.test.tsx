@@ -5,7 +5,11 @@ import { http, HttpResponse } from "msw";
 import { server, API, sampleUser } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCharacters } from "../contexts/CharacterContext";
-import { useCharacterRoster, useGuardianEquipment } from "./characters";
+import {
+  useCharacterRoster,
+  useGuardianActivityHistory,
+  useGuardianEquipment,
+} from "./characters";
 import { useMembershipRefresh } from "./membershipRefresh";
 
 /**
@@ -57,6 +61,30 @@ function EquipmentProbe({ characterId = "char-a" }: { characterId?: string }) {
                   .map(
                     (item) =>
                       `${item.id}:${item.slot}:${item.group}:${item.name}:${item.type}:${item.rarity}:${item.power ?? "no-power"}:${item.icon ?? "no-icon"}`,
+                  )
+                  .join(",")}`
+              : "none"}
+      </div>
+    </div>
+  );
+}
+
+function ActivityProbe({ characterId = "char-a" }: { characterId?: string }) {
+  const { history, isLoading, isError, retry } =
+    useGuardianActivityHistory(characterId);
+  return (
+    <div>
+      <button onClick={retry}>retry activity</button>
+      <div data-testid="activity-history">
+        {isLoading
+          ? "loading"
+          : isError
+            ? "failed"
+            : history
+              ? `${history.characterId}|${history.state}|${history.fetchedAt}|${history.activities
+                  .map(
+                    (activity) =>
+                      `${activity.activityHash}:${activity.name}:${activity.occurredAt ?? "no-time"}:${activity.duration ?? "no-duration"}:${activity.privateMatch}:${activity.resolved}`,
                   )
                   .join(",")}`
               : "none"}
@@ -183,6 +211,46 @@ describe("projection", () => {
       `${sampleUser.membershipType}/${sampleUser.membershipId}/char-a`,
     ]);
   });
+
+  it("projects bounded activity history and requests the signed-in membership plus Guardian", async () => {
+    const sent: string[] = [];
+    server.use(
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/activity-history`,
+        ({ params }) => {
+          sent.push(
+            `${String(params.type)}/${String(params.id)}/${String(params.characterId)}`,
+          );
+          return HttpResponse.json({
+            characterId: "char-a",
+            state: "ready",
+            fetchedAt: "2026-09-14T00:00:00Z",
+            activities: [
+              {
+                activityHash: "3637500864",
+                name: "The Insight Terminus",
+                occurredAt: "2026-09-13T22:15:00Z",
+                duration: "11m 12s",
+                privateMatch: true,
+                resolved: true,
+              },
+            ],
+          });
+        },
+      ),
+    );
+
+    renderWithProviders(<ActivityProbe />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("activity-history")).toHaveTextContent(
+        "char-a|ready|2026-09-14T00:00:00Z|3637500864:The Insight Terminus:2026-09-13T22:15:00Z:11m 12s:true:true",
+      ),
+    );
+    expect(sent).toEqual([
+      `${sampleUser.membershipType}/${sampleUser.membershipId}/char-a`,
+    ]);
+  });
 });
 
 describe("retry", () => {
@@ -229,6 +297,20 @@ function RefreshAndEquipmentProbe() {
       <button onClick={refresh}>refresh equipment</button>
       <div data-testid="equipment-state">
         {equipment?.items.map((item) => item.name).join(",") ?? "loading"}
+      </div>
+    </div>
+  );
+}
+
+function RefreshAndActivityProbe() {
+  const { refresh } = useMembershipRefresh();
+  const { history } = useGuardianActivityHistory("char-a");
+  return (
+    <div>
+      <button onClick={refresh}>refresh activity</button>
+      <div data-testid="activity-name">
+        {history?.activities.map((activity) => activity.name).join(",") ??
+          "loading"}
       </div>
     </div>
   );
@@ -302,6 +384,49 @@ describe("invalidation", () => {
     await waitFor(() =>
       expect(screen.getByTestId("equipment-state")).toHaveTextContent(
         "Weapon 2",
+      ),
+    );
+  });
+
+  it("a membership refresh refetches Guardian activity history", async () => {
+    let gets = 0;
+    server.use(
+      http.get(
+        `${API}/api/characters/:type/:id/:characterId/activity-history`,
+        () => {
+          gets += 1;
+          return HttpResponse.json({
+            characterId: "char-a",
+            state: "ready",
+            fetchedAt: "2026-09-14T00:00:00Z",
+            activities: [
+              {
+                activityHash: String(gets),
+                name: `Activity ${gets}`,
+                privateMatch: false,
+                resolved: true,
+              },
+            ],
+          });
+        },
+      ),
+      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
+        HttpResponse.json({ success: true, message: "ok" }),
+      ),
+    );
+
+    renderWithProviders(<RefreshAndActivityProbe />);
+    await waitFor(() =>
+      expect(screen.getByTestId("activity-name")).toHaveTextContent(
+        "Activity 1",
+      ),
+    );
+
+    await userEvent.click(screen.getByText("refresh activity"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("activity-name")).toHaveTextContent(
+        "Activity 2",
       ),
     );
   });

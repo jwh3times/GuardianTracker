@@ -3,8 +3,16 @@ import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
 import { toRarity } from "../lib/rarity";
-import type { APICharacter, APIEquipmentDetail } from "../types/api";
-import type { Character, GuardianEquipment } from "../types/design";
+import type {
+  APIActivityHistory,
+  APICharacter,
+  APIEquipmentDetail,
+} from "../types/api";
+import type {
+  Character,
+  GuardianActivityHistory,
+  GuardianEquipment,
+} from "../types/design";
 
 /**
  * The Characters data-access module (ADR 0020). It owns this resource's query
@@ -43,6 +51,20 @@ function equipmentKey(
     membershipType,
     membershipId,
     "equipment",
+    characterId,
+  ] as const;
+}
+
+function activityHistoryKey(
+  membershipType: number | undefined,
+  membershipId: string | undefined,
+  characterId: string | undefined,
+) {
+  return [
+    "characters",
+    membershipType,
+    membershipId,
+    "activity-history",
     characterId,
   ] as const;
 }
@@ -86,6 +108,24 @@ function toEquipment(detail: APIEquipmentDetail): GuardianEquipment {
       rarity: item.resolved ? toRarity(item.rarity) : undefined,
       icon: item.icon || undefined,
       power: item.power,
+    })),
+  };
+}
+
+function toActivityHistory(
+  history: APIActivityHistory,
+): GuardianActivityHistory {
+  return {
+    characterId: history.characterId,
+    state: history.state,
+    fetchedAt: history.fetchedAt,
+    activities: history.activities.map((activity) => ({
+      activityHash: activity.activityHash,
+      name: activity.name,
+      occurredAt: activity.occurredAt,
+      duration: activity.duration,
+      privateMatch: activity.privateMatch,
+      resolved: activity.resolved,
     })),
   };
 }
@@ -162,6 +202,39 @@ export function useGuardianEquipment(characterId: string | undefined) {
 
   return {
     equipment: data,
+    isLoading,
+    isError,
+    error,
+    retry,
+  };
+}
+
+/**
+ * One bounded recent-activity page for the selected Guardian. Membership and
+ * pagination stay inside this module so callers cannot widen the owner-only
+ * resource or accidentally create a second query identity.
+ */
+export function useGuardianActivityHistory(characterId: string | undefined) {
+  const { user } = useAuth();
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
+
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: activityHistoryKey(membershipType, membershipId, characterId),
+    queryFn: () =>
+      apiFetch<APIActivityHistory>(
+        `/api/characters/${membershipType}/${membershipId}/${characterId}/activity-history`,
+      ),
+    enabled: membershipType != null && !!membershipId && characterId != null,
+    select: toActivityHistory,
+  });
+
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
+  return {
+    history: data,
     isLoading,
     isError,
     error,
