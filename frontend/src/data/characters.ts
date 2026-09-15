@@ -76,13 +76,14 @@ function toEquipment(detail: APIEquipmentDetail): GuardianEquipment {
   return {
     characterId: detail.characterId,
     state: detail.state,
+    fetchedAt: detail.fetchedAt,
     items: detail.items.map((item) => ({
       id: item.itemHash,
       slot: item.slot,
       group: item.group,
       name: item.name,
       type: item.itemType,
-      rarity: toRarity(item.rarity),
+      rarity: item.resolved ? toRarity(item.rarity) : undefined,
       icon: item.icon || undefined,
       power: item.power,
     })),

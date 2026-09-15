@@ -53,7 +53,7 @@ function EquipmentProbe({ characterId = "char-a" }: { characterId?: string }) {
           : isError
             ? "failed"
             : equipment
-              ? `${equipment.characterId}|${equipment.state}|${equipment.items
+              ? `${equipment.characterId}|${equipment.state}|${equipment.fetchedAt}|${equipment.items
                   .map(
                     (item) =>
                       `${item.id}:${item.slot}:${item.group}:${item.name}:${item.type}:${item.rarity}:${item.power ?? "no-power"}:${item.icon ?? "no-icon"}`,
@@ -144,6 +144,7 @@ describe("projection", () => {
           return HttpResponse.json({
             characterId: "char-a",
             state: "ready",
+            fetchedAt: "2026-09-14T00:00:00Z",
             items: [
               {
                 itemHash: "10",
@@ -153,7 +154,17 @@ describe("projection", () => {
                 itemType: "Hand Cannon",
                 rarity: "Exotic",
                 icon: "/fatebringer.png",
+                resolved: true,
                 power: 550,
+              },
+              {
+                itemHash: "11",
+                slot: "Energy",
+                group: "Weapons",
+                name: "Unknown item",
+                itemType: "Energy",
+                icon: "",
+                resolved: false,
               },
             ],
           });
@@ -165,7 +176,7 @@ describe("projection", () => {
 
     await waitFor(() =>
       expect(screen.getByTestId("equipment")).toHaveTextContent(
-        "char-a|ready|10:Kinetic:Weapons:Fatebringer:Hand Cannon:exotic:550:/fatebringer.png",
+        "char-a|ready|2026-09-14T00:00:00Z|10:Kinetic:Weapons:Fatebringer:Hand Cannon:exotic:550:/fatebringer.png,11:Energy:Weapons:Unknown item:Energy:undefined:no-power:no-icon",
       ),
     );
     expect(sent).toEqual([
@@ -259,6 +270,7 @@ describe("invalidation", () => {
         return HttpResponse.json({
           characterId: "char-a",
           state: "ready",
+          fetchedAt: "2026-09-14T00:00:00Z",
           items: [
             {
               itemHash: String(gets),
@@ -268,6 +280,7 @@ describe("invalidation", () => {
               itemType: "Hand Cannon",
               rarity: "Legendary",
               icon: "",
+              resolved: true,
             },
           ],
         });

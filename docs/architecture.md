@@ -154,12 +154,12 @@ extracts the SQLite database, opens it through the manifest provider, and notifi
 dependent services to rebuild manifest-derived indexes.
 
 Collections, cosmetics, catalysts, crafting, triumphs, search, item detail, and
-Guardian equipment views all depend on the manifest. The search index restores a matching versioned
-snapshot from beside the manifest on startup, then rebuilds asynchronously when
-the snapshot is missing or the manifest changes. A build that fails is retried by
-the next search request rather than waiting for the next manifest swap, throttled
-to one attempt per 30 seconds. Other affected endpoints can return warming
-responses during cold start or manifest swap.
+Guardian equipment views all depend on the manifest. On startup, the search index
+restores a matching versioned snapshot from beside the manifest, then rebuilds
+asynchronously when the snapshot is missing or the manifest changes. A build that
+fails is retried by the next search request rather than waiting for the next
+manifest swap, throttled to one attempt per 30 seconds. Other affected endpoints
+can return warming responses during cold start or manifest swap.
 
 `services/manifeststate` provides the generation fence that keeps a slow request
 from republishing state derived from a manifest that has since been replaced.

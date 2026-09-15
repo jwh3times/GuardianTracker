@@ -4,7 +4,12 @@ import { useGuardianEquipment } from "../../data/characters";
 import type { EquipmentGroup, EquippedItem } from "../../types/design";
 import { Icon } from "../../components/Icon";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
-import { EmptyState, ItemTile, Skeleton } from "../../components/primitives";
+import {
+  DataFreshnessChip,
+  EmptyState,
+  ItemTile,
+  Skeleton,
+} from "../../components/primitives";
 
 const GROUPS: EquipmentGroup[] = ["Weapons", "Armor", "Equipment"];
 
@@ -36,9 +41,12 @@ function GuardianMark({ src }: { src: string | undefined }) {
 
 function EquipmentRow({ item }: { item: EquippedItem }) {
   return (
-    <article className="gt-guardian-item" data-rarity={item.rarity}>
+    <article
+      className="gt-guardian-item"
+      data-rarity={item.rarity ?? "unresolved"}
+    >
       <ItemTile
-        rarity={item.rarity}
+        rarity={item.rarity ?? "unresolved"}
         type={item.type}
         icon={item.icon}
         style={{ width: "3rem" }}
@@ -86,7 +94,13 @@ function EquipmentLoading() {
 }
 
 export function Guardian() {
-  const { activeCharacter, isLoading: rosterLoading } = useCharacters();
+  const {
+    activeCharacter,
+    isLoading: rosterLoading,
+    isError: rosterIsError,
+    error: rosterError,
+    retry: retryRoster,
+  } = useCharacters();
   const {
     equipment,
     isLoading: equipmentLoading,
@@ -109,6 +123,14 @@ export function Guardian() {
       <div className="gt-page">
         <Skeleton w="100%" h="10rem" r="var(--r-lg)" />
         <EquipmentLoading />
+      </div>
+    );
+  }
+
+  if (rosterIsError) {
+    return (
+      <div className="gt-page">
+        <QueryErrorPanel error={rosterError} onRetry={retryRoster} />
       </div>
     );
   }
@@ -149,10 +171,13 @@ export function Guardian() {
             <span>Power</span>
           </div>
         </div>
-        <p className="gt-guardian-scope">
-          Equipment follows the selected Guardian. Collections remain shared
-          across your Destiny membership.
-        </p>
+        <div className="gt-guardian-scope">
+          <p>
+            Equipment follows the selected Guardian. Collections remain shared
+            across your Destiny membership.
+          </p>
+          <DataFreshnessChip updatedAt={equipment?.fetchedAt} />
+        </div>
       </header>
 
       {isError ? (

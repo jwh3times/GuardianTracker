@@ -155,8 +155,9 @@ export interface APIEquippedItem {
   group: "Weapons" | "Armor" | "Equipment";
   name: string;
   itemType: string;
-  rarity: string;
+  rarity?: string;
   icon: string;
+  resolved: boolean;
   power?: number;
 }
 
@@ -165,6 +166,7 @@ export interface APIEquipmentDetail {
   characterId: string;
   state: "ready" | "unavailable";
   items: APIEquippedItem[];
+  fetchedAt: string;
 }
 
 // --- Misc ---

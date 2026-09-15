@@ -115,6 +115,10 @@
   border-top: 0.07rem solid var(--c-line-soft);
   color: var(--c-text-3);
   font-size: var(--t-xs);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
 }
 .gt-guardian-groups {
   display: grid;

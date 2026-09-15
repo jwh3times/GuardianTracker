@@ -68,7 +68,7 @@ export interface EquippedItem {
   group: EquipmentGroup;
   name: string;
   type: string;
-  rarity: Rarity;
+  rarity?: Rarity;
   icon?: string;
   power?: number;
 }
@@ -77,6 +77,7 @@ export interface GuardianEquipment {
   characterId: string;
   state: "ready" | "unavailable";
   items: EquippedItem[];
+  fetchedAt: string;
 }
 
 export interface TreeNode {

@@ -273,7 +273,12 @@ export const defaultHandlers = [
   ),
   http.get(`${API}/api/characters/:type/:id`, () => HttpResponse.json([])),
   http.get(`${API}/api/characters/:type/:id/:characterId/equipment`, () =>
-    HttpResponse.json({ characterId: "", state: "ready", items: [] }),
+    HttpResponse.json({
+      characterId: "",
+      state: "ready",
+      items: [],
+      fetchedAt: "2026-09-14T00:00:00Z",
+    }),
   ),
   http.get(`${API}/api/collections/:type/:id`, () =>
     HttpResponse.json(sampleCollections),

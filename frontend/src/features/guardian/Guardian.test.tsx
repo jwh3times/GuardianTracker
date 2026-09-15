@@ -43,6 +43,7 @@ describe("Guardian equipment", () => {
           return HttpResponse.json({
             characterId: character.characterId,
             state: "ready",
+            fetchedAt: new Date().toISOString(),
             items: [
               {
                 itemHash: "10",
@@ -52,6 +53,7 @@ describe("Guardian equipment", () => {
                 itemType: "Hand Cannon",
                 rarity: "Legendary",
                 icon: "/fatebringer.png",
+                resolved: true,
                 power: 550,
               },
               {
@@ -62,6 +64,7 @@ describe("Guardian equipment", () => {
                 itemType: "Helmet",
                 rarity: "Exotic",
                 icon: "/nighthawk.png",
+                resolved: true,
                 power: 551,
               },
               {
@@ -72,6 +75,7 @@ describe("Guardian equipment", () => {
                 itemType: "Ghost",
                 rarity: "Common",
                 icon: "",
+                resolved: true,
               },
             ],
           });
@@ -98,6 +102,7 @@ describe("Guardian equipment", () => {
     expect(screen.getByText("Fatebringer")).toBeInTheDocument();
     expect(screen.getByText("Celestial Nighthawk")).toBeInTheDocument();
     expect(screen.getByLabelText("551 Power")).toBeInTheDocument();
+    expect(screen.getByText(/^Updated /)).toBeInTheDocument();
     expect(container.querySelector(".gt-guardian-hero-art")).toHaveAttribute(
       "src",
       character.emblemBackgroundPath,
@@ -121,6 +126,7 @@ describe("Guardian equipment", () => {
           characterId: character.characterId,
           state: "unavailable",
           items: [],
+          fetchedAt: "2026-09-14T00:00:00Z",
         }),
       ),
     );
@@ -167,6 +173,19 @@ describe("Guardian equipment", () => {
     expect(await screen.findByText("No Guardians found")).toBeInTheDocument();
   });
 
+  it("distinguishes a roster failure from an empty roster", async () => {
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json({ error: "down" }, { status: 500 }),
+      ),
+    );
+
+    renderGuardian();
+
+    expect(await screen.findByText("Couldn't load data")).toBeInTheDocument();
+    expect(screen.queryByText("No Guardians found")).not.toBeInTheDocument();
+  });
+
   it("surfaces an equipment failure and retries", async () => {
     let attempts = 0;
     server.use(
@@ -181,6 +200,7 @@ describe("Guardian equipment", () => {
               characterId: character.characterId,
               state: "ready",
               items: [],
+              fetchedAt: "2026-09-14T00:00:00Z",
             });
       }),
     );

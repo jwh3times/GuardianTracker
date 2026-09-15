@@ -70,6 +70,7 @@ type EquipmentDetail struct {
 	CharacterID string          `json:"characterId"`
 	State       EquipmentState  `json:"state"`
 	Items       []EquipmentItem `json:"items"`
+	FetchedAt   time.Time       `json:"fetchedAt"`
 }
 
 // EquipmentItem combines canonical manifest facts with character-specific
@@ -80,8 +81,9 @@ type EquipmentItem struct {
 	Group    string `json:"group"`
 	Name     string `json:"name"`
 	ItemType string `json:"itemType"`
-	Rarity   string `json:"rarity"`
+	Rarity   string `json:"rarity,omitempty"`
 	Icon     string `json:"icon"`
+	Resolved bool   `json:"resolved"`
 	Power    *int   `json:"power,omitempty"`
 
 	order int
@@ -179,6 +181,7 @@ func (s *Service) GetEquipment(ctx context.Context, membershipType int, membersh
 		CharacterID: characterID,
 		State:       EquipmentUnavailable,
 		Items:       []EquipmentItem{},
+		FetchedAt:   time.Now().UTC(),
 	}
 
 	characters := resp.Response.Characters
@@ -239,12 +242,12 @@ func (s *Service) GetEquipment(ctx context.Context, membershipType int, membersh
 			ItemType: fact.ItemType,
 			Rarity:   fact.Rarity,
 			Icon:     fact.Icon,
+			Resolved: resolved,
 			order:    slot.order,
 		}
 		if !resolved {
 			item.Name = "Unknown item"
 			item.ItemType = slot.label
-			item.Rarity = "Common"
 		}
 		if instance, ok := instanceData[equipped.ItemInstanceID]; ok && instance.PrimaryStat != nil {
 			power := instance.PrimaryStat.Value

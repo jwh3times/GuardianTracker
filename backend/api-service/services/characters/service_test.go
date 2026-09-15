@@ -143,6 +143,9 @@ func TestGetEquipment_ProjectsVerifiedComponentsAndOrdersSlots(t *testing.T) {
 	if detail.State != EquipmentReady || len(detail.Items) != 3 {
 		t.Fatalf("detail = %+v, want ready with 3 items", detail)
 	}
+	if detail.FetchedAt.IsZero() {
+		t.Error("fetchedAt is zero")
+	}
 	if got := reader.hashes; fmt.Sprint(got) != "[20 10 30]" {
 		t.Errorf("Lookup hashes = %v, want equipment order", got)
 	}
@@ -154,6 +157,30 @@ func TestGetEquipment_ProjectsVerifiedComponentsAndOrdersSlots(t *testing.T) {
 	}
 	if got := detail.Items[2]; got.Slot != "Item" || got.Group != "Equipment" || got.Power != nil {
 		t.Errorf("unknown-bucket item = %+v, want visible Equipment fallback without Power", got)
+	}
+}
+
+func TestGetEquipment_QualifiesAnUnresolvedManifestItem(t *testing.T) {
+	const characterID = "2305843009263456789"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"ErrorCode":1,"Response":{
+			"characters":{"privacy":1,"data":{"%s":{"characterId":"%s"}}},
+			"characterEquipment":{"privacy":1,"data":{"%s":{"items":[{"itemHash":99,"bucketHash":1498876634}]}}}
+		}}`, characterID, characterID, characterID)
+	}))
+	defer srv.Close()
+
+	svc := NewService(bungie.NewClient("k", srv.URL, 100, 100), &fakeEquipmentItems{facts: map[uint32]items.AcquisitionFacts{}}, cache.NewNoOpCache(), time.Minute)
+	detail, err := svc.GetEquipment(context.Background(), 3, "membership", characterID, "token")
+	if err != nil {
+		t.Fatalf("GetEquipment: %v", err)
+	}
+	if len(detail.Items) != 1 {
+		t.Fatalf("items = %+v, want one unresolved item", detail.Items)
+	}
+	got := detail.Items[0]
+	if got.Resolved || got.Name != "Unknown item" || got.Rarity != "" || got.Icon != "" {
+		t.Errorf("unresolved item = %+v, want qualified unknown without fabricated manifest facts", got)
 	}
 }
 
