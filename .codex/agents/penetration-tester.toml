@@ -140,7 +140,7 @@ JWT-gated. NOT membership-scoped — returns public manifest-derived data only (
 
 ### `GET /api/collections/:membershipType/:membershipId`
 
-The path `membershipType`/`membershipId` pair must be validated together against the JWT's `membership_type`/`membership_id` claims — `ownershipCheck` (`api/handlers/common.go`) checks both, not `membershipId` alone. The same helper guards both character routes and the catalysts/crafting/seals routes.
+The path `membershipType`/`membershipId` pair must be validated together against the JWT's `membership_type`/`membership_id` claims — `ownershipCheck` (`api/handlers/common.go`) checks both, not `membershipId` alone. The same helper guards all character routes and the catalysts/crafting/seals routes.
 
 - Test: authenticate as user A, then request `/api/collections/3/<user_B_membershipId>` — must be rejected (403), not return user B's data
 - Test: call without a JWT — must return 401
@@ -166,6 +166,21 @@ Bungie request, and the requested character must belong to that membership.
 - Test: call without a JWT — must return 401
 - Test: inspect a successful response — it may include manifest item facts and
   optional Power, but must not expose Bungie item-instance IDs
+
+### `GET /api/characters/:membershipType/:membershipId/:characterId/activity-history`
+
+This route returns owner-specific recent completed activity. It must enforce the
+same complete membership-pair and roster-membership checks as equipment before
+calling Bungie. Its bounded projection must not expose Bungie activity-instance
+IDs.
+
+- Test: authenticate as user A, then request history under user B's membership
+  ID or platform type — must return 403 before any Bungie call
+- Test: request a well-formed character ID absent from the authenticated
+  membership — must return 404 `CHARACTER_NOT_FOUND`
+- Test: call without a JWT — must return 401
+- Test: inspect ready, unavailable, and error responses — none may expose Bungie
+  activity-instance IDs
 
 ## Wishlist endpoints — data isolation
 

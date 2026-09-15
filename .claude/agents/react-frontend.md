@@ -156,7 +156,11 @@ frontend/src/
                                    calls the owner-only equipment endpoint, and projects
                                    `APIEquipmentDetail` to `GuardianEquipment`; its placement below the
                                    characters root means `invalidateCharacters(client)` refreshes roster
-                                   and equipment together. CharacterContext also carries roster query errors
+                                   and equipment together. It also owns recent activity under
+                                   `["characters", membershipType, membershipId, "activity-history", characterId]`;
+                                   `useGuardianActivityHistory(characterId)` keeps the membership and bounded
+                                   first-page policy inside the data module and projects `APIActivityHistory`
+                                   to `GuardianActivityHistory`. CharacterContext also carries roster query errors
                                    so the Guardian page cannot confuse a failed roster with an empty one.
     items.ts                     ← Fifth resource landed (E8). Private per-hash query keys
                                    `["item-perks", itemHash]` / `["item-view", itemHash]`; projects
@@ -455,10 +459,12 @@ frontend/src/
                                    ActionList.tsx, XurModule.tsx, MilestoneModule.tsx live here too (F5) —
                                    each has exactly one caller, this page
     dashboard/Dashboard.tsx    ← completion hero + "do this today"; real totals + cosmetics + active-character weekly
-    guardian/Guardian.tsx      ← selected-Guardian identity, freshness, and current equipment grouped into
+    guardian/Guardian.tsx      ← selected-Guardian identity, freshness, current equipment grouped into
                                    weapons, armor, and equipment via `data/characters.ts`'s
                                    `useGuardianEquipment`; distinguishes unavailable, failed-roster, and
-                                   ready-but-empty states and renders unresolved item facts neutrally
+                                   ready-but-empty equipment states and renders unresolved item facts neutrally;
+                                   independently renders the bounded recent-completed-activity timeline with
+                                   explicit empty, unavailable, request-failure, and reconnect-required states
     settings/Settings.tsx      ← Destiny membership info, early-access tier opt-in, appearance prefs, sign out
     admin/                     ← Admin.tsx (admin console: user roster + role mgmt, flag config;
                                    admin-gated route; reads `data/admin.ts`'s useAdminUsers/useAdminFlags/
@@ -687,8 +693,9 @@ outside `CharacterProvider`, matching `useAuth`, `useFlags`, and
 catalysts, and seals remain membership-wide. Dashboard and This Week include
 the active character ID in weekly query keys and requests so authenticated
 vendor context follows the selected character. Guardian passes the active
-character ID to `useGuardianEquipment`; the data module supplies the signed-in
-membership pair, so pages cannot select another membership.
+character ID to `useGuardianEquipment` and `useGuardianActivityHistory`; the data
+module supplies the signed-in membership pair, so pages cannot select another
+membership.
 
 ## Preferences
 
