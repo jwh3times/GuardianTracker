@@ -19,14 +19,17 @@ function fail(message) {
   process.exit(1);
 }
 
-// HANDOFF_DIR wins; otherwise the single Proton Drive account folder that
-// holds My files/Documents/Handoffs/handoff_map.json.
+// HANDOFFS_DIR (or the older HANDOFF_DIR) wins; otherwise the single Proton
+// Drive account folder that holds My files/Documents/Handoffs/handoff_map.json.
+// On a machine without the desktop client, HANDOFFS_DIR is a local mirror the
+// skills pull from and push to the cloud folder through the proton-drive CLI.
 function resolveDir() {
-  if (process.env.HANDOFF_DIR) {
-    if (!existsSync(join(process.env.HANDOFF_DIR, MAP_FILE))) {
-      fail(`HANDOFF_DIR has no ${MAP_FILE}: ${process.env.HANDOFF_DIR}`);
+  const override = process.env.HANDOFFS_DIR || process.env.HANDOFF_DIR;
+  if (override) {
+    if (!existsSync(join(override, MAP_FILE))) {
+      fail(`HANDOFFS_DIR has no ${MAP_FILE}: ${override}`);
     }
-    return process.env.HANDOFF_DIR;
+    return override;
   }
   const root = join(homedir(), "Proton Drive");
   const accounts = existsSync(root)
@@ -38,11 +41,11 @@ function resolveDir() {
   if (matches.length === 1) return matches[0];
   if (matches.length === 0) {
     fail(
-      `no ${MAP_FILE} under ${root}/<account>/My files/Documents/Handoffs; is Proton Drive running and synced? Set HANDOFF_DIR to override.`,
+      `no ${MAP_FILE} under ${root}/<account>/My files/Documents/Handoffs; is Proton Drive running and synced? Set HANDOFFS_DIR to override.`,
     );
   }
   fail(
-    `several Handoffs folders found; set HANDOFF_DIR to one of: ${matches.join(", ")}`,
+    `several Handoffs folders found; set HANDOFFS_DIR to one of: ${matches.join(", ")}`,
   );
 }
 
