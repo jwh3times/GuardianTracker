@@ -12,6 +12,10 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [1.5.6] - 2026-09-16
+
 ### Changed
 
 - The `/handoff` and `/lets-go` agent skills now work on a machine without the
@@ -19,6 +23,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
   both skills pull from and push to the cloud `Handoffs` folder through the
   `proton-drive` CLI at the points where the map or a handoff document is read
   or written; the map helper also honours `HANDOFFS_DIR` ahead of `HANDOFF_DIR`.
+
+## [1.5.5] - 2026-09-16
+
+### Changed
+
+- Bumped the frontend runtime image to `nginxinc/nginx-unprivileged`
+  1.31.6-alpine3.24 (Dependabot, #329).
+
+## [1.5.4] - 2026-09-16
+
+### Changed
+
+- Bumped `tailwind-merge` from 3.6.0 to 3.7.0 in the frontend (Dependabot, #330).
 
 ## [1.5.3] - 2026-09-16
 
@@ -1061,7 +1078,10 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.3...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.6...HEAD
+[1.5.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.5...v1.5.6
+[1.5.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.4...v1.5.5
+[1.5.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.2...v1.5.3
 [1.5.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.0...v1.5.1
