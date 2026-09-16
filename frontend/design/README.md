@@ -14,6 +14,12 @@ Contents:
 - `Guardian Tracker.html` and `Design System.html` — rendered prototype pages.
 - `src/`, `tokens.css`, and `tweaks-panel.jsx` — prototype source and styling.
 - `scratch/` — retained visual exploration images.
+- `icons/` — source README and HTML snippet for the shipped icon pack.
+  Unlike the rest of this directory, these document **current** production
+  assets in [`frontend/public/`](../public/), not prototype history. They
+  live here because everything under `public/` is served as a public URL,
+  and because this directory is already Prettier-ignored, which preserves
+  the pack's authored formatting.
 
 ## Where the shipped tokens intentionally diverge
 
