@@ -14,6 +14,23 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.5.3] - 2026-09-16
+
+### Added
+
+- Guardian Tracker now has a real icon set. Browsers, bookmarks, and mobile home
+  screens show the aqua-cyan mark on its dark tile instead of a generic default:
+  a multi-resolution `favicon.ico`, a scalable SVG favicon where supported, 16x16
+  and 32x32 PNGs, and a 180x180 Apple touch icon. Until now `index.html` linked a
+  `/favicon.ico` that did not exist, so every browser fell back to its placeholder.
+
+## [1.5.2] - 2026-09-15
+
+### Changed
+
+- Updated the frontend `@tanstack/react-virtual` dependency from 3.14.11 to
+  3.14.12 (patch release, no behavior change).
+
 ## [1.5.1] - 2026-09-15
 
 ### Added
@@ -1038,7 +1055,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.3...HEAD
+[1.5.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.2...v1.5.3
+[1.5.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.1...v1.5.2
 [1.5.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.3.60...v1.4.0
