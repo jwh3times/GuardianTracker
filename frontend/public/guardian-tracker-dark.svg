@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Guardian Tracker icon">
+  <rect width="1024" height="1024" rx="112" fill="#04080d"/>
+  <polygon points="512,150 806,320 806,704 512,874 218,704 218,320" fill="none" stroke="#28d6df" stroke-width="76" stroke-linejoin="miter"/>
+  <polygon points="326,455 512,590 698,455 698,550 512,690 326,550" fill="#28d6df"/>
+  <polygon points="512,352 596,436 512,520 428,436" fill="#ae7ee2"/>
+</svg>
