@@ -12,7 +12,13 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- The `/handoff` and `/lets-go` agent skills now work on a machine without the
+  Proton Drive desktop client. There, `HANDOFFS_DIR` names a local mirror that
+  both skills pull from and push to the cloud `Handoffs` folder through the
+  `proton-drive` CLI at the points where the map or a handoff document is read
+  or written; the map helper also honours `HANDOFFS_DIR` ahead of `HANDOFF_DIR`.
 
 ## [1.5.3] - 2026-09-16
 
