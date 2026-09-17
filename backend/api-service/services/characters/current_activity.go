@@ -76,7 +76,7 @@ func (s *Service) GetCurrentActivity(ctx context.Context, membershipType int, me
 		return nil, errors.New("characters: activity definition reader is unavailable")
 	}
 	activityHashes := []uint32{*entry.CurrentActivityHash}
-	if hash := populated(entry.CurrentPlaylistActivityHash); hash != 0 {
+	if hash := hashOrZero(entry.CurrentPlaylistActivityHash); hash != 0 {
 		activityHashes = append(activityHashes, hash)
 	}
 	definitions, err := s.activityFacts.GetActivityDefinitions(activityHashes)
@@ -92,13 +92,13 @@ func (s *Service) GetCurrentActivity(ctx context.Context, membershipType int, me
 			current.ActivityName = "Unnamed activity"
 		}
 	}
-	if hash := populated(entry.CurrentPlaylistActivityHash); hash != 0 {
+	if hash := hashOrZero(entry.CurrentPlaylistActivityHash); hash != 0 {
 		if definition, ok := definitions[hash]; ok && definition != nil {
 			current.PlaylistName = definition.DisplayProperties.Name
 		}
 	}
 
-	if hash := populated(entry.CurrentActivityModeHash); hash != 0 {
+	if hash := hashOrZero(entry.CurrentActivityModeHash); hash != 0 {
 		modes, err := s.activityFacts.GetActivityModeDefinitions([]uint32{hash})
 		if err != nil {
 			return nil, fmt.Errorf("resolve current activity mode: %w", err)
@@ -110,8 +110,8 @@ func (s *Service) GetCurrentActivity(ctx context.Context, membershipType int, me
 	return current, nil
 }
 
-// populated reads an optional component-204 hash, treating absent as zero.
-func populated(hash *uint32) uint32 {
+// hashOrZero reads an optional component-204 hash, treating absent as zero.
+func hashOrZero(hash *uint32) uint32 {
 	if hash == nil {
 		return 0
 	}
