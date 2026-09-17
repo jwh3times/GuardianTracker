@@ -344,6 +344,7 @@ npm test -- --coverage
 npm run build
 
 # Browser (start from repo root, then run scripts from frontend/)
+$env:GO_ENV="development"                  # only in a worktree with no root .env
 docker compose stop frontend api-service   # 5273/8081 would be silently reused
 docker compose --profile e2e up -d --wait e2e-postgres
 $env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"
@@ -560,10 +561,14 @@ Single-context layout: root `CONTEXT.md` (created lazily) + existing `docs/adr/`
   authenticated weekly vendor inventory, today actions, availability ranking,
   Xûr location, the Guardian equipment view, one bounded page of recent
   completed activities, and a best-effort current-activity snapshot to the
-  selected character. Curated progression remains P2; recent history has no
-  pagination or aggregate analytics; current activity is not cached
-  server-side and reports "unknown" when Bungie's reported activity hash is
-  absent from the Manifest.
+  selected character. Recent history has no pagination or aggregate analytics;
+  current activity is not cached server-side and reports "unknown" when
+  Bungie's reported activity hash is absent from the Manifest.
+- Per-Guardian progression summaries are deliberately not shown. Verified
+  character-scope progressions (component 202) offered no named entry with a
+  current earning path or a value that tells the player what to do next.
+  Reopen only with a fresh owner capture that establishes one; never substitute
+  membership-wide Collections or account-scope progression.
 - Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready). A build that fails is retried by the next search request (throttled to one attempt per 30s) instead of waiting for the next hourly manifest swap.
 - Xûr location is best-effort: the authenticated character-vendor component's
   location index resolves through the manifest to "The Tower"; failures omit the field.

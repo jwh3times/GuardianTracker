@@ -21,23 +21,6 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ## Product Backlog
 
-### Deeper Character-Scoped Surfaces
-
-**Status:** In progress
-**Gate:** Progression curation
-**Likely size:** Large
-
-The character switcher now drives authenticated weekly vendor context, including
-inventory that can vary by class. The owner-only Guardian view adds current
-weapons, armor, and equipment, one bounded page of recent completed activity,
-and a best-effort current-activity snapshot for one character. Collections
-remain membership-wide. Further character-scoped surfaces should use verified
-Bungie progression and activity data rather than reinterpreting collection data.
-
-Remaining shape:
-
-- curated per-Guardian progression summaries
-
 ### God-Roll and Owned-Roll Insights
 
 **Status:** Not implemented
