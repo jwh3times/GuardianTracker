@@ -22,6 +22,8 @@ Destiny manifest, live weekly data, and persisted Guardian Tracker preferences.
 - Manifest-backed global item search and a dedicated cosmetics gallery.
 - Persisted preferences and onboarding, controlled feature rollout, and an
   admin console with an audit log.
+- Installable as an app from supporting browsers, opening in its own
+  standalone window; there is no service worker or offline mode.
 
 ## Architecture
 
