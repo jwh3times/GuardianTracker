@@ -62,6 +62,9 @@ the visual-baseline runbook build this helper image before running `npm ci`;
 Playwright's stock image may carry an older Node line.
 
 The `nginx.conf` must serve `index.html` for all unknown paths so React Router works correctly.
+It also has a `location = /site.webmanifest` block that sets `application/manifest+json`
+explicitly (the base nginx `mime.types` has no webmanifest entry) and keeps that path out
+of the long-lived static-asset cache so installability metadata updates with each deploy.
 
 ## Build context isolation
 

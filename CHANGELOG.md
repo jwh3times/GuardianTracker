@@ -14,6 +14,28 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.7.0] - 2026-09-17
+
+### Added
+
+- Guardian Tracker can be installed as an app from supporting browsers. It opens
+  in its own standalone window at the app root, with the dark-tile icon. There is
+  no service worker and no offline mode: the installed app loads live data exactly
+  as the browser tab does and caches nothing extra.
+
+### Changed
+
+- The browser theme color is now the app's dark chrome (`#04080d`, matching the
+  icon tile) instead of a shade that matched no part of the interface. The install
+  splash screen uses the page background.
+- The web manifest is served as `application/manifest+json` and is excluded from
+  the long-lived static-asset cache, so install details update with each deploy.
+
+### Removed
+
+- `guardian-tracker.ico`, a byte-identical copy of `favicon.ico` that was shipped
+  but never referenced.
+
 ## [1.6.1] - 2026-09-17
 
 ### Fixed
@@ -1113,7 +1135,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.6...v1.6.0
 [1.5.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.5...v1.5.6
