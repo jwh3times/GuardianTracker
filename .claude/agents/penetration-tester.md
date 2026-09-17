@@ -179,6 +179,22 @@ IDs.
 - Test: inspect ready, unavailable, and error responses — none may expose Bungie
   activity-instance IDs
 
+### `GET /api/characters/:membershipType/:membershipId/:characterId/current-activity`
+
+This route returns an owner-only, best-effort snapshot of what the Guardian is
+doing right now (Bungie's component-204 `CharacterActivities`). It must enforce
+the same complete membership-pair and roster-membership checks as equipment and
+activity history before calling Bungie. The response is not cached server-side
+and must carry no membership, character, instance, or definition identifiers.
+
+- Test: authenticate as user A, then request current activity under user B's
+  membership ID or platform type — must return 403 before any Bungie call
+- Test: request a well-formed character ID absent from the authenticated
+  membership — must return 404 `CHARACTER_NOT_FOUND`
+- Test: call without a JWT — must return 401
+- Test: inspect ready, idle, unknown, and unavailable responses — none may
+  expose Bungie membership, character, instance, or definition identifiers
+
 ## Wishlist endpoints — data isolation
 
 All wishlist endpoints (`GET/POST/PUT/DELETE /api/wishlist`) are JWT-protected and scoped to the authenticated user.

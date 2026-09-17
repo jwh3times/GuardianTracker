@@ -85,11 +85,14 @@ control. Page routes include Dashboard, Collections, Cosmetics, Wishlist, This
 Week, Catalysts & Crafting, Triumphs & Seals, Settings, and the admin-only
 console. Feature-flag and admin checks in the UI supplement server-side
 authorization; they do not replace it. The Guardian route shows only the
-selected character's current equipment and a bounded recent-completed-activity
-timeline. Activity names resolve through the manifest; time, duration, and a
-private-match indicator appear only when Bungie provides them. Empty,
-unavailable, request-failure, and reconnect-required states remain distinct.
-Collection ownership remains membership-wide.
+selected character's current equipment, a bounded recent-completed-activity
+timeline, and a best-effort current-activity panel. Activity names resolve
+through the manifest; time, duration, and a private-match indicator appear
+only when Bungie provides them. Current activity is labelled "Best effort"
+and shows ready, idle ("Not in an activity"), unknown (an unresolved
+activity), and unavailable states independently of recent-activity history.
+Empty, unavailable, request-failure, and reconnect-required states remain
+distinct. Collection ownership remains membership-wide.
 
 ## Authentication
 
