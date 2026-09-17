@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useCharacters } from "../../contexts/CharacterContext";
 import {
   useGuardianActivityHistory,
+  useGuardianCurrentActivity,
   useGuardianEquipment,
 } from "../../data/characters";
 import type {
@@ -9,11 +10,13 @@ import type {
   EquippedItem,
   GuardianActivity,
   GuardianActivityHistory,
+  GuardianCurrentActivity,
 } from "../../types/design";
 import { Icon } from "../../components/Icon";
 import { QueryErrorPanel } from "../../components/QueryErrorPanel";
 import {
   Badge,
+  Button,
   DataFreshnessChip,
   EmptyState,
   ItemTile,
@@ -153,6 +156,90 @@ function ActivityHistoryLoading() {
   );
 }
 
+function CurrentActivityPanel({
+  currentActivity,
+  isLoading,
+  isError,
+  retry,
+}: {
+  currentActivity: GuardianCurrentActivity | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  retry: () => void;
+}) {
+  const facts = currentActivity && (
+    <div className="gt-guardian-current-facts">
+      {currentActivity.modeName && <span>{currentActivity.modeName}</span>}
+      {currentActivity.playlistName && (
+        <span>Playlist: {currentActivity.playlistName}</span>
+      )}
+    </div>
+  );
+
+  return (
+    <section
+      className="gt-guardian-history gt-guardian-current"
+      aria-labelledby="current-activity-title"
+    >
+      <div className="gt-guardian-history-head">
+        <div>
+          <h2 id="current-activity-title">Current activity</h2>
+          <p>
+            What Bungie last reported this Guardian doing. Bungie documents this
+            as relatively unreliable, so it can lag behind or miss the game.
+          </p>
+        </div>
+        <div className="gt-guardian-current-meta">
+          <Badge kind="best-effort">Best effort</Badge>
+          {!isError && (
+            <DataFreshnessChip updatedAt={currentActivity?.fetchedAt} />
+          )}
+        </div>
+      </div>
+
+      {isError || currentActivity?.state === "unavailable" ? (
+        <EmptyState
+          icon="info"
+          title="Current activity is unavailable"
+          body="Bungie did not return current activity for this Guardian. Recent activity is unaffected."
+          action={
+            isError ? (
+              <Button sm onClick={retry} aria-label="Retry current activity">
+                Retry
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : isLoading || !currentActivity ? (
+        <div
+          className="gt-guardian-current-body"
+          aria-label="Loading current activity"
+        >
+          <Skeleton w="40%" h="1.1rem" />
+          <Skeleton w="12rem" h="0.75rem" />
+        </div>
+      ) : currentActivity.state === "idle" ? (
+        <EmptyState
+          icon="guardian"
+          title="Not in an activity"
+          body="Bungie reported no current activity for this Guardian."
+        />
+      ) : currentActivity.state === "unknown" ? (
+        <div className="gt-guardian-current-body" data-resolved="false">
+          <h3>Unknown activity</h3>
+          <p>Bungie reported an activity the Manifest could not name.</p>
+          {facts}
+        </div>
+      ) : (
+        <div className="gt-guardian-current-body" data-resolved="true">
+          <h3>{currentActivity.activityName}</h3>
+          {facts}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ActivityHistoryPanel({
   history,
   isLoading,
@@ -233,6 +320,12 @@ export function Guardian() {
     error: historyError,
     retry: retryHistory,
   } = useGuardianActivityHistory(activeCharacter?.id);
+  const {
+    currentActivity,
+    isLoading: currentActivityLoading,
+    isError: currentActivityIsError,
+    retry: retryCurrentActivity,
+  } = useGuardianCurrentActivity(activeCharacter?.id);
 
   const grouped = useMemo(() => {
     const result = new Map<EquipmentGroup, EquippedItem[]>();
@@ -343,6 +436,13 @@ export function Guardian() {
           })}
         </div>
       )}
+
+      <CurrentActivityPanel
+        currentActivity={currentActivity}
+        isLoading={currentActivityLoading}
+        isError={currentActivityIsError}
+        retry={retryCurrentActivity}
+      />
 
       <ActivityHistoryPanel
         history={history}

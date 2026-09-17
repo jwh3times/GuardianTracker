@@ -8,6 +8,7 @@ import { useCharacters } from "../contexts/CharacterContext";
 import {
   useCharacterRoster,
   useGuardianActivityHistory,
+  useGuardianCurrentActivity,
   useGuardianEquipment,
 } from "./characters";
 import { useMembershipRefresh } from "./membershipRefresh";
@@ -444,3 +445,122 @@ function apiCharacter(characterId: string) {
     dateLastPlayed: "2026-09-01T00:00:00Z",
   };
 }
+
+const CURRENT_ACTIVITY_ROUTE = `${API}/api/characters/:type/:id/:characterId/current-activity`;
+
+function CurrentActivityProbe({ characterId }: { characterId: string }) {
+  const { refresh } = useMembershipRefresh();
+  const { currentActivity, isLoading, isError } =
+    useGuardianCurrentActivity(characterId);
+  return (
+    <div>
+      <button onClick={refresh}>refresh</button>
+      <div data-testid="current-activity">
+        {isLoading
+          ? "loading"
+          : isError
+            ? "failed"
+            : currentActivity
+              ? [
+                  currentActivity.state,
+                  currentActivity.activityName ?? "no-activity",
+                  currentActivity.modeName ?? "no-mode",
+                  currentActivity.playlistName ?? "no-playlist",
+                  currentActivity.fetchedAt,
+                ].join("|")
+              : "none"}
+      </div>
+    </div>
+  );
+}
+
+describe("useGuardianCurrentActivity", () => {
+  it("projects a resolved activity for the signed-in membership and Guardian", async () => {
+    const sent: string[] = [];
+    server.use(
+      http.get(CURRENT_ACTIVITY_ROUTE, ({ params }) => {
+        sent.push(
+          `${String(params.type)}/${String(params.id)}/${String(params.characterId)}`,
+        );
+        return HttpResponse.json({
+          state: "ready",
+          activityName: "Lake of Shadows",
+          modeName: "Strike",
+          playlistName: "Quickplay: Master",
+          fetchedAt: "2026-09-15T16:47:18Z",
+        });
+      }),
+    );
+
+    renderWithProviders(<CurrentActivityProbe characterId="char-a" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("current-activity")).toHaveTextContent(
+        "ready|Lake of Shadows|Strike|Quickplay: Master|2026-09-15T16:47:18Z",
+      ),
+    );
+    expect(sent).toEqual([
+      `${sampleUser.membershipType}/${sampleUser.membershipId}/char-a`,
+    ]);
+  });
+
+  it.each([
+    ["idle", { state: "idle" }, "idle|no-activity|no-mode|no-playlist"],
+    [
+      "unavailable",
+      { state: "unavailable" },
+      "unavailable|no-activity|no-mode|no-playlist",
+    ],
+    [
+      "unknown",
+      { state: "unknown", modeName: "Strike" },
+      "unknown|no-activity|Strike|no-playlist",
+    ],
+  ])("preserves the %s state", async (_name, body, expected) => {
+    server.use(
+      http.get(CURRENT_ACTIVITY_ROUTE, () =>
+        HttpResponse.json({ ...body, fetchedAt: "2026-09-15T00:00:00Z" }),
+      ),
+    );
+
+    renderWithProviders(<CurrentActivityProbe characterId="char-a" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("current-activity")).toHaveTextContent(
+        `${expected}|2026-09-15T00:00:00Z`,
+      ),
+    );
+  });
+
+  it("a membership refresh refetches current activity", async () => {
+    let gets = 0;
+    server.use(
+      http.get(CURRENT_ACTIVITY_ROUTE, () => {
+        gets += 1;
+        return HttpResponse.json({
+          state: "ready",
+          activityName: `Activity ${gets}`,
+          fetchedAt: "2026-09-15T00:00:00Z",
+        });
+      }),
+      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
+        HttpResponse.json({ success: true, message: "ok" }),
+      ),
+    );
+
+    renderWithProviders(<CurrentActivityProbe characterId="char-a" />);
+    await waitFor(() =>
+      expect(screen.getByTestId("current-activity")).toHaveTextContent(
+        "Activity 1",
+      ),
+    );
+
+    await userEvent.click(screen.getByText("refresh"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("current-activity")).toHaveTextContent(
+        "Activity 2",
+      ),
+    );
+  });
+});

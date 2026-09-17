@@ -290,6 +290,14 @@ export const defaultHandlers = [
         fetchedAt: "2026-09-14T00:00:00Z",
       }),
   ),
+  http.get(
+    `${API}/api/characters/:type/:id/:characterId/current-activity`,
+    () =>
+      HttpResponse.json({
+        state: "idle",
+        fetchedAt: "2026-09-14T00:00:00Z",
+      }),
+  ),
   http.get(`${API}/api/collections/:type/:id`, () =>
     HttpResponse.json(sampleCollections),
   ),
