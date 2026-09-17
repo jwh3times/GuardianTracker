@@ -24,6 +24,12 @@ No unreleased changes.
   `guardiantracker_default`, and both that guide and the browser-test commands in
   `AGENTS.md` note that a worktree without a root `.env` must set `GO_ENV` before
   Compose will read `docker-compose.yml`.
+- The roadmap no longer lists per-Guardian progression summaries as remaining
+  work. Verified character-scope progressions offered nothing with a current
+  earning path, so none are planned; `AGENTS.md` records this as a known
+  limitation and the evidence needed to reopen it. With that settled, the
+  "Deeper Character-Scoped Surfaces" roadmap item has no remaining shape and is
+  removed.
 
 ## [1.6.0] - 2026-09-16
 
