@@ -5,6 +5,7 @@ import { http, HttpResponse } from "msw";
 import { Route, Routes } from "react-router";
 import { API, sampleUser, server } from "../../test/testServer";
 import { renderWithProviders } from "../../test/renderWithProviders";
+import { useCharacters } from "../../contexts/CharacterContext";
 import { Guardian } from "./Guardian";
 
 const character = {
@@ -148,7 +149,7 @@ describe("Guardian equipment", () => {
     expect(
       container.querySelector('time[datetime="2026-09-13T22:15:00Z"]'),
     ).not.toBeNull();
-    expect(screen.getAllByText(/^Updated /)).toHaveLength(2);
+    expect(screen.getAllByText(/^Updated /)).toHaveLength(3);
     expect(container.querySelector(".gt-guardian-hero-art")).toHaveAttribute(
       "src",
       character.emblemBackgroundPath,
@@ -374,5 +375,183 @@ describe("Guardian equipment", () => {
         screen.getByText("No recent completed activity returned"),
       ).toBeInTheDocument(),
     );
+  });
+});
+
+describe("Guardian current activity", () => {
+  const CURRENT = `${API}/api/characters/:type/:id/:characterId/current-activity`;
+  const HISTORY = `${API}/api/characters/:type/:id/:characterId/activity-history`;
+
+  function withRosterAndHistory() {
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json([character]),
+      ),
+      http.get(HISTORY, () =>
+        HttpResponse.json({
+          characterId: character.characterId,
+          state: "ready",
+          fetchedAt: "2026-09-15T00:00:00Z",
+          activities: [
+            {
+              activityHash: "3637500864",
+              name: "The Insight Terminus",
+              privateMatch: false,
+              resolved: true,
+            },
+          ],
+        }),
+      ),
+    );
+  }
+
+  function currentPanel() {
+    return screen.getByRole("region", { name: "Current activity" });
+  }
+
+  it("shows a resolved activity with its mode, playlist, and best-effort label", async () => {
+    withRosterAndHistory();
+    server.use(
+      http.get(CURRENT, () =>
+        HttpResponse.json({
+          state: "ready",
+          activityName: "Lake of Shadows",
+          modeName: "Strike",
+          playlistName: "Quickplay: Master",
+          fetchedAt: new Date().toISOString(),
+        }),
+      ),
+    );
+
+    renderGuardian();
+
+    expect(
+      await screen.findByRole("heading", { name: "Lake of Shadows" }),
+    ).toBeInTheDocument();
+    const panel = currentPanel();
+    expect(panel).toHaveTextContent("Strike");
+    expect(panel).toHaveTextContent("Quickplay: Master");
+    expect(panel).toHaveTextContent("Best effort");
+    expect(panel).toHaveTextContent(/^.*Updated /);
+  });
+
+  it.each([
+    ["idle", { state: "idle" }, "Not in an activity"],
+    [
+      "unavailable",
+      { state: "unavailable" },
+      "Current activity is unavailable",
+    ],
+    ["unknown", { state: "unknown", modeName: "Strike" }, "Unknown activity"],
+  ])("renders the %s state distinctly", async (_name, body, title) => {
+    withRosterAndHistory();
+    server.use(
+      http.get(CURRENT, () =>
+        HttpResponse.json({ ...body, fetchedAt: "2026-09-15T00:00:00Z" }),
+      ),
+    );
+
+    renderGuardian();
+
+    expect(await screen.findByText(title)).toBeInTheDocument();
+    for (const other of [
+      "Not in an activity",
+      "Current activity is unavailable",
+      "Unknown activity",
+    ].filter((t) => t !== title)) {
+      expect(screen.queryByText(other)).not.toBeInTheDocument();
+    }
+    expect(screen.getByText("The Insight Terminus")).toBeInTheDocument();
+  });
+
+  it("presents a request failure as unavailable, keeps recent history, and retries", async () => {
+    withRosterAndHistory();
+    let attempts = 0;
+    server.use(
+      http.get(CURRENT, () => {
+        attempts += 1;
+        return attempts === 1
+          ? HttpResponse.json({ error: "down" }, { status: 502 })
+          : HttpResponse.json({
+              state: "idle",
+              fetchedAt: "2026-09-15T00:00:00Z",
+            });
+      }),
+    );
+
+    renderGuardian();
+
+    expect(
+      await screen.findByText("Current activity is unavailable"),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("The Insight Terminus")).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load data")).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Retry current activity" }),
+    );
+    expect(await screen.findByText("Not in an activity")).toBeInTheDocument();
+  });
+
+  it("follows the selected Guardian without showing the previous one's activity", async () => {
+    const warlock = {
+      ...character,
+      characterId: "2305843009263456790",
+      className: "Warlock",
+    };
+    const requested: string[] = [];
+    let releaseWarlock: () => void = () => {};
+    const warlockGate = new Promise<void>((resolve) => {
+      releaseWarlock = resolve;
+    });
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json([character, warlock]),
+      ),
+      http.get(CURRENT, async ({ params }) => {
+        const id = String(params.characterId);
+        requested.push(id);
+        if (id === warlock.characterId) await warlockGate;
+        return HttpResponse.json({
+          state: "ready",
+          activityName:
+            id === warlock.characterId ? "The Pale Heart" : "Lake of Shadows",
+          fetchedAt: "2026-09-15T00:00:00Z",
+        });
+      }),
+    );
+
+    function Switcher() {
+      const { setActiveCharacter } = useCharacters();
+      return (
+        <button onClick={() => setActiveCharacter(warlock.characterId)}>
+          switch
+        </button>
+      );
+    }
+
+    renderWithProviders(
+      <Routes>
+        <Route
+          path="/guardian"
+          element={
+            <>
+              <Switcher />
+              <Guardian />
+            </>
+          }
+        />
+      </Routes>,
+      { route: "/guardian" },
+    );
+
+    expect(await screen.findByText("Lake of Shadows")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("switch"));
+    await waitFor(() =>
+      expect(screen.queryByText("Lake of Shadows")).not.toBeInTheDocument(),
+    );
+    releaseWarlock();
+    expect(await screen.findByText("The Pale Heart")).toBeInTheDocument();
+    expect(requested).toEqual([character.characterId, warlock.characterId]);
   });
 });

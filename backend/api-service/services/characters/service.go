@@ -40,10 +40,11 @@ type EquipmentItemReader interface {
 }
 
 // ActivityDefinitionReader is the entire Manifest seam Characters consumes for
-// history. The provider owns signed SQLite row-key conversion and lifecycle;
-// Characters owns the owner-specific recent-activity projection.
+// recent and current activity. The provider owns signed SQLite row-key
+// conversion and lifecycle; Characters owns the owner-specific projections.
 type ActivityDefinitionReader interface {
 	GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error)
+	GetActivityModeDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModeDefinition, error)
 }
 
 func NewService(bungieClient *bungie.Client, itemFacts EquipmentItemReader, activityFacts ActivityDefinitionReader, c cache.Cache, cacheTTL time.Duration) *Service {

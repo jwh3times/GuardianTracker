@@ -6,11 +6,13 @@ import { toRarity } from "../lib/rarity";
 import type {
   APIActivityHistory,
   APICharacter,
+  APICurrentActivity,
   APIEquipmentDetail,
 } from "../types/api";
 import type {
   Character,
   GuardianActivityHistory,
+  GuardianCurrentActivity,
   GuardianEquipment,
 } from "../types/design";
 
@@ -65,6 +67,20 @@ function activityHistoryKey(
     membershipType,
     membershipId,
     "activity-history",
+    characterId,
+  ] as const;
+}
+
+function currentActivityKey(
+  membershipType: number | undefined,
+  membershipId: string | undefined,
+  characterId: string | undefined,
+) {
+  return [
+    "characters",
+    membershipType,
+    membershipId,
+    "current-activity",
     characterId,
   ] as const;
 }
@@ -127,6 +143,18 @@ function toActivityHistory(
       privateMatch: activity.privateMatch,
       resolved: activity.resolved,
     })),
+  };
+}
+
+function toCurrentActivity(
+  current: APICurrentActivity,
+): GuardianCurrentActivity {
+  return {
+    state: current.state,
+    activityName: current.activityName,
+    modeName: current.modeName,
+    playlistName: current.playlistName,
+    fetchedAt: current.fetchedAt,
   };
 }
 
@@ -238,6 +266,39 @@ export function useGuardianActivityHistory(characterId: string | undefined) {
     isLoading,
     isError,
     error,
+    retry,
+  };
+}
+
+/**
+ * The selected Guardian's best-effort current activity (component 204). Each
+ * Guardian has its own query identity, so switching never shows the previous
+ * Guardian's activity. A request failure is the caller's to present as
+ * unavailable; it never degrades the separate recent-history resource.
+ */
+export function useGuardianCurrentActivity(characterId: string | undefined) {
+  const { user } = useAuth();
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
+
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: currentActivityKey(membershipType, membershipId, characterId),
+    queryFn: () =>
+      apiFetch<APICurrentActivity>(
+        `/api/characters/${membershipType}/${membershipId}/${characterId}/current-activity`,
+      ),
+    enabled: membershipType != null && !!membershipId && characterId != null,
+    select: toCurrentActivity,
+  });
+
+  const retry = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
+  return {
+    currentActivity: data,
+    isLoading,
+    isError,
     retry,
   };
 }

@@ -96,6 +96,19 @@ export interface GuardianActivityHistory {
   fetchedAt: string;
 }
 
+/**
+ * A Guardian's best-effort current activity. `idle` is only Bungie's zero
+ * activity; data Bungie did not return is `unavailable`, and an activity the
+ * Manifest cannot name is `unknown`.
+ */
+export interface GuardianCurrentActivity {
+  state: "ready" | "idle" | "unavailable" | "unknown";
+  activityName?: string;
+  modeName?: string;
+  playlistName?: string;
+  fetchedAt: string;
+}
+
 export interface TreeNode {
   id: string;
   label: string;

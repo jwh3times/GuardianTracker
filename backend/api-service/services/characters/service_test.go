@@ -32,13 +32,20 @@ type fakeEquipmentItems struct {
 
 type fakeActivityDefinitions struct {
 	definitions map[uint32]*bungie.ActivityDefinition
+	modes       map[uint32]*bungie.ActivityModeDefinition
 	err         error
 	hashes      []uint32
+	modeHashes  []uint32
 }
 
 func (f *fakeActivityDefinitions) GetActivityDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityDefinition, error) {
 	f.hashes = append([]uint32(nil), hashes...)
 	return f.definitions, f.err
+}
+
+func (f *fakeActivityDefinitions) GetActivityModeDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModeDefinition, error) {
+	f.modeHashes = append([]uint32(nil), hashes...)
+	return f.modes, f.err
 }
 
 func (f *fakeEquipmentItems) Lookup(_ context.Context, hashes []uint32) (map[uint32]items.AcquisitionFacts, error) {

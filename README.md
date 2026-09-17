@@ -16,7 +16,8 @@ Destiny manifest, live weekly data, and persisted Guardian Tracker preferences.
 - An owner-only Guardian view for current weapons, armor, and equipment with
   manifest-backed item details and equipped Power when available, plus a bounded
   recent-completed-activity timeline with manifest-resolved names and optional
-  time, duration, and private-match context.
+  time, duration, and private-match context, and a best-effort current-activity
+  snapshot.
 - Catalyst, crafting-pattern, triumph, and seal progress.
 - Manifest-backed global item search and a dedicated cosmetics gallery.
 - Persisted preferences and onboarding, controlled feature rollout, and an

@@ -205,6 +205,8 @@ func (s *Server) profile(w http.ResponseWriter, r *http.Request) {
 		writeBungie(w, characterProfile())
 	case "200,205,300":
 		writeBungie(w, equipmentProfile())
+	case "204":
+		writeBungie(w, currentActivityProfile())
 	case "900":
 		writeBungie(w, recordsProfile())
 	default:
@@ -265,6 +267,24 @@ func equipmentProfile() map[string]any {
 		},
 	}
 	return profile
+}
+
+// currentActivityProfile mirrors the verified populated component-204 shape.
+func currentActivityProfile() map[string]any {
+	return map[string]any{
+		"characterActivities": map[string]any{
+			"privacy": 2,
+			"data": map[string]any{CharacterID: map[string]any{
+				"dateActivityStarted":         "2026-07-18T17:50:00Z",
+				"currentActivityHash":         currentActivityHash,
+				"currentActivityModeHash":     currentModeHash,
+				"currentActivityModeType":     3,
+				"currentActivityModeHashes":   []uint32{currentModeHash},
+				"currentActivityModeTypes":    []int{3},
+				"currentPlaylistActivityHash": currentPlaylistHash,
+			}},
+		},
+	}
 }
 
 func (s *Server) activityHistory(w http.ResponseWriter, r *http.Request) {

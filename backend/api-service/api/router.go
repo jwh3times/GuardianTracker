@@ -155,6 +155,7 @@ func NewRouter(d Deps) *gin.Engine {
 	authed.GET("/characters/:membershipType/:membershipId", d.Handlers.Characters.GetCharacters)
 	authed.GET("/characters/:membershipType/:membershipId/:characterId/equipment", d.Handlers.Characters.GetEquipment)
 	authed.GET("/characters/:membershipType/:membershipId/:characterId/activity-history", d.Handlers.Characters.GetActivityHistory)
+	authed.GET("/characters/:membershipType/:membershipId/:characterId/current-activity", d.Handlers.Characters.GetCurrentActivity)
 
 	// Collections
 	authed.GET("/collections/:membershipType/:membershipId", d.Handlers.Collections.GetCollections)

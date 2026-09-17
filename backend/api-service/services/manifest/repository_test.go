@@ -170,6 +170,20 @@ func writeFixtureDB(t *testing.T, path string) {
 			t.Fatalf("fixture modifier %d: %v", hash, err)
 		}
 	}
+
+	if _, err := db.Exec(`CREATE TABLE DestinyActivityModeDefinition (id INTEGER PRIMARY KEY, json TEXT)`); err != nil {
+		t.Fatalf("fixture ddl: %v", err)
+	}
+	// 4110605575 (Strike) exceeds int32, so its row key is negative.
+	modes := map[uint32]string{
+		4110605575: `{"hash":4110605575,"displayProperties":{"name":"Strike"}}`,
+		1164760493: `{"hash":1164760493,"displayProperties":{"name":"PvE"}}`,
+	}
+	for hash, blob := range modes {
+		if _, err := db.Exec(`INSERT INTO DestinyActivityModeDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
+			t.Fatalf("fixture activity mode %d: %v", hash, err)
+		}
+	}
 }
 
 func fixtureRepo(t *testing.T) (*Repository, string) {
@@ -304,6 +318,20 @@ func TestRepository_GetActivityModifierDefinitions(t *testing.T) {
 	}
 	if defs[9000] == nil || defs[9000].DisplayProperties.Name != "Match Game" {
 		t.Errorf("modifier 9000 = %+v, want Name=Match Game", defs[9000])
+	}
+}
+
+func TestRepository_GetActivityModeDefinitions(t *testing.T) {
+	repo, _ := fixtureRepo(t)
+	defs, err := repo.GetActivityModeDefinitions([]uint32{4110605575, 999})
+	if err != nil {
+		t.Fatalf("GetActivityModeDefinitions: %v", err)
+	}
+	if len(defs) != 1 {
+		t.Fatalf("len = %d, want 1 (unknown hash omitted)", len(defs))
+	}
+	if defs[4110605575] == nil || defs[4110605575].DisplayProperties.Name != "Strike" {
+		t.Errorf("mode 4110605575 = %+v, want Name=Strike through the signed row key", defs[4110605575])
 	}
 }
 

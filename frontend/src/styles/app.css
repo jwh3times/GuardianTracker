@@ -294,6 +294,49 @@
   color: var(--c-text-2);
   font-size: var(--t-xs);
 }
+.gt-guardian-current-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.gt-guardian-current-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  padding: var(--s-4);
+  border: 0.07rem solid var(--c-line-soft);
+  border-left: 0.2rem solid var(--c-signal);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+}
+.gt-guardian-current-body[data-resolved="false"] {
+  border-left-color: var(--c-line);
+}
+.gt-guardian-current-body h3 {
+  overflow-wrap: anywhere;
+  color: var(--c-text);
+  font-size: var(--t-lg);
+  line-height: 1.2;
+}
+.gt-guardian-current-body[data-resolved="false"] h3 {
+  color: var(--c-text-2);
+}
+.gt-guardian-current-body p {
+  color: var(--c-text-3);
+  font-size: var(--t-xs);
+}
+.gt-guardian-current-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  color: var(--c-text-2);
+  font-size: var(--t-xs);
+}
+.gt-guardian-current-facts:empty {
+  display: none;
+}
 .gt-link {
   display: inline-flex;
   align-items: center;

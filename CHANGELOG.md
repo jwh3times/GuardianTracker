@@ -14,6 +14,24 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.6.0] - 2026-09-16
+
+### Added
+
+- The Guardian page shows the selected Guardian's current activity, labelled
+  best effort, above recent activity. When Bungie reports one, it names the
+  activity, its mode, and its playlist, with the time the data was fetched. It
+  distinguishes a Guardian that is not in an activity, an activity the Manifest
+  cannot name, and current activity that Bungie did not return. A failed request
+  reads as unavailable with a retry and leaves recent activity usable. Switching
+  Guardians never shows the previous Guardian's activity.
+- `GET /api/characters/:membershipType/:membershipId/:characterId/current-activity`
+  returns that owner-only state (`ready`, `idle`, `unavailable`, or `unknown`)
+  from Bungie profile component 204. It authorizes the full membership pair and
+  rejects a character outside the roster before calling Bungie, and it carries
+  no membership, character, instance, or definition identifiers and no start
+  time.
+
 ## [1.5.6] - 2026-09-16
 
 ### Changed
@@ -1078,7 +1096,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.6...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.6...v1.6.0
 [1.5.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.3...v1.5.4

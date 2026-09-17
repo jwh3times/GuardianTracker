@@ -57,6 +57,10 @@ const (
 	weeklyActivityHash   uint32 = 9501
 	weeklyModifierHash   uint32 = 9502
 	towerDestinationHash uint32 = 9600
+
+	currentActivityHash uint32 = 9700
+	currentModeHash     uint32 = 9701
+	currentPlaylistHash uint32 = 9702
 )
 
 var manifestTables = []string{
@@ -70,6 +74,7 @@ var manifestTables = []string{
 	"DestinyMilestoneDefinition",
 	"DestinyActivityDefinition",
 	"DestinyActivityModifierDefinition",
+	"DestinyActivityModeDefinition",
 	"DestinySandboxPerkDefinition",
 }
 
@@ -270,6 +275,11 @@ func fixtureRows() map[string][]manifestRow {
 		},
 		"DestinyActivityDefinition": {
 			{weeklyActivityHash, map[string]any{"hash": weeklyActivityHash, "displayProperties": display("Vault of Glass: Test Run", "A deterministic raid activity.", "/e2e/activity.png"), "activityTypeHash": uint32(2043403989)}},
+			{currentActivityHash, map[string]any{"hash": currentActivityHash, "displayProperties": display("Lake of Shadows: Test Strike", "A deterministic strike activity.", "/e2e/strike.png")}},
+			{currentPlaylistHash, map[string]any{"hash": currentPlaylistHash, "displayProperties": display("Vanguard Ops: Test Playlist", "A deterministic playlist.", "/e2e/playlist.png")}},
+		},
+		"DestinyActivityModeDefinition": {
+			{currentModeHash, map[string]any{"hash": currentModeHash, "displayProperties": display("Strike", "A deterministic activity mode.", "/e2e/mode.png")}},
 		},
 		"DestinyActivityModifierDefinition": {
 			{weeklyModifierHash, map[string]any{"hash": weeklyModifierHash, "displayProperties": display("E2E Singe", "Incoming and outgoing test damage is increased.", "/e2e/modifier.png")}},

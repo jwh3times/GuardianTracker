@@ -187,6 +187,18 @@ export interface APIActivityHistory {
   fetchedAt: string;
 }
 
+/**
+ * GET /api/characters/:membershipType/:membershipId/:characterId/current-activity
+ * Owner-only and best effort. Names are present only when they resolved.
+ */
+export interface APICurrentActivity {
+  state: "ready" | "idle" | "unavailable" | "unknown";
+  activityName?: string;
+  modeName?: string;
+  playlistName?: string;
+  fetchedAt: string;
+}
+
 // --- Misc ---
 
 /** POST /api/collections/:type/:id/refresh */

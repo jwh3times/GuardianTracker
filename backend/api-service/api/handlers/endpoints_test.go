@@ -320,6 +320,73 @@ func TestCharacterActivityHistory_NotFound(t *testing.T) {
 	}
 }
 
+const currentActivityRoute = "/api/characters/:membershipType/:membershipId/:characterId/current-activity"
+
+func TestCharacterCurrentActivity_BadCharacterID(t *testing.T) {
+	h := charactersHandler(t, "http://x", newTokenStore(t))
+	r := authedRouter(http.MethodGet, currentActivityRoute, testUserID, h.GetCurrentActivity)
+	if w := do(r, http.MethodGet, "/api/characters/3/"+testUserID+"/not-a-character/current-activity"); w.Code != http.StatusBadRequest {
+		t.Errorf("bad character id = %d, want 400", w.Code)
+	}
+}
+
+func TestCharacterCurrentActivity_NoToken(t *testing.T) {
+	h := charactersHandler(t, "http://x", newTokenStore(t))
+	r := authedRouter(http.MethodGet, currentActivityRoute, testUserID, h.GetCurrentActivity)
+	path := "/api/characters/3/" + testUserID + "/2305843009263456789/current-activity"
+	if w := do(r, http.MethodGet, path); w.Code != http.StatusUnauthorized {
+		t.Errorf("no token = %d, want 401", w.Code)
+	} else if !strings.Contains(w.Body.String(), "BUNGIE_REAUTH_REQUIRED") {
+		t.Errorf("no token body = %s, want BUNGIE_REAUTH_REQUIRED", w.Body.String())
+	}
+}
+
+func TestCharacterCurrentActivity_NotFound(t *testing.T) {
+	var activityRequested bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("components") != "200" {
+			activityRequested = true
+		}
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"characters":{"data":{"2305843009263456789":{"characterId":"2305843009263456789"}}}}}`)
+	}))
+	defer upstream.Close()
+
+	ts := newTokenStore(t)
+	storeValidToken(ts, testUserID)
+	h := charactersHandler(t, upstream.URL, ts)
+	r := authedRouter(http.MethodGet, currentActivityRoute, testUserID, h.GetCurrentActivity)
+	w := do(r, http.MethodGet, "/api/characters/3/"+testUserID+"/2305843009000000000/current-activity")
+	if w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "CHARACTER_NOT_FOUND") {
+		t.Errorf("missing character = %d %s, want 404 CHARACTER_NOT_FOUND", w.Code, w.Body.String())
+	}
+	if activityRequested {
+		t.Error("component-204 request sent for a character outside the roster")
+	}
+}
+
+func TestCharacterCurrentActivity_Idle(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("components") == "200" {
+			fmt.Fprint(w, `{"ErrorCode":1,"Response":{"characters":{"data":{"2305843009263456789":{"characterId":"2305843009263456789"}}}}}`)
+			return
+		}
+		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"characterActivities":{"privacy":2,"data":{"2305843009263456789":{"currentActivityHash":0}}}}}`)
+	}))
+	defer upstream.Close()
+
+	ts := newTokenStore(t)
+	storeValidToken(ts, testUserID)
+	h := charactersHandler(t, upstream.URL, ts)
+	r := authedRouter(http.MethodGet, currentActivityRoute, testUserID, h.GetCurrentActivity)
+	w := do(r, http.MethodGet, "/api/characters/3/"+testUserID+"/2305843009263456789/current-activity")
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"state":"idle"`) {
+		t.Errorf("idle = %d %s, want 200 with state idle", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "2305843009263456789") {
+		t.Errorf("idle body leaks the character id: %s", w.Body.String())
+	}
+}
+
 func TestCharacters_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"ErrorCode":1,"Response":{"characters":{"data":{
@@ -447,6 +514,7 @@ func TestMembershipRoutes_RejectAPlatformMismatch(t *testing.T) {
 		"characters":                 charactersHandler(t, "http://x", ts).GetCharacters,
 		"character equipment":        charactersHandler(t, "http://x", ts).GetEquipment,
 		"character activity history": charactersHandler(t, "http://x", ts).GetActivityHistory,
+		"character current activity": charactersHandler(t, "http://x", ts).GetCurrentActivity,
 		"catalysts":                  records.GetCatalysts,
 		"crafting":                   records.GetCrafting,
 		"seals":                      records.GetSeals,

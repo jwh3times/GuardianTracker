@@ -120,6 +120,11 @@ func TestManifestProfileVendorMilestoneAndSettingsRoutes(t *testing.T) {
 	if len(instances) != 3 {
 		t.Fatalf("components 200,205,300 instance count = %d", len(instances))
 	}
+	current := getBungie(t, server, profileBase+"204", true)
+	currentEntry := current["characterActivities"].(map[string]any)["data"].(map[string]any)[CharacterID].(map[string]any)
+	if currentEntry["currentActivityHash"] != float64(currentActivityHash) {
+		t.Fatalf("component 204 = %+v", current)
+	}
 	activityPath := "/Platform/Destiny2/3/Account/" + MembershipID + "/Character/" + CharacterID + "/Stats/Activities/?page=0&count=5"
 	history := getBungie(t, server, activityPath, true)
 	activities := history["activities"].([]any)

@@ -163,7 +163,12 @@ frontend/src/
                                    `["characters", membershipType, membershipId, "activity-history", characterId]`;
                                    `useGuardianActivityHistory(characterId)` keeps the membership and bounded
                                    first-page policy inside the data module and projects `APIActivityHistory`
-                                   to `GuardianActivityHistory`. CharacterContext also carries roster query errors
+                                   to `GuardianActivityHistory`. A third per-Guardian key,
+                                   `["characters", membershipType, membershipId, "current-activity", characterId]`,
+                                   backs `useGuardianCurrentActivity(characterId)`, which projects
+                                   `APICurrentActivity` to `GuardianCurrentActivity` and is independent of the
+                                   history query — a current-activity failure never affects recent history.
+                                   CharacterContext also carries roster query errors
                                    so the Guardian page cannot confuse a failed roster with an empty one.
     items.ts                     ← Fifth resource landed (E8). Private per-hash query keys
                                    `["item-perks", itemHash]` / `["item-view", itemHash]`; projects
@@ -467,7 +472,10 @@ frontend/src/
                                    `useGuardianEquipment`; distinguishes unavailable, failed-roster, and
                                    ready-but-empty equipment states and renders unresolved item facts neutrally;
                                    independently renders the bounded recent-completed-activity timeline with
-                                   explicit empty, unavailable, request-failure, and reconnect-required states
+                                   explicit empty, unavailable, request-failure, and reconnect-required states;
+                                   `CurrentActivityPanel` independently renders `useGuardianCurrentActivity`'s
+                                   ready/idle/unknown/unavailable states behind a "Best effort" badge, so a
+                                   current-activity failure never affects the recent-activity panel
     settings/Settings.tsx      ← Destiny membership info, early-access tier opt-in, appearance prefs, sign out
     admin/                     ← Admin.tsx (admin console: user roster + role mgmt, flag config;
                                    admin-gated route; reads `data/admin.ts`'s useAdminUsers/useAdminFlags/
@@ -696,9 +704,9 @@ outside `CharacterProvider`, matching `useAuth`, `useFlags`, and
 catalysts, and seals remain membership-wide. Dashboard and This Week include
 the active character ID in weekly query keys and requests so authenticated
 vendor context follows the selected character. Guardian passes the active
-character ID to `useGuardianEquipment` and `useGuardianActivityHistory`; the data
-module supplies the signed-in membership pair, so pages cannot select another
-membership.
+character ID to `useGuardianEquipment`, `useGuardianActivityHistory`, and
+`useGuardianCurrentActivity`; the data module supplies the signed-in membership
+pair, so pages cannot select another membership.
 
 ## Preferences
 

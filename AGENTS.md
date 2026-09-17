@@ -234,10 +234,10 @@ deployed frontend runtime is nginx.
 - Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
 - Single-device logout preserves Bungie authorization; logout-all evicts it.
 - Membership-scoped routes (collections, collections refresh, characters,
-  character equipment, character activity history, catalysts, crafting, seals)
-  authorize the caller's whole Destiny membership pair — platform type and ID,
-  not ID alone — and abort the request on mismatch before any Bungie call or
-  cache access.
+  character equipment, character activity history, character current activity,
+  catalysts, crafting, seals) authorize the caller's whole Destiny membership
+  pair — platform type and ID, not ID alone — and abort the request on
+  mismatch before any Bungie call or cache access.
 - Admin access is controlled by explicit membership ID configuration. Self-service role updates lock the current database row, reject admins, and commit `role.optin` audit events atomically without session/token-version changes. Successful bootstrap admin upserts evict the local authorization cache; cross-replica cache propagation retains its 60-second window.
 
 See `SECURITY.md` for public security posture and reporting guidance.
@@ -558,9 +558,12 @@ Single-context layout: root `CONTEXT.md` (created lazily) + existing `docs/adr/`
 
 - Collections data remains membership-wide. The character switcher scopes
   authenticated weekly vendor inventory, today actions, availability ranking,
-  Xûr location, the Guardian equipment view, and one bounded page of recent
-  completed activities to the selected character. Curated progression and live
-  activity remain P2; recent history has no pagination or aggregate analytics.
+  Xûr location, the Guardian equipment view, one bounded page of recent
+  completed activities, and a best-effort current-activity snapshot to the
+  selected character. Curated progression remains P2; recent history has no
+  pagination or aggregate analytics; current activity is not cached
+  server-side and reports "unknown" when Bungie's reported activity hash is
+  absent from the Manifest.
 - Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready). A build that fails is retried by the next search request (throttled to one attempt per 30s) instead of waiting for the next hourly manifest swap.
 - Xûr location is best-effort: the authenticated character-vendor component's
   location index resolves through the manifest to "The Tower"; failures omit the field.
