@@ -14,6 +14,20 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.7.1] - 2026-09-17
+
+### Changed
+
+- The roadmap records the scope of god-roll and owned-roll insights. The feature
+  is now called roll targets, so it stays distinct from the wish list of items to
+  acquire. Targets are authored by the user, who can also import a DIM-format wish
+  list file they supply; no third-party roll data is bundled or fetched. It still
+  waits on a fresh owner capture of owned-item sockets before its data design.
+- The roadmap now states that Guardian Tracker is a local-only application.
+  Notifications and digests, shareable collection progress, and metrics each
+  name the production deployment decision as their first gate, instead of
+  appearing independently actionable.
+
 ## [1.7.0] - 2026-09-17
 
 ### Added
@@ -1135,7 +1149,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.6...v1.6.0
