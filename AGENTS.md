@@ -344,6 +344,7 @@ npm test -- --coverage
 npm run build
 
 # Browser (start from repo root, then run scripts from frontend/)
+$env:GO_ENV="development"                  # only in a worktree with no root .env
 docker compose stop frontend api-service   # 5273/8081 would be silently reused
 docker compose --profile e2e up -d --wait e2e-postgres
 $env:E2E_FIXED_TIME="2026-07-18T18:00:00Z"

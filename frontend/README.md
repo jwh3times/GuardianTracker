@@ -233,10 +233,12 @@ $goImage = "golang:" + (Select-String -Path backend/api-service/go.mod `
 docker build --pull -t guardian-tracker/playwright:local `
   -f frontend/Dockerfile.playwright frontend
 docker compose --profile e2e up -d --wait e2e-postgres
+$network = docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' `
+  (docker compose --profile e2e ps -q e2e-postgres)
 docker run --rm -v "${repo}:/src" -v guardian-e2e-bin:/out -w /src/backend/api-service `
   -e CGO_ENABLED=1 $goImage `
   bash -c "go build -o /out/api-service . && go build -o /out/fake-bungie ./cmd/fake-bungie"
-docker run --rm --init --ipc=host --network guardiantracker_default `
+docker run --rm --init --ipc=host --network $network `
   -e CI=true -e E2E_FIXED_TIME=2026-07-18T18:00:00Z `
   -e E2E_FAKE_COMMAND=/out/fake-bungie -e E2E_API_COMMAND=/out/api-service `
   -e E2E_DATABASE_URL="postgres://guardian_app:guardian_dev_password@e2e-postgres:5432/guardian_tracker?sslmode=disable" `
@@ -247,7 +249,13 @@ docker run --rm --init --ipc=host --network guardiantracker_default `
 
 Run these commands from the repository root. The anonymous `node_modules`
 volume prevents the container's Linux dependencies from overwriting the host
-installation.
+installation. Compose names its network after the checkout directory, so
+`$network` is read from the running `e2e-postgres` container rather than
+assumed; a git worktree gets a different name than the main checkout.
+
+A git worktree also has no root `.env`, and Compose refuses to interpolate
+`docker-compose.yml` without `GO_ENV`. Set `$env:GO_ENV = "development"` in the
+session before the first `docker compose` command there.
 
 ## Production Build
 
