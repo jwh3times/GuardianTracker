@@ -41,6 +41,51 @@ test("Guardian renders the selected character's equipment and recent activity", 
   ).toBeVisible();
 });
 
+test("Guardian shows best-effort current activity beside recent activity", async ({
+  page,
+}) => {
+  await page.goto("/guardian");
+  const current = page.getByRole("region", { name: "Current activity" });
+  await expect(
+    current.getByRole("heading", {
+      name: FIXTURES.guardianCurrentActivityName,
+    }),
+  ).toBeVisible();
+  await expect(current.getByText("Best effort")).toBeVisible();
+  await expect(
+    current.getByText(FIXTURES.guardianCurrentModeName, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    current.getByText(`Playlist: ${FIXTURES.guardianCurrentPlaylistName}`),
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Recent activity" })
+      .getByText(FIXTURES.guardianActivityName),
+  ).toBeVisible();
+});
+
+test("Guardian current activity fits a phone-width viewport", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto("/guardian");
+  const current = page.getByRole("region", { name: "Current activity" });
+  await expect(
+    current.getByRole("heading", {
+      name: FIXTURES.guardianCurrentActivityName,
+    }),
+  ).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - window.innerWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(0);
+  const box = await current.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+});
+
 test("Catalysts, Crafting, Triumphs, Settings, and Cosmetics load", async ({
   page,
 }) => {

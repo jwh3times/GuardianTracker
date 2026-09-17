@@ -81,6 +81,18 @@ for (const [label, path, heading] of authenticatedPages) {
   });
 }
 
+test("Guardian current activity is WCAG 2.2 A/AA clean once loaded", async ({
+  page,
+}, testInfo) => {
+  await page.goto("/guardian");
+  await expect(
+    page
+      .getByRole("region", { name: "Current activity" })
+      .getByRole("heading", { name: FIXTURES.guardianCurrentActivityName }),
+  ).toBeVisible();
+  await scanPage(page, testInfo, "guardian-current-activity");
+});
+
 test("Crafting is WCAG 2.2 A/AA clean", async ({ page }, testInfo) => {
   await page.goto("/catalysts");
   const crafting = page.getByRole("button", { name: "Crafting Patterns" });

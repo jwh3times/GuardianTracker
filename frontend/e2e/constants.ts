@@ -16,6 +16,9 @@ export const FIXTURES = {
   guardianArmorName: "Helm of Tests",
   guardianEquipmentName: "Test Ship",
   guardianActivityName: "Vault of Glass: Test Run",
+  guardianCurrentActivityName: "Lake of Shadows: Test Strike",
+  guardianCurrentModeName: "Strike",
+  guardianCurrentPlaylistName: "Vanguard Ops: Test Playlist",
   wishlistItemName: "Fatebringer",
   catalystName: "Sunshot Catalyst",
 } as const;
