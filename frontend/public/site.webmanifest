@@ -1,6 +1,12 @@
 {
+  "id": "/",
   "name": "Guardian Tracker",
   "short_name": "Guardian Tracker",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#04080d",
+  "background_color": "#090e13",
   "icons": [
     {
       "src": "/png-dark/guardian-tracker-192x192.png",
@@ -12,8 +18,5 @@
       "sizes": "512x512",
       "type": "image/png"
     }
-  ],
-  "theme_color": "#04080d",
-  "background_color": "#04080d",
-  "display": "standalone"
+  ]
 }
