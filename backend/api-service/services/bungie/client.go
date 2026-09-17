@@ -368,6 +368,7 @@ const (
 	ComponentProfiles             = 100
 	ComponentCharacters           = 200
 	ComponentCharacterInventories = 201
+	ComponentCharacterActivities  = 204
 	ComponentCharacterEquipment   = 205
 	ComponentItemInstances        = 300
 	ComponentItemPerks            = 302

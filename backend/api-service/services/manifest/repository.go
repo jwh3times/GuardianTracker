@@ -449,6 +449,27 @@ func (r *Repository) GetActivityModifierDefinitions(hashes []uint32) (map[uint32
 	return out, nil
 }
 
+// GetActivityModeDefinitions fetches activity mode definitions for a batch of hashes.
+func (r *Repository) GetActivityModeDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModeDefinition, error) {
+	if len(hashes) == 0 {
+		return map[uint32]*bungie.ActivityModeDefinition{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	out := make(map[uint32]*bungie.ActivityModeDefinition, len(hashes))
+	err := queryDefsChunked(r.db, hashes, byRowID("DestinyActivityModeDefinition", "GetActivityModeDefinitions"),
+		func(_ uint32, def *bungie.ActivityModeDefinition) {
+			if def.Hash != 0 {
+				out[def.Hash] = def
+			}
+		})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AcquisitionRows is one coherent read of the item definitions and linked
 // collectibles behind a set of item hashes.
 //

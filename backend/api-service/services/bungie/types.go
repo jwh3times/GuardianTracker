@@ -28,9 +28,10 @@ type ManifestResponse struct {
 // including collectibles (component 800).
 type ProfileResponse struct {
 	Response struct {
-		Characters         ComponentEnvelope[map[string]CharacterComponent]          `json:"characters"`
-		CharacterEquipment ComponentEnvelope[map[string]CharacterEquipmentComponent] `json:"characterEquipment"`
-		ItemComponents     struct {
+		Characters          ComponentEnvelope[map[string]CharacterComponent]           `json:"characters"`
+		CharacterActivities ComponentEnvelope[map[string]CharacterActivitiesComponent] `json:"characterActivities"`
+		CharacterEquipment  ComponentEnvelope[map[string]CharacterEquipmentComponent]  `json:"characterEquipment"`
+		ItemComponents      struct {
 			Instances ComponentEnvelope[map[string]DestinyItemInstanceComponent] `json:"instances"`
 		} `json:"itemComponents"`
 		ProfileCollectibles struct {
@@ -131,6 +132,16 @@ type CharacterComponent struct {
 	EmblemPath           string `json:"emblemPath"`
 	EmblemBackgroundPath string `json:"emblemBackgroundPath"`
 	DateLastPlayed       string `json:"dateLastPlayed"`
+}
+
+// CharacterActivitiesComponent is the verified subset of component 204 for one
+// character. Every field is optional on the wire: a zero activity hash is idle,
+// while an absent one says nothing. dateActivityStarted is deliberately not
+// decoded because it establishes no freshness guarantee.
+type CharacterActivitiesComponent struct {
+	CurrentActivityHash         *uint32 `json:"currentActivityHash"`
+	CurrentActivityModeHash     *uint32 `json:"currentActivityModeHash"`
+	CurrentPlaylistActivityHash *uint32 `json:"currentPlaylistActivityHash"`
 }
 
 // CharacterEquipmentComponent is component 205 for one character.
@@ -449,6 +460,12 @@ type MilestoneActivity struct {
 
 // ActivityModifierDefinition is a DestinyActivityModifierDefinition entry from the manifest.
 type ActivityModifierDefinition struct {
+	Hash              uint32            `json:"hash"`
+	DisplayProperties DisplayProperties `json:"displayProperties"`
+}
+
+// ActivityModeDefinition is a minimal DestinyActivityModeDefinition entry from the manifest.
+type ActivityModeDefinition struct {
 	Hash              uint32            `json:"hash"`
 	DisplayProperties DisplayProperties `json:"displayProperties"`
 }

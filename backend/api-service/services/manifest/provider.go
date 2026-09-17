@@ -150,6 +150,14 @@ func (p *Provider) GetActivityModifierDefinitions(hashes []uint32) (map[uint32]*
 	return r.GetActivityModifierDefinitions(hashes)
 }
 
+func (p *Provider) GetActivityModeDefinitions(hashes []uint32) (map[uint32]*bungie.ActivityModeDefinition, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetActivityModeDefinitions(hashes)
+}
+
 func (p *Provider) GetPresentationNodeDefinitions(hashes []uint32) (map[uint32]*PresentationNodeDef, error) {
 	r, err := p.get()
 	if err != nil {
