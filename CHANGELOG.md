@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.6.1] - 2026-09-16
+
+### Fixed
+
+- The visual-baseline regeneration commands in the frontend guide now work from
+  a git worktree. They read the Compose network name from the running
+  `e2e-postgres` container instead of assuming the main checkout's
+  `guardiantracker_default`, and both that guide and the browser-test commands in
+  `AGENTS.md` note that a worktree without a root `.env` must set `GO_ENV` before
+  Compose will read `docker-compose.yml`.
+
 ## [1.6.0] - 2026-09-16
 
 ### Added
@@ -1096,7 +1107,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.6...v1.6.0
 [1.5.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.5...v1.5.6
 [1.5.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.5.4...v1.5.5
