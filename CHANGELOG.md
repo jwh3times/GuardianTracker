@@ -14,6 +14,47 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.7.6] - 2026-09-18
+
+### Changed
+
+- The changelog now documents `v1.7.2` through `v1.7.5`. Those four releases
+  merged as Dependabot pull requests, which `Changelog Version` exempts, so each
+  minted a version tag with no entry. The sections below were reconstructed from
+  the tagged diffs.
+
+## [1.7.5] - 2026-09-18
+
+### Changed
+
+- Updated the pinned CI actions `docker/setup-buildx-action` from 4.3.0 to 4.4.0
+  and `docker/build-push-action` from 7.3.0 to 7.4.0, each to its reviewed release
+  commit.
+
+## [1.7.4] - 2026-09-18
+
+### Changed
+
+- Updated the pinned `postgres:18.6-alpine3.24` image digest across the three
+  Compose PostgreSQL services and the `postgres-specialist` agent guide. The
+  PostgreSQL version is unchanged.
+
+## [1.7.3] - 2026-09-18
+
+### Changed
+
+- Updated frontend dependencies: `@tanstack/react-virtual` from 3.14.12 to
+  3.14.13, `@vitest/coverage-v8` and Vitest from 5.0.0 to 5.0.1, and Oxlint from
+  1.82.0 to 1.83.0.
+
+## [1.7.2] - 2026-09-18
+
+### Changed
+
+- Updated the frontend Node toolchain from 26.8.2 to 26.9.0, covering `.nvmrc`
+  and the pinned base images in all three frontend Dockerfiles. Node remains
+  build and development tooling only; the deployed frontend runtime is nginx.
+
 ## [1.7.1] - 2026-09-17
 
 ### Changed
@@ -1149,7 +1190,12 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.6...HEAD
+[1.7.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.5...v1.7.6
+[1.7.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.4...v1.7.5
+[1.7.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.3...v1.7.4
+[1.7.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.2...v1.7.3
+[1.7.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.6.0...v1.6.1
