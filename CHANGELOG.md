@@ -14,6 +14,32 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.8.0] - 2026-09-18
+
+### Added
+
+- The Dashboard shows what you acquired while you were away. A visit begins on a
+  page load more than two hours after your last recorded activity, and the panel
+  lists the collectibles obtained since the previous one. The digest is computed
+  once when a visit starts and stays fixed for its duration, so navigating away
+  and back re-shows it rather than clearing it, and it survives an application
+  restart.
+- `GET /api/digest/:membershipType/:membershipId` returns that digest for the
+  authenticated membership. It reports three distinct outcomes: a first visit,
+  which starts tracking rather than reporting a whole collection as new; a
+  computed digest, which may legitimately contain nothing; and an unavailable
+  digest, which is a quiet state rather than an error.
+
+### Changed
+
+- Guardian Tracker now keeps one durable record of previously observed Bungie
+  data: a `digest_state` row per account holding the visit clock, the collected
+  baseline, and the current visit's outcome. The baseline is written only from a
+  successful read of a public Destiny profile, so a private or failed read leaves
+  the previous baseline standing instead of reporting the whole collection as
+  newly acquired on the following visit. Collections remain read through the
+  existing cache; no additional Bungie refresh is forced.
+
 ## [1.7.7] - 2026-09-18
 
 ### Added
@@ -1203,7 +1229,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.7...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.7...v1.8.0
 [1.7.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.4...v1.7.5

@@ -134,6 +134,16 @@ export const sampleCrafting = {
   fetchedAt: new Date().toISOString(),
 };
 
+// Default digest fixture: a returning visit with nothing new (ADR 0023). Most
+// tests don't care about the digest, so this is the least eventful of the
+// three states; individual tests override with server.use for the others.
+export const sampleDigest = {
+  status: "ready" as const,
+  visitStartedAt: "2026-09-18T18:00:00Z",
+  previousVisitAt: "2026-09-17T12:00:00Z",
+  acquired: [],
+};
+
 export const sampleSeals = {
   items: [
     {
@@ -315,6 +325,9 @@ export const defaultHandlers = [
     HttpResponse.json(sampleCrafting),
   ),
   http.get(`${API}/api/seals/:type/:id`, () => HttpResponse.json(sampleSeals)),
+  http.get(`${API}/api/digest/:type/:id`, () =>
+    HttpResponse.json(sampleDigest),
+  ),
   http.get(`${API}/api/items/search`, () => HttpResponse.json([])),
   http.get(`${API}/api/items/:hash/perks`, ({ params }) =>
     HttpResponse.json({

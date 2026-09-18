@@ -110,6 +110,11 @@ type analysis struct {
 	catalog   []items.AcquisitionFacts
 	collected map[uint32]bool // collectible-hash-keyed, straight from the profile response
 	owned     map[uint32]bool // itemHash-keyed: true if ANY of the item's collectibles is acquired (see deriveOwnedItems)
+	// privacy is the Bungie ProfileCollectibles.Privacy value the profile read
+	// carried (bungie.CollectiblesPrivacy*). It travels with the rest of the
+	// profile-derived half of the analysis — untouched by a manifest swap,
+	// carried forward by refreshManifestParts exactly like collected.
+	privacy   int
 	tree      *TreeStructure
 	fetchedAt time.Time
 	// builtUnder is the publication attempt the manifest-derived fields above
@@ -243,6 +248,7 @@ func (m *MembershipAnalysis) getAnalysis(ctx context.Context, membershipType int
 		catalog:    catalog,
 		collected:  collected,
 		owned:      deriveOwnedItems(catalog, collected),
+		privacy:    profile.Response.ProfileCollectibles.Privacy,
 		tree:       tree,
 		fetchedAt:  time.Now().UTC(),
 		builtUnder: attempt,
@@ -352,6 +358,20 @@ func (m *MembershipAnalysis) GetMissingItemHashes(ctx context.Context, membershi
 	return missing, nil
 }
 
+// CollectedState returns this membership's current item-hash ownership plus
+// the Bungie profile-collectibles privacy value the same read carried
+// (bungie.CollectiblesPrivacy*), reusing the same cached analysis
+// GetSummary/GetFull read rather than issuing a second Bungie call. It is the
+// read the since-last-visit digest (ADR 0023) is built on: Collections owns
+// this projection, and the digest does not re-derive it.
+func (m *MembershipAnalysis) CollectedState(ctx context.Context, membershipType int, membershipID, accessToken string) (owned map[uint32]bool, privacy int, fetchedAt time.Time, err error) {
+	a, err := m.getAnalysis(ctx, membershipType, membershipID, accessToken)
+	if err != nil {
+		return nil, 0, time.Time{}, err
+	}
+	return a.owned, a.privacy, a.fetchedAt, nil
+}
+
 // InvalidateCache retires this owner's cached analysis for one membership as a
 // single transition: the generation advances and the entry is deleted together,
 // so a load already in flight can still answer its own request but can no
@@ -402,6 +422,7 @@ func (m *MembershipAnalysis) refreshManifestParts(ctx context.Context, cacheKey 
 		catalog:    catalog,
 		collected:  a.collected,
 		owned:      deriveOwnedItems(catalog, a.collected),
+		privacy:    a.privacy,
 		tree:       tree,
 		fetchedAt:  a.fetchedAt,
 		builtUnder: attempt,

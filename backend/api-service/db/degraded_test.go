@@ -41,6 +41,7 @@ func TestDegradedStores_EveryMethodReportsUnavailable(t *testing.T) {
 		{"Tokens", s.Tokens},
 		{"Wishlist", s.Wishlist},
 		{"Prefs", s.Prefs},
+		{"Digest", s.Digest},
 		{"Flags", s.Flags},
 		{"Audit", s.Audit},
 		{"Pinger", s.Pinger},

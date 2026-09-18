@@ -37,6 +37,11 @@ type ProfileResponse struct {
 		ProfileCollectibles struct {
 			Data struct {
 				Collectibles map[string]CollectibleComponent `json:"collectibles"`
+				// RecentCollectibleHashes is the game's own "recently acquired"
+				// list (ADR 0023). Its window is undefined and client-controlled,
+				// so it is captured only as a corroborating signal — no behavior
+				// keys off it.
+				RecentCollectibleHashes []uint32 `json:"recentCollectibleHashes"`
 			} `json:"data"`
 			Privacy int `json:"privacy"`
 		} `json:"profileCollectibles"`
@@ -112,6 +117,16 @@ type HistoricalStatValue struct {
 	DisplayValue string  `json:"displayValue"`
 	Value        float64 `json:"value"`
 }
+
+// Collectibles privacy values reported on ProfileResponse's
+// ProfileCollectibles.Privacy (ADR 0023). A Private read returns an empty
+// collectibles map, which is why the digest snapshot write is gated on this
+// value rather than inferred from an empty result.
+const (
+	CollectiblesPrivacyNone    = 0
+	CollectiblesPrivacyPublic  = 1
+	CollectiblesPrivacyPrivate = 2
+)
 
 // CollectibleComponent is the per-item collectible state from the API.
 type CollectibleComponent struct {

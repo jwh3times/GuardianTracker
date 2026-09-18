@@ -38,6 +38,7 @@ type Handlers struct {
 	Audit       *handlers.AuditHandler
 	Characters  *handlers.CharactersHandler
 	Collections *handlers.CollectionsHandler
+	Digest      *handlers.DigestHandler
 	Items       *handlers.ItemsHandler
 	Weekly      *handlers.WeeklyHandler
 	Records     *handlers.RecordsHandler
@@ -160,6 +161,9 @@ func NewRouter(d Deps) *gin.Engine {
 	// Collections
 	authed.GET("/collections/:membershipType/:membershipId", d.Handlers.Collections.GetCollections)
 	authed.POST("/collections/:membershipType/:membershipId/refresh", d.Handlers.Collections.RefreshCollections)
+
+	// Since-last-visit digest (ADR 0023)
+	authed.GET("/digest/:membershipType/:membershipId", d.Handlers.Digest.GetDigest)
 
 	// Flag-gated routes. RequireFlag must compose after the JWT gate, which sets
 	// the role in the context — the group supplies that ordering. It fails open

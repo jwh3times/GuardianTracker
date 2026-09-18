@@ -15,6 +15,7 @@ type Stores struct {
 	Tokens   TokenRepo
 	Wishlist WishlistRepo
 	Prefs    PrefsRepo
+	Digest   DigestRepo
 	Flags    FlagRepo
 	Audit    AuditRepo
 	Pinger   Pinger
@@ -32,6 +33,7 @@ func NewStores(pool *pgxpool.Pool) *Stores {
 			Tokens:   degradedTokens{},
 			Wishlist: degradedWishlist{},
 			Prefs:    degradedPrefs{},
+			Digest:   degradedDigest{},
 			Flags:    degradedFlags{},
 			Audit:    degradedAudit{},
 			Pinger:   degradedPinger{},
@@ -42,6 +44,7 @@ func NewStores(pool *pgxpool.Pool) *Stores {
 		Tokens:    NewBungieTokenStore(pool),
 		Wishlist:  NewWishlistStore(pool),
 		Prefs:     NewPrefsStore(pool),
+		Digest:    NewDigestStore(pool),
 		Flags:     NewFlagStore(pool),
 		Audit:     NewAuditStore(pool),
 		Pinger:    pool,

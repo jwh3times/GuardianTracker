@@ -27,6 +27,7 @@ import (
 	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/characters"
 	"guardian-tracker/api-service/services/collections"
+	"guardian-tracker/api-service/services/digest"
 	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/items"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
@@ -155,6 +156,17 @@ func main() {
 	charactersService := characters.NewService(bungieClient, itemsService, manifestProvider, appCache, cfg.CacheTTLCollections)
 	collectionsAnalysis := collections.NewMembershipAnalysis(bungieClient, manifestService, itemsService, manifestProvider, appCache, cfg.CacheTTLCollections)
 
+	// Since-last-visit digest (ADR 0023) — reads collectionsAnalysis' cached
+	// state directly rather than the complete collections.Service, so it needs
+	// no place in the Weekly/Collections construction ordering above it.
+	digestService := digest.NewService(adapters.NewDigestRepository(stores.Digest), collectionsAnalysis, itemsService)
+	if cfg.E2EFixedTime != nil {
+		fixedTime := *cfg.E2EFixedTime
+		digestService = digest.NewServiceWithClock(adapters.NewDigestRepository(stores.Digest), collectionsAnalysis, itemsService,
+			func() time.Time { return fixedTime },
+		)
+	}
+
 	// Wish list core — constructed before Weekly, which reads saved item hashes
 	// through it. The complete wish list service is constructed after Weekly
 	// (ADR 0019), which is what keeps that pair acyclic.
@@ -280,6 +292,7 @@ func main() {
 			Audit:       handlers.NewAuditHandler(stores.Audit),
 			Characters:  handlers.NewCharactersHandler(charactersService, tokenStore),
 			Collections: handlers.NewCollectionsHandler(collectionsService, tokenStore),
+			Digest:      handlers.NewDigestHandler(digestService, tokenStore),
 			Items:       handlers.NewItemsHandler(itemsService),
 			Weekly:      handlers.NewWeeklyHandler(weeklyService, tokenStore),
 			Records:     handlers.NewRecordsHandler(recordsService, tokenStore),

@@ -376,3 +376,28 @@ export interface APIAuditPage {
   entries: APIAuditEntry[];
   nextCursor: string;
 }
+
+// --- Digest (ADR 0023) ---
+
+/** One collectible acquired since the membership's previous visit. */
+export interface APIAcquiredItem {
+  itemHash: number;
+  name: string;
+  icon: string;
+  itemType: string;
+}
+
+/**
+ * GET /api/digest/:membershipType/:membershipId — always 200. `status`
+ * distinguishes a computed digest from a genuinely new account (first-visit)
+ * and from no digest being computable this visit (unavailable); the caller
+ * must not infer either from an empty `acquired` list.
+ */
+export interface APIDigest {
+  status: "ready" | "first-visit" | "unavailable";
+  visitStartedAt: string; // RFC3339
+  /** Omitted on a first visit, and whenever no previous snapshot exists yet. */
+  previousVisitAt?: string; // RFC3339
+  /** Always an array; may be empty. */
+  acquired: APIAcquiredItem[];
+}
