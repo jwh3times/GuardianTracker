@@ -11,7 +11,9 @@ import (
 )
 
 // stubRepository is the fake Repository every test drives directly, mirroring
-// preferences' stubRepository pattern.
+// preferences' stubRepository pattern. It stands in for a real row: state set
+// on it before a call is what Get returns; state recorded during a call is
+// what a real UPDATE/INSERT would have written.
 type stubRepository struct {
 	getSnap  Snapshot
 	getFound bool
@@ -19,8 +21,12 @@ type stubRepository struct {
 
 	touchCalls          int
 	touchLastActivityAt time.Time
-	touchVisitStartedAt *time.Time
 	touchErr            error
+
+	recordCalls           int
+	recordAt              time.Time
+	recordPreviousVisitAt *time.Time
+	recordErr             error
 
 	saveCalls int
 	saveSnap  Snapshot
@@ -31,11 +37,17 @@ func (s *stubRepository) Get(context.Context, string) (Snapshot, bool, error) {
 	return s.getSnap, s.getFound, s.getErr
 }
 
-func (s *stubRepository) TouchActivity(_ context.Context, _ string, lastActivityAt time.Time, visitStartedAt *time.Time) error {
+func (s *stubRepository) TouchActivity(_ context.Context, _ string, at time.Time) error {
 	s.touchCalls++
-	s.touchLastActivityAt = lastActivityAt
-	s.touchVisitStartedAt = visitStartedAt
+	s.touchLastActivityAt = at
 	return s.touchErr
+}
+
+func (s *stubRepository) RecordUnavailableVisit(_ context.Context, _ string, at time.Time, previousVisitAt *time.Time) error {
+	s.recordCalls++
+	s.recordAt = at
+	s.recordPreviousVisitAt = previousVisitAt
+	return s.recordErr
 }
 
 func (s *stubRepository) Save(_ context.Context, _ string, snap Snapshot) error {
@@ -61,9 +73,11 @@ func (s *stubCollections) CollectedState(context.Context, int, string, string) (
 type stubItems struct {
 	facts map[uint32]items.AcquisitionFacts
 	err   error
+	calls int
 }
 
 func (s *stubItems) Lookup(_ context.Context, hashes []uint32) (map[uint32]items.AcquisitionFacts, error) {
+	s.calls++
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -160,6 +174,9 @@ func TestGetDigest_FirstVisitReportsFirstVisitNotAnEmptyOrFullDigest(t *testing.
 	if len(repo.saveSnap.OwnedItemHashes) != 2 {
 		t.Fatalf("saved snapshot = %v, want both currently owned hashes", repo.saveSnap.OwnedItemHashes)
 	}
+	if repo.saveSnap.CurrentVisitStatus != StatusFirstVisit {
+		t.Fatalf("saved current-visit status = %q, want %q", repo.saveSnap.CurrentVisitStatus, StatusFirstVisit)
+	}
 }
 
 // --- Required property 4: a second request inside the same visit returns the
@@ -192,9 +209,10 @@ func TestGetDigest_SecondRequestInSameVisitReturnsFrozenDigestWithoutResnapshott
 		t.Fatalf("Save calls after first request = %d, want 1", repo.saveCalls)
 	}
 
-	// The repository now reflects the just-written baseline, as it would in
-	// production: existing.OwnedItemHashes == the current live read, so a
-	// naive recompute would show zero acquisitions rather than the frozen one.
+	// The repository now reflects the just-written row, as it would in
+	// production: existing.OwnedItemHashes == the current live read (so a
+	// naive recompute of the *baseline* diff would show zero acquisitions),
+	// while CurrentVisit* carries the frozen outcome forward.
 	repo.getSnap = repo.saveSnap
 	collections.owned = map[uint32]bool{1: true, 2: true} // unchanged mid-visit
 
@@ -205,14 +223,75 @@ func TestGetDigest_SecondRequestInSameVisitReturnsFrozenDigestWithoutResnapshott
 	if second.Status != first.Status || len(second.Acquired) != 1 || second.Acquired[0].ItemHash != first.Acquired[0].ItemHash {
 		t.Fatalf("second result = %+v, want identical to first %+v", second, first)
 	}
+	if second.Acquired[0].Name != first.Acquired[0].Name {
+		t.Fatalf("second result item facts = %+v, want identical to first %+v", second.Acquired[0], first.Acquired[0])
+	}
 	if !second.VisitStartedAt.Equal(first.VisitStartedAt) {
 		t.Fatalf("second VisitStartedAt = %v, want %v", second.VisitStartedAt, first.VisitStartedAt)
+	}
+	if second.PreviousVisitAt == nil || first.PreviousVisitAt == nil || !second.PreviousVisitAt.Equal(*first.PreviousVisitAt) {
+		t.Fatalf("second PreviousVisitAt = %v, want %v", second.PreviousVisitAt, first.PreviousVisitAt)
 	}
 	if repo.saveCalls != 1 {
 		t.Fatalf("Save calls after second request = %d, want still 1 — a same-visit request must not re-snapshot", repo.saveCalls)
 	}
 	if collections.calls != 1 {
 		t.Fatalf("Collections read calls = %d, want still 1 — a same-visit request must not re-read Bungie", collections.calls)
+	}
+}
+
+// This is the property the process-local cache design could not hold: a
+// second Service instance — standing in for the process having restarted
+// between the two requests — reads the same row and must reconstruct the
+// identical frozen digest purely from persistence, with no shared memory.
+func TestGetDigest_SecondRequestAfterARestartStillReturnsTheFrozenDigest(t *testing.T) {
+	repo := &stubRepository{
+		getFound: true,
+		getSnap: Snapshot{
+			LastActivityAt:  baseTime.Add(-3 * time.Hour),
+			VisitStartedAt:  baseTime.Add(-3 * time.Hour),
+			OwnedItemHashes: []uint32{1},
+			SnapshotTakenAt: baseTime.Add(-3 * time.Hour),
+		},
+	}
+	collections := &stubCollections{owned: map[uint32]bool{1: true, 2: true}, privacy: bungie.CollectiblesPrivacyPublic}
+	itemLookup := &stubItems{facts: map[uint32]items.AcquisitionFacts{
+		2: {ItemHash: 2, Name: "New Gun", Icon: "/icon.png", ItemType: "Auto Rifle"},
+	}}
+
+	first, err := NewServiceWithClock(repo, collections, itemLookup, fixedClock(baseTime)).
+		GetDigest(context.Background(), 3, "member-1", "token")
+	if err != nil {
+		t.Fatalf("first GetDigest: %v", err)
+	}
+
+	// Simulate a restart: the row is exactly what persistence now holds
+	// (repo.saveSnap from the write above), and a brand-new Service is built
+	// around it — no field, map, or mutex is carried over from the first one.
+	repo.getSnap = repo.saveSnap
+	restarted := NewServiceWithClock(repo, collections, itemLookup, fixedClock(baseTime))
+
+	second, err := restarted.GetDigest(context.Background(), 3, "member-1", "token")
+	if err != nil {
+		t.Fatalf("second GetDigest (post-restart): %v", err)
+	}
+	if second.Status != first.Status {
+		t.Fatalf("post-restart Status = %q, want %q", second.Status, first.Status)
+	}
+	if len(second.Acquired) != len(first.Acquired) || second.Acquired[0].ItemHash != first.Acquired[0].ItemHash || second.Acquired[0].Name != first.Acquired[0].Name {
+		t.Fatalf("post-restart Acquired = %+v, want identical to pre-restart %+v", second.Acquired, first.Acquired)
+	}
+	if !second.VisitStartedAt.Equal(first.VisitStartedAt) {
+		t.Fatalf("post-restart VisitStartedAt = %v, want %v", second.VisitStartedAt, first.VisitStartedAt)
+	}
+	if second.PreviousVisitAt == nil || first.PreviousVisitAt == nil || !second.PreviousVisitAt.Equal(*first.PreviousVisitAt) {
+		t.Fatalf("post-restart PreviousVisitAt = %v, want %v", second.PreviousVisitAt, first.PreviousVisitAt)
+	}
+	if repo.saveCalls != 1 {
+		t.Fatalf("Save calls after the post-restart request = %d, want still 1 — it must read the frozen row, not recompute", repo.saveCalls)
+	}
+	if collections.calls != 1 {
+		t.Fatalf("Collections read calls after the post-restart request = %d, want still 1", collections.calls)
 	}
 }
 
@@ -285,31 +364,45 @@ func TestGetDigest_NewVisitAfterGapRecomputesAgainstStoredSnapshot(t *testing.T)
 	}
 }
 
-// A request inside the 2h gap must not touch Bungie or Collections at all.
-func TestGetDigest_WithinGapNeverReadsCollections(t *testing.T) {
+// A request inside the 2h gap must not touch Bungie or Collections at all,
+// and must read the frozen result straight off the row.
+func TestGetDigest_WithinGapNeverReadsCollectionsAndReturnsPersistedResult(t *testing.T) {
+	frozenAcquired := baseTime.Add(-30 * time.Minute)
+	prev := baseTime.Add(-4 * time.Hour)
 	repo := &stubRepository{
 		getFound: true,
 		getSnap: Snapshot{
-			LastActivityAt:  baseTime.Add(-30 * time.Minute),
-			VisitStartedAt:  baseTime.Add(-30 * time.Minute),
-			OwnedItemHashes: []uint32{1},
-			SnapshotTakenAt: baseTime.Add(-30 * time.Minute),
+			LastActivityAt:              frozenAcquired,
+			VisitStartedAt:              frozenAcquired,
+			OwnedItemHashes:             []uint32{1, 2},
+			SnapshotTakenAt:             frozenAcquired,
+			CurrentVisitStatus:          StatusReady,
+			CurrentVisitPreviousVisitAt: &prev,
+			CurrentVisitAcquired:        []uint32{2},
 		},
 	}
 	collections := &stubCollections{}
-	svc := NewServiceWithClock(repo, collections, &stubItems{}, fixedClock(baseTime))
+	itemLookup := &stubItems{facts: map[uint32]items.AcquisitionFacts{2: {ItemHash: 2, Name: "Frozen Gun"}}}
+	svc := NewServiceWithClock(repo, collections, itemLookup, fixedClock(baseTime))
 
-	// No frozen entry exists yet for this membership (server just started),
-	// so this exercises the degrade-gracefully path rather than a cache hit —
-	// and even then, Collections must never be consulted mid-visit.
-	if _, err := svc.GetDigest(context.Background(), 3, "member-1", "token"); err != nil {
+	result, err := svc.GetDigest(context.Background(), 3, "member-1", "token")
+	if err != nil {
 		t.Fatalf("GetDigest: %v", err)
 	}
 	if collections.calls != 0 {
 		t.Fatalf("Collections read calls = %d, want 0 — a within-visit request must never read Bungie", collections.calls)
 	}
-	if repo.touchCalls != 1 || repo.touchVisitStartedAt != nil {
-		t.Fatalf("touch = (%d calls, visitStartedAt=%v), want (1, nil) — only last_activity_at advances", repo.touchCalls, repo.touchVisitStartedAt)
+	if result.Status != StatusReady || len(result.Acquired) != 1 || result.Acquired[0].ItemHash != 2 || result.Acquired[0].Name != "Frozen Gun" {
+		t.Fatalf("result = %+v, want the persisted frozen outcome (item 2, Frozen Gun)", result)
+	}
+	if result.PreviousVisitAt == nil || !result.PreviousVisitAt.Equal(prev) {
+		t.Fatalf("PreviousVisitAt = %v, want the persisted %v", result.PreviousVisitAt, prev)
+	}
+	if repo.touchCalls != 1 {
+		t.Fatalf("touch calls = %d, want 1 — only last_activity_at advances", repo.touchCalls)
+	}
+	if repo.saveCalls != 0 || repo.recordCalls != 0 {
+		t.Fatalf("saveCalls=%d recordCalls=%d, want both 0 — a same-visit request writes neither", repo.saveCalls, repo.recordCalls)
 	}
 }
 
@@ -323,6 +416,36 @@ func TestGetDigest_RepositoryUnavailableReportsUnavailable(t *testing.T) {
 	}
 	if result.Status != StatusUnavailable {
 		t.Fatalf("Status = %q, want %q", result.Status, StatusUnavailable)
+	}
+}
+
+// A failed read on an established visit records the frozen "unavailable"
+// outcome (via RecordUnavailableVisit) rather than leaving the row silently
+// pointed at a stale successful visit's result.
+func TestGetDigest_FailedReadOnExistingRowRecordsUnavailableVisit(t *testing.T) {
+	repo := &stubRepository{
+		getFound: true,
+		getSnap: Snapshot{
+			LastActivityAt:  baseTime.Add(-3 * time.Hour),
+			VisitStartedAt:  baseTime.Add(-3 * time.Hour),
+			OwnedItemHashes: []uint32{1},
+			SnapshotTakenAt: baseTime.Add(-3 * time.Hour),
+		},
+	}
+	collections := &stubCollections{err: errors.New("bungie down")}
+	svc := NewServiceWithClock(repo, collections, &stubItems{}, fixedClock(baseTime))
+
+	if _, err := svc.GetDigest(context.Background(), 3, "member-1", "token"); err != nil {
+		t.Fatalf("GetDigest: %v", err)
+	}
+	if repo.recordCalls != 1 {
+		t.Fatalf("RecordUnavailableVisit calls = %d, want 1", repo.recordCalls)
+	}
+	if !repo.recordAt.Equal(baseTime) {
+		t.Fatalf("record at = %v, want %v", repo.recordAt, baseTime)
+	}
+	if repo.recordPreviousVisitAt == nil || !repo.recordPreviousVisitAt.Equal(baseTime.Add(-3*time.Hour)) {
+		t.Fatalf("record previousVisitAt = %v, want %v", repo.recordPreviousVisitAt, baseTime.Add(-3*time.Hour))
 	}
 }
 

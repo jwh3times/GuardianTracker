@@ -13,6 +13,24 @@ for consistency with `wishlist_items`, `bungie_tokens`, and
 `user_preferences`. The membership pair remains the identity the HTTP and
 service layers operate on — only the storage key differs from the sketch.
 
+`digest_state` also carries one additional column beyond the ADR's four,
+`current_visit_result`: the complete outcome (status, the acquired item
+hashes, and the previous visit's boundary) computed at the current visit's
+start. With only `snapshot` as a baseline, the pre-visit state a repeated
+request within the same visit needs to reproduce its answer is destroyed the
+moment the new visit's snapshot replaces it — so freezing the digest for the
+rest of a visit needs a home for the already-computed *result*, not just the
+baseline it was computed from. That home is this column, not process memory:
+a value held only in the running process would report zero acquisitions after
+every restart for the remainder of an open visit, which is a user-visible
+failure for a frequently-restarted local application whose entire purpose is
+reporting what was acquired. `current_visit_result` is written atomically with
+`snapshot` on a successful visit start (`Service.Save`) and, separately, on a
+failed-or-private visit start (`Service.RecordUnavailableVisit`) — the latter
+advances the visit clock and freezes an "unavailable" outcome without ever
+touching the `snapshot` baseline the privacy gate protects. `Service` itself
+holds no cross-request state.
+
 ## Context
 
 Guardian Tracker shows current state well — `This Week` already renders

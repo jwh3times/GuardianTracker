@@ -65,7 +65,8 @@ type PrefsRepo interface {
 type DigestRepo interface {
 	GetUserID(ctx context.Context, membershipID string) (int64, error)
 	Get(ctx context.Context, userID int64) (*DigestState, error)
-	TouchActivity(ctx context.Context, userID int64, lastActivityAt time.Time, visitStartedAt *time.Time) error
+	TouchActivity(ctx context.Context, userID int64, at time.Time) error
+	RecordUnavailableVisit(ctx context.Context, userID int64, at time.Time, previousVisitAt *time.Time) error
 	Save(ctx context.Context, userID int64, state DigestState) error
 }
 
@@ -190,7 +191,10 @@ func (degradedDigest) GetUserID(context.Context, string) (int64, error) {
 func (degradedDigest) Get(context.Context, int64) (*DigestState, error) {
 	return nil, ErrUnavailable
 }
-func (degradedDigest) TouchActivity(context.Context, int64, time.Time, *time.Time) error {
+func (degradedDigest) TouchActivity(context.Context, int64, time.Time) error {
+	return ErrUnavailable
+}
+func (degradedDigest) RecordUnavailableVisit(context.Context, int64, time.Time, *time.Time) error {
 	return ErrUnavailable
 }
 func (degradedDigest) Save(context.Context, int64, DigestState) error { return ErrUnavailable }

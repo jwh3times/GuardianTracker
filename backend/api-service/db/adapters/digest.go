@@ -37,12 +37,20 @@ func (r *digestRepository) Get(ctx context.Context, membershipID string) (digest
 	return digestSnapshot(stored), true, nil
 }
 
-func (r *digestRepository) TouchActivity(ctx context.Context, membershipID string, lastActivityAt time.Time, visitStartedAt *time.Time) error {
+func (r *digestRepository) TouchActivity(ctx context.Context, membershipID string, at time.Time) error {
 	userID, err := r.store.GetUserID(ctx, membershipID)
 	if err != nil {
 		return digestError(err)
 	}
-	return digestError(r.store.TouchActivity(ctx, userID, lastActivityAt, visitStartedAt))
+	return digestError(r.store.TouchActivity(ctx, userID, at))
+}
+
+func (r *digestRepository) RecordUnavailableVisit(ctx context.Context, membershipID string, at time.Time, previousVisitAt *time.Time) error {
+	userID, err := r.store.GetUserID(ctx, membershipID)
+	if err != nil {
+		return digestError(err)
+	}
+	return digestError(r.store.RecordUnavailableVisit(ctx, userID, at, previousVisitAt))
 }
 
 func (r *digestRepository) Save(ctx context.Context, membershipID string, snap digest.Snapshot) error {
@@ -51,19 +59,25 @@ func (r *digestRepository) Save(ctx context.Context, membershipID string, snap d
 		return digestError(err)
 	}
 	return digestError(r.store.Save(ctx, userID, db.DigestState{
-		LastActivityAt:  snap.LastActivityAt,
-		VisitStartedAt:  snap.VisitStartedAt,
-		Snapshot:        snap.OwnedItemHashes,
-		SnapshotTakenAt: snap.SnapshotTakenAt,
+		LastActivityAt:              snap.LastActivityAt,
+		VisitStartedAt:              snap.VisitStartedAt,
+		Snapshot:                    snap.OwnedItemHashes,
+		SnapshotTakenAt:             snap.SnapshotTakenAt,
+		CurrentVisitStatus:          string(snap.CurrentVisitStatus),
+		CurrentVisitPreviousVisitAt: snap.CurrentVisitPreviousVisitAt,
+		CurrentVisitAcquired:        snap.CurrentVisitAcquired,
 	}))
 }
 
 func digestSnapshot(stored *db.DigestState) digest.Snapshot {
 	return digest.Snapshot{
-		LastActivityAt:  stored.LastActivityAt,
-		VisitStartedAt:  stored.VisitStartedAt,
-		OwnedItemHashes: stored.Snapshot,
-		SnapshotTakenAt: stored.SnapshotTakenAt,
+		LastActivityAt:              stored.LastActivityAt,
+		VisitStartedAt:              stored.VisitStartedAt,
+		OwnedItemHashes:             stored.Snapshot,
+		SnapshotTakenAt:             stored.SnapshotTakenAt,
+		CurrentVisitStatus:          digest.Status(stored.CurrentVisitStatus),
+		CurrentVisitPreviousVisitAt: stored.CurrentVisitPreviousVisitAt,
+		CurrentVisitAcquired:        stored.CurrentVisitAcquired,
 	}
 }
 

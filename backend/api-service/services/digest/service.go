@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"guardian-tracker/api-service/observability"
@@ -66,12 +65,26 @@ type Result struct {
 	Acquired []AcquiredItem
 }
 
-// Snapshot is the durable visit-clock-plus-baseline state Repository stores.
+// Snapshot is the durable visit-clock-plus-baseline state Repository stores,
+// including the outcome frozen for the current visit.
+//
+// The frozen outcome travels in the same row as the baseline on purpose: it
+// is what lets a repeated request within one visit — including one that
+// arrives after a process restart — reconstruct an identical [Result] by
+// reading this row alone, with no process-local cache. CurrentVisitAcquired
+// holds raw item hashes rather than resolved item facts: display projection
+// (name/icon/itemType) is re-resolved through ItemLookup on every read, so
+// storage never bakes in a name or icon that could go stale against a manifest
+// update mid-visit.
 type Snapshot struct {
 	LastActivityAt  time.Time
 	VisitStartedAt  time.Time
 	OwnedItemHashes []uint32
 	SnapshotTakenAt time.Time
+
+	CurrentVisitStatus          Status
+	CurrentVisitPreviousVisitAt *time.Time
+	CurrentVisitAcquired        []uint32
 }
 
 // ErrUnavailable distinguishes unavailable persistence from another failure,
@@ -84,16 +97,24 @@ type Repository interface {
 	// no row exists yet for this membership — a genuinely new account.
 	Get(ctx context.Context, membershipID string) (snap Snapshot, found bool, err error)
 
-	// TouchActivity updates only the visit-clock columns. It never touches
-	// the snapshot, so it is safe to call after a failed or private read —
-	// ADR 0023's privacy gate covers the snapshot alone. visitStartedAt is
-	// nil when this request continues the existing visit rather than
-	// starting a new one.
-	TouchActivity(ctx context.Context, membershipID string, lastActivityAt time.Time, visitStartedAt *time.Time) error
+	// TouchActivity advances only last_activity_at, for a request that
+	// continues an existing visit. It touches nothing else — not the
+	// snapshot baseline, not visit_started_at, not the frozen current-visit
+	// outcome.
+	TouchActivity(ctx context.Context, membershipID string, at time.Time) error
 
-	// Save atomically replaces the whole row: the visit clock and the
-	// snapshot together. Called only when a new visit begins and the read is
-	// public and successful.
+	// RecordUnavailableVisit starts a new visit whose read failed or was
+	// private: it advances the visit clock and records the frozen
+	// "unavailable" outcome (so a same-visit repeat reads the same answer
+	// back instead of retrying), but never touches the snapshot baseline —
+	// ADR 0023's privacy gate covers the baseline alone. previousVisitAt is
+	// the boundary to report alongside that frozen outcome (nil when there
+	// is no previous visit to report).
+	RecordUnavailableVisit(ctx context.Context, membershipID string, at time.Time, previousVisitAt *time.Time) error
+
+	// Save atomically replaces the whole row: the visit clock, the snapshot
+	// baseline, and the frozen current-visit outcome together. Called only
+	// when a new visit begins and the read is public and successful.
 	Save(ctx context.Context, membershipID string, snap Snapshot) error
 }
 
@@ -116,25 +137,16 @@ type ItemLookup interface {
 
 // Service owns the since-last-visit digest.
 //
-// It keeps one process-local, per-membership record of the digest computed
-// for the membership's current visit. That record — not a database column —
-// is what makes a repeated request inside the same visit return an identical
-// result without a second Bungie read: the pre-visit baseline is consumed the
-// moment the new visit's snapshot replaces it in storage, so nothing durable
-// is left to recompute the same diff from afterward. This mirrors the rest of
-// the codebase's in-process, non-durable caches (Collections' and Weekly's
-// analysis caches, the revocation cache) — acceptable because Guardian
-// Tracker is a single local-only process. If the record is missing (e.g. a
-// restart mid-visit), the visit degrades to reporting zero acquisitions
-// rather than fabricating a diff it no longer has the baseline for.
+// It holds no cross-request state of its own: the outcome frozen for a
+// membership's current visit is a database column (Repository, via Save and
+// RecordUnavailableVisit), not an in-memory record, so a repeated request
+// inside one visit is answered identically whether or not the process
+// restarted between the two requests.
 type Service struct {
 	repo        Repository
 	collections CollectionsReader
 	items       ItemLookup
 	now         func() time.Time
-
-	mu     sync.Mutex
-	frozen map[string]Result
 }
 
 // NewService constructs Digest around its required dependencies. A nil
@@ -155,7 +167,6 @@ func NewService(repo Repository, collections CollectionsReader, items ItemLookup
 		collections: collections,
 		items:       items,
 		now:         func() time.Time { return time.Now().UTC() },
-		frozen:      make(map[string]Result),
 	}
 }
 
@@ -167,15 +178,10 @@ func NewServiceWithClock(repo Repository, collections CollectionsReader, items I
 	return s
 }
 
-func membershipKey(membershipType int, membershipID string) string {
-	return fmt.Sprintf("%d:%s", membershipType, membershipID)
-}
-
 // GetDigest returns the since-last-visit digest for one membership, advancing
 // the visit clock as a side effect exactly as ADR 0023 describes.
 func (s *Service) GetDigest(ctx context.Context, membershipType int, membershipID, accessToken string) (Result, error) {
 	now := s.now()
-	key := membershipKey(membershipType, membershipID)
 
 	existing, found, err := s.repo.Get(ctx, membershipID)
 	if errors.Is(err, ErrUnavailable) {
@@ -188,54 +194,63 @@ func (s *Service) GetDigest(ctx context.Context, membershipType int, membershipI
 	newVisit := !found || now.Sub(existing.LastActivityAt) > VisitGap
 
 	if !newVisit {
-		return s.continueVisit(ctx, membershipID, existing, now, key), nil
+		return s.continueVisit(ctx, membershipID, existing, now)
 	}
-	return s.startVisit(ctx, membershipType, membershipID, accessToken, existing, found, now, key)
+	return s.startVisit(ctx, membershipType, membershipID, accessToken, existing, found, now)
 }
 
 // continueVisit handles a request that falls inside an already-started visit:
-// the visit clock still advances, but the digest itself is frozen and no
-// Bungie call is made.
-func (s *Service) continueVisit(ctx context.Context, membershipID string, existing Snapshot, now time.Time, key string) Result {
-	if err := s.repo.TouchActivity(ctx, membershipID, now, nil); err != nil && !errors.Is(err, ErrUnavailable) {
+// the visit clock still advances, but the digest itself is frozen — read back
+// from the row Save or RecordUnavailableVisit wrote when the visit began —
+// and no Bungie call is made.
+func (s *Service) continueVisit(ctx context.Context, membershipID string, existing Snapshot, now time.Time) (Result, error) {
+	if err := s.repo.TouchActivity(ctx, membershipID, now); err != nil && !errors.Is(err, ErrUnavailable) {
 		observability.Logger(ctx).WarnContext(ctx, "digest: visit-clock touch failed", observability.Err(err))
 	}
+	return s.resultFromSnapshot(ctx, existing)
+}
 
-	s.mu.Lock()
-	frozen, ok := s.frozen[key]
-	s.mu.Unlock()
-	if ok {
-		return frozen
+// resultFromSnapshot reconstructs a [Result] from a stored row's frozen
+// current-visit fields, re-resolving display facts for the acquired hashes.
+func (s *Service) resultFromSnapshot(ctx context.Context, snap Snapshot) (Result, error) {
+	result := Result{
+		Status:          snap.CurrentVisitStatus,
+		VisitStartedAt:  snap.VisitStartedAt,
+		PreviousVisitAt: snap.CurrentVisitPreviousVisitAt,
+		Acquired:        []AcquiredItem{},
 	}
-
-	// The process-local record is gone (most likely a restart mid-visit).
-	// The pre-visit baseline this visit's diff needs was already consumed
-	// when the new snapshot replaced it in storage, so the true diff cannot
-	// be reconstructed. Degrading to zero acquisitions never invents data;
-	// it only under-reports for the remainder of this one visit.
-	observability.Logger(ctx).WarnContext(ctx, "digest: frozen visit result unavailable; degrading to zero acquisitions")
-	return Result{Status: StatusReady, VisitStartedAt: existing.VisitStartedAt, Acquired: []AcquiredItem{}}
+	if len(snap.CurrentVisitAcquired) == 0 {
+		return result, nil
+	}
+	acquired, err := s.projectAcquired(ctx, snap.CurrentVisitAcquired)
+	if err != nil {
+		return Result{}, fmt.Errorf("digest: resolve frozen visit's acquired items: %w", err)
+	}
+	result.Acquired = acquired
+	return result, nil
 }
 
 // startVisit handles a request that begins a new visit: the Bungie read
-// happens here, gated by privacy, and (on success) the snapshot is replaced.
-func (s *Service) startVisit(ctx context.Context, membershipType int, membershipID, accessToken string, existing Snapshot, found bool, now time.Time, key string) (Result, error) {
+// happens here, gated by privacy, and (on success) the snapshot baseline and
+// this visit's frozen outcome are replaced together.
+func (s *Service) startVisit(ctx context.Context, membershipType int, membershipID, accessToken string, existing Snapshot, found bool, now time.Time) (Result, error) {
 	owned, privacy, _, err := s.collections.CollectedState(ctx, membershipType, membershipID, accessToken)
 	if err != nil {
 		observability.Logger(ctx).WarnContext(ctx, "digest: collections read failed; snapshot left standing", observability.Err(err))
-		return s.unavailableVisit(ctx, membershipID, existing, found, now, key), nil
+		return s.unavailableVisit(ctx, membershipID, existing, found, now), nil
 	}
 	if privacy != bungie.CollectiblesPrivacyPublic {
-		return s.unavailableVisit(ctx, membershipID, existing, found, now, key), nil
+		return s.unavailableVisit(ctx, membershipID, existing, found, now), nil
 	}
 
 	newSnapshot := sortedOwnedHashes(owned)
 
 	var result Result
+	var acquiredHashes []uint32
 	if !found {
 		result = Result{Status: StatusFirstVisit, VisitStartedAt: now, Acquired: []AcquiredItem{}}
 	} else {
-		acquiredHashes := setDifference(newSnapshot, existing.OwnedItemHashes)
+		acquiredHashes = setDifference(newSnapshot, existing.OwnedItemHashes)
 		logIfShrunk(ctx, membershipType, existing.OwnedItemHashes, newSnapshot)
 
 		acquired, err := s.projectAcquired(ctx, acquiredHashes)
@@ -252,10 +267,13 @@ func (s *Service) startVisit(ctx context.Context, membershipType int, membership
 	}
 
 	if err := s.repo.Save(ctx, membershipID, Snapshot{
-		LastActivityAt:  now,
-		VisitStartedAt:  now,
-		OwnedItemHashes: newSnapshot,
-		SnapshotTakenAt: now,
+		LastActivityAt:              now,
+		VisitStartedAt:              now,
+		OwnedItemHashes:             newSnapshot,
+		SnapshotTakenAt:             now,
+		CurrentVisitStatus:          result.Status,
+		CurrentVisitPreviousVisitAt: result.PreviousVisitAt,
+		CurrentVisitAcquired:        acquiredHashes,
 	}); err != nil {
 		if errors.Is(err, ErrUnavailable) {
 			return Result{Status: StatusUnavailable, VisitStartedAt: now, Acquired: []AcquiredItem{}}, nil
@@ -263,43 +281,34 @@ func (s *Service) startVisit(ctx context.Context, membershipType int, membership
 		return Result{}, fmt.Errorf("digest: save snapshot: %w", err)
 	}
 
-	s.freeze(key, result)
 	return result, nil
 }
 
 // unavailableVisit is the shared tail of startVisit's two failure branches
-// (a failed read and a private profile): the visit clock advances when there
-// is a row to advance it on, but the snapshot is never touched.
-func (s *Service) unavailableVisit(ctx context.Context, membershipID string, existing Snapshot, found bool, now time.Time, key string) Result {
-	if found {
-		// There is a previous row: advance the visit clock onto it, but
-		// never touch the snapshot columns (the privacy gate covers exactly
-		// those). Best-effort — a touch failure must not fail the request,
-		// since there is already a definite answer (unavailable) to return.
-		if err := s.repo.TouchActivity(ctx, membershipID, now, &now); err != nil && !errors.Is(err, ErrUnavailable) {
-			observability.Logger(ctx).WarnContext(ctx, "digest: visit-clock update failed", observability.Err(err))
-		}
-	}
-	// !found: no row exists, and one cannot be created without a snapshot
-	// value (NOT NULL) — so this request leaves no trace. The next request,
-	// however soon, retries the read from scratch, which is exactly what
-	// lets the account recover as soon as the profile is public again.
-
+// (a failed read and a private profile): the visit clock advances and the
+// frozen "unavailable" outcome is recorded when there is a row to advance it
+// on, but the snapshot baseline is never touched.
+func (s *Service) unavailableVisit(ctx context.Context, membershipID string, existing Snapshot, found bool, now time.Time) Result {
 	result := Result{Status: StatusUnavailable, VisitStartedAt: now, Acquired: []AcquiredItem{}}
-	if found {
-		prev := existing.LastActivityAt
-		result.PreviousVisitAt = &prev
+	if !found {
+		// No row exists, and one cannot be created without a snapshot value
+		// (NOT NULL) — so this request leaves no trace. The next request,
+		// however soon, retries the read from scratch, which is exactly what
+		// lets the account recover as soon as the profile is public again.
+		return result
 	}
-	if found {
-		s.freeze(key, result)
+
+	prev := existing.LastActivityAt
+	result.PreviousVisitAt = &prev
+
+	// Best-effort — a record failure must not fail the request, since there
+	// is already a definite answer (unavailable) to return for this call.
+	// Never touches the snapshot columns (the privacy gate covers exactly
+	// those).
+	if err := s.repo.RecordUnavailableVisit(ctx, membershipID, now, &prev); err != nil && !errors.Is(err, ErrUnavailable) {
+		observability.Logger(ctx).WarnContext(ctx, "digest: recording unavailable visit failed", observability.Err(err))
 	}
 	return result
-}
-
-func (s *Service) freeze(key string, result Result) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.frozen[key] = result
 }
 
 func (s *Service) projectAcquired(ctx context.Context, hashes []uint32) ([]AcquiredItem, error) {
