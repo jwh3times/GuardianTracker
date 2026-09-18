@@ -276,3 +276,30 @@ export interface Seal {
   left: string;
   triumphs: Triumph[];
 }
+
+export type DigestStatus = "ready" | "first-visit" | "unavailable";
+
+/** One collectible acquired since the membership's previous visit (ADR 0023). */
+export interface AcquiredItem {
+  itemHash: number;
+  name: string;
+  /** Bungie icon path; absent when the manifest had no definition. */
+  icon?: string;
+  type: string;
+}
+
+/**
+ * The since-last-visit digest (ADR 0023). `status` is a real branch, not
+ * inferred from `acquired`'s length: `first-visit` means there is no prior
+ * snapshot to diff against, `unavailable` means no digest could be computed
+ * this visit (no persistence, a failed read, or a private profile), and only
+ * `ready` may legitimately report a genuinely empty `acquired` list.
+ */
+export interface Digest {
+  status: DigestStatus;
+  /** When the current visit began (RFC3339). */
+  visitStartedAt: string;
+  /** When the previous visit ended; absent on a first visit. */
+  previousVisitAt?: string;
+  acquired: AcquiredItem[];
+}

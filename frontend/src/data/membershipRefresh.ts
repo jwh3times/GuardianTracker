@@ -7,6 +7,7 @@ import { invalidateCatalysts } from "./catalysts";
 import { invalidateCharacters } from "./characters";
 import { invalidateCollections } from "./collections";
 import { invalidateCrafting } from "./crafting";
+import { invalidateDigest } from "./digest";
 import { invalidateSeals } from "./seals";
 import { invalidateWeekly } from "./weekly";
 import type { APICacheRefreshResponse } from "../types/api";
@@ -26,7 +27,9 @@ import type { APICacheRefreshResponse } from "../types/api";
  * on the other five.
  *
  * ADR 0018 requires this fan-out to keep covering both Collections variants
- * plus Characters, Weekly, Catalysts, Crafting and Seals.
+ * plus Characters, Weekly, Catalysts, Crafting and Seals. Digest (ADR 0023)
+ * joined the fan-out when it landed — see `invalidateDigest`'s doc comment
+ * for why it belongs here rather than being exempt like Preferences.
  */
 
 /**
@@ -41,6 +44,7 @@ function fanOut(client: QueryClient) {
   invalidateCharacters(client);
   invalidateCollections(client);
   invalidateCrafting(client);
+  invalidateDigest(client);
   invalidateSeals(client);
   invalidateWeekly(client);
 }

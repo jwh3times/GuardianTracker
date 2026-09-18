@@ -18,7 +18,9 @@ import { Icon } from "../../components/Icon";
 import { useAuth } from "../../contexts/AuthContext";
 import { useCharacters } from "../../contexts/CharacterContext";
 import { errorState } from "../../lib/errorState";
+import { relTime } from "../../lib/format";
 import { useCollectionsSummary } from "../../data/collections";
+import { useDigest } from "../../data/digest";
 import { useWeekly } from "../../data/weekly";
 import { useWishlist } from "../../data/wishlist";
 import type { SummaryCategory, TodayAction } from "../../types/design";
@@ -60,6 +62,12 @@ export function Dashboard() {
     isLoading: wishlistLoading,
     isError: wishlistFailed,
   } = useWishlist();
+
+  const {
+    digest,
+    isLoading: digestLoading,
+    isError: digestFailed,
+  } = useDigest();
 
   const displayName = user?.displayName;
 
@@ -342,6 +350,131 @@ export function Dashboard() {
                 </button>
               );
             })
+          )}
+        </div>
+      </Panel>
+
+      {/* SINCE YOUR LAST VISIT (ADR 0023) */}
+      <Panel
+        title="Since your last visit"
+        icon="sparkle"
+        accent="var(--c-signal)"
+      >
+        <div className="gt-today">
+          {digestLoading ? (
+            [0, 1].map((i) => (
+              <div
+                key={i}
+                className="gt-today-row"
+                style={{ pointerEvents: "none" }}
+              >
+                <Skeleton w="1.2rem" h="1.2rem" r="50%" />
+                <div
+                  className="gt-today-main"
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--s-2)",
+                  }}
+                >
+                  <Skeleton w="60%" h="0.9rem" />
+                </div>
+              </div>
+            ))
+          ) : digestFailed ? (
+            <div
+              className="gt-today-row"
+              style={{ pointerEvents: "none", opacity: 0.6 }}
+            >
+              <Icon
+                name="bolt"
+                size="1.2rem"
+                style={{ color: "var(--c-text-3)" }}
+              />
+              <div className="gt-today-main">
+                <div className="gt-today-text">
+                  Couldn't load your visit digest — try again after a refresh.
+                </div>
+              </div>
+            </div>
+          ) : digest?.status === "first-visit" ? (
+            <div className="gt-today-row" style={{ pointerEvents: "none" }}>
+              <Icon
+                name="sparkle"
+                size="1.2rem"
+                style={{ color: "var(--c-signal)" }}
+              />
+              <div className="gt-today-main">
+                <div className="gt-today-text">
+                  <strong>Tracking starts now.</strong> Come back later and
+                  we'll show you what's new.
+                </div>
+              </div>
+            </div>
+          ) : digest?.status === "unavailable" ? (
+            <div
+              className="gt-today-row"
+              style={{ pointerEvents: "none", opacity: 0.6 }}
+            >
+              <Icon
+                name="lock"
+                size="1.2rem"
+                style={{ color: "var(--c-text-3)" }}
+              />
+              <div className="gt-today-main">
+                <div className="gt-today-text">
+                  Digest unavailable right now — this can happen while your
+                  Destiny profile is private. No action needed.
+                </div>
+              </div>
+            </div>
+          ) : digest && digest.acquired.length === 0 ? (
+            <div
+              className="gt-today-row"
+              style={{ pointerEvents: "none", opacity: 0.6 }}
+            >
+              <Icon
+                name="check"
+                size="1.2rem"
+                style={{ color: "var(--c-text-3)" }}
+              />
+              <div className="gt-today-main">
+                <div className="gt-today-text">
+                  Nothing new since your last visit
+                  {digest.previousVisitAt && (
+                    <span className="gt-action-meta mono">
+                      {" "}
+                      · {relTime(digest.previousVisitAt)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            digest && (
+              <div className="gt-avail-list">
+                {digest.acquired.map((item) => (
+                  <div
+                    key={item.itemHash}
+                    className="gt-item gt-item--compact"
+                    data-rarity="unresolved"
+                  >
+                    <ItemTile
+                      rarity="unresolved"
+                      type={item.type}
+                      icon={item.icon}
+                      style={{ width: "1.9rem" }}
+                    />
+                    <div className="gt-item-head" style={{ flex: 1 }}>
+                      <div className="gt-item-name">{item.name}</div>
+                      <div className="gt-item-type">{item.type}</div>
+                    </div>
+                    <Badge kind="new" dot />
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
       </Panel>

@@ -167,3 +167,107 @@ describe("Dashboard page", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("Dashboard — since your last visit (ADR 0023)", () => {
+  function renderDashboard() {
+    return renderPage(<Dashboard />);
+  }
+
+  it("shows 'tracking starts now' on a first visit, never an empty digest", async () => {
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, () =>
+        HttpResponse.json({
+          status: "first-visit",
+          visitStartedAt: "2026-09-18T18:00:00Z",
+          acquired: [],
+        }),
+      ),
+    );
+    renderDashboard();
+
+    expect(await screen.findByText(/tracking starts now/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/nothing new since your last visit/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("distinguishes a genuinely empty ready digest from a first visit", async () => {
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, () =>
+        HttpResponse.json({
+          status: "ready",
+          visitStartedAt: "2026-09-18T18:00:00Z",
+          previousVisitAt: "2026-09-17T12:00:00Z",
+          acquired: [],
+        }),
+      ),
+    );
+    renderDashboard();
+
+    expect(
+      await screen.findByText(/nothing new since your last visit/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/tracking starts now/i)).not.toBeInTheDocument();
+  });
+
+  it("renders acquired items for a ready digest with something new", async () => {
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, () =>
+        HttpResponse.json({
+          status: "ready",
+          visitStartedAt: "2026-09-18T18:00:00Z",
+          previousVisitAt: "2026-09-17T12:00:00Z",
+          acquired: [
+            {
+              itemHash: 99999,
+              name: "Gjallarhorn",
+              icon: "/icons/gj.png",
+              itemType: "Rocket Launcher",
+            },
+          ],
+        }),
+      ),
+    );
+    renderDashboard();
+
+    expect(await screen.findAllByText("Gjallarhorn")).not.toHaveLength(0);
+    expect(
+      screen.queryByText(/nothing new since your last visit/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/tracking starts now/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a quiet, non-alarming state when the digest is unavailable", async () => {
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, () =>
+        HttpResponse.json({
+          status: "unavailable",
+          visitStartedAt: "2026-09-18T18:00:00Z",
+          acquired: [],
+        }),
+      ),
+    );
+    renderDashboard();
+
+    expect(
+      await screen.findByText(/digest unavailable right now/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/nothing new since your last visit/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/tracking starts now/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a muted row when the digest request itself fails", async () => {
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+    );
+    renderDashboard();
+
+    expect(
+      await screen.findByText(/couldn't load your visit digest/i),
+    ).toBeInTheDocument();
+  });
+});
