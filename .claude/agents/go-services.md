@@ -57,6 +57,9 @@ backend/api-service/
   api/handlers/preferences.go          ← Thin Preferences HTTP adapter: binds partial patches, maps typed
                                            service errors, and serializes GET provenance; owns no defaults,
                                            validation, write ordering, or onboarding policy
+  api/handlers/digest.go               ← Thin since-last-visit Digest HTTP adapter (ADR 0023): binds,
+                                           authenticates, resolves the Bungie token, and serializes;
+                                           holds no visit-boundary, diff, or privacy-gate logic itself
   api/handlers/account.go              ← Self-service role opt-in (PUT /api/account/role) +
                                            resolved feature-flag state (GET /api/flags)
   api/handlers/admin.go                ← Admin console: user roster, role management, feature-flag
@@ -204,6 +207,11 @@ backend/api-service/
   services/preferences/service.go      ← Preferences owner: framed/personalized defaults, card-style
                                            validation, atomic field-presence patches, irreversible
                                            onboarding completion, and authoritative/degraded read provenance
+  services/digest/service.go           ← Digest owner (ADR 0023): the two-hour visit boundary, the
+                                           additive diff between a fresh Collections read and the stored
+                                           snapshot, and the write-time privacy gate; frozen per-visit via
+                                           the Repository row (Save/RecordUnavailableVisit), not in-process
+                                           state, so a repeated request answers identically after a restart
   services/search/service.go           ← Manifest item search index with versioned disk snapshots; opens its
                                            own SQLite handle on the manifest (not manifest.Provider), so it
                                            registers itself as its own bungie.SwapParticipant (CloseForSwap/
@@ -226,9 +234,10 @@ backend/api-service/
   db/db.go, db/migrate.go              ← Postgres pool; migration runner (each migration runs in a tx)
   db/stores.go                         ← Stores struct — interface fields, never nil; NewStores(nil)
                                            returns the degraded set; Available() reports whether a real DB backs it
-  db/degraded.go                       ← ErrUnavailable sentinel; the six store interfaces (UserRepo,
-                                           TokenRepo, WishlistRepo, PrefsRepo, FlagRepo, AuditRepo) + Pinger;
-                                           degraded implementations whose every method returns ErrUnavailable
+  db/degraded.go                       ← ErrUnavailable sentinel; the seven store interfaces (UserRepo,
+                                           TokenRepo, WishlistRepo, PrefsRepo, DigestRepo, FlagRepo,
+                                           AuditRepo) + Pinger; degraded implementations whose every
+                                           method returns ErrUnavailable
   db/migrations/0001_init.sql          ← Base schema DDL
   db/migrations/0002_roles_flags.sql   ← Adds role column to users, feature_flags table, role_audit
   db/migrations/0003_refresh_sessions.sql ← Adds refresh_sessions for per-device sessions + reuse detection
@@ -237,16 +246,23 @@ backend/api-service/
                                            (matches the logout.* prefix filter)
   db/migrations/0006_remove_unused_flags.sql ← Retires wishlist-alerts and ui-tweaks flags
                                            seeded by 0002 (10 → 8 seeded flags)
+  db/migrations/0008_digest_state.sql  ← Adds digest_state (ADR 0023): one row per user, keyed on
+                                           user_id like user_preferences; holds the visit clock, the
+                                           owned-hash snapshot, and the frozen current_visit_result
   db/users.go                          ← UserStore — upsert, get, bump token_version, per-device sessions
                                            (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
   db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens
   db/wishlist.go, db/prefs.go          ← DB stores for wishlist and preferences
+  db/digest.go                         ← DigestStore (ADR 0023) — user-keyed Get/TouchActivity/
+                                           RecordUnavailableVisit/Save over digest_state
   db/adapters/wishlist.go              ← Membership-keyed wishlist.Repository adapter; hides internal user
                                            IDs and translates PostgreSQL's failure vocabulary (23505 →
                                            ErrDuplicate, pgx.ErrNoRows → ErrNotFound, db.ErrUnavailable →
                                            wishlist.ErrUnavailable) into wishlist's typed errors
   db/adapters/preferences.go           ← Membership-keyed Preferences repository adapter; hides internal
                                            user IDs and translates db.ErrUnavailable to the domain sentinel
+  db/adapters/digest.go                ← Membership-keyed digest.Repository adapter (ADR 0023); hides
+                                           internal user IDs and maps db.ErrUnavailable to digest.ErrUnavailable
   db/audit.go                          ← Unified append-only audit trail store (audit_log): best-effort
                                            Log, in-transaction insertAudit, filtered/keyset List, prune
   db/flags.go                          ← Feature flags store (get all, get by key, upsert)
@@ -284,6 +300,7 @@ backend/api-service/
 | GET    | `/api/characters/:membershipType/:membershipId/:characterId/current-activity` | JWT                           | Owner-only best-effort component-204 snapshot; validates the complete membership pair and character membership before the Bungie call; returns `{state,activityName?,modeName?,playlistName?,fetchedAt}` with `state` one of `ready`/`idle`/`unavailable`/`unknown`; not cached server-side; never returns membership, character, instance, or definition IDs |
 | GET    | `/api/collections/:membershipType/:membershipId`                              | JWT                           | Collections + fetchedAt; `?include=all` adds `items`, `collectedHashes`, `availableNow`                                                                                                                                                                                                                                                                       |
 | POST   | `/api/collections/:membershipType/:membershipId/refresh`                      | JWT                           | Invalidate cache (collections + characters + records)                                                                                                                                                                                                                                                                                                         |
+| GET    | `/api/digest/:membershipType/:membershipId`                                   | JWT                           | Since-last-visit digest (ADR 0023): `{status,visitStartedAt,previousVisitAt?,acquired}`, `status` one of `ready`/`first-visit`/`unavailable`; advances the visit clock as a side effect; reads Collections' cached analysis, no forced refresh                                                                                                                |
 | GET    | `/api/manifest/status`                                                        | None                          | Manifest version and readiness                                                                                                                                                                                                                                                                                                                                |
 | GET    | `/api/weekly/recommendations?characterId=`                                    | JWT + flag                    | Weekly data, Xûr, milestones, recommended actions + fetchedAt/resetAt; validates the optional character against the authenticated roster and falls back to the primary character                                                                                                                                                                              |
 | GET    | `/api/items/search?q=&limit=`                                                 | JWT + flag                    | Manifest item search; 503 until index ready                                                                                                                                                                                                                                                                                                                   |
@@ -386,8 +403,8 @@ Sentinel errors:
 
 `db.NewStores(pool)` never returns a nil field. With a `nil` pool it returns
 degraded implementations of every store interface (`UserRepo`, `TokenRepo`,
-`WishlistRepo`, `PrefsRepo`, `FlagRepo`, `AuditRepo`, `Pinger`) whose every
-method returns `db.ErrUnavailable`. There is no store nil-guard convention.
+`WishlistRepo`, `PrefsRepo`, `DigestRepo`, `FlagRepo`, `AuditRepo`, `Pinger`)
+whose every method returns `db.ErrUnavailable`. There is no store nil-guard convention.
 The admin/audit/account handlers still call a store directly and handle the
 error like any other:
 

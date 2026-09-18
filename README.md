@@ -11,6 +11,7 @@ Destiny manifest, live weekly data, and persisted Guardian Tracker preferences.
   every collectible-attributed acquisition source and its source-specific
   difficulty.
 - Wishlist management with priorities, notes, and live vendor availability.
+- A Dashboard digest of collectibles acquired since the player's last visit.
 - A weekly planner with milestones, Xûr inventory, selected-character vendor
   context, reset timing, and ranked recommendations.
 - An owner-only Guardian view for current weapons, armor, and equipment with

@@ -19,11 +19,11 @@ React/Vite frontend (:5273)
   custom `gt-*` design system.
 - **API:** Go + Gin HTTP service with Bungie OAuth, JWT access/refresh tokens,
   manifest management, collection analysis, weekly recommendations, search,
-  wishlist, preferences, roles, flags, admin endpoints, and structured request
-  logging.
-- **Postgres:** users, wishlist, preferences and onboarding completion, encrypted
-  Bungie access authorization, Guardian Tracker refresh sessions, roles, feature
-  flags, and audit log.
+  wishlist, preferences, a since-last-visit digest, roles, flags, admin
+  endpoints, and structured request logging.
+- **Postgres:** users, wishlist, preferences and onboarding completion,
+  since-last-visit digest state, encrypted Bungie access authorization,
+  Guardian Tracker refresh sessions, roles, feature flags, and audit log.
 - **SQLite:** local copy of the Bungie Destiny 2 manifest, downloaded and
   swapped by the API service.
 - **Cache:** in-memory service caches for collection results, weekly data,
@@ -266,6 +266,8 @@ Primary route groups:
   character because Bungie's vendor inventory can be class-specific
 - wishlist: user-scoped CRUD
 - preferences: user preferences plus irreversible first-run onboarding completion
+- digest: since-last-visit collectible digest, advancing the visit clock as a
+  side effect
 - records: catalysts, crafting, seals
 - characters: Destiny membership characters, owner-only equipped-item detail,
   one bounded page of recent completed activity, and a best-effort current
@@ -328,6 +330,20 @@ are unstored defaults returned because persistence is unavailable. Writes do not
 degrade: `PUT /api/preferences` returns `503 DB_UNAVAILABLE` when persistence is
 unavailable. `PreferencesHandler` owns request binding, typed error mapping, and
 serialization; preference policy does not live in Gin.
+
+`services/digest` owns the since-last-visit digest: the two-hour visit
+boundary, the additive diff between a fresh Collections read and a stored
+snapshot of owned item hashes, and the write-time gate that skips the
+snapshot when the profile's collectibles privacy is not public or the read
+fails. The `digest_state` table, reached through a membership-keyed repository
+adapter that resolves the internal user id (mirroring preferences), holds the
+visit clock, the snapshot, and the outcome frozen for the current visit, so a
+repeated request within one visit — even after a process restart —
+reconstructs the same result instead of recomputing it.
+`GET /api/digest/:membershipType/:membershipId`
+advances the visit clock as a side effect; it reads Collections' existing
+cached analysis and forces no refresh. See
+[ADR 0023](./adr/0023-since-last-visit-digest-snapshot.md).
 
 ## Request Logging
 

@@ -46,27 +46,6 @@ Still to settle:
   weapons. This needs a fresh owner capture before design.
 - Matching rules, storage, and import parsing for roll targets.
 
-### Since-Last-Visit Digest
-
-**Status:** Not implemented
-**Gate:** None — design accepted in [ADR 0023](./docs/adr/0023-since-last-visit-digest-snapshot.md)
-**Likely size:** Medium
-
-Show an in-app digest of collectibles acquired since the player's last visit.
-This is an in-app, snapshot-diff feature and needs no public host, unlike
-[Notifications and Digests](#notifications-and-digests) below, which it does not
-unpark: scheduled email delivery still waits on the deployment decision.
-
-Decided in the ADR:
-
-- A membership-keyed store owns a snapshot of the collected set and a visit
-  clock (a visit begins on a page load or login more than two hours after the
-  last recorded activity).
-- The digest is the additive set difference between a fresh Collections read
-  and the stored snapshot; losses are never surfaced.
-- The snapshot is written only when the profile's collectibles privacy is
-  Public and the read succeeded.
-
 ### Notifications and Digests
 
 **Status:** Not implemented

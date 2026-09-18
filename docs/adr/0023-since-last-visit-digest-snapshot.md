@@ -1,6 +1,6 @@
 # ADR 0023: Snapshot-Owned Since-Last-Visit Digest
 
-- Status: Accepted (not implemented)
+- Status: Accepted — implemented in `v1.8.0`
 - Date: 2026-09-18
 
 Implementation note (2026-09-18): the store is keyed on `user_id`, mirroring
@@ -19,7 +19,7 @@ hashes, and the previous visit's boundary) computed at the current visit's
 start. With only `snapshot` as a baseline, the pre-visit state a repeated
 request within the same visit needs to reproduce its answer is destroyed the
 moment the new visit's snapshot replaces it — so freezing the digest for the
-rest of a visit needs a home for the already-computed *result*, not just the
+rest of a visit needs a home for the already-computed _result_, not just the
 baseline it was computed from. That home is this column, not process memory:
 a value held only in the running process would report zero acquisitions after
 every restart for the remainder of an open visit, which is a user-visible
