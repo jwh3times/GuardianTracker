@@ -79,6 +79,7 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 			Audit:       handlers.NewAuditHandler(nil),
 			Characters:  handlers.NewCharactersHandler(nil, nil),
 			Collections: handlers.NewCollectionsHandler(nil, nil),
+			Digest:      handlers.NewDigestHandler(nil, nil),
 			Items:       handlers.NewItemsHandler(nil),
 			Weekly:      handlers.NewWeeklyHandler(nil, nil),
 			Records:     handlers.NewRecordsHandler(nil, nil),

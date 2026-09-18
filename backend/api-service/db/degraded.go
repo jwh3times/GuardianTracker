@@ -62,6 +62,13 @@ type PrefsRepo interface {
 	Apply(ctx context.Context, userID int64, initial PreferenceInitial, patch PreferencePatch) (*UserPreferences, error)
 }
 
+type DigestRepo interface {
+	GetUserID(ctx context.Context, membershipID string) (int64, error)
+	Get(ctx context.Context, userID int64) (*DigestState, error)
+	TouchActivity(ctx context.Context, userID int64, lastActivityAt time.Time, visitStartedAt *time.Time) error
+	Save(ctx context.Context, userID int64, state DigestState) error
+}
+
 type FlagRepo interface {
 	List(ctx context.Context) ([]FeatureFlag, error)
 	Get(ctx context.Context, key string) (*FeatureFlag, error)
@@ -174,6 +181,19 @@ func (degradedPrefs) Get(context.Context, int64) (*UserPreferences, error) {
 func (degradedPrefs) Apply(context.Context, int64, PreferenceInitial, PreferencePatch) (*UserPreferences, error) {
 	return nil, ErrUnavailable
 }
+
+type degradedDigest struct{}
+
+func (degradedDigest) GetUserID(context.Context, string) (int64, error) {
+	return 0, ErrUnavailable
+}
+func (degradedDigest) Get(context.Context, int64) (*DigestState, error) {
+	return nil, ErrUnavailable
+}
+func (degradedDigest) TouchActivity(context.Context, int64, time.Time, *time.Time) error {
+	return ErrUnavailable
+}
+func (degradedDigest) Save(context.Context, int64, DigestState) error { return ErrUnavailable }
 
 type degradedFlags struct{}
 

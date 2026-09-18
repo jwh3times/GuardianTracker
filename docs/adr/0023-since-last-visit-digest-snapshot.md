@@ -3,6 +3,16 @@
 - Status: Accepted (not implemented)
 - Date: 2026-09-18
 
+Implementation note (2026-09-18): the store is keyed on `user_id`, mirroring
+`user_preferences` (`db/prefs.go`), rather than the `(membership_type,
+membership_id)` primary key sketched under Migration and test surface below.
+Every other membership-keyed store in this codebase resolves the internal
+`users.id` behind its adapter and keys its table on that instead of the
+Destiny membership pair directly; `digest_state` follows the same convention
+for consistency with `wishlist_items`, `bungie_tokens`, and
+`user_preferences`. The membership pair remains the identity the HTTP and
+service layers operate on — only the storage key differs from the sketch.
+
 ## Context
 
 Guardian Tracker shows current state well — `This Week` already renders

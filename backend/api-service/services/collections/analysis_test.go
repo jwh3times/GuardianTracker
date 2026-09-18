@@ -145,6 +145,38 @@ func TestDeriveOwnedItems_AnyLinkedCollectibleOwnsTheItem(t *testing.T) {
 	}
 }
 
+// CollectedState is the read the since-last-visit digest (ADR 0023) is built
+// on: it must hand back the same owned-item projection GetSummary/GetFull use,
+// plus the privacy value that read carried, from the cached analysis alone.
+func TestCollectedState_ReturnsOwnershipAndPrivacyFromCachedAnalysis(t *testing.T) {
+	catalog := []items.AcquisitionFacts{weapon(100, "Gun", 1)}
+	owned := map[uint32]bool{100: true}
+	fetchedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	m := newAnalysis(t, &fakeCatalog{facts: catalog}, &fakeNodes{})
+	m.cached(3, "member-1", &analysis{
+		catalog:   catalog,
+		collected: map[uint32]bool{1: true},
+		owned:     owned,
+		privacy:   1, // bungie.CollectiblesPrivacyPublic
+		fetchedAt: fetchedAt,
+	})
+
+	gotOwned, gotPrivacy, gotFetchedAt, err := m.CollectedState(context.Background(), 3, "member-1", "token")
+	if err != nil {
+		t.Fatalf("CollectedState: %v", err)
+	}
+	if !gotOwned[100] || len(gotOwned) != 1 {
+		t.Errorf("owned = %v, want exactly {100: true}", gotOwned)
+	}
+	if gotPrivacy != 1 {
+		t.Errorf("privacy = %d, want 1 (Public)", gotPrivacy)
+	}
+	if !gotFetchedAt.Equal(fetchedAt) {
+		t.Errorf("fetchedAt = %v, want %v", gotFetchedAt, fetchedAt)
+	}
+}
+
 func TestGetMissingItemHashes_ExcludesCosmetics(t *testing.T) {
 	ship := weapon(200, "Ship", 2)
 	ship.Category = "cosmetics"
