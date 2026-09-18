@@ -14,6 +14,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.7.7] - 2026-09-18
+
+### Added
+
+- Documented the accepted design for an in-app since-last-visit digest, which
+  reports the collectibles acquired while the player was away. A membership-keyed
+  store owns a snapshot of the collected set and a visit clock, a visit begins on
+  a page load or login more than two hours after the last recorded activity, and
+  the digest is the additive difference between a fresh read and that snapshot.
+  The snapshot is written only from a successful read whose collectibles privacy
+  is public. Implementation remains unscheduled, and the separate notifications
+  and digests item stays gated on the public deployment decision.
+
 ## [1.7.6] - 2026-09-18
 
 ### Changed
@@ -1190,7 +1203,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.6...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.7...HEAD
+[1.7.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.5...v1.7.6
 [1.7.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.4...v1.7.5
 [1.7.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.3...v1.7.4
