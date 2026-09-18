@@ -557,6 +557,13 @@ Single-context layout: root `CONTEXT.md` (created lazily) + existing `docs/adr/`
 
 ## Known Limitations
 
+- The since-last-visit digest advances its visit clock only when the digest
+  endpoint is called, and the Dashboard panel is its only caller. A session
+  that stays in other pages for longer than the two-hour gap therefore starts a
+  new visit on its next Dashboard render, so the digest can appear without the
+  player having left. Its contents stay correct; only the "since your last
+  visit" framing is loose. Driving the clock from app-level activity would fix
+  it and needs a heartbeat that does not exist yet.
 - Collections data remains membership-wide. The character switcher scopes
   authenticated weekly vendor inventory, today actions, availability ranking,
   Xûr location, the Guardian equipment view, one bounded page of recent
