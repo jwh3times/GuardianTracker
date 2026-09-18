@@ -24,24 +24,36 @@ runbooks, and environment-specific operations notes belong under `private/`.
 ### God-Roll and Owned-Roll Insights
 
 **Status:** Not implemented
-**Gate:** Bungie item-instance verification plus data-source decision
+**Gate:** Owner item-instance capture, then an approved roll-targets data design
 **Likely size:** Large
 
 Show owned weapon rolls for the selected Destiny membership and compare them to
-curated or user-defined target rolls.
+target rolls.
 
-Decisions to settle:
+Decided:
 
-- Which item-instance components are required.
-- Whether roll recommendations are user-authored, curated, or imported from a
-  third-party wishlist format.
-- Licensing and freshness expectations for any external roll source.
+- The feature is called **roll targets**, so it stays distinct from the existing
+  wish list of items to acquire.
+- Targets are authored by the user, and the user can import a wish list file in
+  DIM's text format that they supply. Guardian Tracker bundles and fetches no
+  third-party roll data.
+- It works against the signed-in owner's own profile and needs no public hosting.
+
+Still to settle:
+
+- How Bungie's owned-item sockets and selectable perk columns (profile components
+  102, 201, 205, 300, 305, and 310) appear on random-roll, crafted, and enhanced
+  weapons. This needs a fresh owner capture before design.
+- Matching rules, storage, and import parsing for roll targets.
 
 ### Notifications and Digests
 
 **Status:** Not implemented
-**Gate:** Product and provider decision
+**Gate:** Public deployment decision, then product and provider decision
 **Likely size:** Large
+
+Guardian Tracker currently runs only as a local application, so this waits on
+[Production Deployment Path](#production-deployment-path).
 
 Send opt-in reminders when weekly or vendor data contains missing or wishlisted
 items.
@@ -50,13 +62,16 @@ Decisions to settle:
 
 - Email provider and sending domain.
 - User preference model and unsubscribe flow.
-- Whether the app should run scheduled jobs before production deployment exists.
+- How scheduled jobs run once a production deployment exists.
 
 ### Shareable Collection Progress
 
 **Status:** Not implemented
-**Gate:** Security and privacy review
+**Gate:** Public deployment decision, then security and privacy review
 **Likely size:** Medium to large
+
+A public share page needs a public host, so this waits on
+[Production Deployment Path](#production-deployment-path).
 
 Allow users to create public read-only snapshots of collection progress without
 exposing private account details or authenticated endpoints.
@@ -72,9 +87,13 @@ Expected shape:
 
 ### Production Deployment Path
 
-**Status:** Deferred
-**Gate:** Maintainer deployment decision
+**Status:** Deferred — Guardian Tracker is a local-only application by
+maintainer decision
+**Gate:** Maintainer decision to publish
 **Likely size:** Large
+
+Notifications and Digests, Shareable Collection Progress, and Metrics all wait on
+this decision.
 
 CI currently validates tests and Docker builds. Publishing images, provisioning
 cloud resources, and deploying production infrastructure should be implemented
@@ -84,7 +103,7 @@ belong in `private/` until then.
 ### Metrics
 
 **Status:** Not implemented
-**Gate:** Production observability decision
+**Gate:** Production deployment path, then observability decision
 **Likely size:** Medium
 
 Structured request/access logging with request IDs and sanitized identifiers has
