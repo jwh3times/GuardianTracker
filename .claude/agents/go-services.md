@@ -246,6 +246,8 @@ backend/api-service/
                                            (matches the logout.* prefix filter)
   db/migrations/0006_remove_unused_flags.sql ← Retires wishlist-alerts and ui-tweaks flags
                                            seeded by 0002 (10 → 8 seeded flags)
+  db/migrations/0007_onboarding.sql    ← Adds user_preferences.onboarded_at (NULL = not yet onboarded);
+                                           completion is intentionally irreversible through the preferences API
   db/migrations/0008_digest_state.sql  ← Adds digest_state (ADR 0023): one row per user, keyed on
                                            user_id like user_preferences; holds the visit clock, the
                                            owned-hash snapshot, and the frozen current_visit_result
