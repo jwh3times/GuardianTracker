@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.8.1] - 2026-09-20
+
+### Fixed
+
+- The `go-services` agent guide listed the database migrations but skipped
+  `0007_onboarding.sql`, jumping straight from `0006` to `0008`. That migration
+  adds `user_preferences.onboarded_at`, the column behind server-authoritative,
+  irreversible onboarding completion, so the gap hid a live schema detail from
+  anyone working from the guide. Application behavior is unchanged.
+
 ## [1.8.0] - 2026-09-18
 
 ### Added
@@ -1229,7 +1239,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.7...v1.8.0
 [1.7.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.6...v1.7.7
 [1.7.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.5...v1.7.6
