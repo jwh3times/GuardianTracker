@@ -14,6 +14,22 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.8.2] - 2026-09-20
+
+### Fixed
+
+- The repository policy that guards the `@testing-library/jest-dom` matcher-type
+  shim told an incomplete story when it fires. Once upstream jest-dom stops
+  shipping the Vitest 4 assertion shape, deleting the shim and its lint override
+  — the only two steps the failure message named — satisfies the policy's
+  consistency check and then falls through to the same unconditional failure, so
+  `Format Check` would have stayed red for anyone who followed the instructions
+  literally. The message is now a three-step procedure that also names removing
+  the policy test and its `ci-cd.yml` and `AGENTS.md` entries. No behavior or
+  pass/fail condition changed; the shim itself is still required, because
+  jest-dom 7.0.1 remains the latest release and still augments
+  `Assertion<T = any>`.
+
 ## [1.8.1] - 2026-09-20
 
 ### Fixed
@@ -1239,7 +1255,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.2...HEAD
+[1.8.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.7...v1.8.0
 [1.7.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.6...v1.7.7
