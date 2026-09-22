@@ -290,6 +290,19 @@ file order: imported, skipped, already saved, unknown weapon, unresolved perk,
 unsupported, malformed, or failed. Nothing is summarised away and no line is
 dropped, because a line that vanishes is indistinguishable from one that worked.
 
+**Owned roll** — one weapon the membership currently holds, with the perks
+presently sitting in its perk columns, named and sorted the way a _Roll target_
+names them so the two compare directly. Read from profile component 305 (the
+current plug), never from 310, which answers what may be swapped in now rather
+than what the weapon rolled. Owned by `services/ownedrolls`.
+
+**Match report** — which owned weapons satisfy which saved roll targets, split
+into wanted matches, unwanted matches, and _unmatched targets_. A target matches
+when every perk it names is present; extra perks do not prevent it, because a
+target says what must be there and not what must not. Unmatched targets are
+carried rather than dropped: a saved roll nothing satisfies is the roll still
+worth chasing. Owned by `services/rolltargets`.
+
 **Preferences service** (`preferences.Service`) — the handler-facing owner of
 preference defaults, validation, atomic partial updates, and irreversible
 onboarding completion. See

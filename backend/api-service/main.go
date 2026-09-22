@@ -31,6 +31,7 @@ import (
 	"guardian-tracker/api-service/services/efficiency"
 	"guardian-tracker/api-service/services/items"
 	manifestrepo "guardian-tracker/api-service/services/manifest"
+	"guardian-tracker/api-service/services/ownedrolls"
 	"guardian-tracker/api-service/services/preferences"
 	"guardian-tracker/api-service/services/recommendations"
 	"guardian-tracker/api-service/services/records"
@@ -191,7 +192,8 @@ func main() {
 	// constructed after Weekly because it reads live availability back out of
 	// it while Weekly reads saved item hashes from the Entries core above.
 	wishlistService := wishlist.NewService(wishlistEntries, itemsService, weeklyService, tokenStore)
-	rollTargetsService := rolltargets.NewService(adapters.NewRollTargetRepository(stores.RollTargets), itemsService)
+	ownedRollsService := ownedrolls.NewService(bungieClient, itemsService, tokenStore)
+	rollTargetsService := rolltargets.NewService(adapters.NewRollTargetRepository(stores.RollTargets), itemsService, ownedRollsService)
 
 	// The complete Collections service — the outer of ADR 0018's two stages.
 	// It is constructed here, after Weekly and Records, because it reads live
