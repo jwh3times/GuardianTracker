@@ -32,6 +32,7 @@ type Handlers struct {
 	Health      *handlers.HealthHandler
 	Auth        *handlers.AuthHandler
 	Wishlist    *handlers.WishlistHandler
+	RollTargets *handlers.RollTargetsHandler
 	Preferences *handlers.PreferencesHandler
 	User        *handlers.UserHandler
 	Admin       *handlers.AdminHandler
@@ -134,6 +135,14 @@ func NewRouter(d Deps) *gin.Engine {
 	authed.PUT("/wishlist/:id", d.Handlers.Wishlist.UpdateWishlistItem)
 	authed.DELETE("/wishlist/:id", d.Handlers.Wishlist.RemoveFromWishlist)
 	authed.POST("/wishlist/bulk", d.Handlers.Wishlist.BulkUpdate)
+
+	// Roll targets. Membership-scoped through the JWT alone: no membership on
+	// the route and none in any body.
+	authed.GET("/rolltargets", d.Handlers.RollTargets.GetRollTargets)
+	authed.POST("/rolltargets", d.Handlers.RollTargets.AddRollTarget)
+	authed.PATCH("/rolltargets/:id", d.Handlers.RollTargets.UpdateRollTarget)
+	authed.DELETE("/rolltargets/:id", d.Handlers.RollTargets.RemoveRollTarget)
+	authed.POST("/rolltargets/import", d.Handlers.RollTargets.ImportRollTargets)
 
 	// Preferences
 	authed.GET("/preferences", d.Handlers.Preferences.GetPreferences)
