@@ -7,12 +7,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// RollTarget is the DB representation of one saved roll target: a weapon and
-// the perk names the user wants on it.
+// RollTarget is the DB representation of one saved roll target: a perk
+// combination, the weapon it applies to, and whether it is wanted or unwanted.
+//
+// ItemHash is nil for an any-weapon target, which names perks without naming a
+// weapon. A pointer rather than a zero value because 0 is a hash the column
+// would accept, and "no weapon" must not be spelled the same as a weapon.
 type RollTarget struct {
 	ID        int64
 	UserID    int64
-	ItemHash  uint32
+	ItemHash  *uint32
+	Wanted    bool
 	Perks     []string
 	Notes     string
 	CreatedAt time.Time
@@ -31,7 +36,7 @@ func (s *RollTargetStore) GetUserID(ctx context.Context, membershipID string) (i
 	return id, err
 }
 
-const rollTargetCols = `id, user_id, item_hash, perks, notes, created_at, updated_at`
+const rollTargetCols = `id, user_id, item_hash, wanted, perks, notes, created_at, updated_at`
 
 // List returns every roll target for the user, most recently added first.
 func (s *RollTargetStore) List(ctx context.Context, userID int64) ([]RollTarget, error) {
@@ -54,14 +59,15 @@ func (s *RollTargetStore) List(ctx context.Context, userID int64) ([]RollTarget,
 	return out, rows.Err()
 }
 
-// Add inserts a roll target. Callers should check IsDuplicate on the returned
-// error: a membership may hold only one target per weapon.
-func (s *RollTargetStore) Add(ctx context.Context, userID int64, hash uint32, perks []string, notes string) (*RollTarget, error) {
+// Add inserts a roll target. A nil hash stores an any-weapon target. Callers
+// should check IsDuplicate on the returned error: the same roll cannot be saved
+// twice, which is what stops a re-imported file from stacking duplicates.
+func (s *RollTargetStore) Add(ctx context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes string) (*RollTarget, error) {
 	row := s.pool.QueryRow(ctx,
-		`INSERT INTO roll_targets (user_id, item_hash, perks, notes)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO roll_targets (user_id, item_hash, wanted, perks, notes)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING `+rollTargetCols,
-		userID, int64(hash), perks, notes)
+		userID, itemHashArg(hash), wanted, perks, notes)
 	t, err := scanRollTarget(row)
 	if err != nil {
 		return nil, err
@@ -108,10 +114,23 @@ type rowScanner interface {
 
 func scanRollTarget(r rowScanner) (RollTarget, error) {
 	var t RollTarget
-	var hashInt int64
-	if err := r.Scan(&t.ID, &t.UserID, &hashInt, &t.Perks, &t.Notes, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	var hashInt *int64
+	if err := r.Scan(&t.ID, &t.UserID, &hashInt, &t.Wanted, &t.Perks, &t.Notes, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return RollTarget{}, err
 	}
-	t.ItemHash = uint32(hashInt)
+	if hashInt != nil {
+		h := uint32(*hashInt)
+		t.ItemHash = &h
+	}
 	return t, nil
+}
+
+// itemHashArg widens a hash for the BIGINT column while keeping "no weapon" as
+// a real NULL rather than a zero.
+func itemHashArg(hash *uint32) *int64 {
+	if hash == nil {
+		return nil
+	}
+	v := int64(*hash)
+	return &v
 }

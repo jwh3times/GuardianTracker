@@ -59,7 +59,7 @@ type WishlistRepo interface {
 type RollTargetRepo interface {
 	GetUserID(ctx context.Context, membershipID string) (int64, error)
 	List(ctx context.Context, userID int64) ([]RollTarget, error)
-	Add(ctx context.Context, userID int64, hash uint32, perks []string, notes string) (*RollTarget, error)
+	Add(ctx context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes string) (*RollTarget, error)
 	Update(ctx context.Context, userID, id int64, perks *[]string, notes *string) (*RollTarget, error)
 	Delete(ctx context.Context, userID, id int64) (bool, error)
 }
@@ -187,7 +187,7 @@ func (degradedRollTargets) GetUserID(context.Context, string) (int64, error) {
 func (degradedRollTargets) List(context.Context, int64) ([]RollTarget, error) {
 	return nil, ErrUnavailable
 }
-func (degradedRollTargets) Add(context.Context, int64, uint32, []string, string) (*RollTarget, error) {
+func (degradedRollTargets) Add(context.Context, int64, *uint32, bool, []string, string) (*RollTarget, error) {
 	return nil, ErrUnavailable
 }
 func (degradedRollTargets) Update(context.Context, int64, int64, *[]string, *string) (*RollTarget, error) {

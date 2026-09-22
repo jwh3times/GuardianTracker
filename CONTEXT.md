@@ -177,14 +177,21 @@ Item acquisition facts and best-effort live availability; an entry whose Item
 is absent from a successful current Item lookup is an explicit unknown-Item
 tombstone, not a dropped row. Owned by `services/wishlist`.
 
-**Roll target** — the player's own saved perk combination wanted on a specific
-weapon: one weapon Item hash plus the perk names that must all be present. One
-target per weapon per user; a second wanted roll for the same weapon is an edit.
-Distinct from a _Wish list entry_, which is a wanted Item hash with no perk
-dimension; the two are separate concepts and neither name covers the other.
+**Roll target** — the player's own saved perk combination on a weapon: the perk
+names that must all be present, plus the weapon they apply to. A player may save
+several rolls for one weapon; only the identical roll twice is refused. Distinct
+from a _Wish list entry_, which is a wanted Item hash with no perk dimension;
+the two are separate concepts and neither name covers the other.
 Two words, lowercase, in prose; `rolltargets` in code, `roll_targets` in SQL.
 A file imported from Destiny Item Manager is a _DIM-format file_ — never a
 "wish list", whatever DIM itself calls it.
+
+A target's **stance** is whether it is _wanted_ or _unwanted_. An unwanted roll
+is one the player wants to be told about so they can dismantle it; it is DIM's
+"trash" roll. An **any-weapon target** names perks without naming a weapon —
+DIM's any-item wildcard. Perks are stored sorted, because they are AND-ed and
+their order carries no meaning; normalising it is what lets one roll be
+recognised as already saved.
 
 A target names perks by **display name, not plug hash**. A perk's base and
 enhanced variants are two hashes sharing one name and the Manifest links them by
@@ -268,11 +275,19 @@ Item facts and best-effort availability while preserving explicit unknown-Item
 tombstones. See [ADR 0019](./docs/adr/0019-own-wish-list-and-preferences.md).
 
 **Roll targets service** (`rolltargets.Service`) — the handler-facing owner of
-Roll target reads and mutations. It validates a target against the weapon's own
-perk pool before persisting, so a saved target is one that can actually match;
-a perk the weapon cannot roll is refused rather than stored to never match.
-A successful read of no perk columns (not a weapon) and a failed read (pool
-unavailable) are separate outcomes and never collapse into one another.
+Roll target reads, mutations, and DIM-format import. It validates a target
+against the weapon's own perk pool before persisting, so a saved target is one
+that can actually match; a perk the weapon cannot roll is refused rather than
+stored to never match. A successful read of no perk columns (not a weapon) and a
+failed read (pool unavailable) are separate outcomes and never collapse into one
+another. An any-weapon target has no pool to check against, so its perk names
+are resolved from plug hashes instead — sound in that direction only, because
+many plugs share one name but each hash has exactly one.
+
+**DIM import report** — one outcome per line of an imported DIM-format file, in
+file order: imported, skipped, already saved, unknown weapon, unresolved perk,
+unsupported, malformed, or failed. Nothing is summarised away and no line is
+dropped, because a line that vanishes is indistinguishable from one that worked.
 
 **Preferences service** (`preferences.Service`) — the handler-facing owner of
 preference defaults, validation, atomic partial updates, and irreversible

@@ -21,20 +21,36 @@ func TestRollTargetStore_CRUDAndOwnership(t *testing.T) {
 		t.Fatalf("GetUserID = %d, %v; want %d, nil", gotID, err, userID)
 	}
 
-	tgt, err := store.Add(ctx, userID, 1234567890, []string{"Outlaw", "Kill Clip"}, "pvp roll")
+	hash := uint32(1234567890)
+	tgt, err := store.Add(ctx, userID, &hash, true, []string{"Kill Clip", "Outlaw"}, "pvp roll")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	if tgt.ItemHash != 1234567890 || tgt.Notes != "pvp roll" {
+	if tgt.ItemHash == nil || *tgt.ItemHash != 1234567890 || !tgt.Wanted || tgt.Notes != "pvp roll" {
 		t.Errorf("Add returned %+v", tgt)
 	}
-	if len(tgt.Perks) != 2 || tgt.Perks[0] != "Outlaw" || tgt.Perks[1] != "Kill Clip" {
-		t.Errorf("perks round-tripped as %v, want [Outlaw Kill Clip]", tgt.Perks)
+	if len(tgt.Perks) != 2 || tgt.Perks[0] != "Kill Clip" || tgt.Perks[1] != "Outlaw" {
+		t.Errorf("perks round-tripped as %v, want [Kill Clip Outlaw]", tgt.Perks)
 	}
 
-	// One target per weapon per user.
-	if _, err := store.Add(ctx, userID, 1234567890, []string{"Rampage"}, ""); !IsDuplicate(err) {
-		t.Errorf("second target for the same weapon: err = %v, want a duplicate", err)
+	// The same roll twice is a duplicate; a different roll on the same weapon
+	// is ordinary, and so is the opposite stance on the same perks.
+	if _, err := store.Add(ctx, userID, &hash, true, []string{"Kill Clip", "Outlaw"}, ""); !IsDuplicate(err) {
+		t.Errorf("identical roll: err = %v, want a duplicate", err)
+	}
+	other, err := store.Add(ctx, userID, &hash, true, []string{"Rampage"}, "")
+	if err != nil {
+		t.Fatalf("second roll on the same weapon: %v", err)
+	}
+	unwanted, err := store.Add(ctx, userID, &hash, false, []string{"Kill Clip", "Outlaw"}, "")
+	if err != nil {
+		t.Fatalf("opposite stance on the same perks: %v", err)
+	}
+	if _, err := store.Delete(ctx, userID, other.ID); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := store.Delete(ctx, userID, unwanted.ID); err != nil {
+		t.Fatalf("cleanup: %v", err)
 	}
 
 	// A nil perks patch leaves the array alone; notes still change.
@@ -92,17 +108,18 @@ func TestRollTargetStore_ConstraintsRejectNonsense(t *testing.T) {
 	store := NewRollTargetStore(pool)
 	ctx := context.Background()
 
-	if _, err := store.Add(ctx, userID, 1, []string{}, ""); err == nil {
+	h1, h2, h3 := uint32(1), uint32(2), uint32(3)
+	if _, err := store.Add(ctx, userID, &h1, true, []string{}, ""); err == nil {
 		t.Error("empty perks array was accepted")
 	}
 	tooMany := make([]string, 11)
 	for i := range tooMany {
 		tooMany[i] = "p"
 	}
-	if _, err := store.Add(ctx, userID, 2, tooMany, ""); err == nil {
+	if _, err := store.Add(ctx, userID, &h2, true, tooMany, ""); err == nil {
 		t.Error("11 perks were accepted")
 	}
-	if _, err := store.Add(ctx, userID, 3, []string{"Outlaw"}, strings.Repeat("x", 501)); err == nil {
+	if _, err := store.Add(ctx, userID, &h3, true, []string{"Outlaw"}, strings.Repeat("x", 501)); err == nil {
 		t.Error("a 501-character note was accepted")
 	}
 }
@@ -114,7 +131,8 @@ func TestRollTargetStore_CascadesWithTheUser(t *testing.T) {
 	store := NewRollTargetStore(pool)
 	ctx := context.Background()
 
-	if _, err := store.Add(ctx, userID, 99, []string{"Outlaw"}, ""); err != nil {
+	h := uint32(99)
+	if _, err := store.Add(ctx, userID, &h, true, []string{"Outlaw"}, ""); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `DELETE FROM users WHERE membership_id = $1`, mid); err != nil {
@@ -126,5 +144,40 @@ func TestRollTargetStore_CascadesWithTheUser(t *testing.T) {
 	}
 	if len(rows) != 0 {
 		t.Errorf("%d roll targets survived their user", len(rows))
+	}
+}
+
+// An any-weapon target names perks without naming a weapon. NULLS NOT DISTINCT
+// is what keeps it deduplicated: without it PostgreSQL reads every NULL as
+// unique and a re-imported file would stack wildcard rows without limit.
+func TestRollTargetStore_AnyWeaponTargetsDeduplicate(t *testing.T) {
+	pool := testPool(t)
+	_, userID := createTestUser(t, pool)
+	store := NewRollTargetStore(pool)
+	ctx := context.Background()
+
+	first, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, "")
+	if err != nil {
+		t.Fatalf("Add wildcard: %v", err)
+	}
+	if first.ItemHash != nil {
+		t.Errorf("item hash = %v, want nil", first.ItemHash)
+	}
+	if _, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, ""); !IsDuplicate(err) {
+		t.Errorf("identical wildcard: err = %v, want a duplicate", err)
+	}
+	// A different wildcard roll is a different target.
+	if _, err := store.Add(ctx, userID, nil, true, []string{"Rampage"}, ""); err != nil {
+		t.Errorf("second wildcard roll: %v", err)
+	}
+
+	rows, err := store.List(ctx, userID)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("List = %d rows, %v; want 2", len(rows), err)
+	}
+	for _, r := range rows {
+		if r.ItemHash != nil {
+			t.Errorf("wildcard row came back with a weapon: %+v", r)
+		}
 	}
 }
