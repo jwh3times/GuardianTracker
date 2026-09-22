@@ -792,7 +792,8 @@ Bungie data refresh cannot change a Guardian Tracker setting.
 - `APIPreferencesRead extends APIPreferences` — `+ persisted: boolean` on `GET /api/preferences` (ADR 0021); `false` marks unstored defaults returned because persistence is unavailable, distinguishing that from a genuinely new account (`persisted: true` with `onboardedAt: null`)
 - `Milestone.missing`: `number | undefined` — populated for raid/dungeon milestones;
   verified current non-raid rewards contain no collectible-linked items, so others omit it.
-- `APIPerkColumn`: `{ role: string; label: string; perks: string[] }` — one column of the weapon perk pool
+- `APIPerkColumn`: `{ role: string; label: string; perks: string[]; plugs: APIPerkPlug[] }` — one column of the weapon perk pool; `plugs` is index-aligned with `perks` and carries the roll-target base/enhanced plug hashes. `data/items.ts`'s `toItemPerks` deliberately does not project `plugs` onto `ItemPerks`/`PerkColumn` (design.ts) — nothing renders it yet
+- `APIPerkPlug`: `{ name: string; base: number; enhanced: number; ambiguous: boolean }` — one perk's plug hashes behind an `APIPerkColumn` entry; `base`/`enhanced` are 0 when that variant is absent from the pool, and `ambiguous` means the name did not resolve to one plug per variant so the hashes are a sample, not an answer
 - `APIItemCatalyst`: `{ name: string; description: string }` — one exotic catalyst entry; `description` may be empty (the manifest has at least one blank entry — Duality)
 - `APIItemPerks`: `{ itemHash: number; perkColumns: APIPerkColumn[]; catalysts: APIItemCatalyst[] }` — response envelope for `/api/items/:itemHash/perks`; `catalysts` is always present (empty array for non-exotics), up to 4 entries for multi-catalyst exotics
 - `GTItem.perks`: REMOVED — the old dead flat perks field no longer exists on the design type; use `PerkColumn[]` from `data/items.ts`'s `useItemPerks` instead

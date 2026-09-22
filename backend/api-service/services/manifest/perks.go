@@ -122,10 +122,34 @@ func classifyPCI(pci string, traitN *int) (role, label string) {
 }
 
 // PerkColumn is one socket column of a weapon's possible-perk pool, in display order.
+// Perks and Plugs are index-aligned: Plugs[i] carries the hashes behind Perks[i].
 type PerkColumn struct {
-	Role  string   `json:"role"`  // intrinsic | barrel | magazine | trait | origin
-	Label string   `json:"label"` // "Intrinsic", "Barrel", "Trait 1", …
-	Perks []string `json:"perks"` // possible perk display names, deduped, in pool order
+	Role  string     `json:"role"`  // intrinsic | barrel | magazine | trait | origin
+	Label string     `json:"label"` // "Intrinsic", "Barrel", "Trait 1", …
+	Perks []string   `json:"perks"` // possible perk display names, deduped, in pool order
+	Plugs []PerkPlug `json:"plugs"` // the plug hashes behind each name, same order
+}
+
+// PerkPlug is one distinct perk of a column, carrying the plug hashes that the
+// column's name-level dedupe collapses.
+//
+// The Manifest publishes a perk's base and enhanced variants as two separate
+// item definitions and links them with no field in either direction: they share
+// a display name and a plugCategoryHash, and differ only in tier and in
+// itemTypeDisplayName ("Barrel" vs "Enhanced Barrel"). The pairing therefore has
+// to be derived, and it is only sound inside one socket's own plug pool — the
+// display name is not unique manifest-wide, where "Outlaw" resolves to three
+// base Trait hashes and "Psychohack" to ten base Origin Trait hashes.
+type PerkPlug struct {
+	Name string `json:"name"`
+	// Base is the unenhanced variant, or 0 when the pool holds only an enhanced one.
+	Base uint32 `json:"base"`
+	// Enhanced is the enhanced variant, or 0 when the perk has none in this pool.
+	Enhanced uint32 `json:"enhanced"`
+	// Ambiguous reports that this name did not resolve to a single plug per
+	// variant within this pool, so Base/Enhanced are a first-seen sample rather
+	// than an answer. Consumers must not treat an ambiguous plug as identifying.
+	Ambiguous bool `json:"ambiguous"`
 }
 
 // --- parse structs (the shared bungie.InventoryItemDefinition lacks these) ---
@@ -172,6 +196,9 @@ type plugItemDef struct {
 		Description string `json:"description"`
 	} `json:"displayProperties"`
 	ItemType int `json:"itemType"`
+	// ItemTypeDisplayName distinguishes a perk's enhanced variant from its base
+	// ("Enhanced Barrel" vs "Barrel"); nothing else in the definition does.
+	ItemTypeDisplayName string `json:"itemTypeDisplayName"`
 	// Objectives.ObjectiveHashes carries a catalyst plug's unlock-progress
 	// objectives (used by the records service to link an exotic-catalyst record
 	// to its weapon via objective-hash overlap). Nested under "objectives" here —
@@ -291,11 +318,11 @@ func (r *Repository) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 		if skip {
 			continue
 		}
-		perks := resolvePerkNames(cands[i].hashes, plugItems)
+		perks, plugs := resolvePerks(cands[i].hashes, plugItems)
 		if len(perks) == 0 {
 			continue
 		}
-		cols = append(cols, PerkColumn{Role: role, Label: label, Perks: perks})
+		cols = append(cols, PerkColumn{Role: role, Label: label, Perks: perks, Plugs: plugs})
 	}
 	return cols, nil
 }
@@ -319,11 +346,17 @@ func classifyColumn(isIntrinsic bool, hashes []uint32, items map[uint32]*plugIte
 	return "", "", true // every plug junk/unresolved → skip
 }
 
-// resolvePerkNames maps plug-item hashes to display names, excluding junk plugs
-// (see isJunkPCI), deduping by name and preserving pool order.
-func resolvePerkNames(hashes []uint32, items map[uint32]*plugItemDef) []string {
-	seen := map[string]struct{}{}
-	var out []string
+// resolvePerks maps a socket pool's plug-item hashes to its distinct perks,
+// excluding junk plugs (see isJunkPCI), deduping by display name and preserving
+// pool order. The returned slices are index-aligned.
+//
+// The dedupe is what collapses a perk's base and enhanced variants into one
+// entry, since the two share a display name; resolvePerks keeps the hashes that
+// collapse rather than discarding them. See PerkPlug for why the pairing is only
+// derivable within a single pool.
+func resolvePerks(hashes []uint32, items map[uint32]*plugItemDef) ([]string, []PerkPlug) {
+	var order []string
+	acc := map[string]*perkVariants{}
 	for _, h := range hashes {
 		it := items[h]
 		if it == nil || isJunkPCI(it.Plug.PlugCategoryIdentifier) {
@@ -333,13 +366,95 @@ func resolvePerkNames(hashes []uint32, items map[uint32]*plugItemDef) []string {
 		if name == "" {
 			continue
 		}
-		if _, dup := seen[name]; dup {
-			continue
+		v := acc[name]
+		if v == nil {
+			v = &perkVariants{}
+			acc[name] = v
+			order = append(order, name)
 		}
-		seen[name] = struct{}{}
-		out = append(out, name)
+		v.add(h, it.ItemTypeDisplayName)
 	}
-	return out
+	if len(order) == 0 {
+		return nil, nil
+	}
+	names := make([]string, 0, len(order))
+	plugs := make([]PerkPlug, 0, len(order))
+	for _, name := range order {
+		names = append(names, name)
+		plugs = append(plugs, acc[name].plug(name))
+	}
+	return names, plugs
+}
+
+// enhancedTDNPrefix is the Manifest's own convention for naming a perk's
+// enhanced variant: its itemTypeDisplayName is exactly this prefix plus the
+// base's. Verified across every base/enhanced pair that resolves 1:1, with no
+// mismatch; it is the only signal that survives, since tier varies
+// (Common→Uncommon, Legendary→Legendary) and the two variants routinely share no
+// sandbox perk hash at all.
+const enhancedTDNPrefix = "Enhanced "
+
+// perkVariants collects one display name's plugs from a single socket pool,
+// split by variant. It dedupes repeated hashes because a plug set may list the
+// same plug item more than once, which is not the same as two distinct plugs
+// sharing a name.
+type perkVariants struct {
+	base, enhanced       []uint32
+	baseTDN, enhancedTDN string
+}
+
+func (v *perkVariants) add(hash uint32, tdn string) {
+	if strings.HasPrefix(tdn, enhancedTDNPrefix) {
+		if !containsHash(v.enhanced, hash) {
+			if len(v.enhanced) == 0 {
+				v.enhancedTDN = tdn
+			}
+			v.enhanced = append(v.enhanced, hash)
+		}
+		return
+	}
+	if !containsHash(v.base, hash) {
+		if len(v.base) == 0 {
+			v.baseTDN = tdn
+		}
+		v.base = append(v.base, hash)
+	}
+}
+
+// plug reduces the collected variants to one PerkPlug, pairing base to enhanced
+// only on the Manifest's naming convention. Anything that does not satisfy it —
+// more than one distinct hash in a variant, or a pair whose display types do not
+// line up — is reported Ambiguous rather than resolved to whichever plug the
+// pool happened to list first.
+func (v *perkVariants) plug(name string) PerkPlug {
+	p := PerkPlug{Name: name, Ambiguous: len(v.base) > 1 || len(v.enhanced) > 1}
+	if len(v.base) > 0 {
+		p.Base = v.base[0]
+	}
+	switch {
+	case len(v.enhanced) == 0:
+		// No enhanced variant in this pool; Enhanced stays 0.
+	case len(v.base) == 0:
+		// Enhanced-only pool: nothing to pair against, so the base stays 0
+		// rather than being invented.
+		p.Enhanced = v.enhanced[0]
+	case v.enhancedTDN == enhancedTDNPrefix+v.baseTDN:
+		p.Enhanced = v.enhanced[0]
+	default:
+		// Both variants present but the convention does not hold. Unobserved in
+		// the current Manifest; surface it instead of guessing a pairing.
+		p.Ambiguous = true
+	}
+	return p
+}
+
+func containsHash(hs []uint32, h uint32) bool {
+	for _, x := range hs {
+		if x == h {
+			return true
+		}
+	}
+	return false
 }
 
 // plugSetItemHashes returns the rollable plug-item hashes of a plug set in order

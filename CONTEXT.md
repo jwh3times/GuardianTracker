@@ -177,6 +177,20 @@ Item acquisition facts and best-effort live availability; an entry whose Item
 is absent from a successful current Item lookup is an explicit unknown-Item
 tombstone, not a dropped row. Owned by `services/wishlist`.
 
+**Roll target** — the player's own saved perk combination wanted on a specific
+weapon. Distinct from a _Wish list entry_, which is a wanted Item hash with no
+perk dimension; the two are separate concepts and neither name covers the other.
+Two words, lowercase, in prose; `rolltarget` as one word in code and routes.
+A file imported from Destiny Item Manager is a _DIM-format file_ — never a
+"wish list", whatever DIM itself calls it.
+
+**Perk plug** — one distinct perk of a weapon's socket column, carrying the base
+and enhanced plug hashes that the column's name-level dedupe collapses. The
+Manifest links the two variants with no field of its own, so the pairing is
+derived within a single socket's plug pool and is reported _ambiguous_ rather
+than guessed when a name does not resolve to one plug per variant. Owned by
+`services/manifest` as `PerkColumn.Plugs`.
+
 **Preference** — a persisted Guardian Tracker user setting. Preferences are
 updated as one atomic partial patch; onboarding completion is an irreversible,
 server-stamped preference transition. Owned by `services/preferences`.

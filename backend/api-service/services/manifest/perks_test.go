@@ -110,6 +110,20 @@ func writePerksFixtureDB(t *testing.T, path string) {
 				{"singleInitialItemHash":0,"randomizedPlugSetHash":7011}
 			]}}`,
 
+		// --- weapon 4005: intrinsic[0], barrel[1], magazine[2], trait[3]; its pools
+		// cover paired, base-only, enhanced-only, duplicate-name and repeated-hash ---
+		4005: `{"hash":4005,"itemType":3,"inventory":{"tierType":5},"sockets":{
+			"socketCategories":[
+				{"socketCategoryHash":3956125808,"socketIndexes":[0]},
+				{"socketCategoryHash":4241085061,"socketIndexes":[1,2,3]}
+			],
+			"socketEntries":[
+				{"singleInitialItemHash":6700,"reusablePlugSetHash":7012},
+				{"randomizedPlugSetHash":7013},
+				{"randomizedPlugSetHash":7015},
+				{"randomizedPlugSetHash":7014}
+			]}}`,
+
 		// --- plug item defs (name + plugCategoryIdentifier) ---
 		5100: `{"hash":5100,"displayProperties":{"name":"Adaptive Frame"},"plug":{"plugCategoryIdentifier":"intrinsics"}}`,
 		5101: `{"hash":5101,"displayProperties":{"name":"Arrowhead Brake"},"plug":{"plugCategoryIdentifier":"barrels"}}`,
@@ -143,6 +157,19 @@ func writePerksFixtureDB(t *testing.T, path string) {
 		6501: `{"hash":6501,"displayProperties":{"name":"Desperado"},"plug":{"plugCategoryIdentifier":"frames"}}`,
 		6600: `{"hash":6600,"displayProperties":{"name":"Empty Catalyst Socket"},"plug":{"plugCategoryIdentifier":"v400.empty.exotic.masterwork"}}`,
 		6601: `{"hash":6601,"displayProperties":{"name":"Fake Catalyst Trigger"},"plug":{"plugCategoryIdentifier":"catalysts"}}`,
+
+		// --- weapon 4005: one pool per base/enhanced pairing case ---
+		// barrel[1]: a paired perk, a base-only perk, and the paired base listed
+		// twice (a plug set may repeat a plug item; that is not two plugs).
+		6700: `{"hash":6700,"displayProperties":{"name":"Adaptive Frame"},"itemTypeDisplayName":"Intrinsic","plug":{"plugCategoryIdentifier":"intrinsics"}}`,
+		6701: `{"hash":6701,"displayProperties":{"name":"Smallbore"},"itemTypeDisplayName":"Barrel","plug":{"plugCategoryIdentifier":"barrels"}}`,
+		6702: `{"hash":6702,"displayProperties":{"name":"Smallbore"},"itemTypeDisplayName":"Enhanced Barrel","plug":{"plugCategoryIdentifier":"barrels"}}`,
+		6703: `{"hash":6703,"displayProperties":{"name":"Full Bore"},"itemTypeDisplayName":"Barrel","plug":{"plugCategoryIdentifier":"barrels"}}`,
+		// magazine[2]: two distinct hashes sharing one name inside one pool.
+		6705: `{"hash":6705,"displayProperties":{"name":"Drop Mag"},"itemTypeDisplayName":"Magazine","plug":{"plugCategoryIdentifier":"magazines"}}`,
+		6706: `{"hash":6706,"displayProperties":{"name":"Drop Mag"},"itemTypeDisplayName":"Magazine","plug":{"plugCategoryIdentifier":"magazines"}}`,
+		// trait[3]: an enhanced variant with no base in its pool.
+		6704: `{"hash":6704,"displayProperties":{"name":"Golden Tricorn Enhanced"},"itemTypeDisplayName":"Enhanced Trait","plug":{"plugCategoryIdentifier":"frames"}}`,
 	}
 	for hash, blob := range items {
 		if _, err := db.Exec(`INSERT INTO DestinyInventoryItemDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -172,6 +199,12 @@ func writePerksFixtureDB(t *testing.T, path string) {
 		7009: `{"reusablePlugItems":[{"plugItemHash":6500}]}`,
 		7010: `{"reusablePlugItems":[{"plugItemHash":6501}]}`,
 		7011: `{"reusablePlugItems":[{"plugItemHash":6600},{"plugItemHash":6601}]}`,
+
+		7012: `{"reusablePlugItems":[{"plugItemHash":6700}]}`,
+		// 6701 appears twice: the same plug item repeated, not two distinct plugs.
+		7013: `{"reusablePlugItems":[{"plugItemHash":6701},{"plugItemHash":6702},{"plugItemHash":6703},{"plugItemHash":6701}]}`,
+		7014: `{"reusablePlugItems":[{"plugItemHash":6704}]}`,
+		7015: `{"reusablePlugItems":[{"plugItemHash":6705},{"plugItemHash":6706}]}`,
 	}
 	for hash, blob := range plugSets {
 		if _, err := db.Exec(`INSERT INTO DestinyPlugSetDefinition (id, json) VALUES (?, ?)`, int32(hash), blob); err != nil {
@@ -354,5 +387,128 @@ func TestGetWeaponPerks_CatalystColumnExcluded(t *testing.T) {
 	}
 	if _, ok := colByLabel(cols, "Perks"); ok {
 		t.Errorf("catalyst column leaked into perkColumns under the generic fallback label")
+	}
+}
+
+// plugByName finds a column's resolved plug by display name.
+func plugByName(c PerkColumn, name string) (PerkPlug, bool) {
+	for _, p := range c.Plugs {
+		if p.Name == name {
+			return p, true
+		}
+	}
+	return PerkPlug{}, false
+}
+
+// TestGetWeaponPerks_PlugsAlignWithPerks pins the contract every consumer reads
+// the two slices under: same length, same order, same names.
+func TestGetWeaponPerks_PlugsAlignWithPerks(t *testing.T) {
+	repo := perksRepo(t)
+	for _, weapon := range []uint32{1000, 2000, 4000, 4001, 4002, 4003, 4004, 4005} {
+		cols, err := repo.GetWeaponPerks(weapon)
+		if err != nil {
+			t.Fatalf("GetWeaponPerks(%d): %v", weapon, err)
+		}
+		if len(cols) == 0 {
+			t.Fatalf("GetWeaponPerks(%d) returned no columns", weapon)
+		}
+		for _, c := range cols {
+			if len(c.Plugs) != len(c.Perks) {
+				t.Errorf("weapon %d column %q: %d plugs for %d perks", weapon, c.Label, len(c.Plugs), len(c.Perks))
+				continue
+			}
+			for i, name := range c.Perks {
+				if c.Plugs[i].Name != name {
+					t.Errorf("weapon %d column %q index %d: plug name %q, perk name %q",
+						weapon, c.Label, i, c.Plugs[i].Name, name)
+				}
+			}
+		}
+	}
+}
+
+func TestGetWeaponPerks_PairsEnhancedVariantWithinPool(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4005)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	barrel, ok := colByLabel(cols, "Barrel")
+	if !ok {
+		t.Fatalf("missing Barrel column; got %+v", cols)
+	}
+	// Smallbore rolls in both variants; the pool lists its base twice, which must
+	// not read as two distinct plugs.
+	smallbore, ok := plugByName(barrel, "Smallbore")
+	if !ok {
+		t.Fatalf("missing Smallbore plug; got %+v", barrel.Plugs)
+	}
+	if smallbore.Base != 6701 || smallbore.Enhanced != 6702 || smallbore.Ambiguous {
+		t.Errorf("Smallbore = %+v, want base 6701 / enhanced 6702 / unambiguous", smallbore)
+	}
+	// A repeated hash must not inflate the deduped name list either.
+	if got := len(barrel.Perks); got != 2 {
+		t.Errorf("barrel perks = %d (%v), want 2", got, barrel.Perks)
+	}
+}
+
+func TestGetWeaponPerks_BaseOnlyPerkReportsNoEnhanced(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4005)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	barrel, _ := colByLabel(cols, "Barrel")
+	fullBore, ok := plugByName(barrel, "Full Bore")
+	if !ok {
+		t.Fatalf("missing Full Bore plug; got %+v", barrel.Plugs)
+	}
+	// Roughly 8300 names across the real Manifest have no enhanced variant. The
+	// absence must read as 0, never as a guessed hash.
+	if fullBore.Base != 6703 || fullBore.Enhanced != 0 || fullBore.Ambiguous {
+		t.Errorf("Full Bore = %+v, want base 6703 / enhanced 0 / unambiguous", fullBore)
+	}
+}
+
+func TestGetWeaponPerks_EnhancedOnlyPerkReportsNoBase(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4005)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	trait, ok := colByLabel(cols, "Trait 1")
+	if !ok {
+		t.Fatalf("missing Trait 1 column; got %+v", cols)
+	}
+	p, ok := plugByName(trait, "Golden Tricorn Enhanced")
+	if !ok {
+		t.Fatalf("missing enhanced-only plug; got %+v", trait.Plugs)
+	}
+	if p.Base != 0 || p.Enhanced != 6704 || p.Ambiguous {
+		t.Errorf("enhanced-only plug = %+v, want base 0 / enhanced 6704 / unambiguous", p)
+	}
+}
+
+func TestGetWeaponPerks_DuplicateNameInPoolIsAmbiguous(t *testing.T) {
+	repo := perksRepo(t)
+	cols, err := repo.GetWeaponPerks(4005)
+	if err != nil {
+		t.Fatalf("GetWeaponPerks: %v", err)
+	}
+	mag, ok := colByLabel(cols, "Magazine")
+	if !ok {
+		t.Fatalf("missing Magazine column; got %+v", cols)
+	}
+	dropMag, ok := plugByName(mag, "Drop Mag")
+	if !ok {
+		t.Fatalf("missing Drop Mag plug; got %+v", mag.Plugs)
+	}
+	// Two distinct hashes under one name in one pool: the column still shows the
+	// name once, but the plug must not claim to identify it.
+	if !dropMag.Ambiguous {
+		t.Errorf("Drop Mag = %+v, want Ambiguous", dropMag)
+	}
+	if dropMag.Base != 6705 {
+		t.Errorf("Drop Mag base = %d, want the first-seen 6705", dropMag.Base)
 	}
 }

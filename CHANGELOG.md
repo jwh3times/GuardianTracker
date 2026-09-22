@@ -14,6 +14,44 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.9.0] - 2026-09-22
+
+### Added
+
+- A weapon's perk columns now carry the plug hashes behind each perk name, as an
+  index-aligned `plugs` array on every column of `GET /api/items/:hash/perks`.
+  Each entry names the perk and gives its unenhanced and enhanced plug hashes,
+  or `0` where that variant does not exist in the socket's pool. Existing fields
+  are unchanged, so current consumers need no update.
+
+  The columns already collapsed a perk's base and enhanced variants into a
+  single name — the two share one — and then discarded the hashes that made them
+  distinguishable. Keeping them is what lets a saved perk preference identify a
+  perk rather than merely spell it.
+
+  The Manifest links the two variants with no field in either direction, so the
+  pairing is derived: they share a display name and plug category and differ
+  only in tier and in their displayed item type ("Barrel" versus "Enhanced
+  Barrel"). Tier is not a reliable signal and the variants routinely share no
+  underlying perk, which leaves the displayed-type convention. That convention
+  is only trustworthy inside a single socket's own pool, because perk names
+  collide across the Manifest as a whole — "Outlaw" and "Psychohack" each name
+  several unrelated plugs. A perk that still does not resolve to one plug per
+  variant within its pool is flagged `ambiguous` instead of being resolved to
+  whichever plug happened to be listed first, so a caller can tell a real answer
+  from a guess.
+
+## [1.8.3] - 2026-09-21
+
+### Changed
+
+- Updated six frontend dependencies (Dependabot): `@tanstack/react-query`
+  5.102.8 → 5.103.1, `react-router` 8.3.1 → 8.4.0, `@types/node` 26.5.1 →
+  26.6.1, `jsdom` 30.0.1 → 30.1.0, `oxlint-tsgolint` 7.0.2001 → 7.0.2002, and
+  `prettier` 3.9.6 → 3.9.8. No application behavior changed. Run `npm install`
+  in `frontend/` before a local `format:check`; a stale local Prettier reports
+  clean while CI disagrees.
+
 ## [1.8.2] - 2026-09-20
 
 ### Fixed
@@ -1255,7 +1293,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.2...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.3...v1.9.0
+[1.8.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.7.7...v1.8.0
