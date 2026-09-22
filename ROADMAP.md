@@ -23,8 +23,9 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ### God-Roll and Owned-Roll Insights
 
-**Status:** Partially implemented — storage, validation, DIM-format import, and a
-REST surface exist; there is no frontend integration
+**Status:** Partially implemented — storage, validation, DIM-format import,
+matching saved targets against the owned weapons a fresh Bungie profile read
+reports, and a REST surface all exist; there is no frontend integration
 **Gate:** Owner approval of the player-facing surface
 **Likely size:** Large
 
@@ -59,13 +60,29 @@ Decided:
   perks, saved, with a per-line report of what happened and why. It is
   reachable over REST (`POST /api/rolltargets/import`) but not from the app yet
   — see below.
+- Matching saved targets against what the player owns is implemented
+  (`services/ownedrolls`, `services/rolltargets/matching.go`). A new package,
+  `services/ownedrolls`, reads the membership's vault, character inventories,
+  and equipped items (profile components 102/201/205) together with each
+  instanced item's socket states (component 305) and resolves the currently
+  seated plug in every perk column to its Manifest display name — the same
+  spelling and sorting a saved target uses, so the two compare directly.
+  Component 310 (which plugs could be swapped in) is deliberately not
+  requested; it answers a different question and was a large share of the
+  profile response the owner capture measured. `rolltargets.Matches` joins
+  that owned-roll read to the membership's saved targets: a target matches an
+  owned weapon when every perk it names is present on that weapon (extra
+  perks do not prevent a match), an any-weapon target is tested against every
+  owned weapon, and a target nothing satisfies is still reported rather than
+  dropped. `GET /api/rolltargets/matches` exposes the joined result, but
+  nothing in the app calls it yet.
 
 Still to settle:
 
-- A frontend page, data-access module, and UI to reach roll targets and DIM
-  import — the REST endpoints exist but nothing in the app calls them yet.
-- Where matches appear for the owner, and how an unmatched or unresolved perk is
-  presented honestly.
+- A frontend page, data-access module, and UI to reach roll targets, DIM
+  import, and the match report — the REST endpoints exist but nothing in the
+  app calls them yet.
+- How an unmatched or unresolved perk is presented honestly to the owner.
 
 ### Notifications and Digests
 

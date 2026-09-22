@@ -205,11 +205,12 @@ All wishlist endpoints (`GET/POST/PUT/DELETE /api/wishlist`) are JWT-protected a
 
 ## Roll target endpoints — data isolation
 
-All five roll target endpoints (`GET/POST /api/rolltargets`, `PATCH/DELETE
-/api/rolltargets/:id`, `POST /api/rolltargets/import`) are JWT-gated and read
-the caller's membership solely from the JWT claim — no route parameter or
-request-body field ever carries a membership, so there is no membership pair
-to mismatch and no `ownershipCheck` call. They are not part of the
+All six roll target endpoints (`GET/POST /api/rolltargets`, `PATCH/DELETE
+/api/rolltargets/:id`, `POST /api/rolltargets/import`, `GET
+/api/rolltargets/matches`) are JWT-gated and read the caller's membership
+solely from the JWT claim — no route parameter or request-body field ever
+carries a membership, so there is no membership pair to mismatch and no
+`ownershipCheck` call. They are not part of the
 collections/characters/catalysts/crafting/seals family that authorizes an
 explicit path membership pair.
 
@@ -227,6 +228,32 @@ explicit path membership pair.
 - Test: confirm the import endpoint accepts only raw text (no JSON wrapper
   expected) and that a well-formed DIM file from one account cannot affect
   another account's saved targets
+
+### Roll target match endpoint — inventory read
+
+`GET /api/rolltargets/matches` is the one roll-target route that makes a live
+Bungie call rather than only touching Postgres: `services/ownedrolls` fetches
+the caller's own profile inventory (vault, character inventories, character
+equipment, and every returned item's socket states — components
+102/201/205/305) using that user's own stored Bungie authorization, resolved
+from `membership_id`/`membership_type` in the JWT claims, never from a route
+or body field. There is still no cross-membership read path to test here — the
+authorization lookup and the profile call both key off the caller's own JWT.
+
+- Test: call without a JWT — must return 401 before any Bungie call
+- Test: an expired/absent Bungie authorization must return 401
+  `BUNGIE_REAUTH_REQUIRED` (`ownedrolls.ErrNoCredential`), not 503, and must not
+  attempt the profile call
+- Test: a profile response with the inventory or sockets component missing,
+  null, or disabled must return 503 `OWNED_ROLLS_UNAVAILABLE`
+  (`ownedrolls.ErrInventoryUnavailable`), never a match report built on partial
+  data
+- Test: the response body — matches and unmatched targets — must contain only
+  the caller's own saved targets and their own instance IDs; confirm no other
+  membership's roll target or inventory item can be reached through this route
+- Test: confirm the profile request never asks for component 310 (reusable
+  plugs); it is unrelated to what a weapon rolled and was a large share of the
+  response the feature's owner capture measured
 
 ## Bungie token encryption
 
