@@ -34,6 +34,7 @@ import (
 	"guardian-tracker/api-service/services/preferences"
 	"guardian-tracker/api-service/services/recommendations"
 	"guardian-tracker/api-service/services/records"
+	"guardian-tracker/api-service/services/rolltargets"
 	"guardian-tracker/api-service/services/search"
 	"guardian-tracker/api-service/services/weekly"
 	"guardian-tracker/api-service/services/wishlist"
@@ -190,6 +191,7 @@ func main() {
 	// constructed after Weekly because it reads live availability back out of
 	// it while Weekly reads saved item hashes from the Entries core above.
 	wishlistService := wishlist.NewService(wishlistEntries, itemsService, weeklyService, tokenStore)
+	rollTargetsService := rolltargets.NewService(adapters.NewRollTargetRepository(stores.RollTargets), itemsService)
 
 	// The complete Collections service — the outer of ADR 0018's two stages.
 	// It is constructed here, after Weekly and Records, because it reads live
@@ -286,6 +288,7 @@ func main() {
 			Health:      handlers.NewHealthHandler(manifestService, readinessPinger),
 			Auth:        handlers.NewAuthHandler(sessionIssuer, cfg, auditLogger),
 			Wishlist:    handlers.NewWishlistHandler(wishlistService),
+			RollTargets: handlers.NewRollTargetsHandler(rollTargetsService),
 			Preferences: handlers.NewPreferencesHandler(preferencesService),
 			User:        handlers.NewUserHandler(stores.Users, stores.Flags, appCache),
 			Admin:       handlers.NewAdminHandler(stores.Users, stores.Flags, appCache),

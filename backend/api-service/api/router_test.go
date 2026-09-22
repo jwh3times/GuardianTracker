@@ -73,6 +73,7 @@ func newTestRouter(t *testing.T, role int16, authzEnabled bool, disabledFlags ..
 			Health:      handlers.NewHealthHandler(nil, nil),
 			Auth:        handlers.NewAuthHandler(nil, cfg, nil),
 			Wishlist:    handlers.NewWishlistHandler(nil),
+			RollTargets: handlers.NewRollTargetsHandler(nil),
 			Preferences: handlers.NewPreferencesHandler(preferences.NewService(nil)),
 			User:        handlers.NewUserHandler(nil, nil, nil),
 			Admin:       handlers.NewAdminHandler(nil, nil, nil),
@@ -402,4 +403,29 @@ func membershipPath(path string, membershipType int) string {
 		}
 	}
 	return strings.Join(parts, "/")
+}
+
+// TestRollTargetRoutesAreRegistered guards the route table itself.
+//
+// TestEveryAPIRouteRequiresAuthentication walks whatever routes exist, so it
+// would pass just as happily if roll targets were registered nowhere. This is
+// the other half: they have to be there in the first place.
+func TestRollTargetRoutesAreRegistered(t *testing.T) {
+	r := newTestRouter(t, auth.RoleStandard, true)
+
+	registered := map[string]bool{}
+	for _, route := range r.Routes() {
+		registered[route.Method+" "+route.Path] = true
+	}
+	for _, want := range []string{
+		"GET /api/rolltargets",
+		"POST /api/rolltargets",
+		"PATCH /api/rolltargets/:id",
+		"DELETE /api/rolltargets/:id",
+		"POST /api/rolltargets/import",
+	} {
+		if !registered[want] {
+			t.Errorf("%s is not registered", want)
+		}
+	}
 }

@@ -203,6 +203,31 @@ All wishlist endpoints (`GET/POST/PUT/DELETE /api/wishlist`) are JWT-protected a
 - Test: attempt to `PUT /api/wishlist/<other_user_row_id>` or `DELETE` it — must be rejected (404 or 403), not modify another user's data
 - Test: `POST /api/wishlist` with a very large `notes` field — verify the handler enforces a length limit
 
+## Roll target endpoints — data isolation
+
+All five roll target endpoints (`GET/POST /api/rolltargets`, `PATCH/DELETE
+/api/rolltargets/:id`, `POST /api/rolltargets/import`) are JWT-gated and read
+the caller's membership solely from the JWT claim — no route parameter or
+request-body field ever carries a membership, so there is no membership pair
+to mismatch and no `ownershipCheck` call. They are not part of the
+collections/characters/catalysts/crafting/seals family that authorizes an
+explicit path membership pair.
+
+- Test: call any roll target endpoint without a JWT — must return 401
+- Test: attempt `PATCH` or `DELETE` on a `:id` belonging to another user's roll
+  target — must return 404, not 403 and not another user's data; the handler
+  deliberately collapses "missing" and "belongs to someone else" into the same
+  404 so a caller cannot use the status code to enumerate valid ids for another
+  account
+- Test: `POST /api/rolltargets` with a very large `notes` field or an
+  oversized/duplicate `perks` array — verify the handler enforces the domain's
+  validation limits (400), not a 500
+- Test: `POST /api/rolltargets/import` with a body over 4 MiB — must return 413
+  before parsing; with an empty body — must return 400
+- Test: confirm the import endpoint accepts only raw text (no JSON wrapper
+  expected) and that a well-formed DIM file from one account cannot affect
+  another account's saved targets
+
 ## Bungie token encryption
 
 Bungie OAuth authorization is stored AES-256-GCM encrypted in `bungie_tokens`.
