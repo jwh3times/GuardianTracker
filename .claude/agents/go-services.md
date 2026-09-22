@@ -131,7 +131,11 @@ backend/api-service/
   services/items/service.go            ← Cached weapon-perks lookup (GetWeaponPerks), canonical-facts cache
                                            (GetItem), and catalyst-pool lookup (GetCatalysts), each backed by its
                                            own boundedCache; all three cleared by InvalidateCache, called from
-                                           OnVersionChanged (ManifestObserver)
+                                           OnVersionChanged (ManifestObserver). PlugNames(hashes) resolves plug
+                                           item hashes to display names (uncached passthrough to
+                                           repo.GetItemsByHashes) — for an any-weapon roll target, which has no
+                                           weapon pool to resolve perk names against; a hash with no name or no
+                                           definition is simply absent from the result
   services/items/boundedcache.go       ← Unexported generic boundedCache[K,V]: size-capped, no TTL, keyed by
                                            item hash; not cache.Cache — cleared wholesale on manifest swap instead
                                            of expiring
@@ -204,25 +208,48 @@ backend/api-service/
                                            of the handler's former literal "Armor" — the same string the
                                            collections grid and item detail already show; every other
                                            wire field is unchanged.
-  services/rolltargets/rolltargets.go  ← Domain vocabulary: TargetID, StoredTarget, AddCommand,
-                                           UpdateCommand, the typed error set (ErrDuplicate, ErrNotFound,
-                                           ErrNoPerks, ErrTooManyPerks, ErrDuplicatePerk, ErrNotesTooLong,
-                                           ErrNotAWeapon, ErrUnknownPerk, ErrPerksUnavailable,
+  services/rolltargets/rolltargets.go  ← Domain vocabulary: TargetID, StoredTarget (ItemHash *uint32,
+                                           nil = any-weapon target; Wanted bool), AddCommand, UpdateCommand,
+                                           the typed error set (ErrDuplicate, ErrNotFound, ErrNoPerks,
+                                           ErrTooManyPerks, ErrDuplicatePerk, ErrNotesTooLong, ErrNotAWeapon,
+                                           ErrUnknownPerkName, ErrUnknownPerk, ErrPerksUnavailable,
                                            ErrUnavailable), the membership-keyed Repository port, and the
-                                           PerkPool port satisfied by *items.Service (GetWeaponPerks).
-                                           Perks are stored as display names, not plug hashes — a perk's
-                                           base/enhanced variants share one name but no manifest field
-                                           links the two hashes, so a stored hash would match only the
-                                           captured variant. No HTTP route or main.go wiring yet.
+                                           PerkPool port satisfied by *items.Service (GetWeaponPerks,
+                                           PlugNames). Perks are stored as display names, not plug hashes —
+                                           a perk's base/enhanced variants share one name but no manifest
+                                           field links the two hashes, so a stored hash would match only the
+                                           captured variant. A weapon may hold several saved rolls (only an
+                                           identical roll is refused, per migration 0010); there is no
+                                           HTTP route or main.go wiring yet.
   services/rolltargets/service.go      ← Service: List/Add/Update/Remove. Validates a target's perks
                                            against the weapon's own pool (PerkPool.GetWeaponPerks) before
                                            persisting — matching is case-insensitive but the stored value
                                            keeps the manifest's own spelling. A successful read of no perk
                                            columns (ErrNotAWeapon) and a failed read (ErrPerksUnavailable)
-                                           are separate outcomes and never collapse. Update reads the
-                                           current target first (Repository has no single-row read) so a
-                                           perks patch validates against the right weapon and a missing/
-                                           foreign target reports ErrNotFound before anything is written.
+                                           are separate outcomes and never collapse. An any-weapon target has
+                                           no pool, so its perk names are checked only for duplicates
+                                           (validateAnyWeaponPerks) — the import path is what resolves their
+                                           manifest spelling. Update reads the current target first
+                                           (Repository has no single-row read) so a perks patch validates
+                                           against the right weapon and a missing/foreign target reports
+                                           ErrNotFound before anything is written. Perks persist sorted
+                                           (AND-ed, so order carries no meaning) — what makes an identical
+                                           roll detectable as a duplicate.
+  services/rolltargets/dimfile.go      ← ParseDIMFile(text) DIMFile: pure syntax parser for DIM wish-list
+                                           text, transcribed from DIM's own parser
+                                           (DestinyItemManager/DIM, src/app/wishlists/wishlist-file.ts), not
+                                           its wiki. One DIMLine per line (Kind: roll/comment/unsupported/
+                                           malformed, plus Reason); resolves no hashes and consults no
+                                           manifest — a reported roll may still name a weapon or perk that
+                                           does not exist, which is the service's job to catch.
+  services/rolltargets/dimimport.go    ← Service.ImportDIM(ctx, membershipID, text) (ImportReport, error).
+                                           One ImportLine outcome per file line (imported/skipped/already
+                                           saved/unknown weapon/unresolved perk/unsupported/malformed/
+                                           failed) — nothing is summarised away. Resolves DIM's base perk
+                                           hashes through PerkColumn.Plugs (matching Base or Enhanced) and
+                                           refuses to resolve a plug marked Ambiguous. An any-weapon
+                                           (wildcard) line resolves its perk hashes straight against
+                                           PerkPool.PlugNames instead, since it has no weapon pool.
   services/preferences/service.go      ← Preferences owner: framed/personalized defaults, card-style
                                            validation, atomic field-presence patches, irreversible
                                            onboarding completion, and authoritative/degraded read provenance
@@ -270,16 +297,25 @@ backend/api-service/
   db/migrations/0008_digest_state.sql  ← Adds digest_state (ADR 0023): one row per user, keyed on
                                            user_id like user_preferences; holds the visit clock, the
                                            owned-hash snapshot, and the frozen current_visit_result
-  db/migrations/0009_roll_targets.sql  ← Adds roll_targets: one row per weapon per user, keyed on
-                                           user_id like wishlist_items; perks is a TEXT[] of display
-                                           names (1..10), notes <=500 chars, UNIQUE (user_id, item_hash)
+  db/migrations/0009_roll_targets.sql  ← Adds roll_targets: keyed on user_id like wishlist_items;
+                                           perks is a TEXT[] of display names (1..10), notes <=500 chars.
+                                           Its UNIQUE (user_id, item_hash) one-target-per-weapon rule is
+                                           replaced by 0010.
+  db/migrations/0010_roll_target_stance.sql ← Adds wanted BOOLEAN NOT NULL DEFAULT true (DIM's
+                                           undesirable/"trash" roll is wanted = false); makes item_hash
+                                           nullable (NULL = DIM's any-item wildcard); drops 0009's
+                                           UNIQUE (user_id, item_hash) and adds
+                                           UNIQUE NULLS NOT DISTINCT (user_id, item_hash, wanted, perks) —
+                                           a weapon may now hold several saved rolls, and only an
+                                           identical one is refused
   db/users.go                          ← UserStore — upsert, get, bump token_version, per-device sessions
                                            (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
   db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens
   db/wishlist.go, db/prefs.go          ← DB stores for wishlist and preferences
   db/rolltargets.go                    ← RollTargetStore — user-scoped GetUserID/List/Add/Update/Delete
-                                           over roll_targets; Update patches perks/notes independently
-                                           (nil argument leaves that column alone)
+                                           over roll_targets; Add takes a nil *uint32 hash for an
+                                           any-weapon target and a wanted bool; Update patches perks/notes
+                                           independently (nil argument leaves that column alone)
   db/digest.go                         ← DigestStore (ADR 0023) — user-keyed Get/TouchActivity/
                                            RecordUnavailableVisit/Save over digest_state
   db/adapters/wishlist.go              ← Membership-keyed wishlist.Repository adapter; hides internal user
@@ -287,8 +323,9 @@ backend/api-service/
                                            ErrDuplicate, pgx.ErrNoRows → ErrNotFound, db.ErrUnavailable →
                                            wishlist.ErrUnavailable) into wishlist's typed errors
   db/adapters/rolltargets.go           ← Membership-keyed rolltargets.Repository adapter; hides internal
-                                           user IDs and translates duplicate → ErrDuplicate,
-                                           pgx.ErrNoRows/not-found → ErrNotFound, db.ErrUnavailable →
+                                           user IDs and translates a unique-constraint violation →
+                                           ErrDuplicate ("this roll is already saved"), pgx.ErrNoRows/
+                                           not-found → ErrNotFound, db.ErrUnavailable →
                                            rolltargets.ErrUnavailable
   db/adapters/preferences.go           ← Membership-keyed Preferences repository adapter; hides internal
                                            user IDs and translates db.ErrUnavailable to the domain sentinel

@@ -100,11 +100,11 @@ PostgreSQL is the primary persistence layer for all user data. The api-service c
 | `db/users.go`                | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)                                                                                                                                                                                                                                                           |
 | `db/tokens.go`               | `BungieTokenStore` — encrypted Bungie OAuth authorization                                                                                                                                                                                                                                                                                                                                                      |
 | `db/wishlist.go`             | `WishlistStore` — wishlist CRUD, user-scoped; `BulkDelete`/`BulkSetPriority` for `POST /api/wishlist/bulk` (user-scoped `id = ANY($1)`; foreign/missing ids silently skipped; `RowsAffected()` drives the partial-success `{updated, skipped}` response). Consumed only through `db/adapters/wishlist.go` — `services/wishlist` never imports `db` directly                                                    |
-| `db/rolltargets.go`          | `RollTargetStore` — roll target CRUD, user-scoped (`GetUserID`, `List`, `Add`, `Update`, `Delete`); `perks` persists as a `TEXT[]` of display names, not plug hashes. Consumed only through `db/adapters/rolltargets.go`. Backs `services/rolltargets`, which has no HTTP route or `main.go` wiring yet                                                                                                        |
+| `db/rolltargets.go`          | `RollTargetStore` — roll target CRUD, user-scoped (`GetUserID`, `List`, `Add`, `Update`, `Delete`); `Add` takes a nullable `*uint32` hash (nil = any-weapon target) and a `wanted bool`; `perks` persists as a `TEXT[]` of display names, not plug hashes. Consumed only through `db/adapters/rolltargets.go`. Backs `services/rolltargets`, which has no HTTP route or `main.go` wiring yet                   |
 | `db/prefs.go`                | `PrefsStore` — missing-row signaling plus one field-presence-aware `Apply` statement that consumes service-owned initial values for atomic partial preference updates and irreversible onboarding completion                                                                                                                                                                                                   |
 | `db/digest.go`               | `DigestStore` (ADR 0023) — user-keyed `Get`/`TouchActivity`/`RecordUnavailableVisit`/`Save` over `digest_state`; `Save` atomically replaces the visit clock, the owned-hash snapshot, and the JSONB-encoded `current_visit_result` frozen for the current visit in one statement                                                                                                                               |
 | `db/adapters/wishlist.go`    | Membership-keyed adapter for `services/wishlist` (ADR 0019, slice B3); resolves the internal user ID, maps `wishlist.Priority` names to the stored `int16` rank, and translates PostgreSQL's failure vocabulary — `23505` → `ErrDuplicate`, `pgx.ErrNoRows` → `ErrNotFound`, `db.ErrUnavailable` → `wishlist.ErrUnavailable` — so `pgx`/`pgconn`/SQLSTATEs never reach `services/wishlist` or Gin              |
-| `db/adapters/rolltargets.go` | Membership-keyed adapter for `services/rolltargets`; resolves the internal user ID and translates PostgreSQL's failure vocabulary — duplicate → `ErrDuplicate`, `pgx.ErrNoRows`/not-found → `ErrNotFound`, `db.ErrUnavailable` → `rolltargets.ErrUnavailable`                                                                                                                                                  |
+| `db/adapters/rolltargets.go` | Membership-keyed adapter for `services/rolltargets`; resolves the internal user ID and translates PostgreSQL's failure vocabulary — unique-constraint violation → `ErrDuplicate` ("this roll is already saved"), `pgx.ErrNoRows`/not-found → `ErrNotFound`, `db.ErrUnavailable` → `rolltargets.ErrUnavailable`                                                                                                 |
 | `db/adapters/preferences.go` | Membership-keyed adapter for `services/preferences`; resolves the internal user ID, translates storage values, and maps `db.ErrUnavailable` to the Preferences domain sentinel                                                                                                                                                                                                                                 |
 | `db/adapters/digest.go`      | Membership-keyed adapter for `services/digest` (ADR 0023); resolves the internal user ID for every call and maps `db.ErrUnavailable` to `digest.ErrUnavailable`                                                                                                                                                                                                                                                |
 | `db/audit.go`                | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune                                                                                                                                                                                                                                                                  |
@@ -161,13 +161,18 @@ refresh_sessions (id, user_id FK, jti, expires_at, created_at, updated_at)
 -- Wishlist: user-scoped, enriched with manifest data at read time
 wishlist_items (id, user_id FK, item_hash, priority, notes, created_at, updated_at)
 
--- Roll targets (migration 0009): the player's own saved perk combination
--- wanted on a weapon. perks holds display names, not plug hashes (a perk's
--- base/enhanced variants share one name but no manifest field links the two
--- hashes). UNIQUE (user_id, item_hash) — one target per weapon per user.
+-- Roll targets (migrations 0009, 0010): the player's own saved perk
+-- combination on a weapon, or on no weapon at all. perks holds display names,
+-- not plug hashes (a perk's base/enhanced variants share one name but no
+-- manifest field links the two hashes) and is stored sorted, since perks are
+-- AND-ed and order carries no meaning. item_hash is nullable (NULL = DIM's
+-- any-item wildcard); wanted is false for DIM's undesirable/"trash" roll.
+-- 0010 replaces 0009's UNIQUE (user_id, item_hash) one-target-per-weapon rule
+-- with UNIQUE NULLS NOT DISTINCT (user_id, item_hash, wanted, perks) — a
+-- weapon may hold several saved rolls; only an identical one is refused.
 -- No HTTP route or main.go wiring yet.
-roll_targets (id, user_id FK, item_hash, perks TEXT[], notes,
-              created_at, updated_at)
+roll_targets (id, user_id FK, item_hash NULL, wanted BOOLEAN, perks TEXT[],
+              notes, created_at, updated_at)
 
 -- User preferences
 user_preferences (id, user_id FK, card_style, personalize, onboarded_at NULL,

@@ -23,7 +23,7 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ### God-Roll and Owned-Roll Insights
 
-**Status:** Partially implemented — storage and validation only
+**Status:** Partially implemented — storage, validation, and DIM-format import only
 **Gate:** Owner approval of the player-facing surface
 **Likely size:** Large
 
@@ -38,19 +38,26 @@ Decided:
   DIM's text format that they supply. Guardian Tracker bundles and fetches no
   third-party roll data.
 - It works against the signed-in owner's own profile and needs no public hosting.
-- Roll targets have storage and validation: a target is one weapon Item hash
-  plus the perk names that must all be present, checked against the weapon's own
-  perk pool before it saves (`services/rolltargets`). There is no HTTP route yet
+- Roll targets have storage and validation: a target names the perks that must
+  all be present, on a specific weapon Item hash or on no weapon at all (DIM's
+  any-item wildcard), and is either wanted or unwanted (DIM's undesirable/"trash"
+  roll). A named weapon's perks are checked against that weapon's own perk pool
+  before the target saves (`services/rolltargets`); a weapon may hold several
+  saved rolls, and only an identical roll is refused. There is no HTTP route yet
   and no way for a player to reach this from the app.
 - A target names perks by display name rather than by the game's plug
   identifier. An owner capture established that a perk's base and enhanced
   variants are two identifiers sharing one name, linked by no manifest field, so
   an identifier would stop matching as soon as an enhanced copy dropped.
+- Import parsing for a DIM-format file is implemented
+  (`services/rolltargets/dimfile.go`, `dimimport.go`): every line of an
+  uploaded file is parsed and, where it names a real weapon and resolvable
+  perks, saved, with a per-line report of what happened and why. It is not
+  reachable from the app yet — see below.
 
 Still to settle:
 
-- Import parsing for a DIM-format file, and the endpoint(s) that expose roll
-  targets to the frontend.
+- The endpoint(s) that expose roll targets and DIM import to the frontend.
 - Where matches appear for the owner, and how an unmatched or unresolved perk is
   presented honestly.
 
