@@ -207,6 +207,25 @@ backend/api-service/
                                            of the handler's former literal "Armor" — the same string the
                                            collections grid and item detail already show; every other
                                            wire field is unchanged.
+  services/rolltargets/rolltargets.go  ← Domain vocabulary: TargetID, StoredTarget, AddCommand,
+                                           UpdateCommand, the typed error set (ErrDuplicate, ErrNotFound,
+                                           ErrNoPerks, ErrTooManyPerks, ErrDuplicatePerk, ErrNotesTooLong,
+                                           ErrNotAWeapon, ErrUnknownPerk, ErrPerksUnavailable,
+                                           ErrUnavailable), the membership-keyed Repository port, and the
+                                           PerkPool port satisfied by *items.Service (GetWeaponPerks).
+                                           Perks are stored as display names, not plug hashes — a perk's
+                                           base/enhanced variants share one name but no manifest field
+                                           links the two hashes, so a stored hash would match only the
+                                           captured variant. No HTTP route or main.go wiring yet.
+  services/rolltargets/service.go      ← Service: List/Add/Update/Remove. Validates a target's perks
+                                           against the weapon's own pool (PerkPool.GetWeaponPerks) before
+                                           persisting — matching is case-insensitive but the stored value
+                                           keeps the manifest's own spelling. A successful read of no perk
+                                           columns (ErrNotAWeapon) and a failed read (ErrPerksUnavailable)
+                                           are separate outcomes and never collapse. Update reads the
+                                           current target first (Repository has no single-row read) so a
+                                           perks patch validates against the right weapon and a missing/
+                                           foreign target reports ErrNotFound before anything is written.
   services/preferences/service.go      ← Preferences owner: framed/personalized defaults, card-style
                                            validation, atomic field-presence patches, irreversible
                                            onboarding completion, and authoritative/degraded read provenance
@@ -254,16 +273,26 @@ backend/api-service/
   db/migrations/0008_digest_state.sql  ← Adds digest_state (ADR 0023): one row per user, keyed on
                                            user_id like user_preferences; holds the visit clock, the
                                            owned-hash snapshot, and the frozen current_visit_result
+  db/migrations/0009_roll_targets.sql  ← Adds roll_targets: one row per weapon per user, keyed on
+                                           user_id like wishlist_items; perks is a TEXT[] of display
+                                           names (1..10), notes <=500 chars, UNIQUE (user_id, item_hash)
   db/users.go                          ← UserStore — upsert, get, bump token_version, per-device sessions
                                            (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
   db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens
   db/wishlist.go, db/prefs.go          ← DB stores for wishlist and preferences
+  db/rolltargets.go                    ← RollTargetStore — user-scoped GetUserID/List/Add/Update/Delete
+                                           over roll_targets; Update patches perks/notes independently
+                                           (nil argument leaves that column alone)
   db/digest.go                         ← DigestStore (ADR 0023) — user-keyed Get/TouchActivity/
                                            RecordUnavailableVisit/Save over digest_state
   db/adapters/wishlist.go              ← Membership-keyed wishlist.Repository adapter; hides internal user
                                            IDs and translates PostgreSQL's failure vocabulary (23505 →
                                            ErrDuplicate, pgx.ErrNoRows → ErrNotFound, db.ErrUnavailable →
                                            wishlist.ErrUnavailable) into wishlist's typed errors
+  db/adapters/rolltargets.go           ← Membership-keyed rolltargets.Repository adapter; hides internal
+                                           user IDs and translates duplicate → ErrDuplicate,
+                                           pgx.ErrNoRows/not-found → ErrNotFound, db.ErrUnavailable →
+                                           rolltargets.ErrUnavailable
   db/adapters/preferences.go           ← Membership-keyed Preferences repository adapter; hides internal
                                            user IDs and translates db.ErrUnavailable to the domain sentinel
   db/adapters/digest.go                ← Membership-keyed digest.Repository adapter (ADR 0023); hides
@@ -408,7 +437,7 @@ Sentinel errors:
 
 `db.NewStores(pool)` never returns a nil field. With a `nil` pool it returns
 degraded implementations of every store interface (`UserRepo`, `TokenRepo`,
-`WishlistRepo`, `PrefsRepo`, `DigestRepo`, `FlagRepo`, `AuditRepo`, `Pinger`)
+`WishlistRepo`, `RollTargetRepo`, `PrefsRepo`, `DigestRepo`, `FlagRepo`, `AuditRepo`, `Pinger`)
 whose every method returns `db.ErrUnavailable`. There is no store nil-guard convention.
 The admin/audit/account handlers still call a store directly and handle the
 error like any other:
