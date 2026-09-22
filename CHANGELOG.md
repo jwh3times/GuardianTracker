@@ -14,6 +14,26 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.12.0] - 2026-09-22
+
+### Added
+
+- Roll targets are now reachable over the API. Saved rolls can be listed,
+  created, edited and deleted, and a DIM-format file can be uploaded to import
+  in bulk. The import response reports every line of the file, so a line that
+  did not come across says why rather than quietly going missing.
+
+  A roll may name a weapon or apply to any weapon, and may be marked wanted or
+  unwanted; leaving the stance out means wanted. Creating a roll the weapon
+  cannot produce is refused rather than saved to never match.
+
+  Every endpoint acts only on the signed-in player's own saved rolls, taken from
+  the session rather than from anything the request supplies. A roll belonging
+  to someone else is reported as missing, the same as one that does not exist.
+
+  There is still no screen for this — the player-facing surface is separate
+  work.
+
 ## [1.11.0] - 2026-09-22
 
 ### Added
@@ -1363,7 +1383,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.1...v1.10.2
 [1.10.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.0...v1.10.1

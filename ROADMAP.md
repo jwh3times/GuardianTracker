@@ -23,7 +23,8 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ### God-Roll and Owned-Roll Insights
 
-**Status:** Partially implemented — storage, validation, and DIM-format import only
+**Status:** Partially implemented — storage, validation, DIM-format import, and a
+REST surface exist; there is no frontend integration
 **Gate:** Owner approval of the player-facing surface
 **Likely size:** Large
 
@@ -43,8 +44,11 @@ Decided:
   any-item wildcard), and is either wanted or unwanted (DIM's undesirable/"trash"
   roll). A named weapon's perks are checked against that weapon's own perk pool
   before the target saves (`services/rolltargets`); a weapon may hold several
-  saved rolls, and only an identical roll is refused. There is no HTTP route yet
-  and no way for a player to reach this from the app.
+  saved rolls, and only an identical roll is refused. `GET/POST /api/rolltargets`,
+  `PATCH/DELETE /api/rolltargets/:id`, and `POST /api/rolltargets/import` expose
+  this over REST, membership-scoped through the caller's JWT alone. There is
+  still no way for a player to reach this from the app — no frontend page,
+  data-access module, or UI.
 - A target names perks by display name rather than by the game's plug
   identifier. An owner capture established that a perk's base and enhanced
   variants are two identifiers sharing one name, linked by no manifest field, so
@@ -52,12 +56,14 @@ Decided:
 - Import parsing for a DIM-format file is implemented
   (`services/rolltargets/dimfile.go`, `dimimport.go`): every line of an
   uploaded file is parsed and, where it names a real weapon and resolvable
-  perks, saved, with a per-line report of what happened and why. It is not
-  reachable from the app yet — see below.
+  perks, saved, with a per-line report of what happened and why. It is
+  reachable over REST (`POST /api/rolltargets/import`) but not from the app yet
+  — see below.
 
 Still to settle:
 
-- The endpoint(s) that expose roll targets and DIM import to the frontend.
+- A frontend page, data-access module, and UI to reach roll targets and DIM
+  import — the REST endpoints exist but nothing in the app calls them yet.
 - Where matches appear for the owner, and how an unmatched or unresolved perk is
   presented honestly.
 
