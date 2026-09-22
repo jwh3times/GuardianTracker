@@ -40,6 +40,9 @@ export interface ItemPerks {
  */
 function toItemPerks(p: APIItemPerks): ItemPerks {
   return {
+    // `plugs` is deliberately not projected: it carries the roll-target plug
+    // hashes and nothing renders them yet. Adding it here would put an unused
+    // field in the view model; the wire type keeps it so the contract stays honest.
     perkColumns: (p.perkColumns ?? []).map((c) => ({
       role: c.role,
       label: c.label,

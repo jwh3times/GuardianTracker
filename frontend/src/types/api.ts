@@ -73,11 +73,25 @@ export interface APIItemView {
   description: string;
 }
 
+/** One perk plug's hashes (mirrors manifest.PerkPlug). */
+export interface APIPerkPlug {
+  name: string;
+  /** The unenhanced variant, or 0 when the pool holds only an enhanced one. */
+  base: number;
+  /** The enhanced variant, or 0 when the perk has none in this pool. */
+  enhanced: number;
+  /** The name did not resolve to one plug per variant; base/enhanced are a
+   * sample, not an answer. Do not treat an ambiguous plug as identifying. */
+  ambiguous: boolean;
+}
+
 /** One perk column in a weapon's possible-roll pool (mirrors manifest.PerkColumn). */
 export interface APIPerkColumn {
   role: string; // intrinsic | barrel | magazine | trait | origin
   label: string; // "Intrinsic", "Barrel", "Trait 1", …
   perks: string[];
+  /** Index-aligned with `perks`: plugs[i] carries the hashes behind perks[i]. */
+  plugs: APIPerkPlug[];
 }
 
 /** One catalyst entry attached to a weapon (mirrors manifest catalyst records). */
