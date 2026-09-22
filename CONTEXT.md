@@ -178,11 +178,19 @@ is absent from a successful current Item lookup is an explicit unknown-Item
 tombstone, not a dropped row. Owned by `services/wishlist`.
 
 **Roll target** — the player's own saved perk combination wanted on a specific
-weapon. Distinct from a _Wish list entry_, which is a wanted Item hash with no
-perk dimension; the two are separate concepts and neither name covers the other.
-Two words, lowercase, in prose; `rolltarget` as one word in code and routes.
+weapon: one weapon Item hash plus the perk names that must all be present. One
+target per weapon per user; a second wanted roll for the same weapon is an edit.
+Distinct from a _Wish list entry_, which is a wanted Item hash with no perk
+dimension; the two are separate concepts and neither name covers the other.
+Two words, lowercase, in prose; `rolltargets` in code, `roll_targets` in SQL.
 A file imported from Destiny Item Manager is a _DIM-format file_ — never a
 "wish list", whatever DIM itself calls it.
+
+A target names perks by **display name, not plug hash**. A perk's base and
+enhanced variants are two hashes sharing one name and the Manifest links them by
+no field of its own, so a stored hash would match only the variant it was
+captured from — and an enhanced drop would silently stop matching. See
+_Perk plug_.
 
 **Perk plug** — one distinct perk of a weapon's socket column, carrying the base
 and enhanced plug hashes that the column's name-level dedupe collapses. The
@@ -258,6 +266,13 @@ interface; the complete Wish list service is constructed later around it.
 of Wish list reads and mutations. It completes stored entries with canonical
 Item facts and best-effort availability while preserving explicit unknown-Item
 tombstones. See [ADR 0019](./docs/adr/0019-own-wish-list-and-preferences.md).
+
+**Roll targets service** (`rolltargets.Service`) — the handler-facing owner of
+Roll target reads and mutations. It validates a target against the weapon's own
+perk pool before persisting, so a saved target is one that can actually match;
+a perk the weapon cannot roll is refused rather than stored to never match.
+A successful read of no perk columns (not a weapon) and a failed read (pool
+unavailable) are separate outcomes and never collapse into one another.
 
 **Preferences service** (`preferences.Service`) — the handler-facing owner of
 preference defaults, validation, atomic partial updates, and irreversible

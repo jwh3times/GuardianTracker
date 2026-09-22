@@ -23,8 +23,8 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ### God-Roll and Owned-Roll Insights
 
-**Status:** Not implemented
-**Gate:** Owner item-instance capture, then an approved roll-targets data design
+**Status:** Partially implemented — storage and validation only
+**Gate:** Owner approval of the player-facing surface
 **Likely size:** Large
 
 Show owned weapon rolls for the selected Destiny membership and compare them to
@@ -38,13 +38,21 @@ Decided:
   DIM's text format that they supply. Guardian Tracker bundles and fetches no
   third-party roll data.
 - It works against the signed-in owner's own profile and needs no public hosting.
+- Roll targets have storage and validation: a target is one weapon Item hash
+  plus the perk names that must all be present, checked against the weapon's own
+  perk pool before it saves (`services/rolltargets`). There is no HTTP route yet
+  and no way for a player to reach this from the app.
+- A target names perks by display name rather than by the game's plug
+  identifier. An owner capture established that a perk's base and enhanced
+  variants are two identifiers sharing one name, linked by no manifest field, so
+  an identifier would stop matching as soon as an enhanced copy dropped.
 
 Still to settle:
 
-- How Bungie's owned-item sockets and selectable perk columns (profile components
-  102, 201, 205, 300, 305, and 310) appear on random-roll, crafted, and enhanced
-  weapons. This needs a fresh owner capture before design.
-- Matching rules, storage, and import parsing for roll targets.
+- Import parsing for a DIM-format file, and the endpoint(s) that expose roll
+  targets to the frontend.
+- Where matches appear for the owner, and how an unmatched or unresolved perk is
+  presented honestly.
 
 ### Notifications and Digests
 

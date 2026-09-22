@@ -11,14 +11,15 @@ import "github.com/jackc/pgx/v5/pgxpool"
 // whether persistence exists — starting a pruner, or deciding whether role
 // claims are authoritative — rather than nil-testing a field.
 type Stores struct {
-	Users    UserRepo
-	Tokens   TokenRepo
-	Wishlist WishlistRepo
-	Prefs    PrefsRepo
-	Digest   DigestRepo
-	Flags    FlagRepo
-	Audit    AuditRepo
-	Pinger   Pinger
+	Users       UserRepo
+	Tokens      TokenRepo
+	Wishlist    WishlistRepo
+	RollTargets RollTargetRepo
+	Prefs       PrefsRepo
+	Digest      DigestRepo
+	Flags       FlagRepo
+	Audit       AuditRepo
+	Pinger      Pinger
 
 	available bool
 }
@@ -29,25 +30,27 @@ func (s *Stores) Available() bool { return s != nil && s.available }
 func NewStores(pool *pgxpool.Pool) *Stores {
 	if pool == nil {
 		return &Stores{
-			Users:    degradedUsers{},
-			Tokens:   degradedTokens{},
-			Wishlist: degradedWishlist{},
-			Prefs:    degradedPrefs{},
-			Digest:   degradedDigest{},
-			Flags:    degradedFlags{},
-			Audit:    degradedAudit{},
-			Pinger:   degradedPinger{},
+			Users:       degradedUsers{},
+			Tokens:      degradedTokens{},
+			Wishlist:    degradedWishlist{},
+			RollTargets: degradedRollTargets{},
+			Prefs:       degradedPrefs{},
+			Digest:      degradedDigest{},
+			Flags:       degradedFlags{},
+			Audit:       degradedAudit{},
+			Pinger:      degradedPinger{},
 		}
 	}
 	return &Stores{
-		Users:     NewUserStore(pool),
-		Tokens:    NewBungieTokenStore(pool),
-		Wishlist:  NewWishlistStore(pool),
-		Prefs:     NewPrefsStore(pool),
-		Digest:    NewDigestStore(pool),
-		Flags:     NewFlagStore(pool),
-		Audit:     NewAuditStore(pool),
-		Pinger:    pool,
-		available: true,
+		Users:       NewUserStore(pool),
+		Tokens:      NewBungieTokenStore(pool),
+		Wishlist:    NewWishlistStore(pool),
+		RollTargets: NewRollTargetStore(pool),
+		Prefs:       NewPrefsStore(pool),
+		Digest:      NewDigestStore(pool),
+		Flags:       NewFlagStore(pool),
+		Audit:       NewAuditStore(pool),
+		Pinger:      pool,
+		available:   true,
 	}
 }

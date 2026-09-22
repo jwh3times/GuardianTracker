@@ -14,6 +14,32 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.10.0] - 2026-09-22
+
+### Added
+
+- Guardian Tracker can now store **roll targets** — the perk combination you
+  want on a specific weapon, as opposed to a wish list entry, which saves a
+  wanted item with no perk dimension. A target names one weapon and the perks
+  that must all be present on it; one target per weapon, so wanting a different
+  roll on the same gun is an edit rather than a second entry.
+
+  A target is checked against the weapon's own perk pool before it is saved, so
+  a perk the weapon cannot roll is refused outright instead of being stored to
+  quietly never match. Two outcomes that look alike are kept apart: an item that
+  simply is not a weapon with perk columns, and a perk pool that could not be
+  read at all. Notes are limited to 500 characters, counted the way the wish
+  list counts them, so accented characters and emoji cost one each.
+
+  Targets record perk **names**, not the game's internal plug identifiers. A
+  perk's normal and enhanced versions are two different identifiers sharing one
+  name, with nothing in the manifest linking them, so storing an identifier
+  would have quietly stopped matching the moment an enhanced copy dropped.
+
+  Nothing is exposed over the API yet — this release adds the storage and the
+  rules. Running without a database reports roll targets as unavailable rather
+  than as empty.
+
 ## [1.9.0] - 2026-09-22
 
 ### Added
@@ -1293,7 +1319,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.3...v1.9.0
 [1.8.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.1...v1.8.2

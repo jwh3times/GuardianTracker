@@ -56,6 +56,14 @@ type WishlistRepo interface {
 	BulkSetPriority(ctx context.Context, userID int64, ids []int64, prio int16) (int64, error)
 }
 
+type RollTargetRepo interface {
+	GetUserID(ctx context.Context, membershipID string) (int64, error)
+	List(ctx context.Context, userID int64) ([]RollTarget, error)
+	Add(ctx context.Context, userID int64, hash uint32, perks []string, notes string) (*RollTarget, error)
+	Update(ctx context.Context, userID, id int64, perks *[]string, notes *string) (*RollTarget, error)
+	Delete(ctx context.Context, userID, id int64) (bool, error)
+}
+
 type PrefsRepo interface {
 	GetUserID(ctx context.Context, membershipID string) (int64, error)
 	Get(ctx context.Context, userID int64) (*UserPreferences, error)
@@ -169,6 +177,24 @@ func (degradedWishlist) BulkDelete(context.Context, int64, []int64) (int64, erro
 }
 func (degradedWishlist) BulkSetPriority(context.Context, int64, []int64, int16) (int64, error) {
 	return 0, ErrUnavailable
+}
+
+type degradedRollTargets struct{}
+
+func (degradedRollTargets) GetUserID(context.Context, string) (int64, error) {
+	return 0, ErrUnavailable
+}
+func (degradedRollTargets) List(context.Context, int64) ([]RollTarget, error) {
+	return nil, ErrUnavailable
+}
+func (degradedRollTargets) Add(context.Context, int64, uint32, []string, string) (*RollTarget, error) {
+	return nil, ErrUnavailable
+}
+func (degradedRollTargets) Update(context.Context, int64, int64, *[]string, *string) (*RollTarget, error) {
+	return nil, ErrUnavailable
+}
+func (degradedRollTargets) Delete(context.Context, int64, int64) (bool, error) {
+	return false, ErrUnavailable
 }
 
 type degradedPrefs struct{}
