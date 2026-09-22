@@ -28,7 +28,8 @@ type fakeRollTargetStore struct {
 
 	gotUserID int64
 	gotID     int64
-	gotHash   uint32
+	gotHash   *uint32
+	gotWanted bool
 	gotPerks  []string
 	gotNotes  string
 	gotPatch  *[]string
@@ -43,8 +44,8 @@ func (f *fakeRollTargetStore) List(_ context.Context, userID int64) ([]db.RollTa
 	return f.rows, f.err
 }
 
-func (f *fakeRollTargetStore) Add(_ context.Context, userID int64, hash uint32, perks []string, notes string) (*db.RollTarget, error) {
-	f.gotUserID, f.gotHash, f.gotPerks, f.gotNotes = userID, hash, perks, notes
+func (f *fakeRollTargetStore) Add(_ context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes string) (*db.RollTarget, error) {
+	f.gotUserID, f.gotHash, f.gotWanted, f.gotPerks, f.gotNotes = userID, hash, wanted, perks, notes
 	return f.row, f.err
 }
 
@@ -59,8 +60,9 @@ func (f *fakeRollTargetStore) Delete(_ context.Context, userID, id int64) (bool,
 }
 
 func TestRollTargetRepository_ResolvesMembershipToUserID(t *testing.T) {
+	hash := uint32(1000)
 	store := &fakeRollTargetStore{userID: 42, rows: []db.RollTarget{
-		{ID: 1, ItemHash: 1000, Perks: []string{"Outlaw"}, Notes: "n", CreatedAt: time.Unix(5, 0)},
+		{ID: 1, ItemHash: &hash, Wanted: true, Perks: []string{"Outlaw"}, Notes: "n", CreatedAt: time.Unix(5, 0)},
 	}}
 	got, err := NewRollTargetRepository(store).List(context.Background(), "membership-1")
 	if err != nil {
@@ -69,16 +71,20 @@ func TestRollTargetRepository_ResolvesMembershipToUserID(t *testing.T) {
 	if store.gotUserID != 42 {
 		t.Errorf("store saw user id %d, want 42", store.gotUserID)
 	}
-	if len(got) != 1 || got[0].ID != 1 || got[0].ItemHash != 1000 || got[0].Perks[0] != "Outlaw" {
+	if len(got) != 1 || got[0].ID != 1 || got[0].ItemHash == nil || *got[0].ItemHash != 1000 {
 		t.Errorf("targets = %+v", got)
+	}
+	if !got[0].Wanted || got[0].Perks[0] != "Outlaw" {
+		t.Errorf("target = %+v", got[0])
 	}
 }
 
 // A unique-constraint violation is a domain answer, not a driver detail.
 func TestRollTargetRepository_DuplicateBecomesDomainError(t *testing.T) {
 	store := &fakeRollTargetStore{userID: 1, err: &pgconn.PgError{Code: "23505"}}
+	hash := uint32(1000)
 	_, err := NewRollTargetRepository(store).Add(context.Background(), "m", rolltargets.AddCommand{
-		ItemHash: 1000, Perks: []string{"Outlaw"},
+		ItemHash: &hash, Wanted: true, Perks: []string{"Outlaw"},
 	})
 	if !errors.Is(err, rolltargets.ErrDuplicate) {
 		t.Fatalf("err = %v, want ErrDuplicate", err)

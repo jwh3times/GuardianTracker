@@ -15,7 +15,7 @@ import (
 //
 // Two things stop here and go no further: the internal Guardian Tracker user
 // id, and PostgreSQL's vocabulary for failure. A unique-constraint violation
-// becomes "this weapon already has a target", a missing row becomes "not
+// becomes "this roll is already saved", a missing row becomes "not
 // found", and a missing database becomes "unavailable" — because the domain
 // acts on those distinctions and no domain code should need a SQLSTATE to find
 // them.
@@ -47,7 +47,7 @@ func (r *rollTargetRepository) Add(ctx context.Context, membershipID string, tar
 	if err != nil {
 		return rolltargets.StoredTarget{}, err
 	}
-	row, err := r.store.Add(ctx, userID, target.ItemHash, target.Perks, target.Notes)
+	row, err := r.store.Add(ctx, userID, target.ItemHash, target.Wanted, target.Perks, target.Notes)
 	if err != nil {
 		if db.IsDuplicate(err) {
 			return rolltargets.StoredTarget{}, rolltargets.ErrDuplicate
@@ -101,6 +101,7 @@ func storedTarget(row *db.RollTarget) rolltargets.StoredTarget {
 	return rolltargets.StoredTarget{
 		ID:        rolltargets.TargetID(row.ID),
 		ItemHash:  row.ItemHash,
+		Wanted:    row.Wanted,
 		Perks:     row.Perks,
 		Notes:     row.Notes,
 		CreatedAt: row.CreatedAt,

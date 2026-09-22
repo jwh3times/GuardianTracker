@@ -3,6 +3,7 @@ package rolltargets
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -58,6 +59,17 @@ type fakePool struct {
 
 func (f fakePool) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) { return f.cols, f.err }
 
+func (f fakePool) PlugNames(hashes []uint32) (map[uint32]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := map[uint32]string{}
+	for _, h := range hashes {
+		out[h] = "Plug " + strconv.FormatUint(uint64(h), 10)
+	}
+	return out, nil
+}
+
 func testPool() fakePool {
 	return fakePool{cols: []manifest.PerkColumn{
 		{Role: "barrel", Label: "Barrel", Perks: []string{"Smallbore", "Full Bore"}},
@@ -68,16 +80,22 @@ func testPool() fakePool {
 
 func svc(repo Repository, pool PerkPool) *Service { return NewService(repo, pool) }
 
+// weapon is shorthand for a target that names a weapon.
+func weapon(h uint32) *uint32 { return &h }
+
 func TestAdd_PersistsCanonicalPerkSpelling(t *testing.T) {
 	repo := &fakeRepo{}
 	// The user types the perk in lower case; the manifest's spelling is what is
 	// stored, so a target reads back the way the game writes it.
 	got, err := svc(repo, testPool()).Add(context.Background(), "m1", AddCommand{
-		ItemHash: 1000, Perks: []string{"  kill clip ", "OUTLAW"},
+		ItemHash: weapon(1000), Perks: []string{"  kill clip ", "OUTLAW"},
 	})
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
+	// Canonical manifest spelling, and sorted: the perks are AND-ed, so their
+	// order carries no meaning and normalising it is what makes one roll
+	// recognisable as already saved.
 	want := []string{"Kill Clip", "Outlaw"}
 	if len(got.Perks) != 2 || got.Perks[0] != want[0] || got.Perks[1] != want[1] {
 		t.Errorf("stored perks = %v, want %v", got.Perks, want)
@@ -90,7 +108,7 @@ func TestAdd_PersistsCanonicalPerkSpelling(t *testing.T) {
 func TestAdd_RejectsPerkTheWeaponCannotRoll(t *testing.T) {
 	repo := &fakeRepo{}
 	_, err := svc(repo, testPool()).Add(context.Background(), "m1", AddCommand{
-		ItemHash: 1000, Perks: []string{"Outlaw", "Recombination"},
+		ItemHash: weapon(1000), Perks: []string{"Outlaw", "Recombination"},
 	})
 	if !errors.Is(err, ErrUnknownPerk) {
 		t.Fatalf("err = %v, want ErrUnknownPerk", err)
@@ -114,7 +132,7 @@ func TestAdd_RejectsEmptyAndOversizedPerkSets(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := svc(&fakeRepo{}, testPool()).Add(context.Background(), "m1",
-				AddCommand{ItemHash: 1000, Perks: tc.perks})
+				AddCommand{ItemHash: weapon(1000), Perks: tc.perks})
 			if !errors.Is(err, tc.want) {
 				t.Errorf("err = %v, want %v", err, tc.want)
 			}
@@ -126,7 +144,7 @@ func TestAdd_RejectsEmptyAndOversizedPerkSets(t *testing.T) {
 		big[i] = "Outlaw"
 	}
 	_, err := svc(&fakeRepo{}, testPool()).Add(context.Background(), "m1",
-		AddCommand{ItemHash: 1000, Perks: big})
+		AddCommand{ItemHash: weapon(1000), Perks: big})
 	if !errors.Is(err, ErrTooManyPerks) {
 		t.Errorf("oversized err = %v, want ErrTooManyPerks", err)
 	}
@@ -134,7 +152,7 @@ func TestAdd_RejectsEmptyAndOversizedPerkSets(t *testing.T) {
 
 func TestAdd_RejectsTheSamePerkTwice(t *testing.T) {
 	_, err := svc(&fakeRepo{}, testPool()).Add(context.Background(), "m1", AddCommand{
-		ItemHash: 1000, Perks: []string{"Outlaw", "outlaw"},
+		ItemHash: weapon(1000), Perks: []string{"Outlaw", "outlaw"},
 	})
 	if !errors.Is(err, ErrDuplicatePerk) {
 		t.Fatalf("err = %v, want ErrDuplicatePerk", err)
@@ -145,11 +163,11 @@ func TestAdd_RejectsOverlongNotes(t *testing.T) {
 	// Counted in code points: 500 multi-byte runes are legal, 501 are not.
 	legal := strings.Repeat("é", MaxNoteRunes)
 	if _, err := svc(&fakeRepo{}, testPool()).Add(context.Background(), "m1",
-		AddCommand{ItemHash: 1000, Perks: []string{"Outlaw"}, Notes: legal}); err != nil {
+		AddCommand{ItemHash: weapon(1000), Perks: []string{"Outlaw"}, Notes: legal}); err != nil {
 		t.Fatalf("500 runes rejected: %v", err)
 	}
 	_, err := svc(&fakeRepo{}, testPool()).Add(context.Background(), "m1",
-		AddCommand{ItemHash: 1000, Perks: []string{"Outlaw"}, Notes: legal + "é"})
+		AddCommand{ItemHash: weapon(1000), Perks: []string{"Outlaw"}, Notes: legal + "é"})
 	if !errors.Is(err, ErrNotesTooLong) {
 		t.Errorf("err = %v, want ErrNotesTooLong", err)
 	}
@@ -159,20 +177,20 @@ func TestAdd_RejectsOverlongNotes(t *testing.T) {
 // not. They must never collapse into one another.
 func TestAdd_SeparatesNotAWeaponFromUnreadablePool(t *testing.T) {
 	_, err := svc(&fakeRepo{}, fakePool{cols: nil}).Add(context.Background(), "m1",
-		AddCommand{ItemHash: 42, Perks: []string{"Outlaw"}})
+		AddCommand{ItemHash: weapon(42), Perks: []string{"Outlaw"}})
 	if !errors.Is(err, ErrNotAWeapon) {
 		t.Errorf("empty pool err = %v, want ErrNotAWeapon", err)
 	}
 
 	_, err = svc(&fakeRepo{}, fakePool{err: errors.New("manifest warming")}).Add(
-		context.Background(), "m1", AddCommand{ItemHash: 1000, Perks: []string{"Outlaw"}})
+		context.Background(), "m1", AddCommand{ItemHash: weapon(1000), Perks: []string{"Outlaw"}})
 	if !errors.Is(err, ErrPerksUnavailable) {
 		t.Errorf("failed read err = %v, want ErrPerksUnavailable", err)
 	}
 }
 
 func TestUpdate_ValidatesReplacementPerksAgainstTheStoredWeapon(t *testing.T) {
-	repo := &fakeRepo{targets: []StoredTarget{{ID: 7, ItemHash: 1000, Perks: []string{"Outlaw"}}}}
+	repo := &fakeRepo{targets: []StoredTarget{{ID: 7, ItemHash: weapon(1000), Perks: []string{"Outlaw"}}}}
 	perks := []string{"Kill Clip"}
 	if _, err := svc(repo, testPool()).Update(context.Background(), "m1", 7,
 		UpdateCommand{Perks: &perks}); err != nil {
@@ -190,7 +208,7 @@ func TestUpdate_ValidatesReplacementPerksAgainstTheStoredWeapon(t *testing.T) {
 }
 
 func TestUpdate_ForeignTargetIsNotFoundBeforeAnyWrite(t *testing.T) {
-	repo := &fakeRepo{targets: []StoredTarget{{ID: 7, ItemHash: 1000}}}
+	repo := &fakeRepo{targets: []StoredTarget{{ID: 7, ItemHash: weapon(1000)}}}
 	perks := []string{"Outlaw"}
 	_, err := svc(repo, testPool()).Update(context.Background(), "m1", 99, UpdateCommand{Perks: &perks})
 	if !errors.Is(err, ErrNotFound) {

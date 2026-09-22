@@ -47,17 +47,34 @@ const MaxNoteRunes = 500
 // one name, linked by no manifest field (see manifest.PerkPlug) — a stored hash
 // would match only the variant it was captured from, so an enhanced drop would
 // silently stop matching a target written against the base.
+//
+// Perks are held sorted. Order carries no meaning because they are AND-ed, and
+// normalising it is what lets one roll be recognised as already saved.
 type StoredTarget struct {
-	ID        TargetID
-	ItemHash  uint32
+	ID TargetID
+
+	// ItemHash is nil for an any-weapon target, which names perks without
+	// naming a weapon. A pointer rather than a zero value, because 0 must not
+	// be readable as "no weapon".
+	ItemHash *uint32
+
+	// Wanted distinguishes a roll the player is looking for from one they want
+	// to be told about so they can dismantle it.
+	Wanted bool
+
 	Perks     []string
 	Notes     string
 	CreatedAt time.Time
 }
 
-// AddCommand is a request to save one weapon's wanted roll.
+// AnyWeapon reports whether the target names perks without naming a weapon.
+func (t StoredTarget) AnyWeapon() bool { return t.ItemHash == nil }
+
+// AddCommand is a request to save one roll. A nil ItemHash saves an any-weapon
+// target.
 type AddCommand struct {
-	ItemHash uint32
+	ItemHash *uint32
+	Wanted   bool
 	Perks    []string
 	Notes    string
 }
@@ -82,9 +99,10 @@ var (
 	// telling them apart would confirm another user's target ids.
 	ErrNotFound = errors.New("rolltargets: target not found")
 
-	// ErrDuplicate means this membership already has a target for the weapon.
-	// One weapon holds one wanted roll; a second is an edit, not a new target.
-	ErrDuplicate = errors.New("rolltargets: weapon already has a roll target")
+	// ErrDuplicate means this membership has already saved this exact roll —
+	// the same weapon, stance and perks. Several different rolls on one weapon
+	// are ordinary; the same one twice is not.
+	ErrDuplicate = errors.New("rolltargets: this roll is already saved")
 
 	// ErrNoPerks reports a target naming no perks. It would match every copy of
 	// the weapon, which is what a wish list entry already does.
@@ -104,6 +122,11 @@ var (
 	// armor, a consumable, or nothing at all. A roll target on it could never
 	// match.
 	ErrNotAWeapon = errors.New("rolltargets: item is not a weapon with perk columns")
+
+	// ErrUnknownPerkName means a perk named on an any-weapon target matches no
+	// plug in the manifest. Such a target has no weapon pool to check against,
+	// so its names are checked against the manifest's plugs instead.
+	ErrUnknownPerkName = errors.New("rolltargets: no perk has that name")
 
 	// ErrUnknownPerk means the weapon's pool, read successfully, does not
 	// contain a named perk. Saving it would persist a target that can never
@@ -150,4 +173,12 @@ type Repository interface {
 // enhanced variants, which is exactly the identity a target is written in.
 type PerkPool interface {
 	GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
+
+	// PlugNames resolves plug item hashes to their display names. An any-weapon
+	// target has no pool to resolve against, and a DIM wildcard line still
+	// carries plug hashes, so they are resolved directly. Safe where a name
+	// lookup would not be: many plugs share one name, but each hash has exactly
+	// one, and base and enhanced variants share theirs — so a hash resolves to
+	// the same normalised name either way.
+	PlugNames(hashes []uint32) (map[uint32]string, error)
 }

@@ -14,6 +14,50 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.11.0] - 2026-09-22
+
+### Added
+
+- A wish list file exported from Destiny Item Manager can now be imported into
+  roll targets. Every line of the file is reported back with what became of it —
+  imported, skipped, already saved, unknown weapon, unresolved perk, unsupported
+  or malformed — so a line that did not come across says so instead of quietly
+  disappearing.
+
+  DIM files identify a perk by its ordinary version and expect the reader to
+  recognise the enhanced one too. Guardian Tracker does, resolving both to the
+  single perk they name. Where a name is genuinely ambiguous the line is
+  reported rather than guessed at.
+
+  Re-importing the same file is harmless: an identical roll is recognised and
+  left alone, and a roll you wrote by hand is never overwritten.
+
+### Changed
+
+- Roll targets now carry the two forms a DIM file uses that they previously
+  could not. A roll can be marked **unwanted** — the combination you want to be
+  told about so you can dismantle it — and a roll can apply to **any weapon**
+  rather than naming one.
+
+  A weapon may now hold several saved rolls, which is how wish lists are
+  normally written; only saving the identical roll twice is refused. This
+  replaces the one-roll-per-weapon limit from the previous release. Nothing was
+  reachable from the app yet, so no saved data changes meaning.
+
+## [1.10.2] - 2026-09-22
+
+### Changed
+
+- Updated `@types/node` 26.6.1 → 26.6.2 in the frontend (Dependabot). No
+  application behavior changed.
+
+## [1.10.1] - 2026-09-22
+
+### Changed
+
+- Updated the `alpine` base image 3.24.1 → 3.24.2 for the API service
+  (Dependabot). No application behavior changed.
+
 ## [1.10.0] - 2026-09-22
 
 ### Added
@@ -1319,7 +1363,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.2...v1.11.0
+[1.10.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.1...v1.10.2
+[1.10.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.9.0...v1.10.0
 [1.9.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.3...v1.9.0
 [1.8.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.8.2...v1.8.3

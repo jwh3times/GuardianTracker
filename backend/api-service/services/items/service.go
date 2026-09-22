@@ -6,6 +6,7 @@ package items
 import (
 	"sync"
 
+	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/manifeststate"
 )
@@ -16,6 +17,7 @@ const maxCacheEntries = 4096
 
 type itemRepo interface {
 	GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
+	GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error)
 	GetWeaponCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, error)
 	GetAcquisitionRows(hashes []uint32) (*manifest.AcquisitionRows, error)
 	GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error)
@@ -76,6 +78,32 @@ func (s *Service) GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, error)
 // GetCatalysts returns a cached catalyst pool or computes and caches it.
 // (nil, nil) for non-exotics and weapons without a catalyst socket, cached like
 // GetWeaponPerks's non-weapon case. Errors are never cached.
+// PlugNames resolves plug item hashes to their display names.
+//
+// It exists for callers that hold a plug hash with no weapon to place it in —
+// a roll target that names perks without naming a weapon. Resolution is safe in
+// this direction: many plugs share one display name, but each hash has exactly
+// one, and a perk's base and enhanced variants share theirs, so either hash
+// normalises to the same name. A hash the manifest does not know is absent from
+// the result rather than mapped to an empty name.
+func (s *Service) PlugNames(hashes []uint32) (map[uint32]string, error) {
+	if len(hashes) == 0 {
+		return map[uint32]string{}, nil
+	}
+	defs, err := s.repo.GetItemsByHashes(hashes)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[uint32]string, len(defs))
+	for hash, def := range defs {
+		if def == nil || def.DisplayProperties.Name == "" {
+			continue
+		}
+		out[hash] = def.DisplayProperties.Name
+	}
+	return out, nil
+}
+
 func (s *Service) GetCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, error) {
 	return s.catalysts.load(itemHash, s.repo.GetWeaponCatalysts, nil)
 }

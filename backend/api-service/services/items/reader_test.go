@@ -21,6 +21,21 @@ type factsRepo struct {
 }
 
 func (f *factsRepo) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) { return nil, nil }
+
+// GetItemsByHashes serves the same definitions the acquisition rows are built
+// from, which is what PlugNames resolves against.
+func (f *factsRepo) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.InventoryItemDefinition, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := map[uint32]*bungie.InventoryItemDefinition{}
+	for _, h := range hashes {
+		if def, ok := f.items[h]; ok {
+			out[h] = def
+		}
+	}
+	return out, nil
+}
 func (f *factsRepo) GetWeaponCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
 	return nil, nil
 }

@@ -2,6 +2,7 @@ package rolltargets
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"unicode/utf8"
 )
@@ -92,13 +93,20 @@ func (s *Service) find(ctx context.Context, membershipID string, id TargetID) (S
 	return StoredTarget{}, ErrNotFound
 }
 
-// validatePerks checks a target's perks against the weapon's own pool and
-// returns them trimmed, in the caller's order.
+// validatePerks checks a target's perks and returns them canonicalised and
+// sorted.
+//
+// A target naming a weapon is checked against that weapon's own pool. An
+// any-weapon target has no pool, so its names are checked against the
+// manifest's plugs instead — a weaker check, but the alternative is storing a
+// name nothing can ever match.
 //
 // Matching is case-insensitive on the display name but the stored value keeps
 // the manifest's spelling, so a target written "kill clip" persists as
-// "Kill Clip" and reads back the way the game writes it.
-func (s *Service) validatePerks(itemHash uint32, perks []string) ([]string, error) {
+// "Kill Clip" and reads back the way the game writes it. The result is sorted
+// because the perks are AND-ed: order carries no meaning, and normalising it is
+// what lets the same roll be recognised as already saved.
+func (s *Service) validatePerks(itemHash *uint32, perks []string) ([]string, error) {
 	cleaned := make([]string, 0, len(perks))
 	for _, p := range perks {
 		if t := strings.TrimSpace(p); t != "" {
@@ -112,7 +120,11 @@ func (s *Service) validatePerks(itemHash uint32, perks []string) ([]string, erro
 		return nil, ErrTooManyPerks
 	}
 
-	pool, err := s.pool(itemHash)
+	if itemHash == nil {
+		return s.validateAnyWeaponPerks(cleaned)
+	}
+
+	pool, err := s.pool(*itemHash)
 	if err != nil {
 		return nil, err
 	}
@@ -130,6 +142,26 @@ func (s *Service) validatePerks(itemHash uint32, perks []string) ([]string, erro
 		seen[canonical] = struct{}{}
 		out = append(out, canonical)
 	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// validateAnyWeaponPerks accepts names the caller has already resolved against
+// the manifest. An any-weapon target has no pool, so the only check left is
+// that the names are distinct — the import path resolves its names from plug
+// hashes, which is where a name acquires its manifest spelling.
+func (s *Service) validateAnyWeaponPerks(perks []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(perks))
+	out := make([]string, 0, len(perks))
+	for _, p := range perks {
+		key := strings.ToLower(p)
+		if _, dup := seen[key]; dup {
+			return nil, ErrDuplicatePerk
+		}
+		seen[key] = struct{}{}
+		out = append(out, p)
+	}
+	sort.Strings(out)
 	return out, nil
 }
 
