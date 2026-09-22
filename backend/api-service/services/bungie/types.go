@@ -31,8 +31,14 @@ type ProfileResponse struct {
 		Characters          ComponentEnvelope[map[string]CharacterComponent]           `json:"characters"`
 		CharacterActivities ComponentEnvelope[map[string]CharacterActivitiesComponent] `json:"characterActivities"`
 		CharacterEquipment  ComponentEnvelope[map[string]CharacterEquipmentComponent]  `json:"characterEquipment"`
-		ItemComponents      struct {
+		// ProfileInventory (102) is the vault; CharacterInventories (201) is
+		// what each character is carrying. Together with CharacterEquipment
+		// (205) they are every instanced item the player holds.
+		ProfileInventory     ComponentEnvelope[InventoryComponent]            `json:"profileInventory"`
+		CharacterInventories ComponentEnvelope[map[string]InventoryComponent] `json:"characterInventories"`
+		ItemComponents       struct {
 			Instances ComponentEnvelope[map[string]DestinyItemInstanceComponent] `json:"instances"`
+			Sockets   ComponentEnvelope[map[string]ItemSocketsComponent]         `json:"sockets"`
 		} `json:"itemComponents"`
 		ProfileCollectibles struct {
 			Data struct {
@@ -65,6 +71,33 @@ type ComponentEnvelope[T any] struct {
 	Data     *T    `json:"data"`
 	Privacy  int   `json:"privacy"`
 	Disabled *bool `json:"disabled"`
+}
+
+// InventoryComponent is a list of instanced items — the vault (component 102)
+// or one character's inventory (component 201). Same shape as
+// CharacterEquipmentComponent; kept separate because "what you are carrying"
+// and "what you have equipped" are different questions.
+type InventoryComponent struct {
+	Items []DestinyItemComponent `json:"items"`
+}
+
+// ItemSocketsComponent is one item's socket states (component 305), positional
+// over every socket the item has — perks, mods, cosmetics and the kill tracker
+// alike. Which entries are perk columns is the Manifest's to say, not this
+// component's.
+type ItemSocketsComponent struct {
+	Sockets []ItemSocketState `json:"sockets"`
+}
+
+// ItemSocketState is what is currently in one socket.
+//
+// PlugHash is a pointer because a socket can genuinely hold nothing, and an
+// empty socket must not read as plug 0. The accepted owner capture found 5 perk
+// sockets out of 3599 with no current plug.
+type ItemSocketState struct {
+	PlugHash  *uint32 `json:"plugHash"`
+	IsEnabled bool    `json:"isEnabled"`
+	IsVisible bool    `json:"isVisible"`
 }
 
 // CharactersResponse contains a user's characters (component 200).

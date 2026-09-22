@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"guardian-tracker/api-service/services/ownedrolls"
 	"guardian-tracker/api-service/services/rolltargets"
 
 	"github.com/gin-gonic/gin"
@@ -26,12 +27,14 @@ type stubRollTargets struct {
 	report  rolltargets.ImportReport
 	err     error
 
-	gotMembership string
-	gotAdd        rolltargets.AddCommand
-	gotUpdateID   rolltargets.TargetID
-	gotUpdate     rolltargets.UpdateCommand
-	gotRemoveID   rolltargets.TargetID
-	gotImportText string
+	matches           rolltargets.MatchReport
+	gotMembership     string
+	gotMembershipType int
+	gotAdd            rolltargets.AddCommand
+	gotUpdateID       rolltargets.TargetID
+	gotUpdate         rolltargets.UpdateCommand
+	gotRemoveID       rolltargets.TargetID
+	gotImportText     string
 }
 
 func (s *stubRollTargets) List(_ context.Context, m string) ([]rolltargets.StoredTarget, error) {
@@ -59,6 +62,11 @@ func (s *stubRollTargets) ImportDIM(_ context.Context, m, text string) (rolltarg
 	return s.report, s.err
 }
 
+func (s *stubRollTargets) Matches(_ context.Context, mt int, m string) (rolltargets.MatchReport, error) {
+	s.gotMembership, s.gotMembershipType = m, mt
+	return s.matches, s.err
+}
+
 func newRollTargetRouter(h *RollTargetsHandler) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -72,6 +80,7 @@ func newRollTargetRouter(h *RollTargetsHandler) *gin.Engine {
 	r.PATCH("/api/rolltargets/:id", h.UpdateRollTarget)
 	r.DELETE("/api/rolltargets/:id", h.RemoveRollTarget)
 	r.POST("/api/rolltargets/import", h.ImportRollTargets)
+	r.GET("/api/rolltargets/matches", h.GetRollTargetMatches)
 	return r
 }
 
@@ -313,5 +322,79 @@ func TestImportRollTargets_PropagatesServiceFailure(t *testing.T) {
 	w := send(newRollTargetRouter(NewRollTargetsHandler(stub)), http.MethodPost, "/api/rolltargets/import", "dimwishlist:item=1&perks=2")
 	if w.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetRollTargetMatches_SeparatesWantedUnwantedAndUnmatched(t *testing.T) {
+	hash := uint32(1000)
+	stub := &stubRollTargets{matches: rolltargets.MatchReport{
+		Wanted: []rolltargets.Match{{
+			Target: rolltargets.StoredTarget{ID: 1, ItemHash: &hash, Wanted: true, Perks: []string{"Outlaw"}, Notes: "pvp"},
+			Roll:   ownedrolls.OwnedRoll{ItemHash: 1000, InstanceID: "abc", Perks: []string{"Firefly", "Outlaw"}},
+		}},
+		Unwanted: []rolltargets.Match{{
+			Target: rolltargets.StoredTarget{ID: 2, ItemHash: &hash, Perks: []string{"Firefly"}},
+			Roll:   ownedrolls.OwnedRoll{ItemHash: 1000, InstanceID: "def", Perks: []string{"Firefly"}},
+		}},
+		UnmatchedTargets: []rolltargets.StoredTarget{
+			{ID: 3, ItemHash: nil, Wanted: true, Perks: []string{"Rampage"}},
+		},
+	}}
+	w := send(newRollTargetRouter(NewRollTargetsHandler(stub)), http.MethodGet, "/api/rolltargets/matches", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var resp matchReportResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Wanted) != 1 || resp.Wanted[0].InstanceID != "abc" || resp.Wanted[0].TargetID != "1" {
+		t.Errorf("wanted = %+v", resp.Wanted)
+	}
+	if len(resp.Unwanted) != 1 || resp.Unwanted[0].InstanceID != "def" {
+		t.Errorf("unwanted = %+v", resp.Unwanted)
+	}
+	// The roll still worth chasing has to survive onto the wire.
+	if len(resp.UnmatchedTargets) != 1 || resp.UnmatchedTargets[0].ID != "3" || !resp.UnmatchedTargets[0].AnyWeapon {
+		t.Errorf("unmatched = %+v", resp.UnmatchedTargets)
+	}
+}
+
+// Matching reads inventory per membership pair, so the platform has to travel
+// with the id.
+func TestGetRollTargetMatches_PassesTheMembershipPair(t *testing.T) {
+	stub := &stubRollTargets{}
+	send(newRollTargetRouter(NewRollTargetsHandler(stub)), http.MethodGet, "/api/rolltargets/matches", "")
+	if stub.gotMembershipType != 3 || stub.gotMembership != "test-member-123" {
+		t.Errorf("service saw %d/%q, want 3/test-member-123", stub.gotMembershipType, stub.gotMembership)
+	}
+}
+
+// An inventory that could not be read must not render as "nothing matches".
+func TestGetRollTargetMatches_InventoryFailuresHaveTheirOwnStatus(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+		code string
+	}{
+		{"no reader", rolltargets.ErrOwnedRollsUnavailable, http.StatusServiceUnavailable, "OWNED_ROLLS_UNAVAILABLE"},
+		{"components unreadable", ownedrolls.ErrInventoryUnavailable, http.StatusServiceUnavailable, "OWNED_ROLLS_UNAVAILABLE"},
+		{"bungie authorization gone", ownedrolls.ErrNoCredential, http.StatusUnauthorized, "BUNGIE_REAUTH_REQUIRED"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := &stubRollTargets{err: tc.err}
+			w := send(newRollTargetRouter(NewRollTargetsHandler(stub)), http.MethodGet, "/api/rolltargets/matches", "")
+			if w.Code != tc.want {
+				t.Fatalf("status = %d, want %d: %s", w.Code, tc.want, w.Body.String())
+			}
+			if !strings.Contains(w.Body.String(), tc.code) {
+				t.Errorf("body = %s, want code %s", w.Body.String(), tc.code)
+			}
+			if strings.Contains(w.Body.String(), "ownedrolls:") {
+				t.Errorf("wire carried the package prefix: %s", w.Body.String())
+			}
+		})
 	}
 }

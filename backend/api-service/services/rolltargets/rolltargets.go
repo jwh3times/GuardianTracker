@@ -133,6 +133,12 @@ var (
 	// match, and silently never matching is indistinguishable from a bug.
 	ErrUnknownPerk = errors.New("rolltargets: weapon cannot roll a named perk")
 
+	// ErrOwnedRollsUnavailable means this deployment has no way to read what
+	// the player owns, so matching cannot be attempted. Distinct from a read
+	// that found nothing: one is "we cannot look", the other is "nothing you
+	// own matches".
+	ErrOwnedRollsUnavailable = errors.New("rolltargets: owned rolls cannot be read")
+
 	// ErrPerksUnavailable means the weapon's perk pool could not be read at
 	// all. It is never conflated with ErrNotAWeapon or ErrUnknownPerk: an
 	// unreadable manifest must not look like a verdict about the weapon, in

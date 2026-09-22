@@ -367,6 +367,7 @@ func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) error
 const (
 	ComponentProfiles             = 100
 	ComponentCharacters           = 200
+	ComponentProfileInventory     = 102
 	ComponentCharacterInventories = 201
 	ComponentCharacterActivities  = 204
 	ComponentCharacterEquipment   = 205

@@ -78,7 +78,7 @@ func testPool() fakePool {
 	}}
 }
 
-func svc(repo Repository, pool PerkPool) *Service { return NewService(repo, pool) }
+func svc(repo Repository, pool PerkPool) *Service { return NewService(repo, pool, nil) }
 
 // weapon is shorthand for a target that names a weapon.
 func weapon(h uint32) *uint32 { return &h }

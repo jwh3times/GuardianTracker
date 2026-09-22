@@ -94,7 +94,7 @@ func (p importPool) GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, erro
 	}}, nil
 }
 
-func importSvc(repo Repository) *Service { return NewService(repo, importPool{}) }
+func importSvc(repo Repository) *Service { return NewService(repo, importPool{}, nil) }
 
 func outcomes(r ImportReport) []ImportOutcome {
 	out := make([]ImportOutcome, len(r.Lines))
@@ -280,7 +280,7 @@ func TestImportDIM_UnavailablePersistenceFailsTheImport(t *testing.T) {
 // An unreadable perk pool is not a verdict about any weapon, so it stops the
 // import rather than marking every line "unknown weapon".
 func TestImportDIM_UnreadablePoolStopsTheImport(t *testing.T) {
-	svc := NewService(&importRepo{}, importPool{err: errors.New("manifest warming")})
+	svc := NewService(&importRepo{}, importPool{err: errors.New("manifest warming")}, nil)
 	_, err := svc.ImportDIM(context.Background(), "m1", "dimwishlist:item=1000&perks=111")
 	if !errors.Is(err, ErrPerksUnavailable) {
 		t.Fatalf("err = %v, want ErrPerksUnavailable", err)

@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"guardian-tracker/api-service/observability"
+	"guardian-tracker/api-service/services/ownedrolls"
 	"guardian-tracker/api-service/services/rolltargets"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,7 @@ type rollTargetService interface {
 	Update(ctx context.Context, membershipID string, id rolltargets.TargetID, patch rolltargets.UpdateCommand) (rolltargets.StoredTarget, error)
 	Remove(ctx context.Context, membershipID string, id rolltargets.TargetID) error
 	ImportDIM(ctx context.Context, membershipID, text string) (rolltargets.ImportReport, error)
+	Matches(ctx context.Context, membershipType int, membershipID string) (rolltargets.MatchReport, error)
 }
 
 // RollTargetsHandler adapts roll targets to HTTP. It owns request binding,
@@ -246,6 +248,56 @@ func importResponseOf(r rolltargets.ImportReport) importReportResponse {
 	}
 }
 
+// matchResponse is one owned weapon satisfying one saved roll.
+type matchResponse struct {
+	TargetID   string   `json:"targetId"`
+	ItemHash   uint32   `json:"itemHash"`
+	InstanceID string   `json:"instanceId"`
+	Perks      []string `json:"perks"`
+	TargetName []string `json:"targetPerks"`
+	Notes      string   `json:"notes,omitempty"`
+}
+
+// matchReportResponse answers "which of my weapons match what I saved".
+//
+// unmatchedTargets is not an afterthought: a saved roll that nothing satisfies
+// is the roll still worth chasing, and a response carrying only matches would
+// hide the most useful thing the feature has to say.
+type matchReportResponse struct {
+	Wanted           []matchResponse      `json:"wanted"`
+	Unwanted         []matchResponse      `json:"unwanted"`
+	UnmatchedTargets []rollTargetResponse `json:"unmatchedTargets"`
+}
+
+// GetRollTargetMatches handles GET /api/rolltargets/matches
+func (h *RollTargetsHandler) GetRollTargetMatches(c *gin.Context) {
+	report, err := h.targets.Matches(c.Request.Context(), c.GetInt("membership_type"), membershipIDOf(c))
+	if err != nil {
+		handleRollTargetError(c, err, "roll target matching failed")
+		return
+	}
+	c.JSON(http.StatusOK, matchReportResponse{
+		Wanted:           matchResponses(report.Wanted),
+		Unwanted:         matchResponses(report.Unwanted),
+		UnmatchedTargets: rollTargetResponses(report.UnmatchedTargets),
+	})
+}
+
+func matchResponses(matches []rolltargets.Match) []matchResponse {
+	out := make([]matchResponse, 0, len(matches))
+	for _, m := range matches {
+		out = append(out, matchResponse{
+			TargetID:   strconv.FormatInt(int64(m.Target.ID), 10),
+			ItemHash:   m.Roll.ItemHash,
+			InstanceID: m.Roll.InstanceID,
+			Perks:      m.Roll.Perks,
+			TargetName: m.Target.Perks,
+			Notes:      m.Target.Notes,
+		})
+	}
+	return out
+}
+
 // rollTargetIDParam reads and validates the :id path parameter, answering the
 // request itself when it is not a target id.
 func rollTargetIDParam(c *gin.Context) (rolltargets.TargetID, bool) {
@@ -274,6 +326,21 @@ func handleRollTargetError(c *gin.Context, err error, logMsg string) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "roll target not found"})
 	case errors.Is(err, rolltargets.ErrDuplicate):
 		c.JSON(http.StatusConflict, gin.H{"error": "this roll is already saved"})
+	case errors.Is(err, rolltargets.ErrOwnedRollsUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Your Destiny inventory could not be read, so matches cannot be shown.",
+			"code":  "OWNED_ROLLS_UNAVAILABLE",
+		})
+	case errors.Is(err, ownedrolls.ErrNoCredential):
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Reconnect your Bungie account to read what you own.",
+			"code":  "BUNGIE_REAUTH_REQUIRED",
+		})
+	case errors.Is(err, ownedrolls.ErrInventoryUnavailable):
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "Your Destiny inventory could not be read, so matches cannot be shown.",
+			"code":  "OWNED_ROLLS_UNAVAILABLE",
+		})
 	case errors.Is(err, rolltargets.ErrPerksUnavailable):
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "The item database is still downloading — try again in a moment.",

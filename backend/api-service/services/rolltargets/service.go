@@ -13,12 +13,18 @@ import (
 type Service struct {
 	repo  Repository
 	perks PerkPool
+	owned OwnedRollReader
 }
 
-// NewService builds the roll-target service over its persistence port and the
-// manifest perk pool it validates against.
-func NewService(repo Repository, perks PerkPool) *Service {
-	return &Service{repo: repo, perks: perks}
+// NewService builds the roll-target service over its persistence port, the
+// manifest perk pool it validates against, and the source of the weapons the
+// player currently owns.
+//
+// owned may be nil, which leaves every stored and imported capability intact
+// and makes matching report ErrOwnedRollsUnavailable rather than an empty
+// result — a deployment without it has no matches to show, not no matches.
+func NewService(repo Repository, perks PerkPool, owned OwnedRollReader) *Service {
+	return &Service{repo: repo, perks: perks, owned: owned}
 }
 
 // List returns the membership's saved roll targets in repository order.

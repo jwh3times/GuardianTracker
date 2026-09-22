@@ -54,13 +54,20 @@ backend/api-service/
                                            serialization only — delegates everything else, including Item
                                            completion, tombstones, and the live-vendor availability join,
                                            to *wishlist.Service (ADR 0019, slice B5)
-  api/handlers/rolltargets.go          ← Roll target CRUD + DIM import: binding (including the
-                                           any-weapon/default-wanted pointer fields), id parsing,
-                                           typed-error-to-HTTP mapping (handleRollTargetError — a
+  api/handlers/rolltargets.go          ← Roll target CRUD + DIM import + match report: binding
+                                           (including the any-weapon/default-wanted pointer fields), id
+                                           parsing, typed-error-to-HTTP mapping (handleRollTargetError — a
                                            foreign or missing target both answer 404, never 403), and
                                            serialization only; reads the membership solely from the JWT
                                            claim (no route param, no body field); import reads the raw
-                                           request body as DIM text (not a JSON wrapper), capped at 4 MiB
+                                           request body as DIM text (not a JSON wrapper), capped at 4 MiB.
+                                           GetRollTargetMatches (`GET /api/rolltargets/matches`) reads
+                                           membership_type from the JWT claim alongside membership_id and
+                                           returns `{wanted[], unwanted[], unmatchedTargets[]}`;
+                                           `ownedrolls.ErrNoCredential` maps to 401 BUNGIE_REAUTH_REQUIRED,
+                                           and both `rolltargets.ErrOwnedRollsUnavailable` and
+                                           `ownedrolls.ErrInventoryUnavailable` map to 503
+                                           OWNED_ROLLS_UNAVAILABLE
   api/handlers/preferences.go          ← Thin Preferences HTTP adapter: binds partial patches, maps typed
                                            service errors, and serializes GET provenance; owns no defaults,
                                            validation, write ordering, or onboarding policy
@@ -228,20 +235,35 @@ backend/api-service/
                                            captured variant. A weapon may hold several saved rolls (only an
                                            identical roll is refused, per migration 0010); routed at
                                            `/api/rolltargets` (see api/handlers/rolltargets.go below).
-  services/rolltargets/service.go      ← Service: List/Add/Update/Remove. Validates a target's perks
-                                           against the weapon's own pool (PerkPool.GetWeaponPerks) before
-                                           persisting — matching is case-insensitive but the stored value
-                                           keeps the manifest's own spelling. A successful read of no perk
-                                           columns (ErrNotAWeapon) and a failed read (ErrPerksUnavailable)
-                                           are separate outcomes and never collapse. An any-weapon target has
-                                           no pool, so its perk names are checked only for duplicates
-                                           (validateAnyWeaponPerks) — the import path is what resolves their
-                                           manifest spelling. Update reads the current target first
-                                           (Repository has no single-row read) so a perks patch validates
-                                           against the right weapon and a missing/foreign target reports
-                                           ErrNotFound before anything is written. Perks persist sorted
-                                           (AND-ed, so order carries no meaning) — what makes an identical
-                                           roll detectable as a duplicate.
+  services/rolltargets/service.go      ← Service: List/Add/Update/Remove. NewService(repo, perks, owned)
+                                           takes an OwnedRollReader as its third argument; owned may be nil,
+                                           which leaves CRUD/import intact and makes Matches report
+                                           ErrOwnedRollsUnavailable rather than an empty result. Validates a
+                                           target's perks against the weapon's own pool
+                                           (PerkPool.GetWeaponPerks) before persisting — matching is
+                                           case-insensitive but the stored value keeps the manifest's own
+                                           spelling. A successful read of no perk columns (ErrNotAWeapon)
+                                           and a failed read (ErrPerksUnavailable) are separate outcomes and
+                                           never collapse. An any-weapon target has no pool, so its perk
+                                           names are checked only for duplicates (validateAnyWeaponPerks) —
+                                           the import path is what resolves their manifest spelling. Update
+                                           reads the current target first (Repository has no single-row
+                                           read) so a perks patch validates against the right weapon and a
+                                           missing/foreign target reports ErrNotFound before anything is
+                                           written. Perks persist sorted (AND-ed, so order carries no
+                                           meaning) — what makes an identical roll detectable as a
+                                           duplicate.
+  services/rolltargets/matching.go     ← Service.Matches(ctx, membershipType, membershipID) (MatchReport,
+                                           error): joins the caller's saved targets to a fresh
+                                           OwnedRollReader.Read (satisfied by *ownedrolls.Service). A
+                                           target matches an owned weapon when every named perk is present
+                                           (extra perks on the weapon do not prevent a match); an
+                                           any-weapon target is tested against every owned weapon.
+                                           MatchReport splits into Wanted/Unwanted matches plus
+                                           UnmatchedTargets — a target nothing satisfies is carried, not
+                                           dropped. An empty target list short-circuits before the owned
+                                           rolls read; otherwise a nil owned reader (or its failure)
+                                           surfaces as ErrOwnedRollsUnavailable rather than an empty report.
   services/rolltargets/dimfile.go      ← ParseDIMFile(text) DIMFile: pure syntax parser for DIM wish-list
                                            text, transcribed from DIM's own parser
                                            (DestinyItemManager/DIM, src/app/wishlists/wishlist-file.ts), not
@@ -257,6 +279,29 @@ backend/api-service/
                                            refuses to resolve a plug marked Ambiguous. An any-weapon
                                            (wildcard) line resolves its perk hashes straight against
                                            PerkPool.PlugNames instead, since it has no weapon pool.
+  services/ownedrolls/ownedrolls.go    ← Service.Read(ctx, membershipType, membershipID) ([]OwnedRoll,
+                                           error): which weapon rolls the membership currently holds.
+                                           Requests profile components 102 (vault), 201 (character
+                                           inventories), 205 (character equipment) and 305 (item sockets)
+                                           — the first production read of 305, and of 102. Component 310
+                                           (reusable/swappable plugs) is deliberately never requested; it
+                                           answers a different question and was a large share of the
+                                           profile response the owner capture measured. Availability is
+                                           data presence, not the component's privacy flag — an owner's
+                                           own authenticated read returns data on every component
+                                           regardless of privacy, unlike the digest's ADR 0023
+                                           Privacy==Public gate on collectibles, which really does return
+                                           empty data when private. OwnedRoll.Perks resolves each
+                                           instanced item's socket plugs against that weapon's own
+                                           PerkPool.GetWeaponPerks (*items.Service) — component 305 is
+                                           positional over every socket (mods, cosmetics, kill tracker
+                                           included), so a plug not in the weapon's own perk pool is
+                                           skipped rather than misread as a roll perk — then sorts and
+                                           dedupes the names. ErrNoCredential (no usable Bungie
+                                           authorization; satisfied by *auth.TokenStore) and
+                                           ErrInventoryUnavailable (component absent, null, or disabled)
+                                           are distinct from a genuine empty inventory. Consumed only
+                                           through services/rolltargets/matching.go.
   services/preferences/service.go      ← Preferences owner: framed/personalized defaults, card-style
                                            validation, atomic field-presence patches, irreversible
                                            onboarding completion, and authoritative/degraded read provenance
@@ -365,6 +410,7 @@ backend/api-service/
 | PATCH  | `/api/rolltargets/:id`                                                        | JWT                           | Partial patch of `{perks?, notes?}`; a nil field is unchanged; a foreign or missing id returns 404, never 403                                                                                                                                                                                                                                                                                                                                              |
 | DELETE | `/api/rolltargets/:id`                                                        | JWT                           | Remove a roll target; 204; a foreign or missing id returns 404, never 403                                                                                                                                                                                                                                                                                                                                                                                  |
 | POST   | `/api/rolltargets/import`                                                     | JWT                           | Import a DIM-format wish list; body is the raw file text, not JSON, capped at 4 MiB (413 over, 400 empty); returns `{title?, description?, imported, counts, lines[]}`, one line entry per input line including ones that did not import                                                                                                                                                                                                                   |
+| GET    | `/api/rolltargets/matches`                                                    | JWT                           | Join the caller's saved roll targets against a fresh read of their owned weapon rolls (profile components 102/201/205/305); returns `{wanted[], unwanted[], unmatchedTargets[]}`; `ownedrolls.ErrNoCredential` → 401 `BUNGIE_REAUTH_REQUIRED`; no owned-roll reader configured, or the profile/inventory read failing, → 503 `OWNED_ROLLS_UNAVAILABLE`                                                                                                     |
 | GET    | `/api/preferences`                                                            | JWT                           | Get user preferences, `onboardedAt`, and authoritative/degraded `persisted` provenance; degraded defaults remain `200`                                                                                                                                                                                                                                                                                                                                     |
 | PUT    | `/api/preferences`                                                            | JWT                           | Update preferences; `onboardingComplete:true` stamps completion and cannot reset it                                                                                                                                                                                                                                                                                                                                                                        |
 | PUT    | `/api/account/role`                                                           | JWT                           | Self-service opt-in to standard/beta/alpha; admin rejected, admin callers rejected                                                                                                                                                                                                                                                                                                                                                                         |

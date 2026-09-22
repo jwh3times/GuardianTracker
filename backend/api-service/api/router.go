@@ -143,6 +143,7 @@ func NewRouter(d Deps) *gin.Engine {
 	authed.PATCH("/rolltargets/:id", d.Handlers.RollTargets.UpdateRollTarget)
 	authed.DELETE("/rolltargets/:id", d.Handlers.RollTargets.RemoveRollTarget)
 	authed.POST("/rolltargets/import", d.Handlers.RollTargets.ImportRollTargets)
+	authed.GET("/rolltargets/matches", d.Handlers.RollTargets.GetRollTargetMatches)
 
 	// Preferences
 	authed.GET("/preferences", d.Handlers.Preferences.GetPreferences)

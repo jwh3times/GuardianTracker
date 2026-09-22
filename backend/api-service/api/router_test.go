@@ -423,6 +423,7 @@ func TestRollTargetRoutesAreRegistered(t *testing.T) {
 		"PATCH /api/rolltargets/:id",
 		"DELETE /api/rolltargets/:id",
 		"POST /api/rolltargets/import",
+		"GET /api/rolltargets/matches",
 	} {
 		if !registered[want] {
 			t.Errorf("%s is not registered", want)

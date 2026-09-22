@@ -14,6 +14,30 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.13.0] - 2026-09-22
+
+### Added
+
+- Guardian Tracker can now tell you which weapons you own match the rolls you
+  saved. It reads your vault, your characters' inventories and what they have
+  equipped, works out the perks currently in each weapon's perk columns, and
+  compares them to your saved roll targets.
+
+  A roll matches when every perk it names is present. Extra perks do not stop a
+  match — a saved roll says what has to be there, not what must not be. Rolls
+  you marked unwanted are reported separately, as copies you can safely
+  dismantle, and a roll marked for any weapon is checked against every weapon
+  you hold.
+
+  Saved rolls that nothing you own satisfies are reported too. Those are the
+  rolls still worth chasing, and a result that showed only matches would hide
+  them.
+
+  Three situations stay clearly apart: your Bungie connection has lapsed and
+  needs reconnecting, your inventory could not be read at all, and your
+  inventory was read and nothing matched. The middle one never renders as the
+  last.
+
 ## [1.12.0] - 2026-09-22
 
 ### Added
@@ -1383,7 +1407,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.2...v1.11.0
 [1.10.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.1...v1.10.2
