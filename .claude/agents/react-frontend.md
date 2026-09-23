@@ -287,15 +287,21 @@ frontend/src/
                                    `wishlist.ts` — the server derives membership from the JWT) and
                                    `["rollTargets", "matches"]` (`GET /api/rolltargets/matches`, gated
                                    `enabled: !!user` for the same belt-and-braces reason `weekly.ts`
-                                   states). The two queries fail independently on purpose: a Bungie-backed
-                                   match failure must never hide the player's own saved rows. Projects
-                                   `APIRollTarget` → `RollTarget`, `APIRollTargetMatchReport` →
-                                   `RollTargetMatchReport`, and `APIImportReport` → `RollTargetImportReport`
-                                   (the last one on a mutation result, not a query `select`). One shared
-                                   optimistic recipe (mirrors `wishlist.ts`) backs notes update/remove/bulk
-                                   delete/delete-all; DIM import is invalidate-only since the server decides
-                                   per line what imported. Exports `invalidateRollTargets(client)`, which
-                                   joins `membershipRefresh.ts`'s fan-out — the match report is derived from
+                                   states). Both hooks also take an optional `{ enabled?: boolean }`,
+                                   ANDed with the module's own gate (mirrors `data/collections.ts`'s
+                                   `CollectionsQueryOptions`) — added in slice 6 (#371) so the item detail
+                                   drawer's per-weapon section can withhold the matches query, a live
+                                   Bungie profile read, until the `god-roll` flag is accessible and the
+                                   drawer has resolved the open item as a weapon. The two queries fail
+                                   independently on purpose: a Bungie-backed match failure must never hide
+                                   the player's own saved rows. Projects `APIRollTarget` → `RollTarget`,
+                                   `APIRollTargetMatchReport` → `RollTargetMatchReport`, and
+                                   `APIImportReport` → `RollTargetImportReport` (the last one on a mutation
+                                   result, not a query `select`). One shared optimistic recipe (mirrors
+                                   `wishlist.ts`) backs notes update/remove/bulk delete/delete-all; DIM
+                                   import is invalidate-only since the server decides per line what
+                                   imported. Exports `invalidateRollTargets(client)`, which joins
+                                   `membershipRefresh.ts`'s fan-out — the match report is derived from
                                    owned Bungie inventory (profile component 305), so a membership refresh
                                    can change which targets are satisfied. Read by
                                    `features/rolltargets/RollTargets.tsx` through
@@ -304,7 +310,10 @@ frontend/src/
                                    of the app already uses, since a per-hash `data/items.ts` query is a
                                    hook call and this page has an arbitrary number of distinct weapon
                                    hashes) and `data/wishlist.ts`'s `useWishlist()` for the default filter's
-                                   second condition.
+                                   second condition; and, since slice 6 (#371), by
+                                   `features/collections/RollTargetSection.tsx` (both share this module's
+                                   one query identity per resource, so they share one cache entry — no new
+                                   query was added for the drawer).
     preferences.ts                ← ADR 0021's framework-neutral Preferences client (E15), landed
                                    outside ADR 0020's eleven-resource list because it deliberately
                                    uses no React Query — one small object with no shared cache base
@@ -465,7 +474,38 @@ frontend/src/
                                    CategoryTree.tsx (the sidebar tree), ItemDetailDrawer.tsx (renders perk
                                    columns — label + chips — with loading state; props: perkColumns?,
                                    perksLoading?, catalysts?; renders a "Catalyst" section when catalysts is
-                                   non-empty), SealCard.tsx (renders each triumph via its private TriumphRow;
+                                   non-empty; renders `RollTargetSection` directly after the perks block,
+                                   unconditionally — the section decides its own flag/weapon gating),
+                                   RollTargetSection.tsx (roll targets slice 6, #371: the per-weapon
+                                   roll-target block, gated by the `god-roll` flag via `FlagsContext`'s
+                                   `useFlags().flagState`; not enabled → renders nothing; locked → an
+                                   upsell that never promises farming ("Roll targets is an Alpha feature.
+                                   See which of your copies match the rolls you're chasing."); accessible
+                                   → reads `data/rolltargets.ts`'s existing list and match-report queries,
+                                   gated `enabled: !flagsLoading && accessible && isWeapon` so the
+                                   Bungie-backed matches query is never issued until the flag has actually
+                                   resolved accessible and the drawer's own `useItemPerks` has resolved the
+                                   open item as a weapon with a non-empty perk pool — deliberately stricter
+                                   than `FlaggedRoute`'s fail-open-while-unresolved tradeoff, because this
+                                   query costs a live Bungie profile read on every drawer open. Renders,
+                                   in order: "Copies you own that match" (grouped by owned copy via
+                                   `rollTargetSectionView.ts`'s `groupMatchesByCopy` — not by target like
+                                   the page's `groupMatchesByTarget`, because a single weapon-scoped copy
+                                   can satisfy more than one saved target, e.g. a specific-weapon target
+                                   and an any-weapon target both matching the same roll; each copy gets one
+                                   "Copy 1"/"Copy 2" label and a badge per target it satisfies), "Still
+                                   chasing" (this weapon's own unmatched targets — `itemHash === itemHash`
+                                   excludes an unmatched any-weapon target, whose `itemHash` is `null`, by
+                                   construction), and a collapsed "Matches a roll you marked unwanted"
+                                   disclosure; a match-report failure instead lists this weapon's own
+                                   saved targets (from the target list, not the failed match report)
+                                   neutrally, with the same Reconnect (`BUNGIE_REAUTH_REQUIRED`) vs Retry
+                                   banner as the page. Read-only — no notes editing or delete — and always
+                                   links to `/rolls` ("Manage roll targets"). Its own pure helpers
+                                   (`weaponBoundTargetsFor`, `matchesForItem`, `groupMatchesByCopy`) live in
+                                   `rollTargetSectionView.ts` and are table-tested directly, mirroring
+                                   `features/rolltargets/rollTargetsView.ts`'s split,
+                                   SealCard.tsx (renders each triumph via its private TriumphRow;
                                    triumphs with a `t.objectives` array get a collapsed-by-default,
                                    keyboard-accessible disclosure — local expansion state per row — listing
                                    each objective's own label/progress; triumphs without objectives render
@@ -666,7 +706,13 @@ resource's query identity, endpoint, and projection (`toSeal`/`toTriumph`/
 roll-target list and match-report query identities, endpoints, and projections,
 plus every mutation (notes update, remove, bulk delete, delete-all, DIM import);
 exposing `invalidateRollTargets(client)`, since the match report is derived from
-owned Bungie inventory and so is membership-scoped like the eleven above.
+owned Bungie inventory and so is membership-scoped like the eleven above. Both
+queries also take an optional `{ enabled }` ANDed with the module's own gate
+(added in slice 6, #371) so a second consumer, the Collections item detail
+drawer's `RollTargetSection.tsx`, can withhold the matches query — a live
+Bungie profile read — until it is actually going to render something; the two
+consumers share this module's one query identity per resource, so opening the
+drawer after visiting `/rolls` (or vice versa) does not refetch.
 `data/membershipRefresh.ts` holds the
 cross-resource cache-refresh fan-out over every membership-scoped resource
 (Catalysts, Characters, Collections, Crafting, Digest, Roll targets, Seals,
@@ -822,6 +868,17 @@ Bungie data refresh cannot change a Guardian Tracker setting.
   source with its own difficulty tier. `availableNow` stays a separate live-vendor
   join.
 - The Collections toolbar's "Search this category…" field (`type="search"`, `aria-label`, 100-char `maxLength`) filters the currently-loaded category's items by case-insensitive name substring match, purely client-side over the already-fetched `?include=all` payload — it does not call `/api/items/search`. It composes with every other filter/sort as another predicate, is cleared by "Clear filters," and drives a search-specific empty state that names the term (`No items match "<term>"`).
+
+## Collections item drawer roll-target section features
+
+Roll targets slice 6 (#371); see the `RollTargetSection.tsx` entry in "File structure" above for the full component walkthrough. Summary of behavior not already covered there:
+
+- Gate order matches the mockup's `GodRollSection`: flag not enabled → nothing; locked → an upsell whose copy never promises farming; accessible → the full section. Within "accessible," the section further waits for `useItemPerks` to resolve the open item as a weapon (`perkColumns.length > 0`) before rendering or fetching anything — an armor piece or a still-loading item renders nothing, not a briefly-wrong "no targets" line.
+- "Copies you own that match" groups by **owned copy** (`groupMatchesByCopy`), not by target like the Roll targets page's `groupMatchesByTarget` — a single weapon-scoped copy can satisfy more than one saved target (e.g. a specific-weapon target and an any-weapon target matching the same roll), and grouping by target would relabel the same physical copy as "Copy 1" under two different cards. Each copy's own perks are highlighted against the union of every satisfied target's perks; each satisfied target gets its own badge (the any-weapon phrasing for an any-weapon target, else that target's own perks).
+- "Still chasing" and the match-report failure's neutral fallback both filter by `t.itemHash === item.id`, which excludes an any-weapon target (`itemHash: null`) by construction — no separate `anyWeapon` branch needed. An any-weapon target that _matched_ this weapon still appears in "Copies you own that match" (a match's `itemHash` is always the owned copy's hash, so the same equality filter naturally includes it).
+- An empty section (no chasing target, no match, no unwanted match) renders one quiet line, "No roll targets for this weapon.", never absence-as-silence. A "Manage roll targets" link to `/rolls` is always present regardless of state — this section is read-only; notes editing, delete, and DIM import stay on the page.
+- Match-report failure reuses the page's Reconnect (`BUNGIE_REAUTH_REQUIRED`) vs Retry (`errorState`) distinction, scoped to this weapon's own saved targets from the (separately-fetched, independently-successful) target list rather than the failed match report.
+- Shares `data/rolltargets.ts`'s query identity and cache entry with the page — opening the drawer after visiting `/rolls` (or vice versa) does not refetch. The matches query, a live Bungie profile read, is withheld via `useRollTargets`/`useRollTargetMatches`'s `{ enabled }` option until `useFlags().isLoading` is false, the flag is accessible, and the item is a resolved weapon — stricter than `FlaggedRoute`'s fail-open-while-unresolved tradeoff elsewhere in the app, because unlike a full-page mount this section can open on every Collections item.
 
 ## Wishlist page features
 

@@ -1,8 +1,9 @@
 import React from "react";
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ItemDetailDrawer } from "./ItemDetailDrawer";
+import { renderWithProviders } from "../../test/renderWithProviders";
 import type { GTItem } from "../../types/design";
 
 const baseItem: GTItem = {
@@ -29,7 +30,7 @@ const noop = () => {};
 function renderDrawer(
   extra: Partial<React.ComponentProps<typeof ItemDetailDrawer>>,
 ) {
-  return render(
+  return renderWithProviders(
     <ItemDetailDrawer
       item={baseItem}
       onClose={noop}

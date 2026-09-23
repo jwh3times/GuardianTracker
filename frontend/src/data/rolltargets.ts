@@ -33,9 +33,12 @@ import type {
  * bulk delete, delete-all) and the match report (`GET /api/rolltargets/matches`,
  * which of them anything owned currently satisfies). They fail independently —
  * a Bungie-backed match failure must never hide the player's own saved rows —
- * so the page reads both and decides its own degraded rendering.
+ * so each reader decides its own degraded rendering.
  *
- * Read by the Roll targets page.
+ * Read by the Roll targets page and, behind the `god-roll` flag's accessible
+ * state and only while open on a weapon, Collections' item detail drawer
+ * (`features/collections/RollTargetSection.tsx`) — both share this module's
+ * one query identity per resource, so they share one cache entry.
  */
 
 /** Private, and deliberately not exported: no other module may name this key. */
@@ -144,6 +147,17 @@ function toMatchReport(r: APIRollTargetMatchReport): RollTargetMatchReport {
 /** Stable empty list, so `targets` keeps referential identity across renders. */
 const NO_TARGETS: RollTarget[] = [];
 
+interface RollTargetQueryOptions {
+  /**
+   * Extra gate ANDed with this module's own precondition. Only the item
+   * detail drawer needs it — it waits until the drawer is open on a weapon
+   * with a resolved perk pool before fetching anything roll-target-shaped —
+   * and it takes a plain boolean so React Query's option shape stays inside
+   * this module (mirrors `data/collections.ts`'s `CollectionsQueryOptions`).
+   */
+  enabled?: boolean;
+}
+
 /**
  * Every saved roll target for the signed-in membership, most recent first.
  *
@@ -152,10 +166,13 @@ const NO_TARGETS: RollTarget[] = [];
  * truth for target management (notes, bulk delete, delete-all) — the match
  * report below only says which of these are currently satisfied.
  */
-export function useRollTargets() {
+export function useRollTargets({
+  enabled = true,
+}: RollTargetQueryOptions = {}) {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ROLL_TARGETS_LIST_KEY,
     queryFn: () => apiFetch<APIRollTarget[]>("/api/rolltargets"),
+    enabled,
     select: toRollTargets,
   });
 
@@ -180,19 +197,24 @@ export function useRollTargets() {
  * ProtectedLayout unmounts this whole subtree the instant the session goes
  * anonymous, so there is no render in which this hook runs signed out. It is
  * kept because the module, not the route, should own its own precondition.
+ * The caller's own `enabled` is ANDed with it — the item detail drawer uses
+ * this to avoid issuing a live Bungie profile read until the flag is
+ * accessible and the drawer has resolved the open item as a weapon.
  *
  * This is the one query in this module that reads owned Bungie inventory
  * (profile component 305), so a membership refresh that re-fetches Bungie
  * data can change the answer — see {@link invalidateRollTargets}.
  */
-export function useRollTargetMatches() {
+export function useRollTargetMatches({
+  enabled = true,
+}: RollTargetQueryOptions = {}) {
   const { user } = useAuth();
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ROLL_TARGETS_MATCHES_KEY,
     queryFn: () =>
       apiFetch<APIRollTargetMatchReport>("/api/rolltargets/matches"),
-    enabled: !!user,
+    enabled: enabled && !!user,
     select: toMatchReport,
   });
 
