@@ -185,6 +185,62 @@ describe("query identity and projection", () => {
   });
 });
 
+function GatedProbe({ enabled }: { enabled: boolean }) {
+  const { targets } = useRollTargets({ enabled });
+  const { matches } = useRollTargetMatches({ enabled });
+  return (
+    <div data-testid="gated">
+      {targets.length}|{matches ? "loaded" : "none"}
+    </div>
+  );
+}
+
+describe("caller-supplied enabled gate", () => {
+  it("fetches neither query while the caller's gate is closed", async () => {
+    let listRequests = 0;
+    let matchesRequests = 0;
+    server.use(
+      http.get(`${API}/api/rolltargets`, () => {
+        listRequests += 1;
+        return HttpResponse.json([target("1")]);
+      }),
+      http.get(`${API}/api/rolltargets/matches`, () => {
+        matchesRequests += 1;
+        return HttpResponse.json(matchReport());
+      }),
+    );
+
+    renderWithProviders(<GatedProbe enabled={false} />);
+
+    // Settle the microtask queue so a request would have been issued by now.
+    await waitFor(() =>
+      expect(screen.getByTestId("gated")).toHaveTextContent("0|none"),
+    );
+    expect(listRequests).toBe(0);
+    expect(matchesRequests).toBe(0);
+  });
+
+  it("fetches both once the caller's gate opens", async () => {
+    let listRequests = 0;
+    let matchesRequests = 0;
+    server.use(
+      http.get(`${API}/api/rolltargets`, () => {
+        listRequests += 1;
+        return HttpResponse.json([target("1")]);
+      }),
+      http.get(`${API}/api/rolltargets/matches`, () => {
+        matchesRequests += 1;
+        return HttpResponse.json(matchReport());
+      }),
+    );
+
+    renderWithProviders(<GatedProbe enabled={true} />);
+
+    await waitFor(() => expect(listRequests).toBe(1));
+    await waitFor(() => expect(matchesRequests).toBe(1));
+  });
+});
+
 function NotesEditProbe() {
   const { targets } = useRollTargets();
   const { setNotes } = useUpdateRollTargetNotes();

@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures";
 import { FIXTURES } from "../constants";
+import { openCollectionDrawer } from "../helpers";
 
 /**
  * Roll targets (slice 5b), behind the `god-roll` flag. The auth-setup fixture
@@ -55,6 +56,55 @@ test("Roll targets: empty state, DIM import, management, and delete", async ({
   await row.getByRole("button", { name: "Save" }).click();
   await expect(row.getByText('"E2E roll note"')).toBeVisible();
 
+  await row.getByRole("button", { name: "Delete" }).click();
+  await expect(row).toBeHidden();
+});
+
+/**
+ * Roll targets slice 6 (#371): the item detail drawer's per-weapon
+ * roll-target section. Uses a distinct perk pair from the test above so this
+ * test's import cannot collide with — and report "already saved" instead of
+ * "imported" against — a target the previous test already deleted.
+ *
+ * Same fake-Bungie fixture gap as above: `/api/rolltargets/matches` fails, so
+ * the drawer section falls back to its own neutral "match status unknown"
+ * state (scoped to this weapon's own saved targets) with a Retry banner,
+ * rather than "Copies you own that match" or "Still chasing".
+ */
+test("Roll targets: item drawer section lists the weapon's target neutrally when matching fails", async ({
+  page,
+}) => {
+  await page.goto("/rolls");
+  await page
+    .getByLabel("Paste a DIM-format wish list")
+    .fill(`dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11001,11003`);
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByText("1 imported")).toBeVisible();
+
+  const drawer = await openCollectionDrawer(page);
+  await expect(
+    drawer.getByRole("heading", { name: /Your roll targets/ }),
+  ).toBeVisible();
+  const neutralRow = drawer
+    .locator(".gt-rt-row")
+    .filter({ hasText: "Match status unknown" });
+  await expect(neutralRow).toBeVisible();
+  await expect(neutralRow.getByText("Corkscrew Rifling")).toBeVisible();
+  await expect(neutralRow.getByText("Firefly")).toBeVisible();
+  await expect(drawer.getByText("Still chasing")).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(
+    drawer.getByRole("link", { name: "Manage roll targets" }),
+  ).toBeVisible();
+
+  // Clean up so later runs against the same webServer don't see a stale
+  // target for this weapon.
+  await drawer.getByRole("button", { name: "Close" }).click();
+  await page.goto("/rolls");
+  const row = page
+    .locator(".gt-rt-row")
+    .filter({ hasText: FIXTURES.collectionItemName })
+    .first();
   await row.getByRole("button", { name: "Delete" }).click();
   await expect(row).toBeHidden();
 });

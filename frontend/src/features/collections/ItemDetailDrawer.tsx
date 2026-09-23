@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Icon } from "../../components/Icon";
 import { Badge, Button, ItemTile } from "../../components/primitives";
 import { DIFF_LABEL } from "../../lib/constants";
+import { RollTargetSection } from "./RollTargetSection";
 import type { GTItem, ItemCatalyst, PerkColumn } from "../../types/design";
 
 type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
@@ -171,6 +172,12 @@ export function ItemDetailDrawer({
             )}
           </div>
         )}
+
+        <RollTargetSection
+          item={item}
+          perkColumns={perkColumns}
+          perksLoading={perksLoading}
+        />
 
         {catalysts && catalysts.length > 0 && (
           <div className="gt-drawer-block">

@@ -25,9 +25,9 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 **Status:** Partially implemented — storage, validation, DIM-format import,
 matching saved targets against the owned weapons a fresh Bungie profile read
-reports, a REST surface, and the Roll targets page (`/rolls`, behind the
-`god-roll` flag) all exist; a per-weapon item-drawer section and near-miss
-detection do not
+reports, a REST surface, the Roll targets page (`/rolls`, behind the
+`god-roll` flag), and a per-weapon item-drawer section all exist; near-miss
+detection does not
 **Gate:** none — the owner approved the player-facing surface 2026-09-23 (#350)
 **Likely size:** Medium (remaining scope)
 
@@ -87,14 +87,27 @@ Decided:
   collapsed and informational. A match-report failure never hides the
   player's own saved targets — every one still lists, neutrally, with a
   Reconnect or Retry banner depending on the failure.
+- A per-weapon roll-target section in the Collections item detail drawer is
+  implemented (#371, roll targets slice 6), reusing the same
+  `data/rolltargets.ts` queries and cache entry as the page. Opening a
+  weapon's drawer shows: which of its own targets an owned copy currently
+  satisfies (grouped by owned copy, since one weapon-scoped drawer can have a
+  copy that satisfies more than one saved target — an any-weapon target
+  included), which of its own targets are still unmatched ("Still chasing"),
+  and any match on a roll marked unwanted, collapsed and informational. A
+  match-report failure falls back to the same neutral, Reconnect/Retry
+  treatment as the page, scoped to that weapon's own saved targets. The
+  section is read-only — no target creation, editing, or deletion from the
+  drawer — and always links to `/rolls` for management. Below alpha tier it
+  shows a locked upsell instead of a farming promise.
 
 Still to settle:
 
-- A per-weapon item-drawer section, deferred as its own card (owner decision,
-  2026-09-23, #350) — the Roll targets page is a separate top-level page, not
-  yet reachable from an item's own detail view.
 - Near-miss detection ("best copy has 1 of 2") and recording which DIM file a
   target came from — both deferred as their own cards.
+- The mockup's "Best farm: {source}" line (joining acquisition data to
+  targets) is out of scope for the drawer section that shipped in #371 and
+  remains its own decision.
 - Manual perk authoring (saving a target without a DIM import) is deferred.
 - How an unmatched or unresolved perk is presented honestly to the owner.
 
