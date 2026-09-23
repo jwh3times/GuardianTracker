@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/ownedrolls"
 	"guardian-tracker/api-service/services/rolltargets"
 
@@ -381,6 +382,9 @@ func TestGetRollTargetMatches_InventoryFailuresHaveTheirOwnStatus(t *testing.T) 
 		{"no reader", rolltargets.ErrOwnedRollsUnavailable, http.StatusServiceUnavailable, "OWNED_ROLLS_UNAVAILABLE"},
 		{"components unreadable", ownedrolls.ErrInventoryUnavailable, http.StatusServiceUnavailable, "OWNED_ROLLS_UNAVAILABLE"},
 		{"bungie authorization gone", ownedrolls.ErrNoCredential, http.StatusUnauthorized, "BUNGIE_REAUTH_REQUIRED"},
+		{"manifest not ready", ownedrolls.ErrPerksUnavailable, http.StatusServiceUnavailable, "MANIFEST_NOT_READY"},
+		{"bungie rate limited", &bungie.BungieError{ErrorCode: 36, ThrottleSeconds: 5}, http.StatusTooManyRequests, "RATE_LIMITED"},
+		{"bungie failed", &bungie.BungieError{ErrorCode: 1618}, http.StatusBadGateway, "BUNGIE_ERROR"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

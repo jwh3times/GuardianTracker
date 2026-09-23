@@ -67,7 +67,11 @@ backend/api-service/
                                            `ownedrolls.ErrNoCredential` maps to 401 BUNGIE_REAUTH_REQUIRED,
                                            and both `rolltargets.ErrOwnedRollsUnavailable` and
                                            `ownedrolls.ErrInventoryUnavailable` map to 503
-                                           OWNED_ROLLS_UNAVAILABLE
+                                           OWNED_ROLLS_UNAVAILABLE; an unreadable perk pool
+                                           (`ownedrolls.ErrPerksUnavailable`) maps to 503
+                                           MANIFEST_NOT_READY, and a failed profile request
+                                           (`*bungie.BungieError`) goes through handleBungieError
+                                           (429 RATE_LIMITED, 502 BUNGIE_ERROR)
   api/handlers/preferences.go          ← Thin Preferences HTTP adapter: binds partial patches, maps typed
                                            service errors, and serializes GET provenance; owns no defaults,
                                            validation, write ordering, or onboarding policy

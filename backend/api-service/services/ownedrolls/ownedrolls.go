@@ -14,6 +14,7 @@ package ownedrolls
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 
 	"guardian-tracker/api-service/services/bungie"
@@ -54,6 +55,12 @@ var (
 	// conflated with an empty inventory: one means "we cannot tell you", the
 	// other means "you hold nothing".
 	ErrInventoryUnavailable = errors.New("ownedrolls: profile inventory unavailable")
+
+	// ErrPerksUnavailable means a weapon's perk pool could not be read — the
+	// manifest is still downloading or mid-swap, or its query failed. Without
+	// the pool no plug can be named, so the read has no answer; it is never
+	// reported as a weapon with nothing in its perk columns.
+	ErrPerksUnavailable = errors.New("ownedrolls: weapon perk pool unavailable")
 )
 
 // CredentialReader resolves a membership's current Bungie access token.
@@ -151,7 +158,7 @@ func (s *Service) perkNames(cache map[uint32]map[uint32]string, itemHash uint32)
 	}
 	cols, err := s.perks.GetWeaponPerks(itemHash)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrPerksUnavailable, err)
 	}
 	pool := map[uint32]string{}
 	for _, c := range cols {

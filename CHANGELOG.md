@@ -14,6 +14,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.13.1] - 2026-09-23
+
+### Fixed
+
+- Checking your owned weapons against your saved rolls while the item database
+  is still downloading now says so — "try again in a moment" (503
+  `MANIFEST_NOT_READY`) — instead of failing with a generic server error. Saving
+  and importing rolls already behaved this way.
+- When Bungie itself refuses or rate-limits the inventory read behind roll
+  matching, the response now says that (429 `RATE_LIMITED`, 502 `BUNGIE_ERROR`),
+  the same way every other Bungie-backed page does, rather than reporting an
+  internal error.
+
 ## [1.13.0] - 2026-09-22
 
 ### Added
@@ -1407,7 +1420,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.1...HEAD
+[1.13.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.11.0...v1.12.0
 [1.11.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.10.2...v1.11.0

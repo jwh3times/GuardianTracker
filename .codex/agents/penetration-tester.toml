@@ -251,6 +251,13 @@ authorization lookup and the profile call both key off the caller's own JWT.
   null, or disabled must return 503 `OWNED_ROLLS_UNAVAILABLE`
   (`ownedrolls.ErrInventoryUnavailable`), never a match report built on partial
   data
+- Test: a weapon's perk pool that cannot be read (manifest still downloading or
+  mid-swap) must return 503 `MANIFEST_NOT_READY` (`ownedrolls.ErrPerksUnavailable`),
+  the same code the add/update/import routes already use, not 500
+- Test: an upstream profile-request failure that is a `*bungie.BungieError`
+  must go through the same mapping every other Bungie-backed route uses (429
+  `RATE_LIMITED`, 502 `BUNGIE_ERROR`, etc.); a non-Bungie transport error still
+  returns 500 `INTERNAL_ERROR`
 - Test: the response body — matches and unmatched targets — must contain only
   the caller's own saved targets and their own instance IDs; confirm no other
   membership's roll target or inventory item can be reached through this route
