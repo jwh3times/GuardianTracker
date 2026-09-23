@@ -14,6 +14,25 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.16.0] - 2026-09-23
+
+### Added
+
+- A weapon's detail drawer in Collections now has a **Your roll targets**
+  section, directly under its possible perks, for accounts with the roll-targets
+  feature. It shows:
+  - each copy you own that matches one of your saved rolls, with the matching
+    perks highlighted and a badge for every roll that copy satisfies
+  - the rolls you saved for this weapon that you are still chasing
+  - a collapsed note of copies that match a roll you marked unwanted
+  - a link to the Roll targets page
+
+  An account below the feature's tier sees a short note that it is an Alpha
+  feature instead. If your owned weapons cannot be read, the weapon's saved rolls
+  still show, marked "match status unknown", with Reconnect or Retry. The drawer
+  checks your inventory only once the feature is confirmed available and the
+  item is a weapon, and it shares that check with the Roll targets page.
+
 ## [1.15.0] - 2026-09-23
 
 ### Added
@@ -1482,7 +1501,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.2...v1.14.0
 [1.13.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.1...v1.13.2
