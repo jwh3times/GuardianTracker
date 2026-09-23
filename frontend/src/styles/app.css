@@ -1262,6 +1262,153 @@
   padding-top: var(--s-1);
 }
 
+/* ---------------- ROLL TARGETS ---------------- */
+.gt-rt-import-controls {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-top: var(--s-2);
+}
+.gt-rt-file-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--t-sm);
+  color: var(--c-text-3);
+}
+.gt-rt-import-error {
+  color: var(--c-danger);
+  font-size: var(--t-sm);
+  margin-top: var(--s-2);
+}
+.gt-rt-import-report {
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 0.07rem solid var(--c-line-soft);
+}
+.gt-rt-import-stats {
+  color: var(--c-text);
+  font-weight: var(--w-med);
+}
+.gt-rt-import-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin-top: var(--s-3);
+}
+.gt-rt-import-group h3 {
+  font-size: var(--t-sm);
+  font-weight: var(--w-semi);
+  color: var(--c-text-2);
+  margin-bottom: var(--s-1);
+}
+.gt-rt-import-group ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--c-text-3);
+  font-size: var(--t-sm);
+}
+
+.gt-rt-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-2);
+}
+.gt-rt-search .gt-search-input {
+  width: 16rem;
+}
+
+.gt-rt-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.gt-rt-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-bottom: var(--s-2);
+}
+.gt-rt-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.gt-rt-row {
+  display: flex;
+  gap: var(--s-4);
+  align-items: flex-start;
+}
+.gt-rt-row-check {
+  align-self: center;
+  flex: none;
+}
+.gt-rt-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.gt-rt-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.gt-rt-chip-neutral {
+  color: var(--c-text-3);
+}
+.gt-rt-perks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.gt-chip[data-highlight="true"] {
+  color: var(--c-signal);
+  border-color: color-mix(in oklch, var(--c-signal) 40%, var(--c-line));
+  background: color-mix(in oklch, var(--c-signal) 12%, var(--c-surface-2));
+}
+
+.gt-rt-copies {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  background: var(--c-surface-2);
+  border-radius: var(--r-sm);
+}
+.gt-rt-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+.gt-rt-copy-label {
+  color: var(--c-text-3);
+  font-size: var(--t-xs);
+}
+
+.gt-rt-disclosure {
+  margin-top: var(--s-3);
+}
+.gt-rt-disclosure-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  gap: var(--s-2);
+}
+
 /* ---------------- TRIUMPHS / SEALS ---------------- */
 .gt-seal-grid {
   display: grid;

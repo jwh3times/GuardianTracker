@@ -47,6 +47,7 @@ const NAV: NavItem[] = [
     path: "/triumphs",
   },
   { id: "wishlist", label: "Wishlist", icon: "wishlist", path: "/wishlist" },
+  { id: "rolls", label: "Roll targets", icon: "star", path: "/rolls" },
 ];
 
 // Nav items gated by a feature flag: hidden when the flag is disabled, marked
@@ -57,6 +58,7 @@ const NAV_FLAG: Record<string, string> = {
   catalysts: "catalysts-crafting",
   triumphs: "triumphs-seals",
   cosmetics: "cosmetics",
+  rolls: "god-roll",
 };
 const MOBILE_NAV: NavItem[] = [
   { id: "dashboard", label: "Home", icon: "dashboard", path: "/dashboard" },

@@ -25,9 +25,11 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 **Status:** Partially implemented — storage, validation, DIM-format import,
 matching saved targets against the owned weapons a fresh Bungie profile read
-reports, and a REST surface all exist; there is no frontend integration
-**Gate:** Owner approval of the player-facing surface
-**Likely size:** Large
+reports, a REST surface, and the Roll targets page (`/rolls`, behind the
+`god-roll` flag) all exist; a per-weapon item-drawer section and near-miss
+detection do not
+**Gate:** none — the owner approved the player-facing surface 2026-09-23 (#350)
+**Likely size:** Medium (remaining scope)
 
 Show owned weapon rolls for the selected Destiny membership and compare them to
 target rolls.
@@ -50,8 +52,7 @@ Decided:
   named ids or every target the membership owns), and `POST
 /api/rolltargets/import` expose this over REST, membership-scoped through
   the caller's JWT alone and gated behind the `god-roll` feature flag (alpha
-  tier). There is still no way for a player to reach this from the app — no
-  frontend page, data-access module, or UI.
+  tier).
 - A target names perks by display name rather than by the game's plug
   identifier. An owner capture established that a perk's base and enhanced
   variants are two identifiers sharing one name, linked by no manifest field, so
@@ -59,9 +60,9 @@ Decided:
 - Import parsing for a DIM-format file is implemented
   (`services/rolltargets/dimfile.go`, `dimimport.go`): every line of an
   uploaded file is parsed and, where it names a real weapon and resolvable
-  perks, saved, with a per-line report of what happened and why. It is
-  reachable over REST (`POST /api/rolltargets/import`) but not from the app yet
-  — see below.
+  perks, saved, with a per-line report of what happened and why. The Roll
+  targets page's file picker and paste box both reach it, rendering the report
+  inline.
 - Matching saved targets against what the player owns is implemented
   (`services/ownedrolls`, `services/rolltargets/matching.go`). A new package,
   `services/ownedrolls`, reads the membership's vault, character inventories,
@@ -76,14 +77,25 @@ Decided:
   owned weapon when every perk it names is present on that weapon (extra
   perks do not prevent a match), an any-weapon target is tested against every
   owned weapon, and a target nothing satisfies is still reported rather than
-  dropped. `GET /api/rolltargets/matches` exposes the joined result, but
-  nothing in the app calls it yet.
+  dropped. `GET /api/rolltargets/matches` exposes the joined result, and the
+  Roll targets page (`/rolls`, behind the `god-roll` flag, alpha tier) reads
+  it: unmatched targets render as "Still chasing" (a goal, never absence,
+  filtered by default to acquired/wishlisted weapons plus any-weapon targets,
+  with a "Show all" toggle and a search box), wanted matches render as "You
+  have it" (grouped by target, each owned copy labelled "Copy 1", "Copy 2", …
+  with the target's own perks highlighted), and unwanted matches render
+  collapsed and informational. A match-report failure never hides the
+  player's own saved targets — every one still lists, neutrally, with a
+  Reconnect or Retry banner depending on the failure.
 
 Still to settle:
 
-- A frontend page, data-access module, and UI to reach roll targets, DIM
-  import, and the match report — the REST endpoints exist but nothing in the
-  app calls them yet.
+- A per-weapon item-drawer section, deferred as its own card (owner decision,
+  2026-09-23, #350) — the Roll targets page is a separate top-level page, not
+  yet reachable from an item's own detail view.
+- Near-miss detection ("best copy has 1 of 2") and recording which DIM file a
+  target came from — both deferred as their own cards.
+- Manual perk authoring (saving a target without a DIM import) is deferred.
 - How an unmatched or unresolved perk is presented honestly to the owner.
 
 ### Notifications and Digests

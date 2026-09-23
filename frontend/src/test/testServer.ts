@@ -203,6 +203,16 @@ export const sampleFlags = {
       accessible: true,
       locked: false,
     },
+    {
+      key: "god-roll",
+      name: "God-roll insights",
+      desc: "Per-weapon owned rolls and god-roll matching.",
+      category: "Power",
+      minTier: "alpha",
+      enabled: true,
+      accessible: true,
+      locked: false,
+    },
   ],
 };
 
@@ -245,6 +255,24 @@ export const sampleAdminFlags = [
     updatedAt: new Date().toISOString(),
   },
 ];
+
+export const sampleRollTargets = [
+  {
+    id: "1",
+    itemHash: 100,
+    anyWeapon: false,
+    wanted: true,
+    perks: ["Arrowhead Brake", "Explosive Payload"],
+    notes: "PvE roll",
+    dateAdded: new Date().toISOString(),
+  },
+];
+
+export const sampleRollTargetMatches = {
+  wanted: [],
+  unwanted: [],
+  unmatchedTargets: sampleRollTargets,
+};
 
 export const defaultHandlers = [
   http.get(`${API}/api/auth/profile`, () =>
@@ -334,6 +362,29 @@ export const defaultHandlers = [
       itemHash: String(params.hash),
       perkColumns: [],
       catalysts: [],
+    }),
+  ),
+  http.get(`${API}/api/rolltargets`, () =>
+    HttpResponse.json(sampleRollTargets),
+  ),
+  http.get(`${API}/api/rolltargets/matches`, () =>
+    HttpResponse.json(sampleRollTargetMatches),
+  ),
+  http.patch(`${API}/api/rolltargets/:id`, ({ params }) =>
+    HttpResponse.json({ ...sampleRollTargets[0], id: String(params.id) }),
+  ),
+  http.delete(
+    `${API}/api/rolltargets/:id`,
+    () => new HttpResponse(null, { status: 204 }),
+  ),
+  http.post(`${API}/api/rolltargets/bulk`, () =>
+    HttpResponse.json({ deleted: 0, skipped: 0 }),
+  ),
+  http.post(`${API}/api/rolltargets/import`, () =>
+    HttpResponse.json({
+      imported: 0,
+      counts: {},
+      lines: [],
     }),
   ),
 ];

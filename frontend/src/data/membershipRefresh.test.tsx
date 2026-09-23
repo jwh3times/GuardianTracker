@@ -71,6 +71,7 @@ describe("membership refresh fan-out", () => {
       "collections",
       "crafting",
       "digest",
+      "rollTargets",
       "seals",
       "weekly",
     ]);
@@ -188,6 +189,7 @@ describe("membership refresh completeness", () => {
         "./crafting.ts",
         "./digest.ts",
         "./preferences.ts",
+        "./rolltargets.ts",
         "./seals.ts",
         "./weekly.ts",
       ]),

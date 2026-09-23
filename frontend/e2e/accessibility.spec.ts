@@ -66,6 +66,7 @@ const authenticatedPages = [
   ["collections", "/collections", "Collections"],
   ["cosmetics", "/cosmetics", "Cosmetics"],
   ["wishlist", "/wishlist", "Wishlist"],
+  ["rolls", "/rolls", "Roll targets"],
   ["this-week", "/this-week", "This Week"],
   ["catalysts", "/catalysts", "Catalysts & Crafting"],
   ["triumphs", "/triumphs", "Triumphs & Seals"],

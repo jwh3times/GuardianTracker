@@ -34,6 +34,11 @@ const WishList = lazy(() =>
     default: m.WishList,
   })),
 );
+const RollTargets = lazy(() =>
+  import("./features/rolltargets/RollTargets").then((m) => ({
+    default: m.RollTargets,
+  })),
+);
 const ThisWeek = lazy(() =>
   import("./features/weekly/ThisWeek").then((m) => ({
     default: m.ThisWeek,
@@ -176,6 +181,14 @@ const AppContent: React.FC = () => {
             }
           />
           <Route path="/wishlist" element={<WishList />} />
+          <Route
+            path="/rolls"
+            element={
+              <FlaggedRoute flagKey="god-roll">
+                <RollTargets />
+              </FlaggedRoute>
+            }
+          />
           <Route
             path="/this-week"
             element={
