@@ -409,7 +409,7 @@ func TestImportRollTargets_TranscribesUnresolvedPerkDetail(t *testing.T) {
 			},
 			{
 				Number: 2, Outcome: rolltargets.OutcomeUnresolvedPerk,
-				Detail:     "this weapon has no perk matching that hash",
+				Detail:     "no perk matches hash 999",
 				Unresolved: &rolltargets.UnresolvedPerk{Hash: 999, Reason: rolltargets.UnresolvedNotInPool},
 			},
 		},

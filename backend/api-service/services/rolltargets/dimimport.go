@@ -90,7 +90,8 @@ func (u *UnresolvedPerk) Error() string {
 		if u.Name != "" {
 			return fmt.Sprintf("this weapon cannot roll %q", u.Name)
 		}
-		return "this weapon has no perk matching that hash"
+		// A wildcard line lands here too, where there is no weapon to name.
+		return fmt.Sprintf("no perk matches hash %d", u.Hash)
 	}
 }
 
