@@ -137,13 +137,17 @@ func NewRouter(d Deps) *gin.Engine {
 	authed.POST("/wishlist/bulk", d.Handlers.Wishlist.BulkUpdate)
 
 	// Roll targets. Membership-scoped through the JWT alone: no membership on
-	// the route and none in any body.
-	authed.GET("/rolltargets", d.Handlers.RollTargets.GetRollTargets)
-	authed.POST("/rolltargets", d.Handlers.RollTargets.AddRollTarget)
-	authed.PATCH("/rolltargets/:id", d.Handlers.RollTargets.UpdateRollTarget)
-	authed.DELETE("/rolltargets/:id", d.Handlers.RollTargets.RemoveRollTarget)
-	authed.POST("/rolltargets/import", d.Handlers.RollTargets.ImportRollTargets)
-	authed.GET("/rolltargets/matches", d.Handlers.RollTargets.GetRollTargetMatches)
+	// the route and none in any body. Gated on the god-roll flag (alpha tier,
+	// see migration 0011) — RequireFlag composes after the JWT gate `authed`
+	// already applies.
+	rollTargets := authed.Group("/rolltargets", d.Authz.RequireFlag(d.Flags, handlers.FlagGodRoll))
+	rollTargets.GET("", d.Handlers.RollTargets.GetRollTargets)
+	rollTargets.POST("", d.Handlers.RollTargets.AddRollTarget)
+	rollTargets.PATCH("/:id", d.Handlers.RollTargets.UpdateRollTarget)
+	rollTargets.DELETE("/:id", d.Handlers.RollTargets.RemoveRollTarget)
+	rollTargets.POST("/import", d.Handlers.RollTargets.ImportRollTargets)
+	rollTargets.POST("/bulk", d.Handlers.RollTargets.BulkDeleteRollTargets)
+	rollTargets.GET("/matches", d.Handlers.RollTargets.GetRollTargetMatches)
 
 	// Preferences
 	authed.GET("/preferences", d.Handlers.Preferences.GetPreferences)

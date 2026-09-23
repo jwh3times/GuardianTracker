@@ -87,6 +87,30 @@ func (r *rollTargetRepository) Remove(ctx context.Context, membershipID string, 
 	return nil
 }
 
+func (r *rollTargetRepository) RemoveMany(ctx context.Context, membershipID string, ids []rolltargets.TargetID) (int, error) {
+	userID, err := r.userID(ctx, membershipID)
+	if err != nil {
+		return 0, err
+	}
+	removed, err := r.store.BulkDelete(ctx, userID, rollTargetIDs(ids))
+	if err != nil {
+		return 0, rollTargetError(err)
+	}
+	return int(removed), nil
+}
+
+func (r *rollTargetRepository) RemoveAll(ctx context.Context, membershipID string) (int, error) {
+	userID, err := r.userID(ctx, membershipID)
+	if err != nil {
+		return 0, err
+	}
+	removed, err := r.store.DeleteAll(ctx, userID)
+	if err != nil {
+		return 0, rollTargetError(err)
+	}
+	return int(removed), nil
+}
+
 // userID resolves the internal identity every store call needs from the
 // membership the domain works in.
 func (r *rollTargetRepository) userID(ctx context.Context, membershipID string) (int64, error) {
@@ -95,6 +119,14 @@ func (r *rollTargetRepository) userID(ctx context.Context, membershipID string) 
 		return 0, rollTargetError(err)
 	}
 	return id, nil
+}
+
+func rollTargetIDs(ids []rolltargets.TargetID) []int64 {
+	out := make([]int64, len(ids))
+	for i, id := range ids {
+		out[i] = int64(id)
+	}
+	return out
 }
 
 func storedTarget(row *db.RollTarget) rolltargets.StoredTarget {

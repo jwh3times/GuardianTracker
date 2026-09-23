@@ -106,6 +106,30 @@ func (s *RollTargetStore) Delete(ctx context.Context, userID, id int64) (bool, e
 	return tag.RowsAffected() > 0, nil
 }
 
+// BulkDelete removes every roll target in ids that the user owns. Foreign or
+// missing ids are silently skipped. Returns the number of rows deleted.
+func (s *RollTargetStore) BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := s.pool.Exec(ctx,
+		`DELETE FROM roll_targets WHERE id = ANY($1) AND user_id = $2`, ids, userID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// DeleteAll removes every roll target the user owns. Returns the number of
+// rows deleted.
+func (s *RollTargetStore) DeleteAll(ctx context.Context, userID int64) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM roll_targets WHERE user_id = $1`, userID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // rowScanner is satisfied by both pgx.Row and pgx.Rows, so one scan helper
 // serves the single-row writes and the list read.
 type rowScanner interface {

@@ -2,6 +2,7 @@ package rolltargets
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -79,6 +80,25 @@ func (s *Service) Update(ctx context.Context, membershipID string, id TargetID, 
 // Remove deletes one target the membership owns.
 func (s *Service) Remove(ctx context.Context, membershipID string, id TargetID) error {
 	return s.repo.Remove(ctx, membershipID, id)
+}
+
+// DeleteMany removes every listed target the membership owns. Missing and
+// foreign ids are skipped and counted rather than failing the command.
+func (s *Service) DeleteMany(ctx context.Context, membershipID string, ids []TargetID) (BulkResult, error) {
+	unique, err := bulkTargetIDs(ids)
+	if err != nil {
+		return BulkResult{}, err
+	}
+	removed, err := s.repo.RemoveMany(ctx, membershipID, unique)
+	if err != nil {
+		return BulkResult{}, err
+	}
+	return bulkTargetResult(unique, removed), nil
+}
+
+// DeleteAll removes every target the membership owns.
+func (s *Service) DeleteAll(ctx context.Context, membershipID string) (int, error) {
+	return s.repo.RemoveAll(ctx, membershipID)
 }
 
 // find resolves one target the membership owns, or ErrNotFound.
@@ -212,4 +232,41 @@ func validateNotes(notes string) error {
 		return ErrNotesTooLong
 	}
 	return nil
+}
+
+// bulkTargetIDs removes duplicate ids before the size rules apply, so a
+// client that sends the same target twice is asking about one target — not
+// two, and not a larger command than it thinks. Mirrors wishlist's bulkIDs.
+func bulkTargetIDs(ids []TargetID) ([]TargetID, error) {
+	seen := make(map[TargetID]struct{}, len(ids))
+	unique := make([]TargetID, 0, len(ids))
+	for _, id := range ids {
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return nil, ErrNoTargets
+	}
+	if len(unique) > MaxBulkTargets {
+		return nil, fmt.Errorf("%w: at most %d", ErrTooManyTargets, MaxBulkTargets)
+	}
+	return unique, nil
+}
+
+// bulkTargetResult reports what the storage layer actually touched. Targets
+// that were missing or belong to another membership are skipped rather than
+// failing the command, so one stale id in a selection does not discard the
+// rest.
+func bulkTargetResult(requested []TargetID, affected int) BulkResult {
+	if affected < 0 {
+		affected = 0
+	}
+	skipped := len(requested) - affected
+	if skipped < 0 {
+		skipped = 0
+	}
+	return BulkResult{Deleted: affected, Skipped: skipped}
 }

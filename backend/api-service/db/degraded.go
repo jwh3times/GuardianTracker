@@ -62,6 +62,8 @@ type RollTargetRepo interface {
 	Add(ctx context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes string) (*RollTarget, error)
 	Update(ctx context.Context, userID, id int64, perks *[]string, notes *string) (*RollTarget, error)
 	Delete(ctx context.Context, userID, id int64) (bool, error)
+	BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error)
+	DeleteAll(ctx context.Context, userID int64) (int64, error)
 }
 
 type PrefsRepo interface {
@@ -195,6 +197,12 @@ func (degradedRollTargets) Update(context.Context, int64, int64, *[]string, *str
 }
 func (degradedRollTargets) Delete(context.Context, int64, int64) (bool, error) {
 	return false, ErrUnavailable
+}
+func (degradedRollTargets) BulkDelete(context.Context, int64, []int64) (int64, error) {
+	return 0, ErrUnavailable
+}
+func (degradedRollTargets) DeleteAll(context.Context, int64) (int64, error) {
+	return 0, ErrUnavailable
 }
 
 type degradedPrefs struct{}

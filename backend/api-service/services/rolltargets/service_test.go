@@ -27,6 +27,14 @@ type fakeRepo struct {
 	gotID     TargetID
 	addCalled bool
 	updCalled bool
+
+	bulkRemoved int
+	bulkErr     error
+	allRemoved  int
+	allErr      error
+	gotBulkIDs  []TargetID
+	bulkCalled  bool
+	allCalled   bool
 }
 
 func (f *fakeRepo) List(context.Context, string) ([]StoredTarget, error) {
@@ -49,6 +57,23 @@ func (f *fakeRepo) Update(_ context.Context, _ string, id TargetID, patch Update
 		return StoredTarget{}, f.updateErr
 	}
 	return StoredTarget{ID: id}, nil
+}
+
+func (f *fakeRepo) RemoveMany(_ context.Context, _ string, ids []TargetID) (int, error) {
+	f.bulkCalled = true
+	f.gotBulkIDs = ids
+	if f.bulkErr != nil {
+		return 0, f.bulkErr
+	}
+	return f.bulkRemoved, nil
+}
+
+func (f *fakeRepo) RemoveAll(context.Context, string) (int, error) {
+	f.allCalled = true
+	if f.allErr != nil {
+		return 0, f.allErr
+	}
+	return f.allRemoved, nil
 }
 
 // fakePool serves one weapon's perk columns.
@@ -278,5 +303,84 @@ func TestList_UnavailableIsNotEmpty(t *testing.T) {
 	}
 	if got != nil {
 		t.Errorf("targets = %v, want nil", got)
+	}
+}
+
+// A client that sends the same target id twice is asking about one target —
+// not two — and the count reflects only the ids storage actually touched.
+func TestDeleteMany_DedupesAndCountsSkipped(t *testing.T) {
+	repo := &fakeRepo{bulkRemoved: 2}
+	result, err := svc(repo, testPool()).DeleteMany(context.Background(), "m1",
+		[]TargetID{1, 2, 1, 3})
+	if err != nil {
+		t.Fatalf("DeleteMany: %v", err)
+	}
+	if len(repo.gotBulkIDs) != 3 {
+		t.Errorf("storage received %v, want three unique ids", repo.gotBulkIDs)
+	}
+	if result.Deleted != 2 || result.Skipped != 1 {
+		t.Errorf("result = %+v, want {Deleted:2 Skipped:1}", result)
+	}
+}
+
+func TestDeleteMany_RejectsEmptyAndOversizedRequests(t *testing.T) {
+	tooMany := make([]TargetID, MaxBulkTargets+1)
+	for i := range tooMany {
+		tooMany[i] = TargetID(i + 1)
+	}
+	cases := []struct {
+		name string
+		ids  []TargetID
+		want error
+	}{
+		{"none", nil, ErrNoTargets},
+		{"all duplicates of nothing", []TargetID{}, ErrNoTargets},
+		{"over the cap", tooMany, ErrTooManyTargets},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &fakeRepo{}
+			if _, err := svc(repo, testPool()).DeleteMany(context.Background(), "m1", tc.ids); !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v", err, tc.want)
+			}
+			if repo.bulkCalled {
+				t.Error("a refused bulk command still reached storage")
+			}
+		})
+	}
+}
+
+// A storage failure is not a partial success: no count is invented for it.
+func TestDeleteMany_ReportsStorageFailuresWithoutACount(t *testing.T) {
+	repo := &fakeRepo{bulkErr: ErrUnavailable, bulkRemoved: 5}
+	result, err := svc(repo, testPool()).DeleteMany(context.Background(), "m1", []TargetID{1, 2})
+	if !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("err = %v, want ErrUnavailable", err)
+	}
+	if result != (BulkResult{}) {
+		t.Errorf("result = %+v, want no counts alongside a failure", result)
+	}
+}
+
+// DeleteAll is a straight pass-through: every target the membership owns,
+// with no id list to validate.
+func TestDeleteAll_PassesThroughToRepository(t *testing.T) {
+	repo := &fakeRepo{allRemoved: 5}
+	n, err := svc(repo, testPool()).DeleteAll(context.Background(), "m1")
+	if err != nil {
+		t.Fatalf("DeleteAll: %v", err)
+	}
+	if n != 5 {
+		t.Errorf("deleted = %d, want 5", n)
+	}
+	if !repo.allCalled {
+		t.Error("DeleteAll did not reach storage")
+	}
+}
+
+func TestDeleteAll_PropagatesStorageFailure(t *testing.T) {
+	repo := &fakeRepo{allErr: ErrUnavailable}
+	if _, err := svc(repo, testPool()).DeleteAll(context.Background(), "m1"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("err = %v, want ErrUnavailable", err)
 	}
 }

@@ -147,6 +147,79 @@ func TestRollTargetStore_CascadesWithTheUser(t *testing.T) {
 	}
 }
 
+func TestRollTargetStore_BulkDelete_OwnershipScoped(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	s := NewRollTargetStore(pool)
+
+	_, me := createTestUser(t, pool)
+	_, other := createTestUser(t, pool)
+	h1, h2, h3 := uint32(1001), uint32(1002), uint32(1003)
+	a, _ := s.Add(ctx, me, &h1, true, []string{"Outlaw"}, "")
+	b, _ := s.Add(ctx, me, &h2, true, []string{"Outlaw"}, "")
+	foreign, _ := s.Add(ctx, other, &h3, true, []string{"Outlaw"}, "")
+
+	// Delete two owned + one foreign id; only the two owned are removed.
+	removed, err := s.BulkDelete(ctx, me, []int64{a.ID, b.ID, foreign.ID})
+	if err != nil {
+		t.Fatalf("BulkDelete: %v", err)
+	}
+	if removed != 2 {
+		t.Errorf("removed = %d, want 2 (foreign id skipped)", removed)
+	}
+	remaining, _ := s.List(ctx, me)
+	if len(remaining) != 0 {
+		t.Errorf("owned targets remaining = %d, want 0", len(remaining))
+	}
+	stillForeign, _ := s.List(ctx, other)
+	if len(stillForeign) != 1 {
+		t.Errorf("foreign target wrongly deleted; remaining = %d, want 1", len(stillForeign))
+	}
+}
+
+func TestRollTargetStore_BulkDelete_EmptyIDs(t *testing.T) {
+	pool := testPool(t)
+	removed, err := NewRollTargetStore(pool).BulkDelete(context.Background(), 1, []int64{})
+	if err != nil || removed != 0 {
+		t.Fatalf("empty ids: removed=%d err=%v, want 0, nil", removed, err)
+	}
+}
+
+func TestRollTargetStore_DeleteAll_OwnershipScoped(t *testing.T) {
+	pool := testPool(t)
+	ctx := context.Background()
+	s := NewRollTargetStore(pool)
+
+	_, me := createTestUser(t, pool)
+	_, other := createTestUser(t, pool)
+	h1, h2, h3 := uint32(2001), uint32(2002), uint32(2003)
+	if _, err := s.Add(ctx, me, &h1, true, []string{"Outlaw"}, ""); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if _, err := s.Add(ctx, me, &h2, true, []string{"Rampage"}, ""); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if _, err := s.Add(ctx, other, &h3, true, []string{"Outlaw"}, ""); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+
+	removed, err := s.DeleteAll(ctx, me)
+	if err != nil {
+		t.Fatalf("DeleteAll: %v", err)
+	}
+	if removed != 2 {
+		t.Errorf("removed = %d, want 2", removed)
+	}
+	mine, _ := s.List(ctx, me)
+	if len(mine) != 0 {
+		t.Errorf("owner's targets remaining = %d, want 0", len(mine))
+	}
+	theirs, _ := s.List(ctx, other)
+	if len(theirs) != 1 {
+		t.Errorf("another user's target was deleted; remaining = %d, want 1", len(theirs))
+	}
+}
+
 // An any-weapon target names perks without naming a weapon. NULLS NOT DISTINCT
 // is what keeps it deduplicated: without it PostgreSQL reads every NULL as
 // unique and a re-imported file would stack wildcard rows without limit.

@@ -291,6 +291,12 @@ same check, because a plug can have a name without being a weapon perk.
 file order: imported, skipped, already saved, unknown weapon, unresolved perk,
 unsupported, malformed, or failed. Nothing is summarised away and no line is
 dropped, because a line that vanishes is indistinguishable from one that worked.
+An unresolved-perk line additionally carries a structured reason when the
+failure traces to one specific perk hash — not-in-pool, ambiguous, or
+not-a-weapon-perk — alongside the line's own plain-language detail; a naming
+problem with no single hash to blame (an empty or oversized perk set) carries
+no such structure. No detail on the wire carries this package's log-oriented
+`rolltargets:` prefix.
 
 **Owned roll** — one weapon the membership currently holds, with the perks
 presently sitting in its perk columns, named and sorted the way a _Roll target_

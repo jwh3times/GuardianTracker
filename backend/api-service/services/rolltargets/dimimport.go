@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"guardian-tracker/api-service/services/manifest"
 )
@@ -45,12 +46,65 @@ const (
 	OutcomeFailed ImportOutcome = "failed"
 )
 
+// UnresolvedPerkReason classifies why one DIM line's perk hash did not become
+// a stored roll target's perk name.
+type UnresolvedPerkReason string
+
+const (
+	// UnresolvedNotInPool means a weapon-bound line's hash is not in that
+	// weapon's own pool, or a wildcard line's hash is unknown to the manifest
+	// entirely (PerkPool.PlugNames has no entry for it). The two collapse into
+	// one reason because they are the same fact from two callers: "this hash
+	// names no perk this line could use."
+	UnresolvedNotInPool UnresolvedPerkReason = "not-in-pool"
+
+	// UnresolvedAmbiguous means the hash resolved to a plug the manifest could
+	// not link to a single base/enhanced pair (manifest.PerkPlug.Ambiguous).
+	UnresolvedAmbiguous UnresolvedPerkReason = "ambiguous"
+
+	// UnresolvedNotAWeaponPerk means a wildcard line's hash resolved to a real
+	// plug name, but not one any weapon's own perk columns carry — a mod or
+	// other non-perk plug, which could never match a saved roll target.
+	UnresolvedNotAWeaponPerk UnresolvedPerkReason = "not-a-weapon-perk"
+)
+
+// UnresolvedPerk is the structured reason one DIM line's perk hash did not
+// resolve into a stored roll target's perk name. Name is empty when the
+// hash's own display name could not be resolved either — UnresolvedNotInPool
+// is the only reason that can leave it empty.
+type UnresolvedPerk struct {
+	Hash   uint32
+	Name   string
+	Reason UnresolvedPerkReason
+}
+
+// Error is a plain-language message with no package prefix, safe to put on
+// the wire as an import line's Detail.
+func (u *UnresolvedPerk) Error() string {
+	switch u.Reason {
+	case UnresolvedAmbiguous:
+		return fmt.Sprintf("perk %q resolves to more than one plug", u.Name)
+	case UnresolvedNotAWeaponPerk:
+		return fmt.Sprintf("perk %q is not one any weapon can roll", u.Name)
+	default:
+		if u.Name != "" {
+			return fmt.Sprintf("this weapon cannot roll %q", u.Name)
+		}
+		return "this weapon has no perk matching that hash"
+	}
+}
+
 // ImportLine reports one line's fate, with enough detail to point the reader at
 // the file and say why.
 type ImportLine struct {
 	Number  int
 	Outcome ImportOutcome
 	Detail  string
+
+	// Unresolved is set only for OutcomeUnresolvedPerk lines whose failure
+	// traces to one specific perk hash — never for a naming problem with no
+	// single hash to blame (an empty or oversized perk set).
+	Unresolved *UnresolvedPerk
 
 	// ItemHash is nil for an any-weapon roll.
 	ItemHash *uint32
@@ -126,11 +180,22 @@ func (s *Service) ImportDIM(ctx context.Context, membershipID, text string) (Imp
 		if err != nil {
 			switch {
 			case errors.Is(err, ErrNotAWeapon):
-				out.Outcome, out.Detail = OutcomeUnknownWeapon, ErrNotAWeapon.Error()
+				out.Outcome, out.Detail = OutcomeUnknownWeapon, "item hash does not resolve to a weapon with perk columns"
 			case errors.Is(err, ErrPerksUnavailable):
 				return ImportReport{}, err
 			default:
-				out.Outcome, out.Detail = OutcomeUnresolvedPerk, err.Error()
+				out.Outcome = OutcomeUnresolvedPerk
+				var unresolved *UnresolvedPerk
+				switch {
+				case errors.As(err, &unresolved):
+					out.Unresolved, out.Detail = unresolved, unresolved.Error()
+				case errors.Is(err, ErrNoPerks):
+					out.Detail = "names no perk this line could use"
+				case errors.Is(err, ErrTooManyPerks):
+					out.Detail = "names more perks than one roll target can hold"
+				default:
+					out.Detail = "could not resolve this line's perks"
+				}
 			}
 			report.Lines = append(report.Lines, out)
 			continue
@@ -150,11 +215,14 @@ func (s *Service) ImportDIM(ctx context.Context, membershipID, text string) (Imp
 		case errors.Is(err, ErrPerksUnavailable):
 			return ImportReport{}, err
 		case errors.Is(err, ErrUnknownPerkName):
-			// A wildcard line's hashes resolved to names, but not to names any
-			// weapon perk carries (a mod, say). It could never match.
-			out.Outcome, out.Detail = OutcomeUnresolvedPerk, err.Error()
+			// Defensive fallback: resolveDIMPerks already checks a wildcard
+			// line's names against WeaponPerkNames before this call is ever
+			// made, so this path should not be reachable in practice. Kept
+			// because Add performs its own check regardless of caller, and a
+			// manifest swap between the two reads is a real (if rare) window.
+			out.Outcome, out.Detail = OutcomeUnresolvedPerk, "not one any weapon can roll"
 		default:
-			out.Outcome, out.Detail = OutcomeFailed, err.Error()
+			out.Outcome, out.Detail = OutcomeFailed, plainDetail(err)
 		}
 		report.Lines = append(report.Lines, out)
 	}
@@ -172,10 +240,24 @@ func (s *Service) ImportDIM(ctx context.Context, membershipID, text string) (Imp
 // A plug the manifest could not resolve to a single hash per variant is marked
 // Ambiguous, and an ambiguous plug refuses to resolve rather than guessing
 // which of several same-named perks the file meant.
+//
+// A wildcard line's names are additionally checked against WeaponPerkNames
+// here, before the caller ever tries to store them — duplicating the check
+// Add itself performs (see rolltargets.go's ErrUnknownPerkName), but only
+// here is the offending hash still in scope, which is what lets an import
+// report say which one failed instead of just that one did.
 func (s *Service) resolveDIMPerks(itemHash *uint32, hashes []uint32) ([]string, error) {
 	byHash, err := s.dimPerkIndex(itemHash, hashes)
 	if err != nil {
 		return nil, err
+	}
+
+	var weaponNames map[string]string
+	if itemHash == nil {
+		weaponNames, err = s.perks.WeaponPerkNames()
+		if err != nil {
+			return nil, ErrPerksUnavailable
+		}
 	}
 
 	seen := map[string]struct{}{}
@@ -183,11 +265,18 @@ func (s *Service) resolveDIMPerks(itemHash *uint32, hashes []uint32) ([]string, 
 	for _, h := range hashes {
 		plug, ok := byHash[h]
 		if !ok {
-			return nil, fmt.Errorf("%w: %d", ErrUnknownPerk, h)
+			// Not in this weapon's own pool, or (wildcard) unknown to the
+			// manifest entirely — PlugNames simply omits a hash it cannot
+			// name, so there is no name to report here either.
+			return nil, &UnresolvedPerk{Hash: h, Reason: UnresolvedNotInPool}
 		}
 		if plug.Ambiguous {
-			return nil, fmt.Errorf("%w: %d names %q, which resolves to more than one plug",
-				ErrUnknownPerk, h, plug.Name)
+			return nil, &UnresolvedPerk{Hash: h, Name: plug.Name, Reason: UnresolvedAmbiguous}
+		}
+		if weaponNames != nil {
+			if _, ok := weaponNames[strings.ToLower(plug.Name)]; !ok {
+				return nil, &UnresolvedPerk{Hash: h, Name: plug.Name, Reason: UnresolvedNotAWeaponPerk}
+			}
 		}
 		// A file may name both variants of one perk; they are one wanted perk.
 		if _, dup := seen[plug.Name]; dup {
@@ -203,6 +292,13 @@ func (s *Service) resolveDIMPerks(itemHash *uint32, hashes []uint32) ([]string, 
 		return nil, ErrTooManyPerks
 	}
 	return out, nil
+}
+
+// plainDetail turns any domain error into wire-safe text: this package's
+// sentinels all carry a "rolltargets: " log prefix, which a caller reading an
+// import report must never see.
+func plainDetail(err error) string {
+	return strings.TrimPrefix(err.Error(), "rolltargets: ")
 }
 
 // dimPerkIndex builds the hash-to-perk index a line resolves against.

@@ -121,6 +121,105 @@ func TestImportDIM_WildcardNamingANonWeaponPerkIsUnresolved(t *testing.T) {
 	if len(repo.targets) != 0 {
 		t.Errorf("stored %d targets, want none", len(repo.targets))
 	}
+	u := report.Lines[0].Unresolved
+	if u == nil || u.Hash != 444 || u.Name != "Minor Spec" || u.Reason != UnresolvedNotAWeaponPerk {
+		t.Errorf("unresolved = %+v, want {Hash:444 Name:\"Minor Spec\" Reason:not-a-weapon-perk}", u)
+	}
+}
+
+// A weapon-bound line naming a hash outside that weapon's own pool has no
+// name to report — the pool lookup never resolved one — but the hash itself
+// still is, so a reader can look it up themselves.
+func TestImportDIM_WeaponBoundHashNotInPoolReportsTheHashWithNoName(t *testing.T) {
+	repo := &importRepo{}
+	report, err := importSvc(repo).ImportDIM(context.Background(), "m1",
+		"dimwishlist:item=1000&perks=999\n")
+	if err != nil {
+		t.Fatalf("ImportDIM: %v", err)
+	}
+	u := report.Lines[0].Unresolved
+	if u == nil || u.Hash != 999 || u.Name != "" || u.Reason != UnresolvedNotInPool {
+		t.Errorf("unresolved = %+v, want {Hash:999 Name:\"\" Reason:not-in-pool}", u)
+	}
+}
+
+// An ambiguous plug's name is already known — it just cannot say which of two
+// hashes the file meant.
+func TestImportDIM_AmbiguousPlugReportsItsHashAndName(t *testing.T) {
+	repo := &importRepo{}
+	report, err := importSvc(repo).ImportDIM(context.Background(), "m1",
+		"dimwishlist:item=1000&perks=333")
+	if err != nil {
+		t.Fatalf("ImportDIM: %v", err)
+	}
+	u := report.Lines[0].Unresolved
+	if u == nil || u.Hash != 333 || u.Name != "Drop Mag" || u.Reason != UnresolvedAmbiguous {
+		t.Errorf("unresolved = %+v, want {Hash:333 Name:\"Drop Mag\" Reason:ambiguous}", u)
+	}
+}
+
+// A wildcard line's hash the manifest cannot name at all is "not-in-pool" too
+// — PlugNames omits a hash it does not know, the same as a weapon's own pool
+// omitting one it does not carry.
+func TestImportDIM_WildcardHashUnknownToTheManifestReportsNoName(t *testing.T) {
+	repo := &importRepo{}
+	report, err := importSvc(repo).ImportDIM(context.Background(), "m1",
+		"dimwishlist:item=-69420&perks=555\n")
+	if err != nil {
+		t.Fatalf("ImportDIM: %v", err)
+	}
+	u := report.Lines[0].Unresolved
+	if u == nil || u.Hash != 555 || u.Name != "" || u.Reason != UnresolvedNotInPool {
+		t.Errorf("unresolved = %+v, want {Hash:555 Name:\"\" Reason:not-in-pool}", u)
+	}
+}
+
+// A line that fails to store for a reason other than duplication or perk
+// resolution — an overlong note, say — reports OutcomeFailed with a detail
+// that has had this package's log prefix stripped, the same as every other
+// outcome.
+func TestImportDIM_FailedLineDetailHasNoPackagePrefix(t *testing.T) {
+	repo := &importRepo{}
+	longNote := strings.Repeat("x", 501)
+	report, err := importSvc(repo).ImportDIM(context.Background(), "m1",
+		"dimwishlist:item=1000&perks=111#notes:"+longNote)
+	if err != nil {
+		t.Fatalf("ImportDIM: %v", err)
+	}
+	if got := report.Lines[0].Outcome; got != OutcomeFailed {
+		t.Fatalf("outcome = %q, want %q", got, OutcomeFailed)
+	}
+	if strings.Contains(report.Lines[0].Detail, "rolltargets:") {
+		t.Errorf("detail carried the package prefix: %q", report.Lines[0].Detail)
+	}
+	if report.Lines[0].Detail == "" {
+		t.Error("the failing line lost its reason")
+	}
+}
+
+// No detail on the wire may carry this package's log-oriented "rolltargets:"
+// prefix, across every outcome a file can produce in one pass — including the
+// ones that resolve to a Go sentinel error rather than a *UnresolvedPerk.
+func TestImportDIM_NoDetailCarriesThePackagePrefix(t *testing.T) {
+	repo := &importRepo{targets: []StoredTarget{
+		{ID: 1, ItemHash: weapon(1000), Wanted: true, Perks: []string{"Outlaw"}},
+	}}
+	text := "dimwishlist:item=1000&perks=111\n" + // imported
+		"dimwishlist:item=4242&perks=111\n" + // unknown weapon
+		"dimwishlist:item=1000&perks=111\n" + // already saved
+		"dimwishlist:item=1000&perks=999\n" + // unresolved: not in pool
+		"dimwishlist:item=1000&perks=333\n" + // unresolved: ambiguous
+		"dimwishlist:item=-69420&perks=444\n" + // unresolved: not a weapon perk
+		"nonsense\n" // malformed
+	report, err := importSvc(repo).ImportDIM(context.Background(), "m1", text)
+	if err != nil {
+		t.Fatalf("ImportDIM: %v", err)
+	}
+	for _, l := range report.Lines {
+		if strings.Contains(l.Detail, "rolltargets:") {
+			t.Errorf("line %d (%s) detail carried the package prefix: %q", l.Number, l.Outcome, l.Detail)
+		}
+	}
 }
 
 func outcomes(r ImportReport) []ImportOutcome {

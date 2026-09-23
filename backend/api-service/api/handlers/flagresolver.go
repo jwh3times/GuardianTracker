@@ -22,6 +22,7 @@ const (
 	FlagGlobalSearch      = "global-search"
 	FlagCatalystsCrafting = "catalysts-crafting"
 	FlagTriumphsSeals     = "triumphs-seals"
+	FlagGodRoll           = "god-roll"
 )
 
 // FlagResolver caches the feature-flag catalog and answers per-key enabled/min-tier

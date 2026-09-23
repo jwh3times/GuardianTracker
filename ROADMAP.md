@@ -46,10 +46,12 @@ Decided:
   roll). A named weapon's perks are checked against that weapon's own perk pool
   before the target saves (`services/rolltargets`); a weapon may hold several
   saved rolls, and only an identical roll is refused. `GET/POST /api/rolltargets`,
-  `PATCH/DELETE /api/rolltargets/:id`, and `POST /api/rolltargets/import` expose
-  this over REST, membership-scoped through the caller's JWT alone. There is
-  still no way for a player to reach this from the app — no frontend page,
-  data-access module, or UI.
+  `PATCH/DELETE /api/rolltargets/:id`, `POST /api/rolltargets/bulk` (delete
+  named ids or every target the membership owns), and `POST
+/api/rolltargets/import` expose this over REST, membership-scoped through
+  the caller's JWT alone and gated behind the `god-roll` feature flag (alpha
+  tier). There is still no way for a player to reach this from the app — no
+  frontend page, data-access module, or UI.
 - A target names perks by display name rather than by the game's plug
   identifier. An owner capture established that a perk's base and enhanced
   variants are two identifiers sharing one name, linked by no manifest field, so
