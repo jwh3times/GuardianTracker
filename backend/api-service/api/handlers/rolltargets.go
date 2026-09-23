@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"guardian-tracker/api-service/observability"
+	"guardian-tracker/api-service/services/bungie"
 	"guardian-tracker/api-service/services/ownedrolls"
 	"guardian-tracker/api-service/services/rolltargets"
 
@@ -341,18 +342,28 @@ func handleRollTargetError(c *gin.Context, err error, logMsg string) {
 			"error": "Your Destiny inventory could not be read, so matches cannot be shown.",
 			"code":  "OWNED_ROLLS_UNAVAILABLE",
 		})
-	case errors.Is(err, rolltargets.ErrPerksUnavailable):
+	case errors.Is(err, rolltargets.ErrPerksUnavailable), errors.Is(err, ownedrolls.ErrPerksUnavailable):
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "The item database is still downloading — try again in a moment.",
 			"code":  "MANIFEST_NOT_READY",
 		})
 	case isRollTargetValidationError(err):
 		c.JSON(http.StatusBadRequest, gin.H{"error": rollTargetValidationMessage(err)})
+	case isBungieError(err):
+		// The owned-roll read's profile request failed upstream. Answer it the
+		// way every other Bungie-backed route does, so a rate limit reads as a
+		// rate limit rather than as a fault in this server.
+		handleBungieError(c, err)
 	default:
 		ctx := handlerContext(c)
 		observability.Logger(ctx).ErrorContext(ctx, logMsg, observability.Err(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error", "code": "INTERNAL_ERROR"})
 	}
+}
+
+func isBungieError(err error) bool {
+	var bungieErr *bungie.BungieError
+	return errors.As(err, &bungieErr)
 }
 
 func isRollTargetValidationError(err error) bool {

@@ -238,6 +238,24 @@ func TestRead_RequestsOnlyTheComponentsItNeeds(t *testing.T) {
 	}
 }
 
+// A perk pool that cannot be read — a manifest still downloading or mid-swap —
+// is its own answer. It must not pass through as an anonymous failure, and it
+// must not read as a weapon with nothing to report.
+func TestRead_UnreadablePerkPoolIsItsOwnFailure(t *testing.T) {
+	p := &fakeProfiles{resp: profileWith(
+		[]bungie.DestinyItemComponent{{ItemHash: 1000, ItemInstanceID: "a"}},
+		map[string]bungie.ItemSocketsComponent{"a": {Sockets: []bungie.ItemSocketState{{PlugHash: ptr(111)}}}},
+	)}
+	s := NewService(p, fakePerks{err: manifest.ErrNotReady}, fakeCreds{token: "t"})
+	rolls, err := s.Read(context.Background(), 3, "m1")
+	if !errors.Is(err, ErrPerksUnavailable) {
+		t.Fatalf("err = %v, want ErrPerksUnavailable", err)
+	}
+	if rolls != nil {
+		t.Errorf("rolls = %+v, want none alongside the failure", rolls)
+	}
+}
+
 func TestRead_ProfileFailurePassesThrough(t *testing.T) {
 	boom := errors.New("bungie is down")
 	_, err := svc(&fakeProfiles{err: boom}).Read(context.Background(), 3, "m1")
