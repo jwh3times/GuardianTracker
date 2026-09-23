@@ -14,6 +14,18 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.13.2] - 2026-09-23
+
+### Fixed
+
+- A roll saved for any weapon now has its perk names checked, the same way a
+  roll saved for one weapon is. A name no weapon can roll is refused instead of
+  being saved as a target that could never match, and a real name is stored in
+  the game's own spelling whatever case you typed it in.
+- Importing a DIM-format file no longer saves an any-weapon line whose perks turn
+  out to be something other than a weapon perk (a mod, for example). The import
+  report lists that line as an unresolved perk.
+
 ## [1.13.1] - 2026-09-23
 
 ### Fixed
@@ -1420,7 +1432,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.2...HEAD
+[1.13.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.1...v1.13.2
 [1.13.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.11.0...v1.12.0

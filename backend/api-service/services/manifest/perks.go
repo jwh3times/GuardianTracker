@@ -217,6 +217,37 @@ type plugItemDef struct {
 	} `json:"perks"`
 }
 
+// GetWeaponHashes returns the hash of every weapon definition (itemType 3), in
+// no particular order. It exists so a caller can walk every weapon's perk pool;
+// against the manifest verified for #363 that is 2208 weapons, all with perk
+// columns.
+func (r *Repository) GetWeaponHashes() ([]uint32, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	rows, err := r.db.Query(
+		"SELECT id FROM DestinyInventoryItemDefinition WHERE json_extract(json, '$.itemType') = ?",
+		weaponItemType,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("GetWeaponHashes: %w", err)
+	}
+	defer rows.Close()
+
+	var out []uint32
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("GetWeaponHashes scan: %w", err)
+		}
+		// Row ids are the hash reinterpreted as a signed 32-bit integer.
+		out = append(out, uint32(id))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("GetWeaponHashes: %w", err)
+	}
+	return out, nil
+}
+
 // GetWeaponPerks returns the ordered possible-perk columns for a weapon, or nil
 // for non-weapons / unknown hashes. Pure manifest data — no user state.
 func (r *Repository) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {

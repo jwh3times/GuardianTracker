@@ -154,9 +154,16 @@ backend/api-service/
                                            own boundedCache; all three cleared by InvalidateCache, called from
                                            OnVersionChanged (ManifestObserver). PlugNames(hashes) resolves plug
                                            item hashes to display names (uncached passthrough to
-                                           repo.GetItemsByHashes) — for an any-weapon roll target, which has no
-                                           weapon pool to resolve perk names against; a hash with no name or no
-                                           definition is simply absent from the result
+                                           repo.GetItemsByHashes) — for an any-weapon roll target's DIM import,
+                                           which has no weapon pool to resolve perk names against; a hash with
+                                           no name or no definition is simply absent from the result.
+                                           WeaponPerkNames() is the union of every name any weapon's perk
+                                           columns carry (lower case key, manifest spelling as value) — one
+                                           immutable publication per manifest generation, like Catalog, built by
+                                           walking every weapon hash (repo.GetWeaponHashes) and its perk columns
+                                           (repo.GetWeaponPerks) rather than the bounded per-weapon cache, which
+                                           would evict; it is what an any-weapon roll target's named perks are
+                                           validated against
   services/items/boundedcache.go       ← Unexported generic boundedCache[K,V]: size-capped, no TTL, keyed by
                                            item hash; not cache.Cache — cleared wholesale on manifest swap instead
                                            of expiring
@@ -236,7 +243,8 @@ backend/api-service/
                                            ErrUnknownPerkName, ErrUnknownPerk, ErrPerksUnavailable,
                                            ErrUnavailable), the membership-keyed Repository port, and the
                                            PerkPool port satisfied by *items.Service (GetWeaponPerks,
-                                           PlugNames). Perks are stored as display names, not plug hashes —
+                                           PlugNames, WeaponPerkNames). Perks are stored as display names,
+                                           not plug hashes —
                                            a perk's base/enhanced variants share one name but no manifest
                                            field links the two hashes, so a stored hash would match only the
                                            captured variant. A weapon may hold several saved rolls (only an
@@ -251,9 +259,12 @@ backend/api-service/
                                            case-insensitive but the stored value keeps the manifest's own
                                            spelling. A successful read of no perk columns (ErrNotAWeapon)
                                            and a failed read (ErrPerksUnavailable) are separate outcomes and
-                                           never collapse. An any-weapon target has no pool, so its perk
-                                           names are checked only for duplicates (validateAnyWeaponPerks) —
-                                           the import path is what resolves their manifest spelling. Update
+                                           never collapse. An any-weapon target has no single pool, so
+                                           validateAnyWeaponPerks checks its names against
+                                           PerkPool.WeaponPerkNames, the union of every weapon's perk-column
+                                           names — a name outside that union could never match any weapon and
+                                           returns ErrUnknownPerkName (a failed read returns
+                                           ErrPerksUnavailable); duplicates still return ErrDuplicatePerk. Update
                                            reads the current target first (Repository has no single-row
                                            read) so a perks patch validates against the right weapon and a
                                            missing/foreign target reports ErrNotFound before anything is
@@ -285,7 +296,11 @@ backend/api-service/
                                            hashes through PerkColumn.Plugs (matching Base or Enhanced) and
                                            refuses to resolve a plug marked Ambiguous. An any-weapon
                                            (wildcard) line resolves its perk hashes straight against
-                                           PerkPool.PlugNames instead, since it has no weapon pool.
+                                           PerkPool.PlugNames instead, since it has no weapon pool — but that
+                                           only resolves a hash to whatever name its plug carries, which may
+                                           be a mod or other non-perk plug; Add's validateAnyWeaponPerks check
+                                           against PerkPool.WeaponPerkNames catches that case and reports it
+                                           as unresolved perk rather than importing.
   services/ownedrolls/ownedrolls.go    ← Service.Read(ctx, membershipType, membershipID) ([]OwnedRoll,
                                            error): which weapon rolls the membership currently holds.
                                            Requests profile components 102 (vault), 201 (character
@@ -655,6 +670,7 @@ serves; it registers no routes itself.
 | Method                         | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GetWeaponTypesByName()`       | Lowercased weapon name → weapon type display name (table scan; callers cache)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `GetWeaponHashes()`            | Every weapon definition's item hash (itemType 3), unordered; against the manifest verified for #363, 2208 weapons. Backs `items.Service.WeaponPerkNames`, which walks every hash's `GetWeaponPerks` to build the union of every weapon's perk-column names (866 names) — what an any-weapon roll target's named perks are validated against                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `GetWeaponPerks(itemHash)`     | Socket-category → plug-set → plug-item traversal yielding ordered perk columns across every weapon socket category (Intrinsic/Barrel/Magazine/Trait N/Origin plus Scope/Launcher Barrel/Battery/Stock/Blade/Guard/Arrow/Bowstring/Haft/Grip/Rail/Bolt, and a generic "Perks" fallback for unrecognized plug-category-identifiers); weapon-only (itemType 3 + weapon socket categories); `isJunkPCI` blacklist-filters kill-tracker/empty/catalyst-socket plugs (catalysts render separately via `GetWeaponCatalysts`) instead of allowlisting known categories, so no perk-bearing column is silently dropped; dedupes by name into `Perks`, and index-aligned `Plugs []PerkPlug` keeps the base/enhanced plug hashes the name-level dedupe collapses — the Manifest links a perk's two variants by no field of its own, so pairing is derived per-pool from the `itemTypeDisplayName` "Enhanced " prefix convention and reported `Ambiguous` rather than guessed when it does not hold; also exposed via `services/items/service.go` cached wrapper |
 | `GetAcquisitionRows(hashes)`   | Item definitions AND their linked collectibles for the requested hashes, read under ONE lock so a manifest swap cannot land between the two queries. The collectibles half is keyed by itemHash (`map[uint32][]CollectibleDefinition`) and keeps an item's several collectibles in collectible-id order; that multiplicity backs the acquisition-source union, and this is now the only path exposing it. Empty request touches no database. Backs `items.Lookup`; `GetItemView`/`ItemView` were deleted with it — the item-detail wire is now built from `items.AcquisitionFacts`, so armor `itemType` is slot-specific rather than a generic "Armor"                                                                                                                                                                                                                                                                                                                                                                                               |
 | `GetWeaponCatalysts(itemHash)` | Catalyst-socket plug-set traversal yielding an exotic weapon's catalyst name/description pool; `(nil, nil)` for non-weapons, non-exotics, or exotics without a detected catalyst socket; also exposed via `services/items/service.go` cached wrapper (`GetCatalysts`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |

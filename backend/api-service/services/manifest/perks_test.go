@@ -235,6 +235,28 @@ func colByLabel(cols []PerkColumn, label string) (PerkColumn, bool) {
 	return PerkColumn{}, false
 }
 
+// GetWeaponHashes lists weapons and nothing else, so a walk over every weapon's
+// perk pool never reads armor.
+func TestGetWeaponHashes_ListsWeaponsOnly(t *testing.T) {
+	repo := perksRepo(t)
+	hashes, err := repo.GetWeaponHashes()
+	if err != nil {
+		t.Fatalf("GetWeaponHashes: %v", err)
+	}
+	got := map[uint32]bool{}
+	for _, h := range hashes {
+		got[h] = true
+	}
+	for _, want := range []uint32{1000, 2000, 4000} {
+		if !got[want] {
+			t.Errorf("weapon %d missing from %v", want, hashes)
+		}
+	}
+	if got[3000] {
+		t.Errorf("armor 3000 listed as a weapon: %v", hashes)
+	}
+}
+
 func TestGetWeaponPerks_RandomRollLegendary(t *testing.T) {
 	repo := perksRepo(t)
 	cols, err := repo.GetWeaponPerks(1000)

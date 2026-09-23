@@ -4,6 +4,8 @@
 package items
 
 import (
+	"maps"
+	"strings"
 	"sync"
 
 	"guardian-tracker/api-service/services/bungie"
@@ -21,6 +23,7 @@ type itemRepo interface {
 	GetWeaponCatalysts(itemHash uint32) ([]manifest.WeaponCatalyst, error)
 	GetAcquisitionRows(hashes []uint32) (*manifest.AcquisitionRows, error)
 	GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error)
+	GetWeaponHashes() ([]uint32, error)
 }
 
 // Service owns manifest-derived, user-independent item detail: weapon perk
@@ -40,6 +43,9 @@ type Service struct {
 
 	catalogMu sync.RWMutex
 	catalog   []AcquisitionFacts
+
+	perkNamesMu sync.RWMutex
+	perkNames   map[string]string
 }
 
 func NewService(repo itemRepo) *Service {
@@ -66,6 +72,55 @@ func (s *Service) storeCatalog(c []AcquisitionFacts) {
 	s.catalogMu.Lock()
 	defer s.catalogMu.Unlock()
 	s.catalog = c
+}
+
+func (s *Service) loadPerkNames() map[string]string {
+	s.perkNamesMu.RLock()
+	defer s.perkNamesMu.RUnlock()
+	return s.perkNames
+}
+
+func (s *Service) storePerkNames(n map[string]string) {
+	s.perkNamesMu.Lock()
+	defer s.perkNamesMu.Unlock()
+	s.perkNames = n
+}
+
+// WeaponPerkNames returns every name any weapon's perk columns carry, keyed by
+// lower case with the manifest's spelling as the value.
+//
+// Building it reads every weapon definition (about 2,200, a few seconds against
+// the real manifest), so the set is one publication per manifest generation,
+// like Catalog. It reads the repository directly rather than through the
+// per-weapon cache, which is bounded and would evict. A failed read returns the
+// error and caches nothing: an empty set would refuse every name as unknown.
+// Callers receive a copy.
+func (s *Service) WeaponPerkNames() (map[string]string, error) {
+	attempt := s.publication.Begin()
+	if cached := s.loadPerkNames(); cached != nil {
+		return maps.Clone(cached), nil
+	}
+
+	hashes, err := s.repo.GetWeaponHashes()
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]string{}
+	for _, h := range hashes {
+		cols, err := s.repo.GetWeaponPerks(h)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range cols {
+			for _, p := range c.Perks {
+				names[strings.ToLower(p)] = p
+			}
+		}
+	}
+
+	attempt.Publish(func() { s.storePerkNames(names) })
+
+	return maps.Clone(names), nil
 }
 
 // GetWeaponPerks returns cached columns or computes and caches them. A weapon
@@ -137,4 +192,5 @@ func (s *Service) clearAll() {
 	s.catalysts.clear()
 	s.facts.clear()
 	s.storeCatalog(nil)
+	s.storePerkNames(nil)
 }

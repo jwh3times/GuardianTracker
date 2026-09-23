@@ -280,10 +280,12 @@ against the weapon's own perk pool before persisting, so a saved target is one
 that can actually match; a perk the weapon cannot roll is refused rather than
 stored to never match. A successful read of no perk columns (not a weapon) and a
 failed read (pool unavailable) are separate outcomes and never collapse into one
-another. An any-weapon target has no pool to check against: a manually saved one
-only rejects a duplicate perk name, while DIM import instead resolves its perk
-names from plug hashes — sound in that direction only, because many plugs share
-one name but each hash has exactly one.
+another. An any-weapon target has no single pool, so its names are checked
+against the union of every weapon's perk-column names, the exact set any
+weapon-bound target could name. DIM import first resolves a wildcard line's perk
+names from plug hashes (sound in that direction only, because many plugs share
+one name but each hash has exactly one), and the resolved names then face the
+same check, because a plug can have a name without being a weapon perk.
 
 **DIM import report** — one outcome per line of an imported DIM-format file, in
 file order: imported, skipped, already saved, unknown weapon, unresolved perk,

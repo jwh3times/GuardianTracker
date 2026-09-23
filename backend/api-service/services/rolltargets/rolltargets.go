@@ -187,4 +187,10 @@ type PerkPool interface {
 	// one, and base and enhanced variants share theirs — so a hash resolves to
 	// the same normalised name either way.
 	PlugNames(hashes []uint32) (map[uint32]string, error)
+
+	// WeaponPerkNames returns every name any weapon's perk columns carry, keyed
+	// by lower case with the manifest's spelling as the value. It is what an
+	// any-weapon target's names are checked against: the union of every pool a
+	// weapon-bound target could be checked against instead.
+	WeaponPerkNames() (map[string]string, error)
 }
