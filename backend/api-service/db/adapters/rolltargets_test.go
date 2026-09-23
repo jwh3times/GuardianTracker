@@ -19,12 +19,13 @@ import (
 type fakeRollTargetStore struct {
 	db.RollTargetRepo
 
-	userID  int64
-	userErr error
-	rows    []db.RollTarget
-	row     *db.RollTarget
-	err     error
-	found   bool
+	userID   int64
+	userErr  error
+	rows     []db.RollTarget
+	row      *db.RollTarget
+	err      error
+	found    bool
+	affected int64
 
 	gotUserID int64
 	gotID     int64
@@ -33,6 +34,7 @@ type fakeRollTargetStore struct {
 	gotPerks  []string
 	gotNotes  string
 	gotPatch  *[]string
+	gotIDs    []int64
 }
 
 func (f *fakeRollTargetStore) GetUserID(context.Context, string) (int64, error) {
@@ -57,6 +59,16 @@ func (f *fakeRollTargetStore) Update(_ context.Context, userID, id int64, perks 
 func (f *fakeRollTargetStore) Delete(_ context.Context, userID, id int64) (bool, error) {
 	f.gotUserID, f.gotID = userID, id
 	return f.found, f.err
+}
+
+func (f *fakeRollTargetStore) BulkDelete(_ context.Context, userID int64, ids []int64) (int64, error) {
+	f.gotUserID, f.gotIDs = userID, ids
+	return f.affected, f.err
+}
+
+func (f *fakeRollTargetStore) DeleteAll(_ context.Context, userID int64) (int64, error) {
+	f.gotUserID = userID
+	return f.affected, f.err
 }
 
 func TestRollTargetRepository_ResolvesMembershipToUserID(t *testing.T) {
@@ -120,6 +132,46 @@ func TestRollTargetRepository_NoDatabaseBecomesUnavailable(t *testing.T) {
 	if err := repo.Remove(context.Background(), "m", 1); !errors.Is(err, rolltargets.ErrUnavailable) {
 		t.Errorf("Remove err = %v, want ErrUnavailable", err)
 	}
+	if _, err := repo.RemoveMany(context.Background(), "m", []rolltargets.TargetID{1}); !errors.Is(err, rolltargets.ErrUnavailable) {
+		t.Errorf("RemoveMany err = %v, want ErrUnavailable", err)
+	}
+	if _, err := repo.RemoveAll(context.Background(), "m"); !errors.Is(err, rolltargets.ErrUnavailable) {
+		t.Errorf("RemoveAll err = %v, want ErrUnavailable", err)
+	}
+}
+
+// The bulk paths carry every requested id to storage and hand back exactly
+// what storage reports touching, the same contract wishlist's bulk adapter
+// keeps.
+func TestRollTargetRepository_BulkOperationsCarryIDsAndCounts(t *testing.T) {
+	t.Run("remove many", func(t *testing.T) {
+		store := &fakeRollTargetStore{userID: 1, affected: 2}
+		removed, err := NewRollTargetRepository(store).RemoveMany(context.Background(), "m",
+			[]rolltargets.TargetID{1, 2, 3})
+		if err != nil {
+			t.Fatalf("RemoveMany: %v", err)
+		}
+		if removed != 2 {
+			t.Errorf("removed = %d, want 2", removed)
+		}
+		if len(store.gotIDs) != 3 || store.gotIDs[0] != 1 || store.gotIDs[2] != 3 {
+			t.Errorf("stored ids = %v, want [1 2 3]", store.gotIDs)
+		}
+	})
+
+	t.Run("remove all", func(t *testing.T) {
+		store := &fakeRollTargetStore{userID: 1, affected: 5}
+		removed, err := NewRollTargetRepository(store).RemoveAll(context.Background(), "m")
+		if err != nil {
+			t.Fatalf("RemoveAll: %v", err)
+		}
+		if removed != 5 {
+			t.Errorf("removed = %d, want 5", removed)
+		}
+		if store.gotUserID != 1 {
+			t.Errorf("store saw user id %d, want 1", store.gotUserID)
+		}
+	})
 }
 
 // A real read failure must not be dressed up as "no database" — that would tell

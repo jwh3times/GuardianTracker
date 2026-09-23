@@ -265,12 +265,13 @@ Primary route groups:
   reset countdowns; authenticated vendor calls validate and follow the selected
   character because Bungie's vendor inventory can be class-specific
 - wishlist: user-scoped CRUD
-- rolltargets: user-scoped CRUD, DIM-format wish list import, and a match
-  report joining saved targets against a fresh read of the membership's owned
-  weapon rolls (`services/ownedrolls`); membership is read solely from the
-  JWT — unlike collections, characters, catalysts, crafting, and seals, no
-  route or request body carries a membership; not yet called from the
-  frontend
+- rolltargets: user-scoped CRUD, bulk delete (named ids or every target the
+  membership owns), DIM-format wish list import, and a match report joining
+  saved targets against a fresh read of the membership's owned weapon rolls
+  (`services/ownedrolls`); membership is read solely from the JWT — unlike
+  collections, characters, catalysts, crafting, and seals, no route or
+  request body carries a membership; gated behind the `god-roll` feature flag
+  (alpha tier); not yet called from the frontend
 - preferences: user preferences plus irreversible first-run onboarding completion
 - digest: since-last-visit collectible digest, advancing the visit clock as a
   side effect

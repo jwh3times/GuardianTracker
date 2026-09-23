@@ -208,9 +208,11 @@ All wishlist endpoints (`GET/POST/PUT/DELETE /api/wishlist`) are JWT-protected a
 
 ## Roll target endpoints — data isolation
 
-All six roll target endpoints (`GET/POST /api/rolltargets`, `PATCH/DELETE
-/api/rolltargets/:id`, `POST /api/rolltargets/import`, `GET
-/api/rolltargets/matches`) are JWT-gated and read the caller's membership
+All seven roll target endpoints (`GET/POST /api/rolltargets`, `PATCH/DELETE
+/api/rolltargets/:id`, `POST /api/rolltargets/bulk`, `POST
+/api/rolltargets/import`, `GET /api/rolltargets/matches`) are JWT-gated,
+additionally gated behind the `god-roll` feature flag (`authz.RequireFlag`,
+min tier alpha), and read the caller's membership
 solely from the JWT claim — no route parameter or request-body field ever
 carries a membership, so there is no membership pair to mismatch and no
 `ownershipCheck` call. They are not part of the
@@ -218,6 +220,9 @@ collections/characters/catalysts/crafting/seals family that authorizes an
 explicit path membership pair.
 
 - Test: call any roll target endpoint without a JWT — must return 401
+- Test: with `god-roll` disabled, every roll target route must return 404
+  `FEATURE_DISABLED`; as a standard or beta caller (below the flag's alpha min
+  tier) with `god-roll` enabled, every route must return 403 `TIER_LOCKED`
 - Test: attempt `PATCH` or `DELETE` on a `:id` belonging to another user's roll
   target — must return 404, not 403 and not another user's data; the handler
   deliberately collapses "missing" and "belongs to someone else" into the same
@@ -231,6 +236,31 @@ explicit path membership pair.
 - Test: confirm the import endpoint accepts only raw text (no JSON wrapper
   expected) and that a well-formed DIM file from one account cannot affect
   another account's saved targets
+- Test: an unresolved-perk import line's `unresolved.perkHash`/`perkName` must
+  never carry a Go package prefix (`rolltargets:`) and must never disclose
+  anything about another account's saved targets — it is purely a fact about
+  the uploaded file and the manifest
+
+### Roll target bulk delete — cross-user isolation
+
+`POST /api/rolltargets/bulk` accepts `{"action":"delete","ids":[...]}` or
+`{"action":"delete_all"}`. Both forms resolve the acting user id from the JWT
+alone before touching storage, and the store's SQL is set-based
+(`id = ANY($1) AND user_id = $2`; `delete_all` is `WHERE user_id = $1`) —
+there is no code path that can delete a row by id without also matching the
+caller's own `user_id`.
+
+- Test: as user A, bulk-delete a mix of A's own ids and B's ids in one
+  request — the response's `deleted` count must equal only A's ids that
+  existed, `skipped` must account for the rest, and B's targets must still
+  exist afterward; confirm via a follow-up `GET /api/rolltargets` as B
+- Test: as user A, call `delete_all` — only A's targets are removed; B's
+  targets (and B's own subsequent `GET /api/rolltargets`) are unaffected
+- Test: an empty `ids` array, an oversized `ids` array (over 100 unique ids),
+  or an unrecognized `action` value — each must return 400, not 500, and must
+  not reach storage
+- Test: `ids` containing a non-numeric string — must return 400 before any
+  service call
 
 ### Roll target match endpoint — inventory read
 

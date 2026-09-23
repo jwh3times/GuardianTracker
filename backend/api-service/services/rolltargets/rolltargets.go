@@ -39,6 +39,19 @@ const MaxPerks = 10
 // that the storage constraint would accept.
 const MaxNoteRunes = 500
 
+// MaxBulkTargets bounds one bulk delete, counted after duplicate ids are
+// removed — matching wishlist's MaxBulkEntries.
+const MaxBulkTargets = 100
+
+// BulkResult reports how a bulk delete landed. Skipped counts requested ids
+// that did not correspond to a target this membership owns — missing or
+// foreign, never distinguished, for the same reason a single delete does not
+// distinguish them either.
+type BulkResult struct {
+	Deleted int
+	Skipped int
+}
+
 // StoredTarget is one persisted, user-authored roll target.
 //
 // Perks holds perk display names, not plug hashes, and they are AND-ed: a
@@ -144,6 +157,12 @@ var (
 	// unreadable manifest must not look like a verdict about the weapon, in
 	// either direction.
 	ErrPerksUnavailable = errors.New("rolltargets: weapon perk pool unavailable")
+
+	// ErrNoTargets reports a bulk delete naming no target ids.
+	ErrNoTargets = errors.New("rolltargets: ids must be a non-empty list")
+
+	// ErrTooManyTargets reports a bulk delete over MaxBulkTargets.
+	ErrTooManyTargets = errors.New("rolltargets: too many target ids in one request")
 )
 
 // Repository is the membership-keyed persistence port. Implementations resolve
@@ -169,6 +188,14 @@ type Repository interface {
 	// Remove deletes one target the membership owns; missing or foreign gets
 	// ErrNotFound.
 	Remove(ctx context.Context, membershipID string, id TargetID) error
+
+	// RemoveMany deletes the listed targets the membership owns. Missing or
+	// foreign ids are skipped, not counted as failures — the same rule Remove
+	// applies to one id.
+	RemoveMany(ctx context.Context, membershipID string, ids []TargetID) (int, error)
+
+	// RemoveAll deletes every target the membership owns.
+	RemoveAll(ctx context.Context, membershipID string) (int, error)
 }
 
 // PerkPool is the manifest surface roll targets consume: which perks can this

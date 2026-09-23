@@ -29,8 +29,15 @@ func TestFlagStore_SeedAndList(t *testing.T) {
 		t.Errorf("global-search = %+v, want enabled min_tier=0", f)
 	}
 	// Not-yet-built features are seeded disabled at a higher tier.
-	if f, ok := byKey["god-roll"]; !ok || f.Enabled || f.MinTier != 2 {
-		t.Errorf("god-roll = %+v, want disabled min_tier=2", f)
+	if f, ok := byKey["char-loadouts"]; !ok || f.Enabled || f.MinTier != 2 {
+		t.Errorf("char-loadouts = %+v, want disabled min_tier=2", f)
+	}
+	// god-roll shipped its REST surface in 0011 and is enabled at its
+	// original alpha tier — unlike the flags 0002 seeded enabled at
+	// min_tier=0, it was never reachable by any current user, so there is
+	// nobody to preserve access for by seeding it any wider.
+	if f, ok := byKey["god-roll"]; !ok || !f.Enabled || f.MinTier != 2 {
+		t.Errorf("god-roll = %+v, want enabled min_tier=2", f)
 	}
 }
 
@@ -80,7 +87,22 @@ func TestSeededFlagsIncludeEnforced(t *testing.T) {
 	// Keep in sync with handlers.Flag* (server-side enforcement, Task 3). Duplicated
 	// here deliberately as a tripwire: this fails if a migration ever drops a flag
 	// that a route still enforces (which would silently fail open in production).
-	enforced := []string{"weekly-planner", "global-search", "catalysts-crafting", "triumphs-seals"}
+	//
+	// wantMinTier is the tier the flag must be seeded at: 0 for the flags 0002
+	// already shipped enabled to everyone (no current user loses access), and
+	// alpha (2) for god-roll, which migration 0011 enables at the design tier
+	// it was seeded disabled at in 0002 — it has never been reachable by any
+	// current user, so there is nobody to preserve access for.
+	enforced := []struct {
+		key         string
+		wantMinTier int16
+	}{
+		{"weekly-planner", 0},
+		{"global-search", 0},
+		{"catalysts-crafting", 0},
+		{"triumphs-seals", 0},
+		{"god-roll", 2},
+	}
 
 	pool := testPool(t)
 	list, err := NewFlagStore(pool).List(context.Background())
@@ -91,14 +113,15 @@ func TestSeededFlagsIncludeEnforced(t *testing.T) {
 	for _, f := range list {
 		byKey[f.Key] = f
 	}
-	for _, key := range enforced {
-		f, ok := byKey[key]
+	for _, tc := range enforced {
+		f, ok := byKey[tc.key]
 		if !ok {
-			t.Errorf("enforced flag %q missing from seed — the route would fail open", key)
+			t.Errorf("enforced flag %q missing from seed — the route would fail open", tc.key)
 			continue
 		}
-		if !f.Enabled || f.MinTier != 0 {
-			t.Errorf("enforced flag %q = {enabled:%v min_tier:%d}, want enabled min_tier=0 (no current user loses access)", key, f.Enabled, f.MinTier)
+		if !f.Enabled || f.MinTier != tc.wantMinTier {
+			t.Errorf("enforced flag %q = {enabled:%v min_tier:%d}, want enabled min_tier=%d",
+				tc.key, f.Enabled, f.MinTier, tc.wantMinTier)
 		}
 	}
 }

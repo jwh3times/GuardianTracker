@@ -14,6 +14,29 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.14.0] - 2026-09-23
+
+### Added
+
+- You can delete several saved rolls at once, or all of them, with
+  `POST /api/rolltargets/bulk` (`{"action":"delete","ids":[…]}` or
+  `{"action":"delete_all"}`). It answers how many were deleted and how many
+  were skipped. An id that is missing or belongs to someone else is skipped and
+  counted, never reported back, the same way the wish list's bulk actions work.
+  This is what makes a large DIM-format import reversible.
+- A DIM-format import line that could not resolve a perk now says which perk and
+  why: an `unresolved` object with the perk hash, its name when known, and a
+  reason (`not-in-pool`, `ambiguous`, or `not-a-weapon-perk`).
+
+### Changed
+
+- Roll targets are now behind the `god-roll` feature flag at the alpha tier, and
+  that flag is switched on by this release. Alpha and admin accounts keep
+  access; a standard or beta account gets `403 TIER_LOCKED` from every
+  `/api/rolltargets` route until it opts into alpha.
+- Import report details are plain language and no longer carry internal error
+  prefixes.
+
 ## [1.13.2] - 2026-09-23
 
 ### Fixed
@@ -1432,7 +1455,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.2...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.2...v1.14.0
 [1.13.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.1...v1.13.2
 [1.13.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.0...v1.13.1
 [1.13.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.12.0...v1.13.0

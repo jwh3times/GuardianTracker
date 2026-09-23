@@ -29,6 +29,8 @@ type rollTargetService interface {
 	Add(ctx context.Context, membershipID string, cmd rolltargets.AddCommand) (rolltargets.StoredTarget, error)
 	Update(ctx context.Context, membershipID string, id rolltargets.TargetID, patch rolltargets.UpdateCommand) (rolltargets.StoredTarget, error)
 	Remove(ctx context.Context, membershipID string, id rolltargets.TargetID) error
+	DeleteMany(ctx context.Context, membershipID string, ids []rolltargets.TargetID) (rolltargets.BulkResult, error)
+	DeleteAll(ctx context.Context, membershipID string) (int, error)
 	ImportDIM(ctx context.Context, membershipID, text string) (rolltargets.ImportReport, error)
 	Matches(ctx context.Context, membershipType int, membershipID string) (rolltargets.MatchReport, error)
 }
@@ -175,14 +177,85 @@ func (h *RollTargetsHandler) RemoveRollTarget(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// bulkDeleteRollTargetsRequest is the bulk body: "delete" removes the named
+// ids, "delete_all" removes every target the membership owns and carries no
+// ids at all.
+type bulkDeleteRollTargetsRequest struct {
+	Action string   `json:"action"`
+	IDs    []string `json:"ids"`
+}
+
+// BulkDeleteRollTargets handles POST /api/rolltargets/bulk.
+//
+// Missing or foreign ids are skipped and counted, never 404 and never listed
+// — the same rule a single DELETE applies to one id. Response:
+// {"deleted":n,"skipped":m}; delete_all always answers skipped:0, since it
+// names nothing that could be missing or foreign.
+func (h *RollTargetsHandler) BulkDeleteRollTargets(c *gin.Context) {
+	var body bulkDeleteRollTargetsRequest
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	membershipID := membershipIDOf(c)
+	switch body.Action {
+	case "delete":
+		ids, ok := parseTargetIDs(c, body.IDs)
+		if !ok {
+			return
+		}
+		result, err := h.targets.DeleteMany(c.Request.Context(), membershipID, ids)
+		if err != nil {
+			handleRollTargetError(c, err, "roll target bulk delete failed")
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": result.Deleted, "skipped": result.Skipped})
+	case "delete_all":
+		deleted, err := h.targets.DeleteAll(c.Request.Context(), membershipID)
+		if err != nil {
+			handleRollTargetError(c, err, "roll target delete-all failed")
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": deleted, "skipped": 0})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete' or 'delete_all'"})
+	}
+}
+
+// parseTargetIDs converts the wire's string ids to TargetID, answering the
+// request itself on the first one that is not a valid id.
+func parseTargetIDs(c *gin.Context, raw []string) ([]rolltargets.TargetID, bool) {
+	ids := make([]rolltargets.TargetID, 0, len(raw))
+	for _, s := range raw {
+		id, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+			return nil, false
+		}
+		ids = append(ids, rolltargets.TargetID(id))
+	}
+	return ids, true
+}
+
+// unresolvedPerkResponse is the structured reason one DIM line's perk hash
+// did not resolve, alongside the line's own plain-language Detail. PerkName
+// is omitted when the hash's own display name could not be resolved either.
+type unresolvedPerkResponse struct {
+	PerkHash uint32 `json:"perkHash"`
+	PerkName string `json:"perkName,omitempty"`
+	Reason   string `json:"reason"`
+}
+
 // importLineResponse is one line's fate on the wire.
 type importLineResponse struct {
-	Line     int      `json:"line"`
-	Outcome  string   `json:"outcome"`
-	Detail   string   `json:"detail,omitempty"`
-	ItemHash *uint32  `json:"itemHash,omitempty"`
-	Wanted   bool     `json:"wanted"`
-	Perks    []string `json:"perks,omitempty"`
+	Line       int                     `json:"line"`
+	Outcome    string                  `json:"outcome"`
+	Detail     string                  `json:"detail,omitempty"`
+	Unresolved *unresolvedPerkResponse `json:"unresolved,omitempty"`
+	ItemHash   *uint32                 `json:"itemHash,omitempty"`
+	Wanted     bool                    `json:"wanted"`
+	Perks      []string                `json:"perks,omitempty"`
 }
 
 // importReportResponse carries every line, plus a tally for a caller that only
@@ -232,12 +305,13 @@ func importResponseOf(r rolltargets.ImportReport) importReportResponse {
 	lines := make([]importLineResponse, 0, len(r.Lines))
 	for _, l := range r.Lines {
 		lines = append(lines, importLineResponse{
-			Line:     l.Number,
-			Outcome:  string(l.Outcome),
-			Detail:   l.Detail,
-			ItemHash: l.ItemHash,
-			Wanted:   l.Wanted,
-			Perks:    l.Perks,
+			Line:       l.Number,
+			Outcome:    string(l.Outcome),
+			Detail:     l.Detail,
+			Unresolved: unresolvedPerkResponseOf(l.Unresolved),
+			ItemHash:   l.ItemHash,
+			Wanted:     l.Wanted,
+			Perks:      l.Perks,
 		})
 	}
 	return importReportResponse{
@@ -246,6 +320,20 @@ func importResponseOf(r rolltargets.ImportReport) importReportResponse {
 		Imported:    r.Imported(),
 		Counts:      counts,
 		Lines:       lines,
+	}
+}
+
+// unresolvedPerkResponseOf transcribes the domain's structured unresolved-perk
+// reason onto the wire. nil in, nil out — most lines have no single hash to
+// blame.
+func unresolvedPerkResponseOf(u *rolltargets.UnresolvedPerk) *unresolvedPerkResponse {
+	if u == nil {
+		return nil
+	}
+	return &unresolvedPerkResponse{
+		PerkHash: u.Hash,
+		PerkName: u.Name,
+		Reason:   string(u.Reason),
 	}
 }
 
@@ -375,6 +463,8 @@ func isRollTargetValidationError(err error) bool {
 		rolltargets.ErrNotAWeapon,
 		rolltargets.ErrUnknownPerk,
 		rolltargets.ErrUnknownPerkName,
+		rolltargets.ErrNoTargets,
+		rolltargets.ErrTooManyTargets,
 	} {
 		if errors.Is(err, sentinel) {
 			return true
@@ -401,6 +491,10 @@ func rollTargetValidationMessage(err error) string {
 		return "this weapon cannot roll one of the named perks"
 	case errors.Is(err, rolltargets.ErrUnknownPerkName):
 		return "no perk has that name"
+	case errors.Is(err, rolltargets.ErrNoTargets):
+		return "ids must be a non-empty list"
+	case errors.Is(err, rolltargets.ErrTooManyTargets):
+		return "at most " + strconv.Itoa(rolltargets.MaxBulkTargets) + " ids per request"
 	}
 	return "invalid request"
 }

@@ -256,12 +256,20 @@ func TestFlagGatedRoutesEnforceTheirOwnFlag(t *testing.T) {
 		{http.MethodGet, "/api/catalysts/3/1", handlers.FlagCatalystsCrafting},
 		{http.MethodGet, "/api/crafting/3/1", handlers.FlagCatalystsCrafting},
 		{http.MethodGet, "/api/seals/3/1", handlers.FlagTriumphsSeals},
+		{http.MethodGet, "/api/rolltargets", handlers.FlagGodRoll},
+		{http.MethodPost, "/api/rolltargets", handlers.FlagGodRoll},
+		{http.MethodPatch, "/api/rolltargets/1", handlers.FlagGodRoll},
+		{http.MethodDelete, "/api/rolltargets/1", handlers.FlagGodRoll},
+		{http.MethodPost, "/api/rolltargets/import", handlers.FlagGodRoll},
+		{http.MethodPost, "/api/rolltargets/bulk", handlers.FlagGodRoll},
+		{http.MethodGet, "/api/rolltargets/matches", handlers.FlagGodRoll},
 	}
 	allFlags := []string{
 		handlers.FlagWeeklyPlanner,
 		handlers.FlagGlobalSearch,
 		handlers.FlagCatalystsCrafting,
 		handlers.FlagTriumphsSeals,
+		handlers.FlagGodRoll,
 	}
 
 	token := accessToken(t)
@@ -423,6 +431,7 @@ func TestRollTargetRoutesAreRegistered(t *testing.T) {
 		"PATCH /api/rolltargets/:id",
 		"DELETE /api/rolltargets/:id",
 		"POST /api/rolltargets/import",
+		"POST /api/rolltargets/bulk",
 		"GET /api/rolltargets/matches",
 	} {
 		if !registered[want] {
