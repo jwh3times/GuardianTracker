@@ -271,7 +271,8 @@ Primary route groups:
   (`services/ownedrolls`); membership is read solely from the JWT — unlike
   collections, characters, catalysts, crafting, and seals, no route or
   request body carries a membership; gated behind the `god-roll` feature flag
-  (alpha tier); not yet called from the frontend
+  (alpha tier); called from the frontend's Roll targets page (`/rolls`) via
+  `frontend/src/data/rolltargets.ts`
 - preferences: user preferences plus irreversible first-run onboarding completion
 - digest: since-last-visit collectible digest, advancing the visit clock as a
   side effect

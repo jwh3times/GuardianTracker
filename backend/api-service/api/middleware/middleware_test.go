@@ -172,4 +172,10 @@ func TestCORS_Preflight(t *testing.T) {
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("preflight status = %d, want 204", w.Code)
 	}
+	// PATCH (roll targets' notes update, the first route to use it) must stay
+	// listed: a browser preflight silently blocks any method missing from
+	// this header, with no server-side error to point at the real cause.
+	if got := w.Header().Get("Access-Control-Allow-Methods"); !strings.Contains(got, "PATCH") {
+		t.Fatalf("Access-Control-Allow-Methods = %q, want it to include PATCH", got)
+	}
 }

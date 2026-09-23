@@ -280,6 +280,31 @@ frontend/src/
                                    Exports `invalidateSeals(client)` as this resource's invalidation
                                    entry point. Read by `Triumphs.tsx`. This is the last of the eleven
                                    ADR 0020 resource slices (E4–E14).
+    rolltargets.ts                ← Roll targets (slice 5b, behind the `god-roll` flag), landed after
+                                   ADR 0020's own eleven-resource list but following its pattern exactly.
+                                   Two private query keys sharing one root — `["rollTargets", "list"]`
+                                   (the membership's saved targets, `GET /api/rolltargets`, flat like
+                                   `wishlist.ts` — the server derives membership from the JWT) and
+                                   `["rollTargets", "matches"]` (`GET /api/rolltargets/matches`, gated
+                                   `enabled: !!user` for the same belt-and-braces reason `weekly.ts`
+                                   states). The two queries fail independently on purpose: a Bungie-backed
+                                   match failure must never hide the player's own saved rows. Projects
+                                   `APIRollTarget` → `RollTarget`, `APIRollTargetMatchReport` →
+                                   `RollTargetMatchReport`, and `APIImportReport` → `RollTargetImportReport`
+                                   (the last one on a mutation result, not a query `select`). One shared
+                                   optimistic recipe (mirrors `wishlist.ts`) backs notes update/remove/bulk
+                                   delete/delete-all; DIM import is invalidate-only since the server decides
+                                   per line what imported. Exports `invalidateRollTargets(client)`, which
+                                   joins `membershipRefresh.ts`'s fan-out — the match report is derived from
+                                   owned Bungie inventory (profile component 305), so a membership refresh
+                                   can change which targets are satisfied. Read by
+                                   `features/rolltargets/RollTargets.tsx` through
+                                   `useRollTargetsBrowser.ts`, which also reads `data/collections.ts`'s
+                                   `useCollections()` (name/icon/type/collected — the item lookup the rest
+                                   of the app already uses, since a per-hash `data/items.ts` query is a
+                                   hook call and this page has an arbitrary number of distinct weapon
+                                   hashes) and `data/wishlist.ts`'s `useWishlist()` for the default filter's
+                                   second condition.
     preferences.ts                ← ADR 0021's framework-neutral Preferences client (E15), landed
                                    outside ADR 0020's eleven-resource list because it deliberately
                                    uses no React Query — one small object with no shared cache base
@@ -312,19 +337,20 @@ frontend/src/
                                    for the same reason. Read by Settings, Collections, and OnboardingTour.
     membershipRefresh.ts         ← `useMembershipRefresh()` owns the cache-refresh endpoint
                                    (`POST /api/collections/:membershipType/:membershipId/refresh`) and
-                                   the six-resource invalidation fan-out that follows it, replacing two
+                                   the membership-scoped invalidation fan-out that follows it, replacing two
                                    verbatim copies previously inline in Collections and Settings. Lives
                                    in its own module rather than inside `collections.ts` because it
-                                   invalidates six membership-scoped resources and a module owning one
-                                   has no claim on the other five. Calls `invalidateCatalysts`,
+                                   invalidates several membership-scoped resources and a module owning one
+                                   has no claim on the rest. Calls `invalidateCatalysts`,
                                    `invalidateCharacters`, `invalidateCollections`, `invalidateCrafting`,
-                                   `invalidateSeals`, and `invalidateWeekly` — one module entry point per
-                                   resource; it names no raw query keys of its own.
+                                   `invalidateDigest`, `invalidateRollTargets`, `invalidateSeals`, and
+                                   `invalidateWeekly` — one module entry point per resource; it names no
+                                   raw query keys of its own.
                                    Reads no membership argument — it reads the signed-in membership from
                                    `useAuth()`. Also exports `useReloadAfterReconnect()` — a plain
                                    `client.invalidateQueries()` with no query key, deliberately wider
                                    than the membership fan-out because any cached resource may have
-                                   failed while the Bungie authorization was expired, not only the six
+                                   failed while the Bungie authorization was expired, not only the
                                    membership-scoped ones; `OAuthCallback.tsx` calls it after a
                                    successful reconnect.
                                    Search (E9), Flags (E10), and Admin (E11) are membership-independent
@@ -460,6 +486,26 @@ frontend/src/
                                    (COSMETIC_TYPES: Emblem/Shader/Ghost/Ship/Sparrow/Emote/Ornament/Finisher)
     onboarding/                ← Guardian Tracker user-backed first-run welcome + three-step guided tour
     wishlist/WishList.tsx      ← wishlist mgmt; real API w/ optimistic mutations; inline notes editor
+    rolltargets/               ← `/rolls`, behind the `god-roll` flag (slice 5b). RollTargets.tsx (the
+                                   page: full-page loading/error, an empty state pointing at import, a
+                                   management bar — select mode + bulk delete + "Delete all…" behind an
+                                   inline confirm, never `window.confirm` — then either the three
+                                   sections or, on a match-report failure, every saved target rendered
+                                   neutrally with a Reconnect/Retry banner; see "Roll targets page
+                                   features" below), RollTargetImport.tsx (file picker + paste box, both
+                                   landing on `data/rolltargets.ts`'s `useImportRollTargets`; renders the
+                                   DIM import report), RollTargetRow.tsx (one target's card: icon/name or
+                                   the any-weapon phrase, perk chips, note, select/edit/delete — shared by
+                                   "Still chasing" and the neutral failure-state list), RollTargetMatchCard.tsx
+                                   (one target's "You have it"/unwanted card: heading, perks, note, then
+                                   each owned copy labelled "Copy 1", "Copy 2", … with the target's own
+                                   perks highlighted via `isTargetPerk`), useRollTargetsBrowser.ts (wires
+                                   `data/rolltargets.ts` + `data/collections.ts` + `data/wishlist.ts` into
+                                   the pure grouping/filtering in rollTargetsView.ts; owns local
+                                   search/show-all state, mirroring `useCollectionsBrowser.ts`'s pure/hook
+                                   split), rollTargetsView.ts (pure: `groupChasingTargets`,
+                                   `applyDefaultFilter`, `applySearch`, `groupMatchesByTarget`,
+                                   `isTargetPerk` — table-tested directly in rollTargetsView.test.ts)
     weekly/ThisWeek.tsx        ← weekly recommendations / Xûr / milestones scoped to active character;
                                    ActionList.tsx, XurModule.tsx, MilestoneModule.tsx live here too (F5) —
                                    each has exactly one caller, this page
@@ -543,7 +589,9 @@ path, projection to a domain type, every mutation, and its own invalidation.
 feature for a resource that already has a `src/data/` module** — read the
 module's hook instead. Preferences (`data/preferences.ts`, ADR 0021, E15) is a
 twelfth `src/data/` module that owns its resource the same way but deliberately
-uses no React Query — see its entry in "File structure" above.
+uses no React Query — see its entry in "File structure" above. Roll targets
+(`data/rolltargets.ts`, slice 5b, behind the `god-roll` flag) landed later,
+outside ADR 0020's own eleven-resource list but following its pattern exactly.
 
 This boundary is machine-enforced, not just convention (ADR 0020, E16):
 `.oxlintrc.json` makes `no-restricted-imports` an error for `src/features/**`
@@ -614,10 +662,16 @@ Catalysts & Crafting page but not a resource. `data/seals.ts` owns the seals
 resource's query identity, endpoint, and projection (`toSeal`/`toTriumph`/
 `toObjective`), exposing `invalidateSeals(client)`; it is read by
 `Triumphs.tsx`.
+`data/rolltargets.ts` (slice 5b, landed outside ADR 0020's own list) owns the
+roll-target list and match-report query identities, endpoints, and projections,
+plus every mutation (notes update, remove, bulk delete, delete-all, DIM import);
+exposing `invalidateRollTargets(client)`, since the match report is derived from
+owned Bungie inventory and so is membership-scoped like the eleven above.
 `data/membershipRefresh.ts` holds the
-cross-resource cache-refresh fan-out over all six membership-scoped resources
-(Catalysts, Characters, Collections, Crafting, Seals, Weekly); Search, Flags,
-and Admin data are not membership-scoped, so none is part of that fan-out.
+cross-resource cache-refresh fan-out over every membership-scoped resource
+(Catalysts, Characters, Collections, Crafting, Digest, Roll targets, Seals,
+Weekly); Search, Flags, and Admin data are not membership-scoped, so none is
+part of that fan-out.
 Consumers read these modules instead of declaring their own. ADR 0020 is fully
 implemented as of E16 (`v1.3.54`): the `no-restricted-imports` import boundary
 the ADR specifies is enforced by oxlint (see "Data fetching" below), and
@@ -681,7 +735,7 @@ wraps `AuthedProviders` (see `contexts/AppProviders.tsx` above), `AppShell`, and
   <Route path="/dashboard" element={<Dashboard />} />
   <Route path="/guardian" element={<Guardian />} />
   <Route path="/collections" element={<Collections />} />
-  {/* …this-week, catalysts, triumphs, wishlist, settings, admin */}
+  {/* …this-week, catalysts, triumphs, wishlist, rolls, settings, admin */}
 </Route>
 ```
 
@@ -776,6 +830,15 @@ Bungie data refresh cannot change a Guardian Tracker setting.
 - Inline notes editor: click to edit, optimistic update with rollback on error, 500 char max
 - All mutations (add, remove, set priority, set notes, bulk) come from `data/wishlist.ts` (ADR 0020); the page supplies only toast copy through each hook's `onSuccess`/`onError`/`onSettled` callbacks — it no longer owns cache reads, writes, or rollback itself
 
+## Roll targets page features
+
+- Sections render in a fixed order — "Still chasing" (unmatched targets, framed as a goal, an any-weapon target reading "Any weapon with X + Y"), "You have it" (wanted matches grouped by target), then a collapsed-by-default disclosure for matches on a roll marked unwanted (informational, never dismantle wording) — never as absence.
+- **Still chasing**'s default filter shows only weapons whose collectible is acquired (`data/collections.ts`'s `useCollections()`) or that are on the wish list (`data/wishlist.ts`); a "Show all" `FilterChip` shows everything, and a hidden-count line states how many rolls the filter is hiding. A search box filters by weapon or perk name, independently of that filter. Any-weapon targets always show.
+- **Match failure**: if `useRollTargetMatches()` fails, every saved target still lists — flat, neutral, "Match status unknown" — never as "Still chasing". A `BUNGIE_REAUTH_REQUIRED` `ApiError.code` renders a Reconnect banner (routes to `/reauthorize`); any other failure renders Retry (`refetch`). Management (notes, delete) still works in this state, since it operates on `data/rolltargets.ts`'s separate, independently-successful target-list query.
+- **Management**: inline notes editor (PATCH notes only, mirroring WishList's click-to-edit pattern); a "Select" mode with per-row checkboxes and a "Delete selected" bulk action, capped at `data/rolltargets.ts`'s exported `MAX_BULK_DELETE` (100, mirrors the server's `rolltargets.MaxBulkTargets`) rather than chunking a larger selection into several calls; "Delete all…" reveals an inline `role="alertdialog"` confirmation bar (never `window.confirm`) before calling `useDeleteAllRollTargets`.
+- **DIM import**: a file picker (`<input type="file">`, read via `file.text()`) and a paste `Textarea`, both add-only, both landing on `useImportRollTargets`. The report renders counts first (e.g. "42 imported · 3 unresolved · 5 already saved"), then non-imported lines grouped by outcome; lines whose outcome is "skipped" (comments/headers) are never listed. An "unresolved perk" line's wording comes from `unresolved.reason` (`not-in-pool`/`ambiguous`/`not-a-weapon-perk`), not from the wire's own `detail` string.
+- Item name/icon/type resolution goes through `data/collections.ts`'s full item join (`itemByHash`) rather than a second per-hash lookup: `data/items.ts`'s single-item queries are hook calls, and this page can have an arbitrary, unbounded number of distinct weapon hashes across its targets and matches. A hash the join has no entry for falls back to a hash-derived label (`Item <hash>`) rather than a blank row.
+
 ## API response type changes
 
 - `APIAcquisitionSource`: `{ text, difficulty, raidDungeon }`; `APIDestinyItem`
@@ -803,6 +866,10 @@ Bungie data refresh cannot change a Guardian Tracker setting.
 - `Catalyst.effect?: string` (design.ts) — catalyst perk/effect text on the `/api/catalysts/...` response; rendered on `Catalysts.tsx` cards when present
 - `Triumph.objectives?: TriumphObjective[]` (design.ts) — optional per-objective drill-down on `/api/seals/...` triumphs; `TriumphObjective { label, done, cur, max }`; absent (not an empty array) when the triumph has no objective data, so existing triumphs render unchanged
 - `WishlistEntry.itemId: string` (design.ts) — the wished item's hash, matching `GTItem.id`; lets Collections match its tiles against the wish list from the projected entry instead of the wire `WishListItem.itemHash`
+- `APIRollTarget`: `{ id, itemHash: number | null, anyWeapon, wanted, perks, notes, dateAdded }` — `GET/PATCH /api/rolltargets`; `itemHash` is an explicit wire `null` for an any-weapon target, never item hash 0
+- `APIRollTargetMatchReport`: `{ wanted: APIRollTargetMatch[], unwanted: APIRollTargetMatch[], unmatchedTargets: APIRollTarget[] }` — `GET /api/rolltargets/matches`; `APIRollTargetMatch` carries the owned copy's full `perks` alongside the target's own `targetPerks`, for highlighting which of the former satisfy the latter
+- `APIImportReport`: `{ title?, description?, imported, counts: Record<string, number>, lines: APIImportLine[] }` — `POST /api/rolltargets/import` (raw DIM-format text body, not JSON); `APIImportLine.unresolved?: APIUnresolvedPerk` (`{ perkHash, perkName?, reason }`) carries the structured reason only when one specific perk hash is to blame
+- `RollTarget`, `RollTargetMatch`, `RollTargetMatchReport`, `RollTargetImportReport` (design.ts) — the domain parallels `data/rolltargets.ts` projects onto; `RollTarget.itemHash: string | null` (matches `GTItem.id`'s hash-as-string convention), not the wire's `number | null`
 
 ## Styling
 

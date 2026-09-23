@@ -14,6 +14,33 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.15.0] - 2026-09-23
+
+### Added
+
+- A **Roll targets** page (`/rolls`, after Wishlist in the sidebar) for accounts
+  with the roll-targets feature (alpha tier). It leads with what you are still
+  chasing: every saved roll you do not yet own, grouped by weapon, with its
+  perks and your note. By default it shows weapons you have collected or put on
+  your wish list, says how many others it is hiding, and can show them all.
+  Below that, **You have it** lists each saved roll with the copies you own that
+  satisfy it, their perks, and the matching ones highlighted. Rolls you marked
+  unwanted that you own sit in a collapsed section at the bottom.
+- Import a DIM-format file from the page, by choosing the file or pasting its
+  text. The result shows right away: counts first, then every line that did not
+  import, grouped by reason and explained in plain language.
+- Edit a saved roll's note in place, delete several rolls at once, or delete
+  them all after a confirmation.
+- If your owned weapons cannot be read (Bungie needs reconnecting, the item
+  database is still downloading, or Bungie is unavailable), your saved rolls
+  still show, marked "match status unknown" instead of "still chasing", with a
+  Reconnect or Retry button.
+
+### Fixed
+
+- The API now allows `PATCH` in its cross-origin preflight response. Without it a
+  browser silently refused to edit a roll target's note.
+
 ## [1.14.0] - 2026-09-23
 
 ### Added
@@ -1455,7 +1482,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.2...v1.14.0
 [1.13.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.1...v1.13.2
 [1.13.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.0...v1.13.1

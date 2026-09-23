@@ -303,3 +303,76 @@ export interface Digest {
   previousVisitAt?: string;
   acquired: AcquiredItem[];
 }
+
+/**
+ * A player's own saved perk combination wanted on a specific weapon (or, when
+ * `anyWeapon`, on any weapon that can roll it) — CONTEXT.md's "Roll target".
+ * Distinct from a {@link WishlistEntry}, which wants an item hash with no perk
+ * dimension.
+ */
+export interface RollTarget {
+  id: string;
+  /** The design-system item id (a hash string); null for an any-weapon target. */
+  itemHash: string | null;
+  anyWeapon: boolean;
+  /** False for a roll the player has flagged as one to avoid, not to chase. */
+  wanted: boolean;
+  perks: string[];
+  notes: string;
+  /** RFC3339, left raw — formatting it here would bake a timestamp into a memo. */
+  dateAdded: string;
+}
+
+/** Why one DIM import line's perk hash did not resolve into a saved perk name. */
+export interface UnresolvedPerk {
+  hash: number;
+  /** Absent when the hash's own display name could not be resolved either. */
+  name?: string;
+  reason: string;
+}
+
+/** One DIM-format import line's fate, in file order. */
+export interface RollTargetImportLine {
+  line: number;
+  outcome: string;
+  detail?: string;
+  unresolved?: UnresolvedPerk;
+  /** The design-system item id; absent for an any-weapon line. */
+  itemHash?: string;
+  wanted: boolean;
+  perks?: string[];
+}
+
+/** The result of importing one DIM-format file — CONTEXT.md's "DIM import report". */
+export interface RollTargetImportReport {
+  title?: string;
+  description?: string;
+  imported: number;
+  counts: Record<string, number>;
+  lines: RollTargetImportLine[];
+}
+
+/** One owned weapon satisfying (or matching, if unwanted) one saved roll target. */
+export interface RollTargetMatch {
+  targetId: string;
+  /** The design-system item id of the owned copy that matched. */
+  itemHash: string;
+  instanceId: string;
+  /** The owned copy's full resolved perks. */
+  perks: string[];
+  /** The target's own saved perks, for highlighting which of `perks` matched. */
+  targetPerks: string[];
+  notes?: string;
+}
+
+/**
+ * The result of matching saved roll targets against owned inventory —
+ * CONTEXT.md's "Match report". `unmatchedTargets` is CONTEXT.md's "Unmatched
+ * target": a saved roll nothing owned currently satisfies, still worth
+ * chasing, never rendered as absence.
+ */
+export interface RollTargetMatchReport {
+  wanted: RollTargetMatch[];
+  unwanted: RollTargetMatch[];
+  unmatchedTargets: RollTarget[];
+}

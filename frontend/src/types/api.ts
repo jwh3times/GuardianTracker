@@ -415,3 +415,72 @@ export interface APIDigest {
   /** Always an array; may be empty. */
   acquired: APIAcquiredItem[];
 }
+
+// --- Roll targets (ADR 0020, slice 5b — behind the `god-roll` flag) ---
+
+/** One row from GET/POST/PATCH /api/rolltargets (mirrors handlers.rollTargetResponse). */
+export interface APIRollTarget {
+  id: string;
+  /** null for an any-weapon target — an explicit wire null, never item hash 0. */
+  itemHash: number | null;
+  anyWeapon: boolean;
+  wanted: boolean;
+  perks: string[];
+  notes: string;
+  dateAdded: string; // RFC3339
+}
+
+/** Why one DIM import line's perk hash did not resolve. */
+export interface APIUnresolvedPerk {
+  perkHash: number;
+  /** Absent when the hash's own display name could not be resolved either. */
+  perkName?: string;
+  reason: string; // "not-in-pool" | "ambiguous" | "not-a-weapon-perk"
+}
+
+/** One line's fate from POST /api/rolltargets/import. */
+export interface APIImportLine {
+  line: number;
+  outcome: string; // "imported" | "skipped" | "already saved" | "unknown weapon" | "unresolved perk" | "unsupported" | "malformed" | "failed"
+  detail?: string;
+  unresolved?: APIUnresolvedPerk;
+  /** Absent for an any-weapon line. */
+  itemHash?: number;
+  wanted: boolean;
+  perks?: string[];
+}
+
+/** POST /api/rolltargets/import — the body is the raw DIM-format text, not JSON. */
+export interface APIImportReport {
+  title?: string;
+  description?: string;
+  imported: number;
+  counts: Record<string, number>;
+  lines: APIImportLine[];
+}
+
+/** One owned weapon satisfying (or matching, if unwanted) one saved roll target. */
+export interface APIRollTargetMatch {
+  targetId: string;
+  itemHash: number;
+  instanceId: string;
+  /** The owned copy's full resolved perks. */
+  perks: string[];
+  /** The target's own saved perks, for highlighting which of `perks` matched. */
+  targetPerks: string[];
+  notes?: string;
+}
+
+/** GET /api/rolltargets/matches */
+export interface APIRollTargetMatchReport {
+  wanted: APIRollTargetMatch[];
+  unwanted: APIRollTargetMatch[];
+  /** Saved targets nothing owned currently satisfies — still worth chasing. */
+  unmatchedTargets: APIRollTarget[];
+}
+
+/** POST /api/rolltargets/bulk (action "delete" | "delete_all") */
+export interface APIRollTargetBulkResult {
+  deleted: number;
+  skipped: number;
+}
