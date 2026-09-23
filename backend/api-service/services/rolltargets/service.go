@@ -152,20 +152,28 @@ func (s *Service) validatePerks(itemHash *uint32, perks []string) ([]string, err
 	return out, nil
 }
 
-// validateAnyWeaponPerks accepts names the caller has already resolved against
-// the manifest. An any-weapon target has no pool, so the only check left is
-// that the names are distinct — the import path resolves its names from plug
-// hashes, which is where a name acquires its manifest spelling.
+// validateAnyWeaponPerks checks an any-weapon target's names against every name
+// a weapon perk column carries. There is no single pool to check against, but
+// the union of all of them is exactly the set a weapon-bound target could
+// name, so a name outside it could never match. A plug hash resolving to a
+// name is not enough: mods and other non-perk plugs have names too.
 func (s *Service) validateAnyWeaponPerks(perks []string) ([]string, error) {
+	names, err := s.perks.WeaponPerkNames()
+	if err != nil {
+		return nil, ErrPerksUnavailable
+	}
 	seen := make(map[string]struct{}, len(perks))
 	out := make([]string, 0, len(perks))
 	for _, p := range perks {
-		key := strings.ToLower(p)
-		if _, dup := seen[key]; dup {
+		canonical, ok := names[strings.ToLower(p)]
+		if !ok {
+			return nil, ErrUnknownPerkName
+		}
+		if _, dup := seen[canonical]; dup {
 			return nil, ErrDuplicatePerk
 		}
-		seen[key] = struct{}{}
-		out = append(out, p)
+		seen[canonical] = struct{}{}
+		out = append(out, canonical)
 	}
 	sort.Strings(out)
 	return out, nil

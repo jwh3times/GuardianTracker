@@ -59,6 +59,21 @@ type fakePool struct {
 
 func (f fakePool) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) { return f.cols, f.err }
 
+// WeaponPerkNames treats the one fixture weapon as the whole manifest, so the
+// names an any-weapon target may use are exactly the names it can roll.
+func (f fakePool) WeaponPerkNames() (map[string]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := map[string]string{}
+	for _, c := range f.cols {
+		for _, p := range c.Perks {
+			out[strings.ToLower(p)] = p
+		}
+	}
+	return out, nil
+}
+
 func (f fakePool) PlugNames(hashes []uint32) (map[uint32]string, error) {
 	if f.err != nil {
 		return nil, f.err
@@ -186,6 +201,41 @@ func TestAdd_SeparatesNotAWeaponFromUnreadablePool(t *testing.T) {
 		context.Background(), "m1", AddCommand{ItemHash: weapon(1000), Perks: []string{"Outlaw"}})
 	if !errors.Is(err, ErrPerksUnavailable) {
 		t.Errorf("failed read err = %v, want ErrPerksUnavailable", err)
+	}
+}
+
+// An any-weapon target has no weapon pool, but its names still have to be
+// perks some weapon can roll — otherwise it is saved and never matches. A name
+// no weapon perk carries is refused before storage; a real one is stored in
+// the manifest's spelling, exactly as a weapon-bound target is.
+func TestAdd_AnyWeaponTargetNamesAreCheckedAgainstTheManifest(t *testing.T) {
+	repo := &fakeRepo{}
+	_, err := svc(repo, testPool()).Add(context.Background(), "m1",
+		AddCommand{Perks: []string{"Outlaw", "Not A Perk"}})
+	if !errors.Is(err, ErrUnknownPerkName) {
+		t.Fatalf("err = %v, want ErrUnknownPerkName", err)
+	}
+	if repo.addCalled {
+		t.Error("unmatchable any-weapon target was persisted")
+	}
+
+	got, err := svc(repo, testPool()).Add(context.Background(), "m1",
+		AddCommand{Perks: []string{" kill clip", "OUTLAW"}})
+	if err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if len(got.Perks) != 2 || got.Perks[0] != "Kill Clip" || got.Perks[1] != "Outlaw" {
+		t.Errorf("stored perks = %v, want [Kill Clip Outlaw]", got.Perks)
+	}
+}
+
+// With the name set unreadable there is no answer, and "unknown perk" would be
+// a false verdict about the name.
+func TestAdd_AnyWeaponTargetWithUnreadableManifestIsUnavailable(t *testing.T) {
+	_, err := svc(&fakeRepo{}, fakePool{err: errors.New("manifest warming")}).Add(
+		context.Background(), "m1", AddCommand{Perks: []string{"Outlaw"}})
+	if !errors.Is(err, ErrPerksUnavailable) {
+		t.Fatalf("err = %v, want ErrPerksUnavailable", err)
 	}
 }
 

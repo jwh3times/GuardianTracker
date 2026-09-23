@@ -9,14 +9,21 @@ import (
 )
 
 type fakeRepo struct {
-	calls int
-	plugs map[uint32]*bungie.InventoryItemDefinition
-	cols  []manifest.PerkColumn
-	err   error
+	calls   int
+	plugs   map[uint32]*bungie.InventoryItemDefinition
+	cols    []manifest.PerkColumn
+	byHash  map[uint32][]manifest.PerkColumn
+	weapons []uint32
+	err     error
+
+	onHashes func() // runs mid-build, to swap the manifest under a load
 }
 
-func (f *fakeRepo) GetWeaponPerks(uint32) ([]manifest.PerkColumn, error) {
+func (f *fakeRepo) GetWeaponPerks(h uint32) ([]manifest.PerkColumn, error) {
 	f.calls++
+	if cols, ok := f.byHash[h]; ok {
+		return cols, f.err
+	}
 	return f.cols, f.err
 }
 
@@ -41,6 +48,13 @@ func (f *fakeRepo) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem
 }
 
 func (f *fakeRepo) GetWeaponCatalysts(uint32) ([]manifest.WeaponCatalyst, error) { return nil, nil }
+
+func (f *fakeRepo) GetWeaponHashes() ([]uint32, error) {
+	if f.onHashes != nil {
+		f.onHashes()
+	}
+	return f.weapons, f.err
+}
 
 func TestService_CachesByHash(t *testing.T) {
 	repo := &fakeRepo{cols: []manifest.PerkColumn{{Role: "barrel", Label: "Barrel", Perks: []string{"Full Bore"}}}}
@@ -94,6 +108,85 @@ func TestService_InvalidateCache(t *testing.T) {
 	}
 }
 
+// The any-weapon name set is the union of every weapon's perk columns, keyed
+// case-insensitively with the manifest's spelling kept.
+func TestWeaponPerkNames_IsTheUnionOfEveryWeaponsColumns(t *testing.T) {
+	repo := &fakeRepo{
+		weapons: []uint32{1, 2},
+		byHash: map[uint32][]manifest.PerkColumn{
+			1: {{Perks: []string{"Outlaw", "Kill Clip"}}},
+			2: {{Perks: []string{"Kill Clip"}}, {Perks: []string{"Firefly"}}},
+		},
+	}
+	got, err := NewService(repo).WeaponPerkNames()
+	if err != nil {
+		t.Fatalf("WeaponPerkNames: %v", err)
+	}
+	want := map[string]string{"outlaw": "Outlaw", "kill clip": "Kill Clip", "firefly": "Firefly"}
+	if len(got) != len(want) {
+		t.Fatalf("names = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("names[%q] = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+// Building the set reads every weapon (seconds against the real manifest), so
+// it is built once per manifest generation, and a swap discards it.
+func TestWeaponPerkNames_IsBuiltOncePerManifestGeneration(t *testing.T) {
+	repo := &fakeRepo{weapons: []uint32{1}, byHash: map[uint32][]manifest.PerkColumn{1: {{Perks: []string{"Outlaw"}}}}}
+	svc := NewService(repo)
+	_, _ = svc.WeaponPerkNames()
+	_, _ = svc.WeaponPerkNames()
+	if repo.calls != 1 {
+		t.Fatalf("repo calls = %d, want 1 (cached)", repo.calls)
+	}
+	if err := svc.OnVersionChanged("v2"); err != nil {
+		t.Fatalf("OnVersionChanged: %v", err)
+	}
+	_, _ = svc.WeaponPerkNames()
+	if repo.calls != 2 {
+		t.Errorf("repo calls = %d, want 2 after a manifest swap", repo.calls)
+	}
+}
+
+// A set built across a manifest swap still answers the call that built it, but
+// must not be left behind for the new generation to serve.
+func TestWeaponPerkNames_BuildRacingASwapIsNotInstalled(t *testing.T) {
+	repo := &fakeRepo{weapons: []uint32{1}, byHash: map[uint32][]manifest.PerkColumn{1: {{Perks: []string{"Outlaw"}}}}}
+	svc := NewService(repo)
+	repo.onHashes = func() {
+		repo.onHashes = nil
+		if err := svc.OnVersionChanged("v2"); err != nil {
+			t.Errorf("OnVersionChanged: %v", err)
+		}
+	}
+	if got, err := svc.WeaponPerkNames(); err != nil || got["outlaw"] != "Outlaw" {
+		t.Fatalf("racing call = %v, %v; want its own answer", got, err)
+	}
+	_, _ = svc.WeaponPerkNames()
+	if repo.calls != 2 {
+		t.Errorf("repo calls = %d, want 2: the stale build was installed", repo.calls)
+	}
+}
+
+// A failed read is not an empty set: that would refuse every name as unknown.
+func TestWeaponPerkNames_FailureIsNotAnEmptySetAndIsNotCached(t *testing.T) {
+	repo := &fakeRepo{weapons: []uint32{1}, err: errors.New("manifest warming")}
+	svc := NewService(repo)
+	if got, err := svc.WeaponPerkNames(); err == nil {
+		t.Fatalf("names = %v, want an error", got)
+	}
+	repo.err = nil
+	repo.byHash = map[uint32][]manifest.PerkColumn{1: {{Perks: []string{"Outlaw"}}}}
+	got, err := svc.WeaponPerkNames()
+	if err != nil || got["outlaw"] != "Outlaw" {
+		t.Errorf("after recovery names = %v, err = %v; want Outlaw", got, err)
+	}
+}
+
 func TestService_BoundsCacheSize(t *testing.T) {
 	repo := &fakeRepo{cols: []manifest.PerkColumn{{Label: "Barrel"}}}
 	svc := NewService(repo)
@@ -134,6 +227,7 @@ func (f *fakeCatalystRepo) GetAcquisitionRows([]uint32) (*manifest.AcquisitionRo
 func (f *fakeCatalystRepo) GetAllCollectiblesWithItems() ([]manifest.CollectibleWithItem, error) {
 	return nil, nil
 }
+func (f *fakeCatalystRepo) GetWeaponHashes() ([]uint32, error) { return nil, nil }
 func (f *fakeCatalystRepo) GetWeaponCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
 	f.calls++
 	return f.cats, f.err

@@ -36,6 +36,7 @@ func (f *factsRepo) GetItemsByHashes(hashes []uint32) (map[uint32]*bungie.Invent
 	}
 	return out, nil
 }
+func (f *factsRepo) GetWeaponHashes() ([]uint32, error) { return nil, nil }
 func (f *factsRepo) GetWeaponCatalysts(uint32) ([]manifest.WeaponCatalyst, error) {
 	return nil, nil
 }

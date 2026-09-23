@@ -66,7 +66,8 @@ func (p importPool) PlugNames(hashes []uint32) (map[uint32]string, error) {
 	if p.err != nil {
 		return nil, p.err
 	}
-	names := map[uint32]string{111: "Outlaw", 911: "Outlaw", 222: "Firefly", 333: "Drop Mag"}
+	// 444 is a real plug that sits in no weapon's perk column — a mod.
+	names := map[uint32]string{111: "Outlaw", 911: "Outlaw", 222: "Firefly", 333: "Drop Mag", 444: "Minor Spec"}
 	out := map[uint32]string{}
 	for _, h := range hashes {
 		if n, ok := names[h]; ok {
@@ -94,7 +95,33 @@ func (p importPool) GetWeaponPerks(itemHash uint32) ([]manifest.PerkColumn, erro
 	}}, nil
 }
 
+// WeaponPerkNames: weapon 1000 is the whole manifest's weapon set here.
+func (p importPool) WeaponPerkNames() (map[string]string, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+	return map[string]string{"outlaw": "Outlaw", "firefly": "Firefly", "drop mag": "Drop Mag"}, nil
+}
+
 func importSvc(repo Repository) *Service { return NewService(repo, importPool{}, nil) }
+
+// A wildcard line resolves its hashes straight to plug names, and a plug can
+// have a name without being a weapon perk. Such a line could never match, so it
+// reports as unresolved rather than being stored or failing anonymously.
+func TestImportDIM_WildcardNamingANonWeaponPerkIsUnresolved(t *testing.T) {
+	repo := &importRepo{}
+	report, err := importSvc(repo).ImportDIM(context.Background(), "m1",
+		"dimwishlist:item=-69420&perks=444\n")
+	if err != nil {
+		t.Fatalf("ImportDIM: %v", err)
+	}
+	if got := outcomes(report); len(got) != 1 || got[0] != OutcomeUnresolvedPerk {
+		t.Fatalf("outcomes = %v, want [%q]", got, OutcomeUnresolvedPerk)
+	}
+	if len(repo.targets) != 0 {
+		t.Errorf("stored %d targets, want none", len(repo.targets))
+	}
+}
 
 func outcomes(r ImportReport) []ImportOutcome {
 	out := make([]ImportOutcome, len(r.Lines))

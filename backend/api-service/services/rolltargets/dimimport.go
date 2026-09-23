@@ -147,6 +147,12 @@ func (s *Service) ImportDIM(ctx context.Context, membershipID, text string) (Imp
 			return ImportReport{}, err
 		case errors.Is(err, ErrDuplicate):
 			out.Outcome = OutcomeAlreadySaved
+		case errors.Is(err, ErrPerksUnavailable):
+			return ImportReport{}, err
+		case errors.Is(err, ErrUnknownPerkName):
+			// A wildcard line's hashes resolved to names, but not to names any
+			// weapon perk carries (a mod, say). It could never match.
+			out.Outcome, out.Detail = OutcomeUnresolvedPerk, err.Error()
 		default:
 			out.Outcome, out.Detail = OutcomeFailed, err.Error()
 		}

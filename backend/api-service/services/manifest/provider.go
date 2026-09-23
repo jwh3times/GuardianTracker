@@ -206,6 +206,14 @@ func (p *Provider) GetExoticWeaponsByName() (map[string]ExoticWeapon, error) {
 	return r.GetExoticWeaponsByName()
 }
 
+func (p *Provider) GetWeaponHashes() ([]uint32, error) {
+	r, err := p.get()
+	if err != nil {
+		return nil, err
+	}
+	return r.GetWeaponHashes()
+}
+
 func (p *Provider) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 	r, err := p.get()
 	if err != nil {
