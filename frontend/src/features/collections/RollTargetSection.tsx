@@ -9,6 +9,7 @@ import { ApiError } from "../../lib/api";
 import { errorState } from "../../lib/errorState";
 import type { GTItem, PerkColumn, RollTarget } from "../../types/design";
 import { isTargetPerk } from "../rolltargets/rollTargetsView";
+import { NearMissSummary } from "../rolltargets/NearMissSummary";
 import {
   groupMatchesByCopy,
   matchesForItem,
@@ -255,6 +256,10 @@ function RollTargetSectionReady({
                       </span>
                     ))}
                   </div>
+                  <NearMissSummary
+                    bestCopy={t.bestCopy}
+                    targetPerkCount={t.perks.length}
+                  />
                   {t.notes && (
                     <div className="gt-wl-notes">&quot;{t.notes}&quot;</div>
                   )}

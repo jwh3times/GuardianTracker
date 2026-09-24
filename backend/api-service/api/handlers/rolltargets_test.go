@@ -583,8 +583,14 @@ func TestGetRollTargetMatches_SeparatesWantedUnwantedAndUnmatched(t *testing.T) 
 			Target: rolltargets.StoredTarget{ID: 2, ItemHash: &hash, Perks: []string{"Firefly"}},
 			Roll:   ownedrolls.OwnedRoll{ItemHash: 1000, InstanceID: "def", Perks: []string{"Firefly"}},
 		}},
-		UnmatchedTargets: []rolltargets.StoredTarget{
-			{ID: 3, ItemHash: nil, Wanted: true, Perks: []string{"Rampage"}},
+		UnmatchedTargets: []rolltargets.UnmatchedTarget{
+			{
+				Target: rolltargets.StoredTarget{ID: 3, ItemHash: nil, Wanted: true, Perks: []string{"Rampage", "Outlaw"}},
+				NearMiss: &rolltargets.NearMiss{
+					Roll:         ownedrolls.OwnedRoll{ItemHash: 2000, InstanceID: "near", Perks: []string{"Firefly", "Rampage"}},
+					MatchedPerks: []string{"Rampage"},
+				},
+			},
 		},
 	}}
 	w := send(newRollTargetRouter(NewRollTargetsHandler(stub)), http.MethodGet, "/api/rolltargets/matches", "")
@@ -604,6 +610,9 @@ func TestGetRollTargetMatches_SeparatesWantedUnwantedAndUnmatched(t *testing.T) 
 	// The roll still worth chasing has to survive onto the wire.
 	if len(resp.UnmatchedTargets) != 1 || resp.UnmatchedTargets[0].ID != "3" || !resp.UnmatchedTargets[0].AnyWeapon {
 		t.Errorf("unmatched = %+v", resp.UnmatchedTargets)
+	}
+	if best := resp.UnmatchedTargets[0].BestCopy; best == nil || best.InstanceID != "near" || len(best.MatchedPerks) != 1 || best.MatchedPerks[0] != "Rampage" {
+		t.Errorf("best copy = %+v, want serialized near miss", best)
 	}
 }
 

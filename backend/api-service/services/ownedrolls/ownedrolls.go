@@ -100,7 +100,8 @@ func NewService(profiles ProfileReader, perks PerkPool, credentials CredentialRe
 //
 // An empty result is an answer: the components were readable and hold no
 // weapons. A read that could not be made returns an error instead, so the two
-// never render alike.
+// never render alike. Results are ordered by ItemHash then InstanceID so copy
+// labels and equal-score near-miss selection remain stable across reads.
 func (s *Service) Read(ctx context.Context, membershipType int, membershipID string) ([]OwnedRoll, error) {
 	token, err := s.credentials.GetValidToken(membershipID)
 	if err != nil || token == "" {
@@ -145,6 +146,12 @@ func (s *Service) Read(ctx context.Context, membershipType int, membershipID str
 			Perks:      perks,
 		})
 	}
+	sort.Slice(rolls, func(i, j int) bool {
+		if rolls[i].ItemHash != rolls[j].ItemHash {
+			return rolls[i].ItemHash < rolls[j].ItemHash
+		}
+		return rolls[i].InstanceID < rolls[j].InstanceID
+	})
 	return rolls, nil
 }
 

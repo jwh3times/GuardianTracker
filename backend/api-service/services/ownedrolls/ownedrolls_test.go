@@ -170,6 +170,9 @@ func TestRead_GathersVaultCharacterAndEquipped(t *testing.T) {
 	if len(rolls) != 3 {
 		t.Fatalf("rolls = %d, want 3 (vault, carried, equipped)", len(rolls))
 	}
+	if rolls[0].InstanceID != "carried" || rolls[1].InstanceID != "equipped" || rolls[2].InstanceID != "vault" {
+		t.Errorf("instance order = [%s %s %s], want deterministic lexical order", rolls[0].InstanceID, rolls[1].InstanceID, rolls[2].InstanceID)
+	}
 }
 
 // "We could not read your inventory" and "you hold nothing" are different

@@ -404,6 +404,7 @@ export function RollTargets() {
                                 group.icon,
                                 group.type,
                               )}
+                              bestCopy={target.bestCopy}
                               selectable={selectMode}
                               selected={selected.has(target.id)}
                               onToggleSelect={() => toggleSelected(target.id)}

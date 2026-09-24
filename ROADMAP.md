@@ -26,8 +26,8 @@ runbooks, and environment-specific operations notes belong under `private/`.
 **Status:** Partially implemented — storage, validation, DIM-format import,
 matching saved targets against the owned weapons a fresh Bungie profile read
 reports, a REST surface, the Roll targets page (`/rolls`, behind the
-`god-roll` flag), and a per-weapon item-drawer section all exist; near-miss
-detection does not
+`god-roll` flag), a per-weapon item-drawer section, and closest-owned-copy
+progress for still-chasing targets all exist
 **Gate:** none — the owner approved the player-facing surface 2026-09-23 (#350)
 **Likely size:** Medium (remaining scope)
 
@@ -77,11 +77,16 @@ Decided:
   owned weapon when every perk it names is present on that weapon (extra
   perks do not prevent a match), an any-weapon target is tested against every
   owned weapon, and a target nothing satisfies is still reported rather than
-  dropped. `GET /api/rolltargets/matches` exposes the joined result, and the
+  dropped. For each unmatched target, the service also selects the applicable
+  owned copy matching the most target perk columns (at least one but fewer than
+  all), preserving deterministic owned-copy order for equal scores. `GET
+/api/rolltargets/matches` exposes that best copy and its matched-perk subset
+  with the joined result, and the
   Roll targets page (`/rolls`, behind the `god-roll` flag, alpha tier) reads
   it: unmatched targets render as "Still chasing" (a goal, never absence,
   filtered by default to acquired/wishlisted weapons plus any-weapon targets,
-  with a "Show all" toggle and a search box), wanted matches render as "You
+  with a "Show all" toggle and a search box), including "Your best copy has X
+  of Y target perks" when a partial copy exists; wanted matches render as "You
   have it" (grouped by target, each owned copy labelled "Copy 1", "Copy 2", …
   with the target's own perks highlighted), and unwanted matches render
   collapsed and informational. A match-report failure never hides the
@@ -93,7 +98,8 @@ Decided:
   weapon's drawer shows: which of its own targets an owned copy currently
   satisfies (grouped by owned copy, since one weapon-scoped drawer can have a
   copy that satisfies more than one saved target — an any-weapon target
-  included), which of its own targets are still unmatched ("Still chasing"),
+  included), which of its own targets are still unmatched ("Still chasing",
+  with closest-copy progress when available),
   and any match on a roll marked unwanted, collapsed and informational. A
   match-report failure falls back to the same neutral, Reconnect/Retry
   treatment as the page, scoped to that weapon's own saved targets. The

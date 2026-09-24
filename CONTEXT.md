@@ -309,7 +309,12 @@ into wanted matches, unwanted matches, and _unmatched targets_. A target matches
 when every perk it names is present; extra perks do not prevent it, because a
 target says what must be there and not what must not. Unmatched targets are
 carried rather than dropped: a saved roll nothing satisfies is the roll still
-worth chasing. Owned by `services/rolltargets`.
+worth chasing. An unmatched target may carry its **best copy**: the applicable
+owned roll with the greatest number of target perk columns present, provided at
+least one but not all are present. Equal scores preserve deterministic owned-copy
+order (Item hash, then instance ID); there is no second quality signal. The
+matched-perk subset crosses the seam with the copy, so consumers present the
+score rather than recomputing it. Owned by `services/rolltargets`.
 
 **Preferences service** (`preferences.Service`) — the handler-facing owner of
 preference defaults, validation, atomic partial updates, and irreversible

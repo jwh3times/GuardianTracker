@@ -13,6 +13,21 @@ type Match struct {
 	Roll   ownedrolls.OwnedRoll
 }
 
+// NearMiss is the best owned copy for a target that nothing fully satisfies.
+// MatchedPerks is the subset of the target's perks present on that copy. It is
+// carried explicitly so consumers never have to recreate the scoring rule.
+type NearMiss struct {
+	Roll         ownedrolls.OwnedRoll
+	MatchedPerks []string
+}
+
+// UnmatchedTarget is a saved target that no owned copy fully satisfies. A
+// target with no partially matching copy still appears, with NearMiss nil.
+type UnmatchedTarget struct {
+	Target   StoredTarget
+	NearMiss *NearMiss
+}
+
 // MatchReport is the complete answer to "which of my weapons match what I
 // saved".
 //
@@ -27,8 +42,9 @@ type MatchReport struct {
 	// copies they can dismantle.
 	Unwanted []Match
 
-	// UnmatchedTargets are saved rolls that nothing owned satisfies.
-	UnmatchedTargets []StoredTarget
+	// UnmatchedTargets are saved rolls that nothing owned satisfies, together
+	// with the best partial copy when at least one target perk is present.
+	UnmatchedTargets []UnmatchedTarget
 }
 
 // OwnedRollReader supplies the weapons the membership currently holds.
@@ -68,11 +84,18 @@ func (s *Service) Matches(ctx context.Context, membershipType int, membershipID 
 	report := MatchReport{}
 	for _, target := range targets {
 		matched := false
+		var best *NearMiss
 		for _, roll := range rolls {
 			if !targetApplies(target, roll) {
 				continue
 			}
-			if !containsAll(roll.Perks, target.Perks) {
+			matchedPerks := matchingPerks(roll.Perks, target.Perks)
+			if len(target.Perks) == 0 || len(matchedPerks) != len(target.Perks) {
+				// Strictly greater preserves the owned-copy order for ties. The
+				// reader guarantees that order by item hash then instance id.
+				if len(matchedPerks) > 0 && (best == nil || len(matchedPerks) > len(best.MatchedPerks)) {
+					best = &NearMiss{Roll: roll, MatchedPerks: matchedPerks}
+				}
 				continue
 			}
 			matched = true
@@ -84,7 +107,10 @@ func (s *Service) Matches(ctx context.Context, membershipType int, membershipID 
 			}
 		}
 		if !matched {
-			report.UnmatchedTargets = append(report.UnmatchedTargets, target)
+			report.UnmatchedTargets = append(report.UnmatchedTargets, UnmatchedTarget{
+				Target:   target,
+				NearMiss: best,
+			})
 		}
 	}
 	return report, nil
@@ -98,22 +124,17 @@ func targetApplies(target StoredTarget, roll ownedrolls.OwnedRoll) bool {
 	return *target.ItemHash == roll.ItemHash
 }
 
-// containsAll reports whether every wanted perk is present among the owned
-// ones. Both slices are sorted and canonically spelled by their owners, so this
-// is an exact comparison rather than a fuzzy one.
-func containsAll(owned, wanted []string) bool {
-	if len(wanted) == 0 {
-		// A target with no perks would match every copy of the weapon. The
-		// domain refuses to store one; refusing to match on one as well means a
-		// row that predates that rule cannot quietly match everything.
-		return false
-	}
-	for _, w := range wanted {
-		if !contains(owned, w) {
-			return false
+// matchingPerks returns the target perks present on an owned copy. Both inputs
+// use canonical Manifest spelling and sorted order; the result follows the
+// target's order so it is stable on the wire.
+func matchingPerks(owned, wanted []string) []string {
+	var matched []string
+	for _, perk := range wanted {
+		if contains(owned, perk) {
+			matched = append(matched, perk)
 		}
 	}
-	return true
+	return matched
 }
 
 func contains(sorted []string, want string) bool {

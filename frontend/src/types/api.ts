@@ -471,12 +471,27 @@ export interface APIRollTargetMatch {
   notes?: string;
 }
 
+/** The highest-scoring partial owned copy for a target nothing fully matches. */
+export interface APIRollTargetNearMiss {
+  itemHash: number;
+  instanceId: string;
+  /** The owned copy's full resolved perks. */
+  perks: string[];
+  /** The target perks present on this copy; this is the service-owned score. */
+  matchedPerks: string[];
+}
+
+/** One still-chasing target, optionally carrying its best partial copy. */
+export interface APIUnmatchedRollTarget extends APIRollTarget {
+  bestCopy?: APIRollTargetNearMiss;
+}
+
 /** GET /api/rolltargets/matches */
 export interface APIRollTargetMatchReport {
   wanted: APIRollTargetMatch[];
   unwanted: APIRollTargetMatch[];
   /** Saved targets nothing owned currently satisfies — still worth chasing. */
-  unmatchedTargets: APIRollTarget[];
+  unmatchedTargets: APIUnmatchedRollTarget[];
 }
 
 /** POST /api/rolltargets/bulk (action "delete" | "delete_all") */

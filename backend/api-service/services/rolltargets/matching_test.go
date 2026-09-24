@@ -115,8 +115,62 @@ func TestMatches_CarriesUnmatchedTargets(t *testing.T) {
 	report, _ := matchSvc([]StoredTarget{
 		target(1, weapon(1000), true, "Kill Clip", "Outlaw"),
 	}, owned).Matches(context.Background(), 3, "m1")
-	if len(report.UnmatchedTargets) != 1 || report.UnmatchedTargets[0].ID != 1 {
+	if len(report.UnmatchedTargets) != 1 || report.UnmatchedTargets[0].Target.ID != 1 {
 		t.Errorf("unmatched = %+v", report.UnmatchedTargets)
+	}
+}
+
+// A still-chasing target carries its highest-scoring partial copy. Scores are
+// matched target perks, not all perks on the weapon; an inapplicable weapon is
+// ignored and an equal score keeps the first copy in the reader's stable order.
+func TestMatches_CarriesTheBestNearMissForAnUnmatchedTarget(t *testing.T) {
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{
+		roll(1000, "a", "Outlaw"),
+		roll(1000, "b", "Firefly", "Outlaw", "Vorpal Weapon"),
+		roll(1000, "c", "Firefly", "Kill Clip"),
+		roll(2000, "d", "Firefly", "Kill Clip", "Outlaw"),
+	}}
+	report, err := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Firefly", "Kill Clip", "Outlaw"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if err != nil {
+		t.Fatalf("Matches: %v", err)
+	}
+	if len(report.UnmatchedTargets) != 1 {
+		t.Fatalf("unmatched = %+v, want one", report.UnmatchedTargets)
+	}
+	near := report.UnmatchedTargets[0].NearMiss
+	if near == nil {
+		t.Fatal("near miss = nil, want the best partial copy")
+	}
+	if near.Roll.InstanceID != "b" {
+		t.Errorf("best copy = %q, want first two-perk tie b", near.Roll.InstanceID)
+	}
+	if got := near.MatchedPerks; len(got) != 2 || got[0] != "Firefly" || got[1] != "Outlaw" {
+		t.Errorf("matched perks = %v, want [Firefly Outlaw]", got)
+	}
+}
+
+func TestMatches_OmitsNearMissWhenNoTargetPerkMatches(t *testing.T) {
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{roll(1000, "a", "Firefly")}}
+	report, _ := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Kill Clip", "Outlaw"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if report.UnmatchedTargets[0].NearMiss != nil {
+		t.Errorf("near miss = %+v, want nil for a zero-perk copy", report.UnmatchedTargets[0].NearMiss)
+	}
+}
+
+func TestMatches_FullMatchWinsOverAnEarlierNearMiss(t *testing.T) {
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{
+		roll(1000, "a", "Outlaw"),
+		roll(1000, "b", "Kill Clip", "Outlaw"),
+	}}
+	report, _ := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Kill Clip", "Outlaw"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if len(report.Wanted) != 1 || len(report.UnmatchedTargets) != 0 {
+		t.Errorf("report = %+v, want one full match and no unmatched target", report)
 	}
 }
 

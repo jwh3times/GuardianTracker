@@ -53,7 +53,7 @@ test("Roll targets: wanted, unmatched, and unwanted matches through the real sta
     .fill(
       [
         `dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11000,11002`,
-        `dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11001,11003`,
+        `dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11001,11002`,
         `dimwishlist:item=-${FIXTURES.collectionItemHash}&perks=11000,11002`,
       ].join("\n"),
     );
@@ -69,7 +69,9 @@ test("Roll targets: wanted, unmatched, and unwanted matches through the real sta
 
   const chasing = page.locator('section[aria-labelledby="rt-chasing-title"]');
   await expect(chasing.getByText("Corkscrew Rifling")).toBeVisible();
-  await expect(chasing.getByText("Firefly")).toBeVisible();
+  await expect(
+    chasing.getByText("Your best copy has 1 of 2 target perks."),
+  ).toBeVisible();
 
   const unwanted = page.locator('section[aria-labelledby="rt-unwanted-title"]');
   const unwantedToggle = unwanted.getByRole("button", {
@@ -111,8 +113,9 @@ test("Roll targets: wanted, unmatched, and unwanted matches through the real sta
  * test's import cannot collide with — and report "already saved" instead of
  * "imported" against — a target the previous test already deleted.
  *
- * The owned copy does not carry this target's Corkscrew Rifling + Firefly pair,
- * so the successful match report places it under "Still chasing".
+ * The owned copy carries Explosive Payload but not this target's Corkscrew
+ * Rifling, so the successful match report places it under "Still chasing" and
+ * names it as the one-of-two best copy.
  */
 test("Roll targets: item drawer section shows an unmatched target as still chasing", async ({
   page,
@@ -120,7 +123,7 @@ test("Roll targets: item drawer section shows an unmatched target as still chasi
   await page.goto("/rolls");
   await page
     .getByLabel("Paste a DIM-format wish list")
-    .fill(`dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11001,11003`);
+    .fill(`dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11001,11002`);
   await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page.getByText("1 imported")).toBeVisible();
 
@@ -134,7 +137,9 @@ test("Roll targets: item drawer section shows an unmatched target as still chasi
   await expect(drawer.getByText("Still chasing")).toBeVisible();
   await expect(chasingRow).toBeVisible();
   await expect(chasingRow.getByText("Corkscrew Rifling")).toBeVisible();
-  await expect(chasingRow.getByText("Firefly")).toBeVisible();
+  await expect(
+    chasingRow.getByText("Your best copy has 1 of 2 target perks."),
+  ).toBeVisible();
   await expect(drawer.getByText("Match status unknown")).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: "Retry" })).toHaveCount(0);
   await expect(

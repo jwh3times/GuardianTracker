@@ -1,4 +1,8 @@
-import type { RollTarget, RollTargetMatch } from "../../types/design";
+import type {
+  RollTarget,
+  RollTargetMatch,
+  UnmatchedRollTarget,
+} from "../../types/design";
 
 /**
  * The pure grouping/filtering pieces behind the Roll targets page (mirrors
@@ -33,13 +37,13 @@ export interface ChasingGroup {
   name: string;
   icon?: string;
   type?: string;
-  targets: RollTarget[];
+  targets: UnmatchedRollTarget[];
 }
 
 /** Group targets by the weapon they name; any-weapon targets share one
  * "Any weapon" bucket regardless of their individual perks. */
 export function groupChasingTargets(
-  targets: RollTarget[],
+  targets: UnmatchedRollTarget[],
   lookup: WeaponLookup,
 ): ChasingGroup[] {
   const groups = new Map<string, ChasingGroup>();

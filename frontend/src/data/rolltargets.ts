@@ -20,6 +20,8 @@ import type {
   RollTargetImportReport,
   RollTargetMatch,
   RollTargetMatchReport,
+  RollTargetNearMiss,
+  UnmatchedRollTarget,
   UnresolvedPerk,
 } from "../types/design";
 
@@ -132,6 +134,27 @@ function toMatch(
   };
 }
 
+function toNearMiss(
+  copy: APIRollTargetMatchReport["unmatchedTargets"][number]["bestCopy"],
+): RollTargetNearMiss | undefined {
+  if (!copy) return undefined;
+  return {
+    itemHash: String(copy.itemHash),
+    instanceId: copy.instanceId,
+    perks: copy.perks ?? [],
+    matchedPerks: copy.matchedPerks ?? [],
+  };
+}
+
+function toUnmatchedTarget(
+  target: APIRollTargetMatchReport["unmatchedTargets"][number],
+): UnmatchedRollTarget {
+  return {
+    ...toRollTarget(target),
+    bestCopy: toNearMiss(target.bestCopy),
+  };
+}
+
 /**
  * The matches query's `select`. Stable module-level reference so React
  * Query's per-observer `select` memoisation holds.
@@ -140,7 +163,7 @@ function toMatchReport(r: APIRollTargetMatchReport): RollTargetMatchReport {
   return {
     wanted: (r.wanted ?? []).map(toMatch),
     unwanted: (r.unwanted ?? []).map(toMatch),
-    unmatchedTargets: (r.unmatchedTargets ?? []).map(toRollTarget),
+    unmatchedTargets: (r.unmatchedTargets ?? []).map(toUnmatchedTarget),
   };
 }
 

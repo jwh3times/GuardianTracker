@@ -1372,6 +1372,14 @@
   flex-wrap: wrap;
   gap: var(--s-2);
 }
+.gt-rt-near-miss {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-3);
+  border-left: 0.15rem solid var(--c-signal);
+  background: color-mix(in oklch, var(--c-signal) 6%, transparent);
+}
 .gt-chip[data-highlight="true"] {
   color: var(--c-signal);
   border-color: color-mix(in oklch, var(--c-signal) 40%, var(--c-line));

@@ -198,6 +198,49 @@ describe("sections, in order", () => {
       ).toBeInTheDocument(),
     );
   });
+
+  it("shows the backend-selected best copy and highlights only its matched target perks", async () => {
+    useCollectionsFixture({ "100": { name: "Fatebringer", collected: true } });
+    server.use(
+      http.get(`${API}/api/rolltargets`, () =>
+        HttpResponse.json([
+          target("1", { perks: ["Explosive Payload", "Firefly"] }),
+        ]),
+      ),
+      http.get(`${API}/api/rolltargets/matches`, () =>
+        HttpResponse.json(
+          emptyMatches({
+            unmatchedTargets: [
+              target("1", {
+                perks: ["Explosive Payload", "Firefly"],
+                bestCopy: {
+                  itemHash: 100,
+                  instanceId: "near-1",
+                  perks: ["Arrowhead Brake", "Explosive Payload"],
+                  matchedPerks: ["Explosive Payload"],
+                },
+              }),
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+
+    const summary = await screen.findByRole("note");
+    expect(summary).toHaveTextContent(
+      "Your best copy has 1 of 2 target perks.",
+    );
+    expect(within(summary).getByText("Explosive Payload")).toHaveAttribute(
+      "data-highlight",
+      "true",
+    );
+    expect(within(summary).getByText("Arrowhead Brake")).toHaveAttribute(
+      "data-highlight",
+      "false",
+    );
+  });
 });
 
 describe("default filter", () => {
