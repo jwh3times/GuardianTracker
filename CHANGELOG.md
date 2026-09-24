@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.16.1] - 2026-09-24
+
+### Changed
+
+- The hermetic browser suite now serves owned weapon rolls from fake Bungie,
+  including an enhanced perk plug, and verifies wanted, unmatched, and unwanted
+  roll-target states through the real frontend and API stack instead of covering
+  only the inventory-read failure path.
+
 ## [1.16.0] - 2026-09-23
 
 ### Added
@@ -1501,7 +1510,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.1...HEAD
+[1.16.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.13.2...v1.14.0

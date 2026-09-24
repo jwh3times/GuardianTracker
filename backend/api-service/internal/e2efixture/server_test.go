@@ -120,6 +120,24 @@ func TestManifestProfileVendorMilestoneAndSettingsRoutes(t *testing.T) {
 	if len(instances) != 3 {
 		t.Fatalf("components 200,205,300 instance count = %d", len(instances))
 	}
+	owned := getBungie(t, server, profileBase+"102,201,205,305", true)
+	vaultItems := owned["profileInventory"].(map[string]any)["data"].(map[string]any)["items"].([]any)
+	carriedItems := owned["characterInventories"].(map[string]any)["data"].(map[string]any)[CharacterID].(map[string]any)["items"].([]any)
+	if len(vaultItems) != 0 || len(carriedItems) != 0 {
+		t.Fatalf("owned-roll empty inventories = vault %+v / character %+v", vaultItems, carriedItems)
+	}
+	ownedEquipment := owned["characterEquipment"].(map[string]any)["data"].(map[string]any)[CharacterID].(map[string]any)["items"].([]any)
+	if len(ownedEquipment) != 1 {
+		t.Fatalf("owned-roll equipment count = %d, want 1", len(ownedEquipment))
+	}
+	ownedItem := ownedEquipment[0].(map[string]any)
+	if ownedItem["itemHash"] != float64(fatebringerHash) || ownedItem["itemInstanceId"] != fatebringerInstanceID {
+		t.Fatalf("owned-roll item = %+v", ownedItem)
+	}
+	ownedSockets := owned["itemComponents"].(map[string]any)["sockets"].(map[string]any)["data"].(map[string]any)[fatebringerInstanceID].(map[string]any)["sockets"].([]any)
+	if len(ownedSockets) != 2 || ownedSockets[0].(map[string]any)["plugHash"] != float64(enhancedArrowheadBrakeHash) || ownedSockets[1].(map[string]any)["plugHash"] != float64(11002) {
+		t.Fatalf("owned-roll sockets = %+v", ownedSockets)
+	}
 	current := getBungie(t, server, profileBase+"204", true)
 	currentEntry := current["characterActivities"].(map[string]any)["data"].(map[string]any)[CharacterID].(map[string]any)
 	if currentEntry["currentActivityHash"] != float64(currentActivityHash) {

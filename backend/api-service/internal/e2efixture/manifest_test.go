@@ -119,6 +119,17 @@ func TestGeneratedManifestExercisesProductionReaders(t *testing.T) {
 	if len(perks) != 2 || perks[0].Label != "Barrel" || perks[1].Label != "Trait 1" {
 		t.Fatalf("Fatebringer perks = %+v", perks)
 	}
+	var arrowhead manifestrepo.PerkPlug
+	for _, column := range perks {
+		for _, plug := range column.Plugs {
+			if plug.Name == "Arrowhead Brake" {
+				arrowhead = plug
+			}
+		}
+	}
+	if arrowhead.Base != 11000 || arrowhead.Enhanced != enhancedArrowheadBrakeHash || arrowhead.Ambiguous {
+		t.Fatalf("Arrowhead Brake plug = %+v, want base 11000 / enhanced %d / unambiguous", arrowhead, enhancedArrowheadBrakeHash)
+	}
 
 	links, err := repo.GetCatalystLinks()
 	if err != nil {

@@ -25,6 +25,8 @@ const (
 	WeeklyEmpty  = "empty"
 )
 
+const fatebringerInstanceID = "fatebringer-instance"
+
 // ServerOptions contains the fake values that must agree with the API E2E
 // environment. Empty fields use the canonical localhost defaults above.
 type ServerOptions struct {
@@ -201,6 +203,8 @@ func (s *Server) profile(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Query().Get("components") {
 	case "800":
 		writeBungie(w, collectibleProfile())
+	case "102,201,205,305":
+		writeBungie(w, ownedRollProfile())
 	case "200":
 		writeBungie(w, characterProfile())
 	case "200,205,300":
@@ -251,7 +255,7 @@ func equipmentProfile() map[string]any {
 	profile["characterEquipment"] = map[string]any{
 		"privacy": 1,
 		"data": map[string]any{CharacterID: map[string]any{"items": []any{
-			map[string]any{"itemHash": fatebringerHash, "itemInstanceId": "fatebringer-instance", "bucketHash": uint32(1498876634)},
+			fatebringerItem(),
 			map[string]any{"itemHash": testHelmetHash, "itemInstanceId": "helmet-instance", "bucketHash": uint32(3448274439)},
 			map[string]any{"itemHash": testShipHash, "itemInstanceId": "ship-instance", "bucketHash": uint32(284967655)},
 		}}},
@@ -260,13 +264,54 @@ func equipmentProfile() map[string]any {
 		"instances": map[string]any{
 			"privacy": 2,
 			"data": map[string]any{
-				"fatebringer-instance": map[string]any{"primaryStat": map[string]any{"statHash": uint32(1480404414), "value": 2010}},
-				"helmet-instance":      map[string]any{"primaryStat": map[string]any{"statHash": uint32(3897883278), "value": 2008}},
-				"ship-instance":        map[string]any{},
+				fatebringerInstanceID: map[string]any{"primaryStat": map[string]any{"statHash": uint32(1480404414), "value": 2010}},
+				"helmet-instance":     map[string]any{"primaryStat": map[string]any{"statHash": uint32(3897883278), "value": 2008}},
+				"ship-instance":       map[string]any{},
 			},
 		},
 	}
 	return profile
+}
+
+func ownedRollProfile() map[string]any {
+	return map[string]any{
+		"profileInventory": map[string]any{
+			"privacy": 2,
+			"data":    map[string]any{"items": []any{}},
+		},
+		"characterInventories": map[string]any{
+			"privacy": 2,
+			"data": map[string]any{
+				CharacterID: map[string]any{"items": []any{}},
+			},
+		},
+		"characterEquipment": map[string]any{
+			"privacy": 2,
+			"data": map[string]any{
+				CharacterID: map[string]any{"items": []any{
+					fatebringerItem(),
+				}},
+			},
+		},
+		"itemComponents": map[string]any{
+			"sockets": map[string]any{
+				"privacy": 2,
+				"data": map[string]any{
+					fatebringerInstanceID: map[string]any{"sockets": []any{
+						map[string]any{"plugHash": enhancedArrowheadBrakeHash, "isEnabled": true, "isVisible": true},
+						map[string]any{"plugHash": uint32(11002), "isEnabled": true, "isVisible": true},
+					}},
+				},
+			},
+		},
+	}
+}
+
+func fatebringerItem() map[string]any {
+	return map[string]any{
+		"itemHash": fatebringerHash, "itemInstanceId": fatebringerInstanceID,
+		"bucketHash": uint32(1498876634),
+	}
 }
 
 // currentActivityProfile mirrors the verified populated component-204 shape.
