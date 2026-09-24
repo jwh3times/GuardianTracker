@@ -124,10 +124,13 @@ func classifyPCI(pci string, traitN *int) (role, label string) {
 // PerkColumn is one socket column of a weapon's possible-perk pool, in display order.
 // Perks and Plugs are index-aligned: Plugs[i] carries the hashes behind Perks[i].
 type PerkColumn struct {
-	Role  string     `json:"role"`  // intrinsic | barrel | magazine | trait | origin
-	Label string     `json:"label"` // "Intrinsic", "Barrel", "Trait 1", …
-	Perks []string   `json:"perks"` // possible perk display names, deduped, in pool order
-	Plugs []PerkPlug `json:"plugs"` // the plug hashes behind each name, same order
+	// SocketIndex is the column's position in profile component 305. It is
+	// internal matching context, not part of the public possible-perks shape.
+	SocketIndex int        `json:"-"`
+	Role        string     `json:"role"`  // intrinsic | barrel | magazine | trait | origin
+	Label       string     `json:"label"` // "Intrinsic", "Barrel", "Trait 1", …
+	Perks       []string   `json:"perks"` // possible perk display names, deduped, in pool order
+	Plugs       []PerkPlug `json:"plugs"` // the plug hashes behind each name, same order
 }
 
 // PerkPlug is one distinct perk of a column, carrying the plug hashes that the
@@ -274,6 +277,7 @@ func (r *Repository) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 	type sel struct {
 		entry       socketEntryDef
 		isIntrinsic bool
+		socketIndex int
 	}
 	var selected []sel
 	for _, want := range []uint32{catIntrinsicTraits, catWeaponPerks} {
@@ -288,6 +292,7 @@ func (r *Repository) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 				selected = append(selected, sel{
 					entry:       def.Sockets.SocketEntries[idx],
 					isIntrinsic: want == catIntrinsicTraits,
+					socketIndex: idx,
 				})
 			}
 		}
@@ -353,7 +358,7 @@ func (r *Repository) GetWeaponPerks(itemHash uint32) ([]PerkColumn, error) {
 		if len(perks) == 0 {
 			continue
 		}
-		cols = append(cols, PerkColumn{Role: role, Label: label, Perks: perks, Plugs: plugs})
+		cols = append(cols, PerkColumn{SocketIndex: s.socketIndex, Role: role, Label: label, Perks: perks, Plugs: plugs})
 	}
 	return cols, nil
 }

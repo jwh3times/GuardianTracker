@@ -27,10 +27,10 @@ import type { RollTarget, RollTargetMatch } from "../../types/design";
  * match-failure fallback (filtering the saved-target list), since both are
  * `RollTarget[]`.
  */
-export function weaponBoundTargetsFor(
-  targets: RollTarget[],
+export function weaponBoundTargetsFor<T extends RollTarget>(
+  targets: T[],
   itemHash: string,
-): RollTarget[] {
+): T[] {
   return targets.filter((t) => t.itemHash === itemHash);
 }
 

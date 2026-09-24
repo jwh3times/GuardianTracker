@@ -268,7 +268,10 @@ Primary route groups:
 - rolltargets: user-scoped CRUD, bulk delete (named ids or every target the
   membership owns), DIM-format wish list import, and a match report joining
   saved targets against a fresh read of the membership's owned weapon rolls
-  (`services/ownedrolls`); membership is read solely from the JWT — unlike
+  (`services/ownedrolls`), including the highest-scoring partial owned copy for
+  each unmatched target when some, but not all, unique target perk columns are
+  satisfied; membership is
+  read solely from the JWT — unlike
   collections, characters, catalysts, crafting, and seals, no route or
   request body carries a membership; gated behind the `god-roll` feature flag
   (alpha tier); called from the frontend's Roll targets page (`/rolls`) and,

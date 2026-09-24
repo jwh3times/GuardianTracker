@@ -3,6 +3,7 @@ package rolltargets
 import (
 	"context"
 	"errors"
+	"sort"
 	"testing"
 
 	"guardian-tracker/api-service/services/ownedrolls"
@@ -25,6 +26,19 @@ func (f *fakeOwned) Read(_ context.Context, membershipType int, membershipID str
 // service. Both invariants are relied on here.
 func roll(hash uint32, instance string, perks ...string) ownedrolls.OwnedRoll {
 	return ownedrolls.OwnedRoll{ItemHash: hash, InstanceID: instance, Perks: perks}
+}
+
+func perkColumn(index int, current string, possible ...string) ownedrolls.OwnedPerkColumn {
+	return ownedrolls.OwnedPerkColumn{SocketIndex: index, Perk: current, PossiblePerks: possible}
+}
+
+func rollWithColumns(hash uint32, instance string, columns ...ownedrolls.OwnedPerkColumn) ownedrolls.OwnedRoll {
+	perks := make([]string, 0, len(columns))
+	for _, column := range columns {
+		perks = append(perks, column.Perk)
+	}
+	sort.Strings(perks)
+	return ownedrolls.OwnedRoll{ItemHash: hash, InstanceID: instance, Perks: perks, Columns: columns}
 }
 
 func target(id TargetID, hash *uint32, wanted bool, perks ...string) StoredTarget {
@@ -115,8 +129,124 @@ func TestMatches_CarriesUnmatchedTargets(t *testing.T) {
 	report, _ := matchSvc([]StoredTarget{
 		target(1, weapon(1000), true, "Kill Clip", "Outlaw"),
 	}, owned).Matches(context.Background(), 3, "m1")
-	if len(report.UnmatchedTargets) != 1 || report.UnmatchedTargets[0].ID != 1 {
+	if len(report.UnmatchedTargets) != 1 || report.UnmatchedTargets[0].Target.ID != 1 {
 		t.Errorf("unmatched = %+v", report.UnmatchedTargets)
+	}
+}
+
+// A still-chasing target carries its highest-scoring partial copy. Scores are
+// matched target columns, not all perks on the weapon; an inapplicable weapon
+// is ignored and an equal score keeps the first copy in the reader's stable
+// order.
+func TestMatches_CarriesTheBestNearMissForAnUnmatchedTarget(t *testing.T) {
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{
+		rollWithColumns(1000, "a",
+			perkColumn(0, "Outlaw", "Outlaw", "Vorpal Weapon"),
+			perkColumn(1, "Explosive Payload", "Explosive Payload", "Firefly"),
+			perkColumn(2, "Rampage", "Kill Clip", "Rampage")),
+		rollWithColumns(1000, "b",
+			perkColumn(0, "Outlaw", "Outlaw", "Vorpal Weapon"),
+			perkColumn(1, "Firefly", "Explosive Payload", "Firefly"),
+			perkColumn(2, "Rampage", "Kill Clip", "Rampage")),
+		rollWithColumns(1000, "c",
+			perkColumn(0, "Vorpal Weapon", "Outlaw", "Vorpal Weapon"),
+			perkColumn(1, "Firefly", "Explosive Payload", "Firefly"),
+			perkColumn(2, "Kill Clip", "Kill Clip", "Rampage")),
+		rollWithColumns(2000, "d",
+			perkColumn(0, "Outlaw", "Outlaw"),
+			perkColumn(1, "Firefly", "Firefly"),
+			perkColumn(2, "Kill Clip", "Kill Clip")),
+	}}
+	report, err := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Firefly", "Kill Clip", "Outlaw"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if err != nil {
+		t.Fatalf("Matches: %v", err)
+	}
+	if len(report.UnmatchedTargets) != 1 {
+		t.Fatalf("unmatched = %+v, want one", report.UnmatchedTargets)
+	}
+	near := report.UnmatchedTargets[0].NearMiss
+	if near == nil {
+		t.Fatal("near miss = nil, want the best partial copy")
+	}
+	if near.Roll.InstanceID != "b" {
+		t.Errorf("best copy = %q, want first two-perk tie b", near.Roll.InstanceID)
+	}
+	if got := near.MatchedPerks; len(got) != 2 || got[0] != "Firefly" || got[1] != "Outlaw" {
+		t.Errorf("matched perks = %v, want [Firefly Outlaw]", got)
+	}
+	if near.MatchedColumns != 2 || near.TargetColumns != 3 {
+		t.Errorf("column score = %d/%d, want 2/3", near.MatchedColumns, near.TargetColumns)
+	}
+}
+
+// Two target names from one socket are one target column. Seating one of those
+// mutually exclusive names is not a near miss: it matches all of the target's
+// columns, even though the impossible name-level target remains unmatched.
+func TestMatches_CountsDistinctTargetColumnsNotTargetNames(t *testing.T) {
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{
+		rollWithColumns(1000, "a", perkColumn(0, "Firefly", "Firefly", "Kill Clip")),
+	}}
+	report, err := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Firefly", "Kill Clip"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if err != nil {
+		t.Fatalf("Matches: %v", err)
+	}
+	if len(report.UnmatchedTargets) != 1 {
+		t.Fatalf("unmatched = %+v, want one", report.UnmatchedTargets)
+	}
+	if report.UnmatchedTargets[0].NearMiss != nil {
+		t.Errorf("near miss = %+v, want nil for 1 of 1 matched target columns", report.UnmatchedTargets[0].NearMiss)
+	}
+}
+
+// A socket referenced by more than one Manifest category is still one physical
+// perk column and must contribute only once to the score.
+func TestMatches_CountsEachSocketIndexOnce(t *testing.T) {
+	duplicate := perkColumn(0, "Firefly", "Firefly")
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{
+		rollWithColumns(1000, "a",
+			duplicate,
+			duplicate,
+			perkColumn(1, "Rampage", "Kill Clip", "Rampage")),
+	}}
+	report, err := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Firefly", "Kill Clip"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if err != nil {
+		t.Fatalf("Matches: %v", err)
+	}
+	near := report.UnmatchedTargets[0].NearMiss
+	if near == nil {
+		t.Fatal("near miss = nil, want the Firefly copy")
+	}
+	if near.MatchedColumns != 1 || near.TargetColumns != 2 {
+		t.Errorf("column score = %d/%d, want 1/2", near.MatchedColumns, near.TargetColumns)
+	}
+}
+
+func TestMatches_OmitsNearMissWhenNoTargetPerkMatches(t *testing.T) {
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{roll(1000, "a", "Firefly")}}
+	report, _ := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Kill Clip", "Outlaw"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if report.UnmatchedTargets[0].NearMiss != nil {
+		t.Errorf("near miss = %+v, want nil for a zero-perk copy", report.UnmatchedTargets[0].NearMiss)
+	}
+}
+
+func TestMatches_FullMatchWinsOverAnEarlierNearMiss(t *testing.T) {
+	owned := &fakeOwned{rolls: []ownedrolls.OwnedRoll{
+		roll(1000, "a", "Outlaw"),
+		roll(1000, "b", "Kill Clip", "Outlaw"),
+	}}
+	report, _ := matchSvc([]StoredTarget{
+		target(1, weapon(1000), true, "Kill Clip", "Outlaw"),
+	}, owned).Matches(context.Background(), 3, "m1")
+	if len(report.Wanted) != 1 || len(report.UnmatchedTargets) != 0 {
+		t.Errorf("report = %+v, want one full match and no unmatched target", report)
 	}
 }
 

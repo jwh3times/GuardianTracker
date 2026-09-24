@@ -267,6 +267,11 @@ func TestGetWeaponPerks_RandomRollLegendary(t *testing.T) {
 	if len(cols) != 3 {
 		t.Fatalf("columns = %d (%+v), want 3", len(cols), cols)
 	}
+	for i, col := range cols {
+		if col.SocketIndex != i {
+			t.Errorf("column %q socket index = %d, want %d", col.Label, col.SocketIndex, i)
+		}
+	}
 	if cols[0].Label != "Intrinsic" || len(cols[0].Perks) != 1 || cols[0].Perks[0] != "Adaptive Frame" {
 		t.Errorf("intrinsic column = %+v", cols[0])
 	}

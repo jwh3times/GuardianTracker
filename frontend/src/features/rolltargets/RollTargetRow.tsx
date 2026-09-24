@@ -1,6 +1,7 @@
 import { Button, ItemTile, Textarea } from "../../components/primitives";
 import { Icon } from "../../components/Icon";
-import type { RollTarget } from "../../types/design";
+import type { RollTarget, RollTargetNearMiss } from "../../types/design";
+import { NearMissSummary } from "./NearMissSummary";
 
 /**
  * One saved roll target's card: weapon icon + name (or the any-weapon
@@ -16,6 +17,7 @@ export function RollTargetRow({
   icon,
   type,
   neutral,
+  bestCopy,
   selectable,
   selected,
   onToggleSelect,
@@ -33,6 +35,8 @@ export function RollTargetRow({
   type?: string;
   /** Renders a "Match status unknown" badge instead of any chasing framing. */
   neutral?: boolean;
+  /** Backend-selected best partial copy; absent when no target perk matches. */
+  bestCopy?: RollTargetNearMiss;
   selectable?: boolean;
   selected?: boolean;
   onToggleSelect?: () => void;
@@ -83,6 +87,7 @@ export function RollTargetRow({
             ))}
           </div>
         )}
+        {!neutral && <NearMissSummary bestCopy={bestCopy} />}
         {editing ? (
           <div className="gt-wl-notes-edit">
             <Textarea

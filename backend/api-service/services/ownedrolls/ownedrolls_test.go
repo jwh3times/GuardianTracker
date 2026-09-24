@@ -43,18 +43,23 @@ type fakeCreds struct {
 
 func (f fakeCreds) GetValidToken(string) (string, error) { return f.token, f.err }
 
-// weapon 1000 has one trait column with a paired base/enhanced perk and a
-// base-only perk. Hash 7777 is a mod plug that is not a perk column.
+// Weapon 1000 has two trait columns. The first carries a paired base/enhanced
+// perk; the second carries a base-only perk. Hash 7777 is a mod plug that is
+// not a perk column.
 func weaponPerks() fakePerks {
 	return fakePerks{cols: map[uint32][]manifest.PerkColumn{
-		1000: {{
-			Role: "trait", Label: "Trait 1",
-			Perks: []string{"Outlaw", "Firefly"},
-			Plugs: []manifest.PerkPlug{
-				{Name: "Outlaw", Base: 111, Enhanced: 911},
-				{Name: "Firefly", Base: 222},
+		1000: {
+			{
+				SocketIndex: 0, Role: "trait", Label: "Trait 1",
+				Perks: []string{"Outlaw"},
+				Plugs: []manifest.PerkPlug{{Name: "Outlaw", Base: 111, Enhanced: 911}},
 			},
-		}},
+			{
+				SocketIndex: 1, Role: "trait", Label: "Trait 2",
+				Perks: []string{"Firefly"},
+				Plugs: []manifest.PerkPlug{{Name: "Firefly", Base: 222}},
+			},
+		},
 	}}
 }
 
@@ -95,6 +100,9 @@ func TestRead_PrivateComponentsStillCarryTheOwnersData(t *testing.T) {
 	if len(rolls[0].Perks) != 2 || rolls[0].Perks[0] != "Firefly" || rolls[0].Perks[1] != "Outlaw" {
 		t.Errorf("perks = %v, want [Firefly Outlaw]", rolls[0].Perks)
 	}
+	if len(rolls[0].Columns) != 2 || rolls[0].Columns[0].Perk != "Outlaw" || rolls[0].Columns[1].Perk != "Firefly" {
+		t.Errorf("columns = %+v, want positional Outlaw and Firefly columns", rolls[0].Columns)
+	}
 }
 
 // An enhanced plug resolves to the same name its base would.
@@ -106,6 +114,9 @@ func TestRead_EnhancedPlugResolvesToTheBaseName(t *testing.T) {
 	rolls, _ := svc(p).Read(context.Background(), 3, "m1")
 	if len(rolls) != 1 || len(rolls[0].Perks) != 1 || rolls[0].Perks[0] != "Outlaw" {
 		t.Errorf("rolls = %+v, want the enhanced plug read as Outlaw", rolls)
+	}
+	if len(rolls) == 1 && (len(rolls[0].Columns) != 2 || rolls[0].Columns[1].Perk != "") {
+		t.Errorf("columns = %+v, want the unpopulated second Manifest column retained", rolls[0].Columns)
 	}
 }
 
@@ -121,7 +132,14 @@ func TestRead_IgnoresNonPerkPlugsAndEmptySockets(t *testing.T) {
 			{PlugHash: ptr(111)},  // a real perk
 		}}},
 	)}
-	rolls, _ := svc(p).Read(context.Background(), 3, "m1")
+	perks := fakePerks{cols: map[uint32][]manifest.PerkColumn{1000: {{
+		SocketIndex: 2,
+		Role:        "trait",
+		Label:       "Trait 1",
+		Perks:       []string{"Outlaw"},
+		Plugs:       []manifest.PerkPlug{{Name: "Outlaw", Base: 111, Enhanced: 911}},
+	}}}}
+	rolls, _ := NewService(p, perks, fakeCreds{token: "t"}).Read(context.Background(), 3, "m1")
 	if len(rolls) != 1 || len(rolls[0].Perks) != 1 || rolls[0].Perks[0] != "Outlaw" {
 		t.Errorf("rolls = %+v, want only the real perk", rolls)
 	}
@@ -169,6 +187,9 @@ func TestRead_GathersVaultCharacterAndEquipped(t *testing.T) {
 	}
 	if len(rolls) != 3 {
 		t.Fatalf("rolls = %d, want 3 (vault, carried, equipped)", len(rolls))
+	}
+	if rolls[0].InstanceID != "carried" || rolls[1].InstanceID != "equipped" || rolls[2].InstanceID != "vault" {
+		t.Errorf("instance order = [%s %s %s], want deterministic lexical order", rolls[0].InstanceID, rolls[1].InstanceID, rolls[2].InstanceID)
 	}
 }
 
