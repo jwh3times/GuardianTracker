@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ManifestVersion     = "e2e-fixture-1"
+	ManifestVersion     = "e2e-fixture-2"
 	ManifestContentName = "world_sql_content_e2e.content"
 
 	MembershipID   = "4611686018400000001"
@@ -41,6 +41,8 @@ const (
 	sunshotHash      uint32 = 600
 	strangeCoinHash  uint32 = 700
 	testingModHash   uint32 = 701
+
+	enhancedArrowheadBrakeHash uint32 = 11005
 
 	combinedRecordsRootHash uint32 = 9000
 	catalystNodeHash        uint32 = 9001
@@ -196,11 +198,12 @@ func fixtureRows() map[string][]manifestRow {
 		{sunshotHash, weapon(sunshotHash, "Sunshot", "An exotic hand cannon that fires explosive rounds.", "/e2e/sunshot.png", 9, 6)},
 		{strangeCoinHash, simpleItem(strangeCoinHash, "Strange Coin", "Currency accepted by Xûr.", "/e2e/strange-coin.png", 10, 0, 5)},
 		{testingModHash, simpleItem(testingModHash, "Testing Targeting", "A rotating test mod.", "/e2e/testing-mod.png", 19, 0, 5)},
-		{11000, plug(11000, "Arrowhead Brake", "Lightly vented barrel.", "barrels", nil, nil)},
-		{11001, plug(11001, "Corkscrew Rifling", "Balanced barrel.", "barrels", nil, nil)},
-		{11002, plug(11002, "Explosive Payload", "Projectiles create an area-of-effect detonation.", "frames", nil, nil)},
-		{11003, plug(11003, "Firefly", "Precision kills increase reload speed and explode the target.", "frames", nil, nil)},
-		{11004, plug(11004, "Sunshot Catalyst", "Upgrades this weapon to a Masterwork.", "catalysts", []uint32{7101}, []uint32{13000})},
+		{11000, plug(11000, "Arrowhead Brake", "Lightly vented barrel.", "Barrel", "barrels", nil, nil)},
+		{enhancedArrowheadBrakeHash, plug(enhancedArrowheadBrakeHash, "Arrowhead Brake", "Lightly vented barrel.", "Enhanced Barrel", "barrels", nil, nil)},
+		{11001, plug(11001, "Corkscrew Rifling", "Balanced barrel.", "Barrel", "barrels", nil, nil)},
+		{11002, plug(11002, "Explosive Payload", "Projectiles create an area-of-effect detonation.", "Trait", "frames", nil, nil)},
+		{11003, plug(11003, "Firefly", "Precision kills increase reload speed and explode the target.", "Trait", "frames", nil, nil)},
+		{11004, plug(11004, "Sunshot Catalyst", "Upgrades this weapon to a Masterwork.", "Catalyst", "catalysts", []uint32{7101}, []uint32{13000})},
 	}
 
 	// Fatebringer has two production-shaped perk sockets; Sunshot has a catalyst
@@ -250,7 +253,7 @@ func fixtureRows() map[string][]manifestRow {
 			{dredgenSealHash, node(dredgenSealHash, "Dredgen", nil, nil, []uint32{completedTriumphHash, inProgressTriumphHash}, sealCompletionHash)},
 		},
 		"DestinyPlugSetDefinition": {
-			{12000, plugSet(12000, 11000, 11001)},
+			{12000, plugSet(12000, 11000, enhancedArrowheadBrakeHash, 11001)},
 			{12001, plugSet(12001, 11002, 11003)},
 			{12003, plugSet(12003, 11004)},
 		},
@@ -341,14 +344,15 @@ func node(hash uint32, name string, childNodes, collectibles, records []uint32, 
 	}
 }
 
-func plug(hash uint32, name, description, category string, objectives, perks []uint32) map[string]any {
+func plug(hash uint32, name, description, typeDisplayName, category string, objectives, perks []uint32) map[string]any {
 	perkRows := make([]any, 0, len(perks))
 	for _, perkHash := range perks {
 		perkRows = append(perkRows, map[string]any{"perkHash": perkHash})
 	}
 	return map[string]any{
 		"hash": hash, "displayProperties": display(name, description, fmt.Sprintf("/e2e/plug-%d.png", hash)), "itemType": 19,
-		"inventory": map[string]any{"tierType": 5}, "plug": map[string]any{"plugCategoryIdentifier": category},
+		"itemTypeDisplayName": typeDisplayName,
+		"inventory":           map[string]any{"tierType": 5}, "plug": map[string]any{"plugCategoryIdentifier": category},
 		"objectives": map[string]any{"objectiveHashes": objectives}, "perks": perkRows,
 	}
 }
