@@ -218,6 +218,8 @@ describe("sections, in order", () => {
                   instanceId: "near-1",
                   perks: ["Arrowhead Brake", "Explosive Payload"],
                   matchedPerks: ["Explosive Payload"],
+                  matchedColumns: 1,
+                  targetColumns: 2,
                 },
               }),
             ],

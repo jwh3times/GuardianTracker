@@ -477,8 +477,12 @@ export interface APIRollTargetNearMiss {
   instanceId: string;
   /** The owned copy's full resolved perks. */
   perks: string[];
-  /** The target perks present on this copy; this is the service-owned score. */
+  /** Target perks present on this copy, carried as display evidence. */
   matchedPerks: string[];
+  /** Unique target perk columns currently matched by this copy. */
+  matchedColumns: number;
+  /** Unique perk columns named by the target for this weapon. */
+  targetColumns: number;
 }
 
 /** One still-chasing target, optionally carrying its best partial copy. */

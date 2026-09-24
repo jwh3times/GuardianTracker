@@ -349,13 +349,15 @@ type matchResponse struct {
 }
 
 // nearMissCopyResponse is the best partial owned copy for an unmatched target.
-// MatchedPerks carries the service-owned score inputs so clients only present
-// the decision; they do not recreate it.
+// MatchedColumns and TargetColumns carry the service-owned score so clients
+// only present the decision; MatchedPerks is display evidence.
 type nearMissCopyResponse struct {
-	ItemHash     uint32   `json:"itemHash"`
-	InstanceID   string   `json:"instanceId"`
-	Perks        []string `json:"perks"`
-	MatchedPerks []string `json:"matchedPerks"`
+	ItemHash       uint32   `json:"itemHash"`
+	InstanceID     string   `json:"instanceId"`
+	Perks          []string `json:"perks"`
+	MatchedPerks   []string `json:"matchedPerks"`
+	MatchedColumns int      `json:"matchedColumns"`
+	TargetColumns  int      `json:"targetColumns"`
 }
 
 // matchReportResponse answers "which of my weapons match what I saved".
@@ -389,10 +391,12 @@ func unmatchedTargetResponses(unmatched []rolltargets.UnmatchedTarget) []rollTar
 		response := rollTargetResponseOf(u.Target)
 		if u.NearMiss != nil {
 			response.BestCopy = &nearMissCopyResponse{
-				ItemHash:     u.NearMiss.Roll.ItemHash,
-				InstanceID:   u.NearMiss.Roll.InstanceID,
-				Perks:        u.NearMiss.Roll.Perks,
-				MatchedPerks: u.NearMiss.MatchedPerks,
+				ItemHash:       u.NearMiss.Roll.ItemHash,
+				InstanceID:     u.NearMiss.Roll.InstanceID,
+				Perks:          u.NearMiss.Roll.Perks,
+				MatchedPerks:   u.NearMiss.MatchedPerks,
+				MatchedColumns: u.NearMiss.MatchedColumns,
+				TargetColumns:  u.NearMiss.TargetColumns,
 			}
 		}
 		out = append(out, response)

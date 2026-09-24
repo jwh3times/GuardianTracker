@@ -371,8 +371,10 @@ export interface RollTargetNearMiss {
   instanceId: string;
   /** The owned copy's full resolved perks. */
   perks: string[];
-  /** Target perks present on the copy; selected by the backend scoring rule. */
+  /** Target perks present on the copy, carried as display evidence. */
   matchedPerks: string[];
+  matchedColumns: number;
+  targetColumns: number;
 }
 
 /** A saved target nothing fully satisfies, with its best copy when one exists. */

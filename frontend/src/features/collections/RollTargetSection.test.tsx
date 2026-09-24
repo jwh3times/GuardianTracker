@@ -254,6 +254,8 @@ describe("still chasing", () => {
                   instanceId: "near-1",
                   perks: ["Arrowhead Brake", "Explosive Payload"],
                   matchedPerks: ["Arrowhead Brake"],
+                  matchedColumns: 1,
+                  targetColumns: 2,
                 },
               }),
               rt({

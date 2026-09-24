@@ -143,6 +143,8 @@ function toNearMiss(
     instanceId: copy.instanceId,
     perks: copy.perks ?? [],
     matchedPerks: copy.matchedPerks ?? [],
+    matchedColumns: copy.matchedColumns,
+    targetColumns: copy.targetColumns,
   };
 }
 

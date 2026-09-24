@@ -87,12 +87,7 @@ export function RollTargetRow({
             ))}
           </div>
         )}
-        {!neutral && (
-          <NearMissSummary
-            bestCopy={bestCopy}
-            targetPerkCount={target.perks.length}
-          />
-        )}
+        {!neutral && <NearMissSummary bestCopy={bestCopy} />}
         {editing ? (
           <div className="gt-wl-notes-edit">
             <Textarea

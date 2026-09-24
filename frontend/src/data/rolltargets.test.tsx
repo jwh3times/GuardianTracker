@@ -71,7 +71,7 @@ function MatchesProbe() {
           : isError
             ? "failed"
             : matches
-              ? `wanted:${matches.wanted.length}|unwanted:${matches.unwanted.length}|unmatched:${matches.unmatchedTargets.length}|best:${matches.unmatchedTargets[0]?.bestCopy?.itemHash ?? "none"}:${matches.unmatchedTargets[0]?.bestCopy?.matchedPerks.join(",") ?? "none"}`
+              ? `wanted:${matches.wanted.length}|unwanted:${matches.unwanted.length}|unmatched:${matches.unmatchedTargets.length}|best:${matches.unmatchedTargets[0]?.bestCopy?.itemHash ?? "none"}:${matches.unmatchedTargets[0]?.bestCopy?.matchedPerks.join(",") ?? "none"}:${matches.unmatchedTargets[0]?.bestCopy?.matchedColumns ?? "none"}/${matches.unmatchedTargets[0]?.bestCopy?.targetColumns ?? "none"}`
               : "no-data"}
       </div>
     </div>
@@ -152,6 +152,8 @@ describe("query identity and projection", () => {
                   instanceId: "near-1",
                   perks: ["Arrowhead Brake", "Firefly"],
                   matchedPerks: ["Arrowhead Brake"],
+                  matchedColumns: 1,
+                  targetColumns: 2,
                 },
               }),
             ],
@@ -164,7 +166,7 @@ describe("query identity and projection", () => {
 
     await waitFor(() =>
       expect(screen.getByTestId("matches")).toHaveTextContent(
-        "wanted:1|unwanted:0|unmatched:1|best:100:Arrowhead Brake",
+        "wanted:1|unwanted:0|unmatched:1|best:100:Arrowhead Brake:1/2",
       ),
     );
   });

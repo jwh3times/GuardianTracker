@@ -42,6 +42,16 @@ type OwnedRoll struct {
 	ItemHash   uint32
 	InstanceID string
 	Perks      []string
+	Columns    []OwnedPerkColumn
+}
+
+// OwnedPerkColumn preserves the column identity the near-miss scorer needs.
+// Perk is the currently seated perk; PossiblePerks is the Manifest pool for
+// that same component-305 socket.
+type OwnedPerkColumn struct {
+	SocketIndex   int
+	Perk          string
+	PossiblePerks []string
 }
 
 var (
@@ -123,20 +133,20 @@ func (s *Service) Read(ctx context.Context, membershipType int, membershipID str
 	}
 
 	rolls := make([]OwnedRoll, 0, len(items))
-	pools := map[uint32]map[uint32]string{}
+	pools := map[uint32][]perkColumnPool{}
 	for _, item := range items {
 		state, held := (*sockets)[item.ItemInstanceID]
 		if !held {
 			continue // not an instanced item, or its sockets were not returned
 		}
-		pool, err := s.perkNames(pools, item.ItemHash)
+		pool, err := s.perkColumns(pools, item.ItemHash)
 		if err != nil {
 			return nil, err
 		}
 		if len(pool) == 0 {
 			continue // not a weapon with perk columns
 		}
-		perks := currentPerks(state.Sockets, pool)
+		perks, columns := currentPerks(state.Sockets, pool)
 		if len(perks) == 0 {
 			continue
 		}
@@ -144,6 +154,7 @@ func (s *Service) Read(ctx context.Context, membershipType int, membershipID str
 			ItemHash:   item.ItemHash,
 			InstanceID: item.ItemInstanceID,
 			Perks:      perks,
+			Columns:    columns,
 		})
 	}
 	sort.Slice(rolls, func(i, j int) bool {
@@ -155,11 +166,16 @@ func (s *Service) Read(ctx context.Context, membershipType int, membershipID str
 	return rolls, nil
 }
 
-// perkNames indexes a weapon's real perk plugs by hash, memoised per read.
-//
-// Both variants of a perk map to the one name they share, so an enhanced plug
-// in a socket resolves exactly as its base would.
-func (s *Service) perkNames(cache map[uint32]map[uint32]string, itemHash uint32) (map[uint32]string, error) {
+type perkColumnPool struct {
+	socketIndex   int
+	possiblePerks []string
+	plugNames     map[uint32]string
+}
+
+// perkColumns indexes each weapon perk column's plugs by hash, memoised per
+// read. Keeping the columns separate is load-bearing for near-miss scoring:
+// two target names from one socket still describe one target column.
+func (s *Service) perkColumns(cache map[uint32][]perkColumnPool, itemHash uint32) ([]perkColumnPool, error) {
 	if pool, done := cache[itemHash]; done {
 		return pool, nil
 	}
@@ -167,16 +183,22 @@ func (s *Service) perkNames(cache map[uint32]map[uint32]string, itemHash uint32)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPerksUnavailable, err)
 	}
-	pool := map[uint32]string{}
+	pool := make([]perkColumnPool, 0, len(cols))
 	for _, c := range cols {
+		column := perkColumnPool{
+			socketIndex:   c.SocketIndex,
+			possiblePerks: append([]string(nil), c.Perks...),
+			plugNames:     map[uint32]string{},
+		}
 		for _, p := range c.Plugs {
 			if p.Base != 0 {
-				pool[p.Base] = p.Name
+				column.plugNames[p.Base] = p.Name
 			}
 			if p.Enhanced != 0 {
-				pool[p.Enhanced] = p.Name
+				column.plugNames[p.Enhanced] = p.Name
 			}
 		}
+		pool = append(pool, column)
 	}
 	cache[itemHash] = pool
 	return pool, nil
@@ -188,17 +210,31 @@ func (s *Service) perkNames(cache map[uint32]map[uint32]string, itemHash uint32)
 // plug is not in the weapon's perk pool is a mod, a cosmetic or the kill
 // tracker, and is not part of the roll. A socket holding nothing has a null
 // plug hash and is skipped rather than read as plug 0.
-func currentPerks(states []bungie.ItemSocketState, pool map[uint32]string) []string {
+func currentPerks(states []bungie.ItemSocketState, pool []perkColumnPool) ([]string, []OwnedPerkColumn) {
 	seen := map[string]struct{}{}
 	var out []string
-	for _, st := range states {
+	var columns []OwnedPerkColumn
+	for _, col := range pool {
+		ownedColumn := OwnedPerkColumn{
+			SocketIndex:   col.socketIndex,
+			PossiblePerks: append([]string(nil), col.possiblePerks...),
+		}
+		if col.socketIndex < 0 || col.socketIndex >= len(states) {
+			columns = append(columns, ownedColumn)
+			continue
+		}
+		st := states[col.socketIndex]
 		if st.PlugHash == nil {
+			columns = append(columns, ownedColumn)
 			continue
 		}
-		name, isPerk := pool[*st.PlugHash]
+		name, isPerk := col.plugNames[*st.PlugHash]
 		if !isPerk {
+			columns = append(columns, ownedColumn)
 			continue
 		}
+		ownedColumn.Perk = name
+		columns = append(columns, ownedColumn)
 		if _, dup := seen[name]; dup {
 			continue
 		}
@@ -206,7 +242,7 @@ func currentPerks(states []bungie.ItemSocketState, pool map[uint32]string) []str
 		out = append(out, name)
 	}
 	sort.Strings(out)
-	return out
+	return out, columns
 }
 
 // instancedItems gathers every item the membership holds, from the vault, each

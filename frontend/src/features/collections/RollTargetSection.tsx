@@ -256,10 +256,7 @@ function RollTargetSectionReady({
                       </span>
                     ))}
                   </div>
-                  <NearMissSummary
-                    bestCopy={t.bestCopy}
-                    targetPerkCount={t.perks.length}
-                  />
+                  <NearMissSummary bestCopy={t.bestCopy} />
                   {t.notes && (
                     <div className="gt-wl-notes">&quot;{t.notes}&quot;</div>
                   )}

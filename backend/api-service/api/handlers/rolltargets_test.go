@@ -587,8 +587,10 @@ func TestGetRollTargetMatches_SeparatesWantedUnwantedAndUnmatched(t *testing.T) 
 			{
 				Target: rolltargets.StoredTarget{ID: 3, ItemHash: nil, Wanted: true, Perks: []string{"Rampage", "Outlaw"}},
 				NearMiss: &rolltargets.NearMiss{
-					Roll:         ownedrolls.OwnedRoll{ItemHash: 2000, InstanceID: "near", Perks: []string{"Firefly", "Rampage"}},
-					MatchedPerks: []string{"Rampage"},
+					Roll:           ownedrolls.OwnedRoll{ItemHash: 2000, InstanceID: "near", Perks: []string{"Firefly", "Rampage"}},
+					MatchedPerks:   []string{"Rampage"},
+					MatchedColumns: 1,
+					TargetColumns:  2,
 				},
 			},
 		},
@@ -613,6 +615,9 @@ func TestGetRollTargetMatches_SeparatesWantedUnwantedAndUnmatched(t *testing.T) 
 	}
 	if best := resp.UnmatchedTargets[0].BestCopy; best == nil || best.InstanceID != "near" || len(best.MatchedPerks) != 1 || best.MatchedPerks[0] != "Rampage" {
 		t.Errorf("best copy = %+v, want serialized near miss", best)
+	}
+	if best := resp.UnmatchedTargets[0].BestCopy; best == nil || best.MatchedColumns != 1 || best.TargetColumns != 2 {
+		t.Errorf("best-copy score = %+v, want 1/2 columns", best)
 	}
 }
 

@@ -18,8 +18,8 @@ No unreleased changes.
 
 ### Added
 
-- Still-chasing roll targets now show the closest owned copy when it carries at
-  least one, but not all, target perks. The Roll targets page and per-weapon
+- Still-chasing roll targets now show the closest owned copy when it satisfies
+  at least one, but not all, unique target perk columns. The Roll targets page and per-weapon
   item drawer report “Your best copy has X of Y target perks,” show the copy's
   full resolved perks, and highlight the ones that contributed to its score.
   Equal scores keep a stable owned-copy order rather than introducing another

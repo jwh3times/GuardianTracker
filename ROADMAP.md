@@ -109,8 +109,7 @@ Decided:
 
 Still to settle:
 
-- Near-miss detection ("best copy has 1 of 2") and recording which DIM file a
-  target came from — both deferred as their own cards.
+- Recording which DIM file a target came from, deferred as its own card.
 - The mockup's "Best farm: {source}" line (joining acquisition data to
   targets) is out of scope for the drawer section that shipped in #371 and
   remains its own decision.
