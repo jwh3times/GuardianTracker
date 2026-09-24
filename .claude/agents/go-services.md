@@ -72,7 +72,10 @@ backend/api-service/
                                            and counted, never 404. GetRollTargetMatches
                                            (`GET /api/rolltargets/matches`) reads
                                            membership_type from the JWT claim alongside membership_id and
-                                           returns `{wanted[], unwanted[], unmatchedTargets[]}`;
+                                           returns `{wanted[], unwanted[], unmatchedTargets[]}`. Each
+                                           unmatched target may carry additive `bestCopy` evidence
+                                           (`itemHash`, `instanceId`, the copy's full `perks`, and the
+                                           target-only `matchedPerks` subset) selected by the service;
                                            `ownedrolls.ErrNoCredential` maps to 401 BUNGIE_REAUTH_REQUIRED,
                                            and both `rolltargets.ErrOwnedRollsUnavailable` and
                                            `ownedrolls.ErrInventoryUnavailable` map to 503
@@ -295,7 +298,13 @@ backend/api-service/
                                            any-weapon target is tested against every owned weapon.
                                            MatchReport splits into Wanted/Unwanted matches plus
                                            UnmatchedTargets — a target nothing satisfies is carried, not
-                                           dropped. An empty target list short-circuits before the owned
+                                           dropped. Each unmatched target may carry the applicable owned
+                                           copy with the greatest number of target perks present, but only
+                                           when at least one (and not all) matches; a strictly-greater
+                                           replacement rule preserves OwnedRollReader's item-hash/instance-id
+                                           order on equal scores. The matched-perk subset travels with that
+                                           copy so handlers and clients present rather than recompute the
+                                           decision. An empty target list short-circuits before the owned
                                            rolls read; otherwise a nil owned reader (or its failure)
                                            surfaces as ErrOwnedRollsUnavailable rather than an empty report.
   services/rolltargets/dimfile.go      ← ParseDIMFile(text) DIMFile: pure syntax parser for DIM wish-list

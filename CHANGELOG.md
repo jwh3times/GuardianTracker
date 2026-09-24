@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.17.0] - 2026-09-24
+
+### Added
+
+- Still-chasing roll targets now show the closest owned copy when it carries at
+  least one, but not all, target perks. The Roll targets page and per-weapon
+  item drawer report “Your best copy has X of Y target perks,” show the copy's
+  full resolved perks, and highlight the ones that contributed to its score.
+  Equal scores keep a stable owned-copy order rather than introducing another
+  hidden quality signal.
+
 ## [1.16.1] - 2026-09-24
 
 ### Changed
@@ -1510,7 +1521,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.15.0...v1.16.0
 [1.15.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.14.0...v1.15.0
