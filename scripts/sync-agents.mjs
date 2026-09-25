@@ -45,6 +45,12 @@ function normalizeNewlines(value) {
   return value.replaceAll("\r\n", "\n");
 }
 
+// Code-point order, independent of locale, so every machine lists files identically.
+function byCodePoint(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 // C0 controls and DEL, minus the characters a caller allows. Checked by code point rather than
 // with a regex, so linters' no-control-regex rule has nothing to object to.
 function isControl(code, allowed = "") {
@@ -265,7 +271,7 @@ function listFiles(root, dir, { strays, authored = false } = {}) {
       strays?.push(relPath);
     }
   }
-  return results.toSorted();
+  return results.toSorted(byCodePoint);
 }
 
 function pruneEmptyDirs(root, dir) {
@@ -340,7 +346,7 @@ function findOrphans(root, mirrors) {
     }
     orphans.push(...strays);
   }
-  return orphans.toSorted();
+  return orphans.toSorted(byCodePoint);
 }
 
 export function syncMirrors(root = defaultRoot, { check = false } = {}) {
