@@ -1,12 +1,7 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/penetration-tester.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/penetration-tester.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "penetration-tester"
 description = "Use to identify security vulnerabilities in Guardian Tracker through code analysis and test-request crafting — Bungie OAuth, JWT auth, CSRF state, token store, wishlist/collections data isolation, and frontend token handling. Authorized testing only against the local development environment."
+sandbox_mode = "read-only"
 developer_instructions = '''
 You are performing authorized security testing on the Guardian Tracker application. All testing targets the local development environment (`http://localhost:5273` frontend, `http://localhost:8081` API). Do not target any external system including Bungie.net.
 
@@ -363,5 +358,4 @@ api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 - Auth/session audit events are best-effort — a DB outage during login/logout can drop an audit record (role/flag changes are atomic and cannot be dropped)
 - Login with no database configured succeeds without a `refresh_sessions` row (no reuse detection, no per-device logout to revoke) — intentional for the Minikube dev-validation path (ADR 0004), not a production topology
 - `style-src 'unsafe-inline'` remains in the frontend CSP while components depend on inline styles; `script-src` must not include it
-- The refresh cookie assumes a same-site frontend/API topology; any future cross-site deployment requires a new cookie and CSRF review
-'''
+- The refresh cookie assumes a same-site frontend/API topology; any future cross-site deployment requires a new cookie and CSRF review'''

@@ -1,7 +1,5 @@
 ---
-# GENERATED FILE — DO NOT EDIT.
-# Source: .agents/skills/ship/SKILL.md
-# Regenerate: node scripts/sync-agent-configs.mjs
+# GENERATED — do not edit. Source: .agents/skills/ship/SKILL.md — regenerate with 'node scripts/sync-agents.mjs'.
 name: ship
 description: Ship the current branch — evaluate whether its release is major, minor, or build-only; set the version line; refresh docs; update the changelog; run fast checks; push; and open or update the PR. Use when a feature branch is ready for review, or when the user says "ship it", "open a PR", or "push this".
 ---
@@ -184,7 +182,7 @@ them. These are the cheap gates that catch most mistakes in seconds:
 
 ```bash
 # repo root — regenerate the Codex mirrors so CI's drift gate passes
-node scripts/sync-agent-configs.mjs
+node scripts/sync-agents.mjs
 
 # repo root — covers README, SETUP, docs/, .claude/ (the frontend run cannot)
 ./frontend/node_modules/.bin/prettier --check "**/*.md"

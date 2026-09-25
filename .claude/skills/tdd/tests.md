@@ -1,7 +1,3 @@
-<!-- GENERATED FILE — DO NOT EDIT.
-Source: .agents/skills/tdd/tests.md
-Regenerate: node scripts/sync-agent-configs.mjs -->
-
 # Good and Bad Tests
 
 ## Good Tests

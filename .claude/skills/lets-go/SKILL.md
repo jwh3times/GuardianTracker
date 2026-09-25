@@ -1,7 +1,5 @@
 ---
-# GENERATED FILE — DO NOT EDIT.
-# Source: .agents/skills/lets-go/SKILL.md
-# Regenerate: node scripts/sync-agent-configs.mjs
+# GENERATED — do not edit. Source: .agents/skills/lets-go/SKILL.md — regenerate with 'node scripts/sync-agents.mjs'.
 name: lets-go
 description: Resume this repo's active handoff from Proton Drive and mark it consumed in handoff_map.json.
 disable-model-invocation: true

@@ -48,7 +48,7 @@ this split exists to eliminate.
 | `.claude/agents/code-reviewer.md`             | code-reviewer subagent             | Review rules, what to flag, intentional exceptions                                                                                  |
 | `.claude/agents/kubernetes-infrastructure.md` | kubernetes-infrastructure subagent | Minikube topology, manifests, configmaps, scripts                                                                                   |
 | `.claude/agents/docker-containers.md`         | docker-containers subagent         | Dockerfiles, image builds, base image versions                                                                                      |
-| `scripts/sync-agent-configs.mjs`              | Maintainers                        | Generates `.codex/agents/` from `.claude/agents/` and `.claude/skills/` from `.agents/skills/`; edit when the sync contract changes |
+| `scripts/sync-agents.mjs`                     | Maintainers                        | Generates `.codex/agents/` from `.claude/agents/` and `.claude/skills/` from `.agents/skills/`; edit when the sync contract changes |
 
 ## Private docs boundary
 
@@ -167,7 +167,7 @@ are portable and permission-free:
   update it after confirmed manifest or script changes.
 - Do not edit `.codex/agents/*.toml` or `.claude/skills/**`. They are generated —
   `.codex/agents/` from `.claude/agents/`, `.claude/skills/` from `.agents/skills/` —
-  by `scripts/sync-agent-configs.mjs`. Edit the authored source instead (`.claude/agents/`
+  by `scripts/sync-agents.mjs`. Edit the authored source instead (`.claude/agents/`
   for agents, `.agents/skills/` for skills); the script regenerates the mirrors and CI
   fails if they drift.
 

@@ -1,7 +1,5 @@
 ---
-# GENERATED FILE — DO NOT EDIT.
-# Source: .agents/skills/prototype/SKILL.md
-# Regenerate: node scripts/sync-agent-configs.mjs
+# GENERATED — do not edit. Source: .agents/skills/prototype/SKILL.md — regenerate with 'node scripts/sync-agents.mjs'.
 name: prototype
 description: Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like.
 ---

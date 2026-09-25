@@ -18,7 +18,7 @@
 // together, so nothing here can drift. (The postgres compose/workflow split is a
 // version-consistency problem, and scripts/postgres-pin-policy.test.mjs owns it.)
 //
-// This talks to the registry, so unlike sync-agent-configs.mjs it is NOT wired
+// This talks to the registry, so unlike sync-agents.mjs it is NOT wired
 // into CI — a required check must not depend on the network. The offline policy
 // test stays the gate; this is the tool that makes it green.
 //

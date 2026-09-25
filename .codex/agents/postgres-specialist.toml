@@ -1,10 +1,4 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/postgres-specialist.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/postgres-specialist.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "postgres-specialist"
 description = "Use for Guardian Tracker database work — the SQLite Bungie manifest database used by api-service, the PostgreSQL schema for user data, DB migration runner, and Bungie token store implementation."
 developer_instructions = '''
@@ -233,5 +227,4 @@ enforces alignment across Compose, the CI service container, and this file.
 | User preferences                                  | PostgreSQL (`db/prefs.go`) behind `db/adapters/preferences.go`       |
 | Since-last-visit digest snapshot and visit clock  | PostgreSQL (`db/digest.go`) behind `db/adapters/digest.go`           |
 | Collections analysis (missing items)              | SQLite manifest + Bungie API live data                               |
-| Weapon type enrichment for catalysts              | SQLite manifest (`GetWeaponTypesByName`; cached)                     |
-'''
+| Weapon type enrichment for catalysts              | SQLite manifest (`GetWeaponTypesByName`; cached)                     |'''

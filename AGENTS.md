@@ -260,7 +260,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agent-configs.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs scripts/board-blockers.test.mjs`,
+   It also runs `node --test scripts/sync-agents.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs scripts/board-blockers.test.mjs`,
    which exercises the generator's own logic and enforces the repository's workflow-action,
    Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
    main-branch synchronization, local documentation-link, jest-dom-shim, and
@@ -281,7 +281,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    below it, and `[Unreleased]` comparing from the newest release. `Changelog Version`
    only inspects the top heading, so without this the footer fell one version behind per
    release. The job also runs
-   `npm run sync:agents -- --check`, which fails if
+   `npm run sync:agents:check`, which fails if
    `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
    (generated from `.agents/skills/`) is out of sync with its source. Fix:
    `npm run sync:agents`. Run `./frontend/node_modules/.bin/prettier --write "**/*.md"`
@@ -521,7 +521,7 @@ they are useful either way.
 the Claude Code convention; the latter is where third-party skill installers write
 (and where a human edits a skill by hand), so installing or updating a skill stays a
 one-way operation with no manual copying. The generated mirrors — `.codex/agents/*.toml`
-and `.claude/skills/**` — are produced from them by `scripts/sync-agent-configs.mjs`
+and `.claude/skills/**` — are produced from them by `scripts/sync-agents.mjs`
 (via `npm run sync:agents`) and committed. The mirror covers a skill's entire
 directory, not just `SKILL.md` — reference docs, `scripts/*.sh`, `agents/*.yaml`, all
 of it. Never edit a generated file: change the authored source and re-run the sync.
@@ -536,8 +536,11 @@ recording one. A directory-walking generator also can't see into a symlink
 skill as untracked source and, in write mode, delete the mirrored copy as an
 orphan. Both failure modes have happened in this repo; regenerate instead.
 
-Codex has no per-agent tool allowlist, so the `tools:` and `model:` frontmatter keys
-are dropped in the generated TOML rather than translated.
+Codex has no per-agent tool allowlist, so the `tools:`, `model:`, and `color:`
+frontmatter keys are dropped in the generated TOML rather than translated. The one
+fact that survives is read-only access: an agent whose `tools:` list names no
+file-writing tool (`Write`, `Edit`, `MultiEdit`, `NotebookEdit`) gets
+`sandbox_mode = "read-only"`.
 
 ## Agent skills
 

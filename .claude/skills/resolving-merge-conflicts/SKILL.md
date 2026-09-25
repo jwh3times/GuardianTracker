@@ -1,7 +1,5 @@
 ---
-# GENERATED FILE — DO NOT EDIT.
-# Source: .agents/skills/resolving-merge-conflicts/SKILL.md
-# Regenerate: node scripts/sync-agent-configs.mjs
+# GENERATED — do not edit. Source: .agents/skills/resolving-merge-conflicts/SKILL.md — regenerate with 'node scripts/sync-agents.mjs'.
 name: resolving-merge-conflicts
 description: "Use when you need to resolve an in-progress git merge/rebase conflict."
 ---

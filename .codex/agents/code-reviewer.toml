@@ -1,12 +1,7 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/code-reviewer.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/code-reviewer.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "code-reviewer"
 description = "Use to review diffs or changed files for correctness bugs, security issues, and violations of Guardian Tracker project patterns before merging."
+sandbox_mode = "read-only"
 developer_instructions = '''
 You are reviewing code changes against the established Guardian Tracker patterns. Be specific: cite file + approximate line, name the violated pattern, and give the correct fix. Do not flag style preferences — only correctness, security, and structural violations.
 
@@ -184,5 +179,4 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 - OAuth validation remains stateless and browser-cookie-bound. Preserve conditional transaction-cookie expiry: valid transaction processing consumes it, while invalid code/state input leaves a pending flow intact.
 - `GET /api/admin/users`, `PUT /api/admin/users/:id/role`, `GET /api/admin/flags`, `PUT /api/admin/flags/:key`, `GET /api/admin/audit` — require admin role via `RequireAdmin`; the restriction itself is correct.
 - `PUT /api/account/role` — self-service role opt-in; rejects `admin` as a target and checks the locked current DB role through `SetSelfRole`, returning `ADMIN_OPT_IN` for admin callers even with stale middleware state. Preserve atomic role-update/`role.optin` audit commit, DB-derived `oldRole`, and session/token-version preservation. Successful bootstrap admin upserts evict the local authorization cache; cross-replica cache lag remains bounded by the normal TTL.
-- `GET /api/flags` — JWT protected but no tier gate; returns resolved state for any authenticated caller.
-'''
+- `GET /api/flags` — JWT protected but no tier gate; returns resolved state for any authenticated caller.'''

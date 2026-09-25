@@ -1,10 +1,4 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/docker-containers.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/docker-containers.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "docker-containers"
 description = "Use for changes to any of the Dockerfiles, Minikube image builds, or local container development for api-service or frontend."
 developer_instructions = '''
@@ -177,5 +171,4 @@ changing a pin; this guide owns only the coupling rules:
 - When reviewing a same-tag republish, read the current tag from its owning
   Dockerfile, Compose file, or workflow and inspect that tag with
   `docker buildx imagetools inspect`. Tags that claim reproducibility remain
-  pinned to reviewed multi-platform OCI index digests.
-'''
+  pinned to reviewed multi-platform OCI index digests.'''
