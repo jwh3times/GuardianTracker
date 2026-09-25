@@ -1,10 +1,4 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/kubernetes-infrastructure.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/kubernetes-infrastructure.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "kubernetes-infrastructure"
 description = "Use for Minikube cluster management, kubectl operations, Kubernetes manifest changes, secret and configmap management, port forwarding, and deployment troubleshooting for Guardian Tracker services."
 developer_instructions = '''
@@ -174,5 +168,4 @@ Read exact base-image refs from the application Dockerfiles; do not cache their
 versions here. Runtime and frontend builder refs remain pinned to reviewed
 multi-platform OCI index digests. Use the drift-verification procedure in
 `SETUP.md` and the coupling rules in `docker-containers.md` when refreshing
-them.
-'''
+them.'''

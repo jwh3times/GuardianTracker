@@ -1,10 +1,4 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/react-frontend.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/react-frontend.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "react-frontend"
 description = "Use for any work in frontend/src/ — React pages, components, the Guardian Tracker design system (gt-* classes + design tokens), TanStack React Query REST calls, AuthContext, FlagsContext, and Vitest tests."
 developer_instructions = '''
@@ -975,5 +969,4 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Xûr location is optional — the backend resolves the authenticated vendor location to
   `The Tower` and omits the field when Bungie or manifest data is unavailable.
 - Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones
-  omit it because verified current reward definitions contain no collectible-linked items.
-'''
+  omit it because verified current reward definitions contain no collectible-linked items.'''

@@ -1,7 +1,3 @@
-<!-- GENERATED FILE — DO NOT EDIT.
-Source: .agents/skills/domain-modeling/CONTEXT-FORMAT.md
-Regenerate: node scripts/sync-agent-configs.mjs -->
-
 # CONTEXT.md Format
 
 ## Structure

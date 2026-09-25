@@ -1,7 +1,3 @@
-<!-- GENERATED FILE — DO NOT EDIT.
-Source: .agents/skills/triage/OUT-OF-SCOPE.md
-Regenerate: node scripts/sync-agent-configs.mjs -->
-
 # Out-of-Scope Knowledge Base
 
 The `.out-of-scope/` directory in a repo stores persistent records of rejected feature requests. It serves two purposes:

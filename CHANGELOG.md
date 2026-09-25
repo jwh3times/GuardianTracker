@@ -14,6 +14,33 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.17.3] - 2026-09-25
+
+### Changed
+
+- The agent-mirror generator is now the shared cross-repository script
+  `scripts/sync-agents.mjs` (replacing `scripts/sync-agent-configs.mjs`), with
+  `npm run sync:agents:check` for the CI drift gate. Generated files carry a
+  one-line banner; non-`SKILL.md` skill files are copied byte-for-byte with no
+  banner; binary skill assets are copied as raw bytes; and emptied generated
+  directories are pruned. Codex agents whose tool list grants no file-writing
+  tool (`code-reviewer`, `penetration-tester`) now get `sandbox_mode = "read-only"`.
+  A `--hook` mode supports a Claude Code PostToolUse hook; the unused `--root` flag is gone.
+
+## [1.17.2] - 2026-09-25
+
+### Changed
+
+- The Compose PostgreSQL services and the `postgres-specialist` agent example
+  moved to the rebuilt `postgres:18.6-alpine3.24` image digest.
+
+## [1.17.1] - 2026-09-25
+
+### Changed
+
+- Frontend dependency updates: `@tanstack/react-query` 5.103.2, `jsdom` 30.1.1,
+  and `oxlint` 1.85.0.
+
 ## [1.17.0] - 2026-09-24
 
 ### Added
@@ -1521,7 +1548,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.3...HEAD
+[1.17.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.2...v1.17.3
+[1.17.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.1...v1.17.2
+[1.17.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.0...v1.17.1
 [1.17.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.1...v1.17.0
 [1.16.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.15.0...v1.16.0

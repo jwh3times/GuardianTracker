@@ -1,7 +1,5 @@
 ---
-# GENERATED FILE — DO NOT EDIT.
-# Source: .agents/skills/wait-what/SKILL.md
-# Regenerate: node scripts/sync-agent-configs.mjs
+# GENERATED — do not edit. Source: .agents/skills/wait-what/SKILL.md — regenerate with 'node scripts/sync-agents.mjs'.
 name: wait-what
 description: Stop. That last message did not land — re-pitch it.
 disable-model-invocation: true

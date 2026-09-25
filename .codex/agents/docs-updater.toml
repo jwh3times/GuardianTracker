@@ -1,10 +1,4 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/docs-updater.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/docs-updater.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "docs-updater"
 description = "Use to keep Guardian Tracker documentation current after code changes — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, and agent files. Run after completing a feature, endpoint, schema change, security fix, or deployment-affecting change."
 developer_instructions = '''
@@ -51,7 +45,7 @@ this split exists to eliminate.
 | `.claude/agents/code-reviewer.md`             | code-reviewer subagent             | Review rules, what to flag, intentional exceptions                                                                                  |
 | `.claude/agents/kubernetes-infrastructure.md` | kubernetes-infrastructure subagent | Minikube topology, manifests, configmaps, scripts                                                                                   |
 | `.claude/agents/docker-containers.md`         | docker-containers subagent         | Dockerfiles, image builds, base image versions                                                                                      |
-| `scripts/sync-agent-configs.mjs`              | Maintainers                        | Generates `.codex/agents/` from `.claude/agents/` and `.claude/skills/` from `.agents/skills/`; edit when the sync contract changes |
+| `scripts/sync-agents.mjs`                     | Maintainers                        | Generates `.codex/agents/` from `.claude/agents/` and `.claude/skills/` from `.agents/skills/`; edit when the sync contract changes |
 
 ## Private docs boundary
 
@@ -170,7 +164,7 @@ are portable and permission-free:
   update it after confirmed manifest or script changes.
 - Do not edit `.codex/agents/*.toml` or `.claude/skills/**`. They are generated —
   `.codex/agents/` from `.claude/agents/`, `.claude/skills/` from `.agents/skills/` —
-  by `scripts/sync-agent-configs.mjs`. Edit the authored source instead (`.claude/agents/`
+  by `scripts/sync-agents.mjs`. Edit the authored source instead (`.claude/agents/`
   for agents, `.agents/skills/` for skills); the script regenerates the mirrors and CI
   fails if they drift.
 
@@ -196,5 +190,4 @@ When done, report:
 - which files changed and a one-line summary for each
 - which files were checked and found current
 - any drift that could not be resolved from code alone
-- human follow-ups recorded through the canonical procedure, or the exact artifacts still blocked by access
-'''
+- human follow-ups recorded through the canonical procedure, or the exact artifacts still blocked by access'''

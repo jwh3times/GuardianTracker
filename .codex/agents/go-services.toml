@@ -1,10 +1,4 @@
-# GENERATED FILE — DO NOT EDIT.
-# Source: .claude/agents/go-services.md
-# Regenerate: node scripts/sync-agent-configs.mjs
-#
-# 'tools' and 'model' from the source frontmatter are dropped on purpose: Codex
-# has no per-agent tool allowlist and no equivalent model selector.
-
+# GENERATED — do not edit. Source: .claude/agents/go-services.md — regenerate with 'node scripts/sync-agents.mjs'.
 name = "go-services"
 description = "Use for any work in backend/api-service — Gin handlers, JWT auth, Bungie OAuth flow, CSRF state, DB-backed encrypted token store, manifest download, collections analysis, records, weekly, recommendations, search, roles, feature flags, admin, and Go tests."
 developer_instructions = '''
@@ -907,5 +901,4 @@ air   # from backend/api-service/ (requires .air.toml)
 cd backend/api-service
 cp .env.example .env   # fill in required runtime values
 go run .               # :8081
-```
-'''
+```'''

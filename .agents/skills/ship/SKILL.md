@@ -181,7 +181,7 @@ them. These are the cheap gates that catch most mistakes in seconds:
 
 ```bash
 # repo root — regenerate the Codex mirrors so CI's drift gate passes
-node scripts/sync-agent-configs.mjs
+node scripts/sync-agents.mjs
 
 # repo root — covers README, SETUP, docs/, .claude/ (the frontend run cannot)
 ./frontend/node_modules/.bin/prettier --check "**/*.md"

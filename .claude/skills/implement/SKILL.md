@@ -1,7 +1,5 @@
 ---
-# GENERATED FILE — DO NOT EDIT.
-# Source: .agents/skills/implement/SKILL.md
-# Regenerate: node scripts/sync-agent-configs.mjs
+# GENERATED — do not edit. Source: .agents/skills/implement/SKILL.md — regenerate with 'node scripts/sync-agents.mjs'.
 name: implement
 description: "Implement a piece of work based on a spec or set of tickets."
 disable-model-invocation: true
