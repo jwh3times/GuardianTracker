@@ -206,7 +206,7 @@ docker run --name guardian-pg `
   -e POSTGRES_USER=guardian_app `
   -e POSTGRES_DB=guardian_tracker `
   -p 127.0.0.1:5432:5432 `
-  -d postgres:18.6-alpine3.24@sha256:6c538e7206ea40ff740ef27883529390a690b6ead6ba96b44c67a9f7c638e8fd
+  -d postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
 
 # Bootstrap least-privilege role (one-time after server provisioning)
 Get-Content database/init/01-init.sql | docker exec -i guardian-pg psql -U postgres -d guardian_tracker
