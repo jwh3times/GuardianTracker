@@ -10,7 +10,7 @@
     "msw": false
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.103.1",
+    "@tanstack/react-query": "^5.103.2",
     "@tanstack/react-virtual": "^3.14.13",
     "clsx": "^2.1.1",
     "react": "^19.3.0",
@@ -50,9 +50,9 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@vitest/coverage-v8": "^5.0.1",
-    "jsdom": "^30.1.0",
+    "jsdom": "^30.1.1",
     "msw": "^2.15.0",
-    "oxlint": "1.83.0",
+    "oxlint": "1.85.0",
     "oxlint-tsgolint": "7.0.2002",
     "postcss": "^8.5.28",
     "prettier": "^3.9.8",

@@ -13,6 +13,23 @@ type Match struct {
 	Roll   ownedrolls.OwnedRoll
 }
 
+// NearMiss is the best owned copy for a target that nothing fully satisfies.
+// MatchedColumns and TargetColumns are the authoritative score; MatchedPerks
+// is the display evidence identifying which perk names contributed.
+type NearMiss struct {
+	Roll           ownedrolls.OwnedRoll
+	MatchedPerks   []string
+	MatchedColumns int
+	TargetColumns  int
+}
+
+// UnmatchedTarget is a saved target that no owned copy fully satisfies. A
+// target with no partially matching copy still appears, with NearMiss nil.
+type UnmatchedTarget struct {
+	Target   StoredTarget
+	NearMiss *NearMiss
+}
+
 // MatchReport is the complete answer to "which of my weapons match what I
 // saved".
 //
@@ -27,8 +44,10 @@ type MatchReport struct {
 	// copies they can dismantle.
 	Unwanted []Match
 
-	// UnmatchedTargets are saved rolls that nothing owned satisfies.
-	UnmatchedTargets []StoredTarget
+	// UnmatchedTargets are saved rolls that nothing owned satisfies, together
+	// with the best partial copy when some, but not all, unique target perk
+	// columns are satisfied.
+	UnmatchedTargets []UnmatchedTarget
 }
 
 // OwnedRollReader supplies the weapons the membership currently holds.
@@ -68,23 +87,41 @@ func (s *Service) Matches(ctx context.Context, membershipType int, membershipID 
 	report := MatchReport{}
 	for _, target := range targets {
 		matched := false
+		var best *NearMiss
 		for _, roll := range rolls {
 			if !targetApplies(target, roll) {
 				continue
 			}
-			if !containsAll(roll.Perks, target.Perks) {
+			if containsAll(roll.Perks, target.Perks) {
+				matched = true
+				m := Match{Target: target, Roll: roll}
+				if target.Wanted {
+					report.Wanted = append(report.Wanted, m)
+				} else {
+					report.Unwanted = append(report.Unwanted, m)
+				}
 				continue
 			}
-			matched = true
-			m := Match{Target: target, Roll: roll}
-			if target.Wanted {
-				report.Wanted = append(report.Wanted, m)
-			} else {
-				report.Unwanted = append(report.Unwanted, m)
+
+			matchedPerks, matchedColumns, targetColumns := scoreTargetColumns(roll.Columns, target.Perks)
+			// A near miss has some, but not all, target columns. Strictly greater
+			// preserves the owned-copy order for equal scores; the reader orders
+			// copies by item hash then instance id.
+			if matchedColumns > 0 && matchedColumns < targetColumns &&
+				(best == nil || matchedColumns > best.MatchedColumns) {
+				best = &NearMiss{
+					Roll:           roll,
+					MatchedPerks:   matchedPerks,
+					MatchedColumns: matchedColumns,
+					TargetColumns:  targetColumns,
+				}
 			}
 		}
 		if !matched {
-			report.UnmatchedTargets = append(report.UnmatchedTargets, target)
+			report.UnmatchedTargets = append(report.UnmatchedTargets, UnmatchedTarget{
+				Target:   target,
+				NearMiss: best,
+			})
 		}
 	}
 	return report, nil
@@ -98,18 +135,57 @@ func targetApplies(target StoredTarget, roll ownedrolls.OwnedRoll) bool {
 	return *target.ItemHash == roll.ItemHash
 }
 
-// containsAll reports whether every wanted perk is present among the owned
-// ones. Both slices are sorted and canonically spelled by their owners, so this
-// is an exact comparison rather than a fuzzy one.
+// scoreTargetColumns counts the owned weapon's unique perk columns that carry
+// at least one target name, and which of those columns currently seat a target
+// perk. Two distinct target names from one socket therefore contribute one
+// target column, never two.
+func scoreTargetColumns(columns []ownedrolls.OwnedPerkColumn, wanted []string) ([]string, int, int) {
+	wantedSet := make(map[string]struct{}, len(wanted))
+	for _, perk := range wanted {
+		wantedSet[perk] = struct{}{}
+	}
+
+	matchedNames := map[string]struct{}{}
+	seenSocketIndexes := map[int]struct{}{}
+	matchedColumns := 0
+	targetColumns := 0
+	for _, column := range columns {
+		if _, seen := seenSocketIndexes[column.SocketIndex]; seen {
+			continue
+		}
+		seenSocketIndexes[column.SocketIndex] = struct{}{}
+		isTargetColumn := false
+		for _, possible := range column.PossiblePerks {
+			if _, wanted := wantedSet[possible]; wanted {
+				isTargetColumn = true
+				break
+			}
+		}
+		if !isTargetColumn {
+			continue
+		}
+		targetColumns++
+		if _, matched := wantedSet[column.Perk]; matched {
+			matchedColumns++
+			matchedNames[column.Perk] = struct{}{}
+		}
+	}
+
+	matchedPerks := make([]string, 0, len(matchedNames))
+	for _, perk := range wanted {
+		if _, matched := matchedNames[perk]; matched {
+			matchedPerks = append(matchedPerks, perk)
+		}
+	}
+	return matchedPerks, matchedColumns, targetColumns
+}
+
 func containsAll(owned, wanted []string) bool {
 	if len(wanted) == 0 {
-		// A target with no perks would match every copy of the weapon. The
-		// domain refuses to store one; refusing to match on one as well means a
-		// row that predates that rule cannot quietly match everything.
 		return false
 	}
-	for _, w := range wanted {
-		if !contains(owned, w) {
+	for _, perk := range wanted {
+		if !contains(owned, perk) {
 			return false
 		}
 	}

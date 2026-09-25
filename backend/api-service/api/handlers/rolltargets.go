@@ -55,13 +55,14 @@ func membershipIDOf(c *gin.Context) string { return c.GetString("membership_id")
 // ItemHash is a pointer so an any-weapon target serialises as an explicit null
 // rather than as item 0, which is a hash the wire would accept.
 type rollTargetResponse struct {
-	ID        string   `json:"id"`
-	ItemHash  *uint32  `json:"itemHash"`
-	AnyWeapon bool     `json:"anyWeapon"`
-	Wanted    bool     `json:"wanted"`
-	Perks     []string `json:"perks"`
-	Notes     string   `json:"notes"`
-	DateAdded string   `json:"dateAdded"`
+	ID        string                `json:"id"`
+	ItemHash  *uint32               `json:"itemHash"`
+	AnyWeapon bool                  `json:"anyWeapon"`
+	Wanted    bool                  `json:"wanted"`
+	Perks     []string              `json:"perks"`
+	Notes     string                `json:"notes"`
+	DateAdded string                `json:"dateAdded"`
+	BestCopy  *nearMissCopyResponse `json:"bestCopy,omitempty"`
 }
 
 func rollTargetResponses(targets []rolltargets.StoredTarget) []rollTargetResponse {
@@ -347,6 +348,18 @@ type matchResponse struct {
 	Notes      string   `json:"notes,omitempty"`
 }
 
+// nearMissCopyResponse is the best partial owned copy for an unmatched target.
+// MatchedColumns and TargetColumns carry the service-owned score so clients
+// only present the decision; MatchedPerks is display evidence.
+type nearMissCopyResponse struct {
+	ItemHash       uint32   `json:"itemHash"`
+	InstanceID     string   `json:"instanceId"`
+	Perks          []string `json:"perks"`
+	MatchedPerks   []string `json:"matchedPerks"`
+	MatchedColumns int      `json:"matchedColumns"`
+	TargetColumns  int      `json:"targetColumns"`
+}
+
 // matchReportResponse answers "which of my weapons match what I saved".
 //
 // unmatchedTargets is not an afterthought: a saved roll that nothing satisfies
@@ -368,8 +381,27 @@ func (h *RollTargetsHandler) GetRollTargetMatches(c *gin.Context) {
 	c.JSON(http.StatusOK, matchReportResponse{
 		Wanted:           matchResponses(report.Wanted),
 		Unwanted:         matchResponses(report.Unwanted),
-		UnmatchedTargets: rollTargetResponses(report.UnmatchedTargets),
+		UnmatchedTargets: unmatchedTargetResponses(report.UnmatchedTargets),
 	})
+}
+
+func unmatchedTargetResponses(unmatched []rolltargets.UnmatchedTarget) []rollTargetResponse {
+	out := make([]rollTargetResponse, 0, len(unmatched))
+	for _, u := range unmatched {
+		response := rollTargetResponseOf(u.Target)
+		if u.NearMiss != nil {
+			response.BestCopy = &nearMissCopyResponse{
+				ItemHash:       u.NearMiss.Roll.ItemHash,
+				InstanceID:     u.NearMiss.Roll.InstanceID,
+				Perks:          u.NearMiss.Roll.Perks,
+				MatchedPerks:   u.NearMiss.MatchedPerks,
+				MatchedColumns: u.NearMiss.MatchedColumns,
+				TargetColumns:  u.NearMiss.TargetColumns,
+			}
+		}
+		out = append(out, response)
+	}
+	return out
 }
 
 func matchResponses(matches []rolltargets.Match) []matchResponse {

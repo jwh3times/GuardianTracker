@@ -365,6 +365,23 @@ export interface RollTargetMatch {
   notes?: string;
 }
 
+/** The highest-scoring partial owned copy for a still-chasing target. */
+export interface RollTargetNearMiss {
+  itemHash: string;
+  instanceId: string;
+  /** The owned copy's full resolved perks. */
+  perks: string[];
+  /** Target perks present on the copy, carried as display evidence. */
+  matchedPerks: string[];
+  matchedColumns: number;
+  targetColumns: number;
+}
+
+/** A saved target nothing fully satisfies, with its best copy when one exists. */
+export interface UnmatchedRollTarget extends RollTarget {
+  bestCopy?: RollTargetNearMiss;
+}
+
 /**
  * The result of matching saved roll targets against owned inventory —
  * CONTEXT.md's "Match report". `unmatchedTargets` is CONTEXT.md's "Unmatched
@@ -374,5 +391,5 @@ export interface RollTargetMatch {
 export interface RollTargetMatchReport {
   wanted: RollTargetMatch[];
   unwanted: RollTargetMatch[];
-  unmatchedTargets: RollTarget[];
+  unmatchedTargets: UnmatchedRollTarget[];
 }

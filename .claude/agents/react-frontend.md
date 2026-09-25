@@ -295,7 +295,10 @@ frontend/src/
                                    drawer has resolved the open item as a weapon. The two queries fail
                                    independently on purpose: a Bungie-backed match failure must never hide
                                    the player's own saved rows. Projects `APIRollTarget` → `RollTarget`,
-                                   `APIRollTargetMatchReport` → `RollTargetMatchReport`, and
+                                   `APIRollTargetMatchReport` → `RollTargetMatchReport` (including each
+                                   unmatched target's optional backend-selected `bestCopy`, authoritative
+                                   `matchedColumns`/`targetColumns` score, and `matchedPerks` display
+                                   evidence), and
                                    `APIImportReport` → `RollTargetImportReport` (the last one on a mutation
                                    result, not a query `select`). One shared optimistic recipe (mirrors
                                    `wishlist.ts`) backs notes update/remove/bulk delete/delete-all; DIM
@@ -497,7 +500,9 @@ frontend/src/
                                    chasing" (this weapon's own unmatched targets — `itemHash === itemHash`
                                    excludes an unmatched any-weapon target, whose `itemHash` is `null`, by
                                    construction), and a collapsed "Matches a roll you marked unwanted"
-                                   disclosure; a match-report failure instead lists this weapon's own
+                                   disclosure. A still-chasing target with a partial owned copy renders
+                                   the shared `NearMissSummary` score and that copy's perks; a match-report
+                                   failure instead lists this weapon's own
                                    saved targets (from the target list, not the failed match report)
                                    neutrally, with the same Reconnect (`BUNGIE_REAUTH_REQUIRED`) vs Retry
                                    banner as the page. Read-only — no notes editing or delete — and always
@@ -539,7 +544,11 @@ frontend/src/
                                    "Still chasing" and the neutral failure-state list), RollTargetMatchCard.tsx
                                    (one target's "You have it"/unwanted card: heading, perks, note, then
                                    each owned copy labelled "Copy 1", "Copy 2", … with the target's own
-                                   perks highlighted via `isTargetPerk`), useRollTargetsBrowser.ts (wires
+                                   perks highlighted via `isTargetPerk`), NearMissSummary.tsx (shared by
+                                   the page and item drawer: presents the backend-selected best partial
+                                   copy as "Your best copy has X of Y target perks" from its
+                                   `matchedColumns`/`targetColumns` score and highlights its
+                                   `matchedPerks`, without rescoring), useRollTargetsBrowser.ts (wires
                                    `data/rolltargets.ts` + `data/collections.ts` + `data/wishlist.ts` into
                                    the pure grouping/filtering in rollTargetsView.ts; owns local
                                    search/show-all state, mirroring `useCollectionsBrowser.ts`'s pure/hook
@@ -891,6 +900,7 @@ Roll targets slice 6 (#371); see the `RollTargetSection.tsx` entry in "File stru
 
 - Sections render in a fixed order — "Still chasing" (unmatched targets, framed as a goal, an any-weapon target reading "Any weapon with X + Y"), "You have it" (wanted matches grouped by target), then a collapsed-by-default disclosure for matches on a roll marked unwanted (informational, never dismantle wording) — never as absence.
 - **Still chasing**'s default filter shows only weapons whose collectible is acquired (`data/collections.ts`'s `useCollections()`) or that are on the wish list (`data/wishlist.ts`); a "Show all" `FilterChip` shows everything, and a hidden-count line states how many rolls the filter is hiding. A search box filters by weapon or perk name, independently of that filter. Any-weapon targets always show.
+- **Closest copy**: an unmatched target with a backend-selected partial copy renders "Your best copy has X of Y target perks," followed by that copy's full perk set with the matched target perks highlighted. `NearMissSummary` performs no scoring; the API's `bestCopy.matchedColumns` and `targetColumns` are the authoritative score, while `matchedPerks` is display evidence. The item drawer reuses the same component for its weapon-scoped still-chasing rows.
 - **Match failure**: if `useRollTargetMatches()` fails, every saved target still lists — flat, neutral, "Match status unknown" — never as "Still chasing". A `BUNGIE_REAUTH_REQUIRED` `ApiError.code` renders a Reconnect banner (routes to `/reauthorize`); any other failure renders Retry (`refetch`). Management (notes, delete) still works in this state, since it operates on `data/rolltargets.ts`'s separate, independently-successful target-list query.
 - **Management**: inline notes editor (PATCH notes only, mirroring WishList's click-to-edit pattern); a "Select" mode with per-row checkboxes and a "Delete selected" bulk action, capped at `data/rolltargets.ts`'s exported `MAX_BULK_DELETE` (100, mirrors the server's `rolltargets.MaxBulkTargets`) rather than chunking a larger selection into several calls; "Delete all…" reveals an inline `role="alertdialog"` confirmation bar (never `window.confirm`) before calling `useDeleteAllRollTargets`.
 - **DIM import**: a file picker (`<input type="file">`, read via `file.text()`) and a paste `Textarea`, both add-only, both landing on `useImportRollTargets`. The report renders counts first (e.g. "42 imported · 3 unresolved · 5 already saved"), then non-imported lines grouped by outcome; lines whose outcome is "skipped" (comments/headers) are never listed. An "unresolved perk" line's wording comes from `unresolved.reason` (`not-in-pool`/`ambiguous`/`not-a-weapon-perk`), not from the wire's own `detail` string.
@@ -924,9 +934,9 @@ Roll targets slice 6 (#371); see the `RollTargetSection.tsx` entry in "File stru
 - `Triumph.objectives?: TriumphObjective[]` (design.ts) — optional per-objective drill-down on `/api/seals/...` triumphs; `TriumphObjective { label, done, cur, max }`; absent (not an empty array) when the triumph has no objective data, so existing triumphs render unchanged
 - `WishlistEntry.itemId: string` (design.ts) — the wished item's hash, matching `GTItem.id`; lets Collections match its tiles against the wish list from the projected entry instead of the wire `WishListItem.itemHash`
 - `APIRollTarget`: `{ id, itemHash: number | null, anyWeapon, wanted, perks, notes, dateAdded }` — `GET/PATCH /api/rolltargets`; `itemHash` is an explicit wire `null` for an any-weapon target, never item hash 0
-- `APIRollTargetMatchReport`: `{ wanted: APIRollTargetMatch[], unwanted: APIRollTargetMatch[], unmatchedTargets: APIRollTarget[] }` — `GET /api/rolltargets/matches`; `APIRollTargetMatch` carries the owned copy's full `perks` alongside the target's own `targetPerks`, for highlighting which of the former satisfy the latter
+- `APIRollTargetMatchReport`: `{ wanted: APIRollTargetMatch[], unwanted: APIRollTargetMatch[], unmatchedTargets: APIUnmatchedRollTarget[] }` — `GET /api/rolltargets/matches`; `APIRollTargetMatch` carries the owned copy's full `perks` alongside the target's own `targetPerks`, while `APIUnmatchedRollTarget` extends `APIRollTarget` with optional `bestCopy: { itemHash, instanceId, perks, matchedPerks, matchedColumns, targetColumns }` for the service-selected closest partial copy
 - `APIImportReport`: `{ title?, description?, imported, counts: Record<string, number>, lines: APIImportLine[] }` — `POST /api/rolltargets/import` (raw DIM-format text body, not JSON); `APIImportLine.unresolved?: APIUnresolvedPerk` (`{ perkHash, perkName?, reason }`) carries the structured reason only when one specific perk hash is to blame
-- `RollTarget`, `RollTargetMatch`, `RollTargetMatchReport`, `RollTargetImportReport` (design.ts) — the domain parallels `data/rolltargets.ts` projects onto; `RollTarget.itemHash: string | null` (matches `GTItem.id`'s hash-as-string convention), not the wire's `number | null`
+- `RollTarget`, `RollTargetMatch`, `UnmatchedRollTarget`, `RollTargetNearMiss`, `RollTargetMatchReport`, `RollTargetImportReport` (design.ts) — the domain parallels `data/rolltargets.ts` projects onto; `RollTarget.itemHash: string | null` (matches `GTItem.id`'s hash-as-string convention), not the wire's `number | null`; near-miss `itemHash` is projected to the same string convention
 
 ## Styling
 

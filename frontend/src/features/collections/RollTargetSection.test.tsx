@@ -245,7 +245,19 @@ describe("still chasing", () => {
         HttpResponse.json(
           emptyMatches({
             unmatchedTargets: [
-              rt({ id: "1", itemHash: 500, perks: ["Arrowhead Brake"] }),
+              rt({
+                id: "1",
+                itemHash: 500,
+                perks: ["Arrowhead Brake", "Firefly"],
+                bestCopy: {
+                  itemHash: 500,
+                  instanceId: "near-1",
+                  perks: ["Arrowhead Brake", "Explosive Payload"],
+                  matchedPerks: ["Arrowhead Brake"],
+                  matchedColumns: 1,
+                  targetColumns: 2,
+                },
+              }),
               rt({
                 id: "2",
                 itemHash: null,
@@ -263,8 +275,16 @@ describe("still chasing", () => {
     await waitFor(() =>
       expect(screen.getByText("Still chasing")).toBeInTheDocument(),
     );
-    expect(screen.getByText("Arrowhead Brake")).toBeInTheDocument();
+    expect(screen.getAllByText("Arrowhead Brake")).toHaveLength(2);
     expect(screen.queryByText("Rampage")).not.toBeInTheDocument();
+    const summary = screen.getByRole("note");
+    expect(summary).toHaveTextContent(
+      "Your best copy has 1 of 2 target perks.",
+    );
+    expect(within(summary).getByText("Arrowhead Brake")).toHaveAttribute(
+      "data-highlight",
+      "true",
+    );
   });
 });
 
