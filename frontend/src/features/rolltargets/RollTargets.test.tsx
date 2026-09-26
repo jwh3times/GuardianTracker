@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { API, server } from "../../test/testServer";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { RollTargets } from "./RollTargets";
+import type { APIRollTarget } from "../../types/api";
 
 beforeEach(() => {
   localStorage.clear();
@@ -15,7 +16,10 @@ function renderPage() {
   return renderWithProviders(<RollTargets />, { route: "/rolls" });
 }
 
-function target(id: string, overrides: Record<string, unknown> = {}) {
+function target(
+  id: string,
+  overrides: Record<string, unknown> = {},
+): APIRollTarget {
   return {
     id,
     itemHash: 100,
@@ -494,6 +498,107 @@ describe("match failure", () => {
 });
 
 describe("management", () => {
+  it("keeps import confirmation during a pending request and allows retry after failure", async () => {
+    let finish: (() => void) | undefined;
+    server.use(
+      http.get(`${API}/api/rolltargets`, () =>
+        HttpResponse.json([target("1", { importId: "batch-a" })]),
+      ),
+      http.get(`${API}/api/rolltargets/matches`, () =>
+        HttpResponse.json(emptyMatches()),
+      ),
+      http.post(`${API}/api/rolltargets/bulk`, async () => {
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        return HttpResponse.json({ error: "failed" }, { status: 500 });
+      }),
+    );
+    renderPage();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Delete import batch-a" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Yes, delete import" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Deleting…" }),
+    ).toBeDisabled();
+    expect(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Cancel",
+      }),
+    ).toBeDisabled();
+    await waitFor(() => expect(finish).toBeDefined());
+    finish?.();
+    expect(
+      await screen.findByText("Could not delete this import. Try again."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Yes, delete import" }),
+    ).toBeEnabled();
+    expect(screen.getByText("Untitled DIM import")).toBeInTheDocument();
+  });
+
+  it("keeps same-title imports separate and confirms deletion of only one batch even when matches fail", async () => {
+    let store = [
+      target("1", { importId: "batch-a", importTitle: "My rolls" }),
+      target("2", { importId: "batch-a", importTitle: "My rolls" }),
+      target("3", { importId: "batch-b", importTitle: "My rolls" }),
+      target("4", { notes: "Manual target" }),
+    ];
+    const requests: unknown[] = [];
+    server.use(
+      http.get(`${API}/api/rolltargets`, () => HttpResponse.json(store)),
+      http.get(`${API}/api/rolltargets/matches`, () =>
+        HttpResponse.json({ error: "unavailable" }, { status: 503 }),
+      ),
+      http.post(`${API}/api/rolltargets/bulk`, async ({ request }) => {
+        const body = (await request.json()) as {
+          action: string;
+          importId: string;
+        };
+        requests.push(body);
+        store = store.filter((row) => row.importId !== body.importId);
+        return HttpResponse.json({ deleted: 2, skipped: 0 });
+      }),
+    );
+    renderPage();
+    const imports = await screen.findByRole("region", {
+      name: "Imported roll targets",
+    });
+    expect(within(imports).getAllByText("My rolls")).toHaveLength(2);
+    expect(within(imports).getByText("2 saved targets")).toBeInTheDocument();
+    await userEvent.click(
+      within(imports).getByRole("button", { name: "Delete import batch-a" }),
+    );
+    expect(requests).toEqual([]);
+    await userEvent.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Cancel",
+      }),
+    );
+    expect(requests).toEqual([]);
+    await userEvent.click(
+      within(imports).getByRole("button", { name: "Delete import batch-a" }),
+    );
+    await userEvent.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Yes, delete import",
+      }),
+    );
+    await waitFor(() =>
+      expect(requests).toEqual([
+        { action: "delete_import", importId: "batch-a" },
+      ]),
+    );
+    await waitFor(() =>
+      expect(within(imports).queryByText("batch-a")).not.toBeInTheDocument(),
+    );
+    expect(within(imports).getByText("batch-b")).toBeInTheDocument();
+    expect(await screen.findByText('"Manual target"')).toBeInTheDocument();
+  });
+
   it("edits notes inline", async () => {
     useCollectionsFixture({ "100": { name: "Fatebringer", collected: true } });
     // Stateful so the settle-time invalidation's refetch agrees with the

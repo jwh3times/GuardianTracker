@@ -311,6 +311,8 @@ export interface Digest {
  * dimension.
  */
 export interface RollTarget {
+  importId?: string;
+  importTitle?: string;
   id: string;
   /** The design-system item id (a hash string); null for an any-weapon target. */
   itemHash: string | null;
@@ -345,6 +347,7 @@ export interface RollTargetImportLine {
 
 /** The result of importing one DIM-format file — CONTEXT.md's "DIM import report". */
 export interface RollTargetImportReport {
+  importId?: string;
   title?: string;
   description?: string;
   imported: number;

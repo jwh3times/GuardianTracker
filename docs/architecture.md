@@ -265,7 +265,7 @@ Primary route groups:
   reset countdowns; authenticated vendor calls validate and follow the selected
   character because Bungie's vendor inventory can be class-specific
 - wishlist: user-scoped CRUD
-- rolltargets: user-scoped CRUD, bulk delete (named ids or every target the
+- rolltargets: user-scoped CRUD, bulk delete (named ids, one import batch, or every target the
   membership owns), DIM-format wish list import, and a match report joining
   saved targets against a fresh read of the membership's owned weapon rolls
   (`services/ownedrolls`), including the highest-scoring partial owned copy for
@@ -277,7 +277,17 @@ Primary route groups:
   (alpha tier); called from the frontend's Roll targets page (`/rolls`) and,
   scoped to the open item, the Collections item detail drawer's per-weapon
   roll-target section, both via `frontend/src/data/rolltargets.ts` (one query
-  identity per resource, shared cache entry)
+  identity per resource, shared cache entry). New DIM targets carry an immutable
+  UUID import ID and optional header title (at most 500 Unicode characters,
+  checked before any writes). Duplicate targets retain their existing provenance;
+  old and manually added targets have none. Migration 0012 stores these fields
+  on `roll_targets`; files and separate import-history records are not retained.
+  The import report includes `importId` only when a target was added. The page
+  derives import groups from surviving targets, independently of match state and
+  filters. `POST /api/rolltargets/bulk` with `action: "delete_import"` and
+  `importId` deletes that membership's batch in one SQL statement without the
+  selected-ID action's 100-target cap; missing or foreign batches delete zero.
+  Deleting and re-importing produces a new ID.
 - preferences: user preferences plus irreversible first-run onboarding completion
 - digest: since-last-visit collectible digest, advancing the visit clock as a
   side effect

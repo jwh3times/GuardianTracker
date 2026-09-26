@@ -27,14 +27,16 @@ type fakeRollTargetStore struct {
 	found    bool
 	affected int64
 
-	gotUserID int64
-	gotID     int64
-	gotHash   *uint32
-	gotWanted bool
-	gotPerks  []string
-	gotNotes  string
-	gotPatch  *[]string
-	gotIDs    []int64
+	gotUserID      int64
+	gotID          int64
+	gotHash        *uint32
+	gotWanted      bool
+	gotPerks       []string
+	gotNotes       string
+	gotPatch       *[]string
+	gotIDs         []int64
+	gotImportID    string
+	gotImportTitle string
 }
 
 func (f *fakeRollTargetStore) GetUserID(context.Context, string) (int64, error) {
@@ -46,8 +48,9 @@ func (f *fakeRollTargetStore) List(_ context.Context, userID int64) ([]db.RollTa
 	return f.rows, f.err
 }
 
-func (f *fakeRollTargetStore) Add(_ context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes string) (*db.RollTarget, error) {
+func (f *fakeRollTargetStore) Add(_ context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes, importID, importTitle string) (*db.RollTarget, error) {
 	f.gotUserID, f.gotHash, f.gotWanted, f.gotPerks, f.gotNotes = userID, hash, wanted, perks, notes
+	f.gotImportID, f.gotImportTitle = importID, importTitle
 	return f.row, f.err
 }
 
@@ -69,6 +72,36 @@ func (f *fakeRollTargetStore) BulkDelete(_ context.Context, userID int64, ids []
 func (f *fakeRollTargetStore) DeleteAll(_ context.Context, userID int64) (int64, error) {
 	f.gotUserID = userID
 	return f.affected, f.err
+}
+
+func (f *fakeRollTargetStore) DeleteImport(_ context.Context, userID int64, importID string) (int64, error) {
+	f.gotUserID, f.gotImportID = userID, importID
+	return f.affected, f.err
+}
+
+func TestRollTargetRepository_ImportProvenance(t *testing.T) {
+	const id = "11111111-1111-4111-8111-111111111111"
+	store := &fakeRollTargetStore{userID: 42, affected: 101, row: &db.RollTarget{ID: 1, ImportID: id, ImportTitle: "DIM title"}}
+	repo := NewRollTargetRepository(store)
+	got, err := repo.Add(context.Background(), "m", rolltargets.AddCommand{ImportID: id, ImportTitle: "DIM title"})
+	if err != nil || got.ImportID != id || got.ImportTitle != "DIM title" || store.gotImportID != id || store.gotImportTitle != "DIM title" || store.gotUserID != 42 {
+		t.Fatalf("Add = %+v, %v; store = %+v", got, err, store)
+	}
+	deleted, err := repo.RemoveImport(context.Background(), "m", id)
+	if err != nil || deleted != 101 || store.gotImportID != id || store.gotUserID != 42 {
+		t.Fatalf("RemoveImport = %d, %v; store = %+v", deleted, err, store)
+	}
+	store.err = db.ErrUnavailable
+	if _, err := repo.RemoveImport(context.Background(), "m", id); !errors.Is(err, rolltargets.ErrUnavailable) {
+		t.Fatalf("store error = %v", err)
+	}
+	store.userErr = db.ErrUnavailable
+	if _, err := repo.RemoveImport(context.Background(), "m", id); !errors.Is(err, rolltargets.ErrUnavailable) {
+		t.Fatalf("lookup error = %v", err)
+	}
+	if _, err := NewRollTargetRepository(db.NewStores(nil).RollTargets).RemoveImport(context.Background(), "m", id); !errors.Is(err, rolltargets.ErrUnavailable) {
+		t.Fatalf("degraded error = %v", err)
+	}
 }
 
 func TestRollTargetRepository_ResolvesMembershipToUserID(t *testing.T) {

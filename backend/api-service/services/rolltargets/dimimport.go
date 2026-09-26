@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/google/uuid"
 
 	"guardian-tracker/api-service/services/manifest"
 )
@@ -120,6 +123,7 @@ type ImportLine struct {
 // reason, because a line that vanishes is indistinguishable from one that
 // worked — which is the failure mode CONTEXT.md names.
 type ImportReport struct {
+	ImportID    ImportID
 	Title       string
 	Description string
 	Lines       []ImportLine
@@ -151,7 +155,11 @@ func (r ImportReport) Imported() int { return r.Counts()[OutcomeImported] }
 // pre-read, so two identical lines in one file behave exactly like a re-import.
 func (s *Service) ImportDIM(ctx context.Context, membershipID, text string) (ImportReport, error) {
 	file := ParseDIMFile(text)
+	if utf8.RuneCountInString(file.Title) > MaxImportTitleRunes {
+		return ImportReport{}, ErrImportTitleTooLong
+	}
 	report := ImportReport{Title: file.Title, Description: file.Description}
+	importID := ImportID(uuid.NewString())
 
 	for _, line := range file.Lines {
 		out := ImportLine{Number: line.Number, Outcome: OutcomeSkipped}
@@ -203,11 +211,13 @@ func (s *Service) ImportDIM(ctx context.Context, membershipID, text string) (Imp
 		}
 		out.Perks = perks
 
-		_, err = s.Add(ctx, membershipID, AddCommand{
+		_, err = s.add(ctx, membershipID, AddCommand{
+			ImportID: importID, ImportTitle: file.Title,
 			ItemHash: hash, Wanted: line.Wanted, Perks: perks, Notes: line.Notes,
 		})
 		switch {
 		case err == nil:
+			report.ImportID = importID
 			out.Outcome = OutcomeImported
 		case errors.Is(err, ErrUnavailable):
 			return ImportReport{}, err

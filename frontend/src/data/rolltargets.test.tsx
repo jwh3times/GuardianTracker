@@ -7,6 +7,7 @@ import { renderWithProviders } from "../test/renderWithProviders";
 import {
   useBulkDeleteRollTargets,
   useDeleteAllRollTargets,
+  useDeleteRollTargetImport,
   useImportRollTargets,
   useRemoveRollTarget,
   useRollTargetMatches,
@@ -417,7 +418,7 @@ describe("bulk delete and delete all", () => {
 function ImportProbe() {
   const { importDIM } = useImportRollTargets({
     onSuccess: (report) => {
-      document.title = `imported:${report.imported}`;
+      document.title = `imported:${report.imported}|${report.importId ?? "none"}`;
     },
   });
   return <button onClick={() => importDIM("dim text")}>import</button>;
@@ -433,6 +434,7 @@ describe("DIM import", () => {
         receivedContentType = request.headers.get("content-type") ?? "";
         return HttpResponse.json({
           imported: 1,
+          importId: "batch-a",
           counts: { imported: 1, "unresolved perk": 1 },
           lines: [
             {
@@ -463,7 +465,64 @@ describe("DIM import", () => {
 
     await waitFor(() => expect(receivedBody).toBe("dim text"));
     expect(receivedContentType).toContain("text/plain");
-    await waitFor(() => expect(document.title).toBe("imported:1"));
+    await waitFor(() => expect(document.title).toBe("imported:1|batch-a"));
+  });
+});
+
+function ImportGroupProbe() {
+  const { targets } = useRollTargets();
+  const { deleteImport } = useDeleteRollTargetImport();
+  return (
+    <>
+      <button onClick={() => deleteImport("batch-a")}>delete-import</button>
+      <output data-testid="provenance">
+        {targets
+          .map(
+            (t) => `${t.id}:${t.importId ?? "none"}:${t.importTitle ?? "none"}`,
+          )
+          .join(";")}
+      </output>
+    </>
+  );
+}
+
+describe("import provenance", () => {
+  it("projects optional metadata and restores just-deleted rows after a failed optimistic batch deletion", async () => {
+    let finish: (() => void) | undefined;
+    server.use(
+      http.get(`${API}/api/rolltargets`, () =>
+        HttpResponse.json([
+          target("1", { importId: "batch-a", importTitle: "My rolls" }),
+          target("2", { importId: "batch-b" }),
+          target("3"),
+        ]),
+      ),
+      http.post(`${API}/api/rolltargets/bulk`, async () => {
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        return HttpResponse.json({ error: "failed" }, { status: 500 });
+      }),
+    );
+    renderWithProviders(<ImportGroupProbe />);
+    await waitFor(() =>
+      expect(screen.getByTestId("provenance")).toHaveTextContent(
+        "1:batch-a:My rolls;2:batch-b:none;3:none:none",
+      ),
+    );
+    await userEvent.click(screen.getByText("delete-import"));
+    await waitFor(() =>
+      expect(screen.getByTestId("provenance")).toHaveTextContent(
+        /^2:batch-b:none;3:none:none$/,
+      ),
+    );
+    await waitFor(() => expect(finish).toBeDefined());
+    finish?.();
+    await waitFor(() =>
+      expect(screen.getByTestId("provenance")).toHaveTextContent(
+        "1:batch-a:My rolls;2:batch-b:none;3:none:none",
+      ),
+    );
   });
 });
 

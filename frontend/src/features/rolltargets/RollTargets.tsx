@@ -17,6 +17,7 @@ import {
 } from "../../data/rolltargets";
 import type { RollTarget } from "../../types/design";
 import { RollTargetImport } from "./RollTargetImport";
+import { RollTargetImports } from "./RollTargetImports";
 import { RollTargetMatchCard } from "./RollTargetMatchCard";
 import { RollTargetRow } from "./RollTargetRow";
 import { fallbackWeaponName } from "./rollTargetsView";
@@ -183,6 +184,7 @@ export function RollTargets() {
       />
 
       <RollTargetImport />
+      <RollTargetImports targets={targets} />
 
       {targets.length === 0 ? (
         <div className="gt-card">

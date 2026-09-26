@@ -77,6 +77,8 @@ function toRollTarget(t: APIRollTarget): RollTarget {
     perks: t.perks ?? [],
     notes: t.notes ?? "",
     dateAdded: t.dateAdded,
+    importId: t.importId,
+    importTitle: t.importTitle,
   };
 }
 
@@ -113,6 +115,7 @@ function toImportLine(
  * is a mutation result, projected once when the mutation resolves. */
 function toImportReport(r: APIImportReport): RollTargetImportReport {
   return {
+    importId: r.importId,
     title: r.title,
     description: r.description,
     imported: r.imported,
@@ -373,6 +376,25 @@ export const MAX_BULK_DELETE = 100;
 export interface BulkDeleteResult {
   deleted: number;
   skipped: number;
+}
+
+/** Delete all surviving rows from one import, regardless of list filters or size. */
+export function useDeleteRollTargetImport(
+  callbacks?: RollTargetMutationCallbacks<string, BulkDeleteResult>,
+) {
+  const mutation = useOptimisticRollTargetMutation<string, BulkDeleteResult>(
+    (importId) =>
+      apiFetch<APIRollTargetBulkResult>("/api/rolltargets/bulk", {
+        method: "POST",
+        body: JSON.stringify({ action: "delete_import", importId }),
+      }),
+    (rows, importId) => rows.filter((row) => row.importId !== importId),
+    callbacks,
+  );
+  return {
+    deleteImport: (importId: string) => mutation.mutate(importId),
+    isPending: mutation.isPending,
+  };
 }
 
 /** Delete many saved targets by id in one call, optimistically. */

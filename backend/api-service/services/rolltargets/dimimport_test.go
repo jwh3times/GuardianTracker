@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"guardian-tracker/api-service/services/manifest"
 )
 
@@ -26,6 +28,59 @@ func (r *importRepo) List(context.Context, string) ([]StoredTarget, error) {
 	return r.targets, r.listErr
 }
 
+func (r *importRepo) RemoveImport(_ context.Context, _ string, id ImportID) (int, error) {
+	kept := make([]StoredTarget, 0, len(r.targets))
+	deleted := 0
+	for _, target := range r.targets {
+		if target.ImportID == id {
+			deleted++
+		} else {
+			kept = append(kept, target)
+		}
+	}
+	r.targets = kept
+	return deleted, nil
+}
+
+func TestDeleteImport_RemovesOnlyItsNewTargetsAndAllowsReimport(t *testing.T) {
+	svc := importSvc(&importRepo{})
+	ctx := context.Background()
+	manual, err := svc.Add(ctx, "m1", AddCommand{Perks: []string{"Outlaw"}, Wanted: true, ImportID: "forged", ImportTitle: "forged"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manual.ImportID != "" || manual.ImportTitle != "" {
+		t.Fatalf("manual provenance = %+v", manual)
+	}
+	text := "dimwishlist:item=-69420&perks=111\ndimwishlist:item=1000&perks=222"
+	first, err := svc.ImportDIM(ctx, "m1", text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.DeleteImport(ctx, "m1", ""); !errors.Is(err, ErrInvalidImportID) {
+		t.Fatalf("empty ID error = %v", err)
+	}
+	if _, err := svc.DeleteImport(ctx, "m1", "not-an-id"); !errors.Is(err, ErrInvalidImportID) {
+		t.Fatalf("invalid ID error = %v", err)
+	}
+	deleted, err := svc.DeleteImport(ctx, "m1", ImportID(strings.ToUpper(string(first.ImportID))))
+	if err != nil || deleted != 1 {
+		t.Fatalf("delete = %d, %v", deleted, err)
+	}
+	targets, err := svc.List(ctx, "m1")
+	if err != nil || len(targets) != 1 || targets[0].ID != manual.ID {
+		t.Fatalf("remaining = %+v, %v", targets, err)
+	}
+	deleted, err = svc.DeleteImport(ctx, "m1", first.ImportID)
+	if err != nil || deleted != 0 {
+		t.Fatalf("repeat delete = %d, %v", deleted, err)
+	}
+	second, err := svc.ImportDIM(ctx, "m1", text)
+	if err != nil || second.Imported() != 1 || second.ImportID == first.ImportID {
+		t.Fatalf("reimport = %+v, %v", second, err)
+	}
+}
+
 func (r *importRepo) Add(_ context.Context, _ string, cmd AddCommand) (StoredTarget, error) {
 	if r.addErr != nil {
 		return StoredTarget{}, r.addErr
@@ -40,6 +95,7 @@ func (r *importRepo) Add(_ context.Context, _ string, cmd AddCommand) (StoredTar
 	}
 	r.nextID++
 	t := StoredTarget{
+		ImportID: cmd.ImportID, ImportTitle: cmd.ImportTitle,
 		ID: r.nextID, ItemHash: cmd.ItemHash, Wanted: cmd.Wanted,
 		Perks: cmd.Perks, Notes: cmd.Notes,
 	}
@@ -104,6 +160,72 @@ func (p importPool) WeaponPerkNames() (map[string]string, error) {
 }
 
 func importSvc(repo Repository) *Service { return NewService(repo, importPool{}, nil) }
+
+func TestImportDIM_TitleLimitIsUnicodeAndCheckedBeforeWriting(t *testing.T) {
+	for _, length := range []int{500, 501} {
+		t.Run(strconv.Itoa(length), func(t *testing.T) {
+			svc := importSvc(&importRepo{})
+			ctx := context.Background()
+			_, err := svc.ImportDIM(ctx, "m1", "dimwishlist:item=1000&perks=111\ntitle:"+strings.Repeat("界", length))
+			if length == 501 && !errors.Is(err, ErrImportTitleTooLong) {
+				t.Fatalf("error = %v", err)
+			}
+			if length == 500 && err != nil {
+				t.Fatal(err)
+			}
+			targets, err := svc.List(ctx, "m1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := 1
+			if length == 501 {
+				want = 0
+			}
+			if len(targets) != want {
+				t.Fatalf("saved %d targets, want %d", len(targets), want)
+			}
+		})
+	}
+}
+
+func TestImportDIM_NewTargetsShareImmutableImportProvenance(t *testing.T) {
+	svc := importSvc(&importRepo{})
+	ctx := context.Background()
+	first, err := svc.ImportDIM(ctx, "m1", "title:My DIM rolls\ndimwishlist:item=1000&perks=111\ndimwishlist:item=-69420&perks=222")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := uuid.Parse(string(first.ImportID)); err != nil {
+		t.Fatalf("import ID = %q: %v", first.ImportID, err)
+	}
+	second, err := svc.ImportDIM(ctx, "m1", "title:My DIM rolls\ndimwishlist:item=1000&perks=111\ndimwishlist:item=1000&perks=222")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.ImportID == "" || second.ImportID == first.ImportID {
+		t.Fatalf("second import ID = %q", second.ImportID)
+	}
+	targets, err := svc.List(ctx, "m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 3 {
+		t.Fatalf("targets = %+v", targets)
+	}
+	for i, target := range targets {
+		wantID := first.ImportID
+		if i == 2 {
+			wantID = second.ImportID
+		}
+		if target.ImportID != wantID || target.ImportTitle != "My DIM rolls" {
+			t.Errorf("target = %+v, want import %s and original title", target, wantID)
+		}
+	}
+	repeated, err := svc.ImportDIM(ctx, "m1", "dimwishlist:item=1000&perks=111")
+	if err != nil || repeated.ImportID != "" {
+		t.Fatalf("duplicate import = %+v, %v", repeated, err)
+	}
+}
 
 // A wildcard line resolves its hashes straight to plug names, and a plug can
 // have a name without being a weapon perk. Such a line could never match, so it

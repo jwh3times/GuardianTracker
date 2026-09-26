@@ -30,6 +30,9 @@ import (
 // assignable to an item hash or a user id by accident.
 type TargetID int64
 
+// ImportID identifies one import batch independently of its optional title.
+type ImportID string
+
 // MaxPerks bounds one target's wanted perks. Weapons top out at six perk
 // columns; ten leaves room without letting a target become a list.
 const MaxPerks = 10
@@ -38,6 +41,9 @@ const MaxPerks = 10
 // wish list, and counted the same way, because a byte count rejects valid notes
 // that the storage constraint would accept.
 const MaxNoteRunes = 500
+
+// MaxImportTitleRunes bounds optional DIM metadata in Unicode code points.
+const MaxImportTitleRunes = 500
 
 // MaxBulkTargets bounds one bulk delete, counted after duplicate ids are
 // removed — matching wishlist's MaxBulkEntries.
@@ -65,6 +71,10 @@ type BulkResult struct {
 // normalising it is what lets one roll be recognised as already saved.
 type StoredTarget struct {
 	ID TargetID
+	// ImportID and ImportTitle are immutable creation provenance. Both are
+	// empty for manual targets and targets saved before provenance existed.
+	ImportID    ImportID
+	ImportTitle string
 
 	// ItemHash is nil for an any-weapon target, which names perks without
 	// naming a weapon. A pointer rather than a zero value, because 0 must not
@@ -84,12 +94,15 @@ type StoredTarget struct {
 func (t StoredTarget) AnyWeapon() bool { return t.ItemHash == nil }
 
 // AddCommand is a request to save one roll. A nil ItemHash saves an any-weapon
-// target.
+// target. Import fields belong to the validated repository command: Service.Add
+// clears them, and only ImportDIM supplies creation provenance.
 type AddCommand struct {
-	ItemHash *uint32
-	Wanted   bool
-	Perks    []string
-	Notes    string
+	ImportID    ImportID
+	ImportTitle string
+	ItemHash    *uint32
+	Wanted      bool
+	Perks       []string
+	Notes       string
 }
 
 // UpdateCommand is a partial patch: a nil field is unchanged, which is what
@@ -129,7 +142,9 @@ var (
 	ErrDuplicatePerk = errors.New("rolltargets: the same perk is named twice")
 
 	// ErrNotesTooLong reports a note longer than MaxNoteRunes code points.
-	ErrNotesTooLong = errors.New("rolltargets: notes must be 500 characters or fewer")
+	ErrNotesTooLong       = errors.New("rolltargets: notes must be 500 characters or fewer")
+	ErrImportTitleTooLong = errors.New("rolltargets: import title must be 500 characters or fewer")
+	ErrInvalidImportID    = errors.New("rolltargets: invalid import id")
 
 	// ErrNotAWeapon means the hash resolves to something with no perk columns —
 	// armor, a consumable, or nothing at all. A roll target on it could never
@@ -196,6 +211,10 @@ type Repository interface {
 
 	// RemoveAll deletes every target the membership owns.
 	RemoveAll(ctx context.Context, membershipID string) (int, error)
+
+	// RemoveImport deletes this membership's targets from one import batch.
+	// Missing and foreign batches both remove zero targets.
+	RemoveImport(ctx context.Context, membershipID string, id ImportID) (int, error)
 }
 
 // PerkPool is the manifest surface roll targets consume: which perks can this

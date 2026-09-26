@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures";
 import type { Page } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 import { FIXTURES } from "../constants";
 import { openCollectionDrawer } from "../helpers";
 
@@ -8,6 +9,114 @@ async function deleteAllRollTargets(page: Page) {
   await page.getByRole("button", { name: "Yes, delete all" }).click();
   await expect(page.getByText("Save the rolls you're chasing")).toBeVisible();
 }
+
+test("DIM imports retain distinct provenance and delete independently", async ({
+  page,
+}) => {
+  await page.goto("/rolls");
+  await expect(page.getByLabel("Paste a DIM-format wish list")).toBeVisible();
+  if (await page.getByRole("button", { name: "Delete all…" }).isVisible()) {
+    await deleteAllRollTargets(page);
+  }
+  const importText = async (text: string) => {
+    await page.getByLabel("Paste a DIM-format wish list").fill(text);
+    const response = page.waitForResponse(
+      (r) =>
+        r.url().endsWith("/api/rolltargets/import") &&
+        r.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: "Import", exact: true }).click();
+    const result = await response;
+    expect(result.ok()).toBe(true);
+    return result.json() as Promise<{ importId?: string; imported: number }>;
+  };
+  const firstText = [
+    "title: Shared list",
+    `dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11000`,
+    `dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11001`,
+  ].join("\n");
+  const first = await importText(firstText);
+  expect(first.imported).toBe(2);
+  expect(first.importId).toBeTruthy();
+
+  const second = await importText(
+    [
+      "title: Shared list",
+      `dimwishlist:item=${FIXTURES.collectionItemHash}&perks=11000`,
+      "dimwishlist:item=-69420&perks=11002",
+    ].join("\n"),
+  );
+  expect(second.imported).toBe(1);
+  expect(second.importId).toBeTruthy();
+  expect(second.importId).not.toBe(first.importId);
+
+  const duplicate = await importText(firstText);
+  expect(duplicate.imported).toBe(0);
+  expect(duplicate.importId).toBeUndefined();
+  await page.reload();
+  const imports = page.getByRole("region", { name: "Imported roll targets" });
+  await expect(imports.getByText("Shared list", { exact: true })).toHaveCount(
+    2,
+  );
+  await expect(
+    imports.locator(".gt-rt-group").filter({ hasText: first.importId! }),
+  ).toContainText("2 saved targets");
+  await expect(
+    imports.locator(".gt-rt-group").filter({ hasText: second.importId! }),
+  ).toContainText("1 saved target");
+
+  await imports
+    .getByRole("button", {
+      name: `Delete import ${first.importId}`,
+      exact: true,
+    })
+    .click();
+  const confirmation = page.getByRole("alertdialog", {
+    name: "Confirm delete import",
+  });
+  const accessibility = await new AxeBuilder({ page })
+    .include(".gt-rt-imports")
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    accessibility.violations.filter((v) =>
+      ["serious", "critical"].includes(v.impact ?? ""),
+    ),
+  ).toEqual([]);
+  await confirmation
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(
+    imports.getByText(first.importId!, { exact: true }),
+  ).toBeVisible();
+  await imports
+    .getByRole("button", {
+      name: `Delete import ${first.importId}`,
+      exact: true,
+    })
+    .click();
+  await confirmation
+    .getByRole("button", { name: "Yes, delete import", exact: true })
+    .click();
+  await expect(confirmation).toBeHidden();
+  await expect(imports.getByText(first.importId!, { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    imports.getByText(second.importId!, { exact: true }),
+  ).toBeVisible();
+
+  const replacement = await importText(firstText);
+  expect(replacement.imported).toBe(2);
+  expect(replacement.importId).not.toBe(first.importId);
+  await expect(
+    imports.getByText(second.importId!, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    imports.getByText(replacement.importId!, { exact: true }),
+  ).toBeVisible();
+  await deleteAllRollTargets(page);
+});
 
 /**
  * Roll targets (slice 5b), behind the `god-roll` flag. The auth-setup fixture

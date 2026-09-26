@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
 )
 
 // Service is the handler-facing owner of roll-target reads and mutations. It
@@ -35,6 +37,11 @@ func (s *Service) List(ctx context.Context, membershipID string) ([]StoredTarget
 
 // Add validates and saves one weapon's wanted roll.
 func (s *Service) Add(ctx context.Context, membershipID string, cmd AddCommand) (StoredTarget, error) {
+	cmd.ImportID, cmd.ImportTitle = "", ""
+	return s.add(ctx, membershipID, cmd)
+}
+
+func (s *Service) add(ctx context.Context, membershipID string, cmd AddCommand) (StoredTarget, error) {
 	perks, err := s.validatePerks(cmd.ItemHash, cmd.Perks)
 	if err != nil {
 		return StoredTarget{}, err
@@ -99,6 +106,15 @@ func (s *Service) DeleteMany(ctx context.Context, membershipID string, ids []Tar
 // DeleteAll removes every target the membership owns.
 func (s *Service) DeleteAll(ctx context.Context, membershipID string) (int, error) {
 	return s.repo.RemoveAll(ctx, membershipID)
+}
+
+// DeleteImport removes targets newly saved by one import for this membership.
+func (s *Service) DeleteImport(ctx context.Context, membershipID string, id ImportID) (int, error) {
+	parsed, err := uuid.Parse(string(id))
+	if err != nil || parsed == uuid.Nil {
+		return 0, ErrInvalidImportID
+	}
+	return s.repo.RemoveImport(ctx, membershipID, ImportID(parsed.String()))
 }
 
 // find resolves one target the membership owns, or ErrNotFound.
