@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"guardian-tracker/api-service/internal/boundedio"
 )
 
 // bungieTokenURL is Bungie's OAuth token endpoint (overridable in tests).
@@ -26,9 +27,10 @@ const bungieDefaultRefreshTTL = 90 * 24 * time.Hour
 // the refresh-token exchange (keeping a Bungie session alive) are the same
 // request with a different grant_type and the same response parsing.
 type bungieOAuth struct {
-	clientID string
-	tokenURL string
-	client   *http.Client
+	clientID  string
+	tokenURL  string
+	client    *http.Client
+	jsonLimit int64
 }
 
 // oauthGrantError is the safe, typed failure returned when Bungie's token
@@ -50,9 +52,10 @@ func newBungieOAuth(clientID, tokenURL string) *bungieOAuth {
 		tokenURL = bungieTokenURL
 	}
 	return &bungieOAuth{
-		clientID: clientID,
-		tokenURL: tokenURL,
-		client:   &http.Client{Timeout: 30 * time.Second},
+		clientID:  clientID,
+		tokenURL:  tokenURL,
+		client:    &http.Client{Timeout: 30 * time.Second},
+		jsonLimit: boundedio.JSONResponseLimit,
 	}
 }
 
@@ -94,12 +97,12 @@ func (o *bungieOAuth) exchange(ctx context.Context, grant url.Values) (*BungieTo
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, &oauthGrantError{Grant: grant.Get("grant_type"), StatusCode: resp.StatusCode}
+	}
+	body, err := boundedio.ReadAll(resp.Body, o.jsonLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var tr struct {
@@ -153,12 +156,12 @@ func (o *bungieOAuth) primaryDestinyMembership(ctx context.Context, apiBaseURL, 
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("profile fetch failed with status %d", resp.StatusCode)
+	}
+	body, err := boundedio.ReadAll(resp.Body, o.jsonLimit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var apiResp struct {

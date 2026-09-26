@@ -3,8 +3,8 @@ package bungie
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,15 +13,17 @@ import (
 	"sync"
 	"time"
 
+	"guardian-tracker/api-service/internal/boundedio"
 	"guardian-tracker/api-service/observability"
 )
 
 // ManifestService handles downloading and updating the Bungie manifest database.
 type ManifestService struct {
-	client        *Client
-	dbPath        string
-	versionPath   string
-	checkInterval time.Duration
+	client         *Client
+	dbPath         string
+	versionPath    string
+	checkInterval  time.Duration
+	extractedLimit int64
 
 	mu             sync.RWMutex
 	currentVersion string
@@ -31,6 +33,8 @@ type ManifestService struct {
 	participants []SwapParticipant
 	observers    []ManifestObserver
 }
+
+const manifestExtractedLimit int64 = 1 << 30
 
 // SwapParticipant is implemented by a module that holds an OS-level handle on
 // the manifest database file. Every such module MUST register, or the swap's
@@ -69,10 +73,11 @@ type ManifestObserver interface {
 func NewManifestService(client *Client, dbPath string, checkInterval time.Duration) *ManifestService {
 	versionPath := strings.TrimSuffix(dbPath, filepath.Ext(dbPath)) + "_version.txt"
 	ms := &ManifestService{
-		client:        client,
-		dbPath:        dbPath,
-		versionPath:   versionPath,
-		checkInterval: checkInterval,
+		client:         client,
+		dbPath:         dbPath,
+		versionPath:    versionPath,
+		checkInterval:  checkInterval,
+		extractedLimit: manifestExtractedLimit,
 	}
 	if data, err := os.ReadFile(versionPath); err == nil {
 		ms.currentVersion = strings.TrimSpace(string(data))
@@ -214,10 +219,10 @@ func (m *ManifestService) Download(ctx context.Context) error {
 		slog.String("manifest_version", newVersion),
 	)
 	zipPath := m.dbPath + ".zip.tmp"
+	defer os.Remove(zipPath)
 	if err := m.client.DownloadFileToPath(ctx, fullURL, zipPath); err != nil {
 		return fmt.Errorf("failed to download manifest: %w", err)
 	}
-	defer os.Remove(zipPath)
 	if err := m.extractManifest(zipPath); err != nil {
 		return fmt.Errorf("failed to extract manifest: %w", err)
 	}
@@ -241,11 +246,28 @@ func (m *ManifestService) Download(ctx context.Context) error {
 }
 
 func (m *ManifestService) extractManifest(zipPath string) error {
+	tmpPath := m.dbPath + ".tmp"
+	defer os.Remove(tmpPath)
+	if err := m.extractToPath(zipPath, tmpPath); err != nil {
+		return err
+	}
+	// Close open handles only after extraction and every file close succeeded.
+	m.closeParticipants()
+	if err := os.Rename(tmpPath, m.dbPath); err != nil {
+		// The previous database is still installed. Reopen its handles without
+		// invalidating caches or announcing a version that was never published.
+		m.reopenParticipants()
+		return fmt.Errorf("failed to move database: %w", err)
+	}
+	return nil
+}
+
+func (m *ManifestService) extractToPath(zipPath, tmpPath string) (err error) {
 	zipReader, err := zip.OpenReader(zipPath)
 	if err != nil {
 		return fmt.Errorf("failed to read zip: %w", err)
 	}
-	defer zipReader.Close()
+	defer func() { err = errors.Join(err, zipReader.Close()) }()
 	var dbFile *zip.File
 	for _, f := range zipReader.File {
 		if strings.HasSuffix(f.Name, ".content") {
@@ -256,36 +278,23 @@ func (m *ManifestService) extractManifest(zipPath string) error {
 	if dbFile == nil {
 		return fmt.Errorf("no .content file found in manifest zip")
 	}
+	if dbFile.UncompressedSize64 > uint64(m.extractedLimit) {
+		return fmt.Errorf("manifest database: %w", boundedio.ErrTooLarge)
+	}
 	rc, err := dbFile.Open()
 	if err != nil {
 		return fmt.Errorf("failed to open file in zip: %w", err)
 	}
-	defer rc.Close()
+	defer func() { err = errors.Join(err, rc.Close()) }()
 	if err := os.MkdirAll(filepath.Dir(m.dbPath), 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
-	tmpPath := m.dbPath + ".tmp"
 	outFile, err := os.Create(tmpPath)
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	_, err = io.Copy(outFile, rc)
-	outFile.Close()
-	if err != nil {
-		os.Remove(tmpPath)
+	if err := copyAndClose(outFile, rc, m.extractedLimit); err != nil {
 		return fmt.Errorf("failed to write database: %w", err)
-	}
-	// Close open handles before replacing the file: on Windows the rename fails
-	// under open handles; on Linux readers would keep the deleted inode.
-	m.closeParticipants()
-	if err := os.Rename(tmpPath, m.dbPath); err != nil {
-		os.Remove(tmpPath)
-		// Rollback: participants are closed but the old database is still in
-		// place, so reopen against it and keep serving the previous version.
-		// Observers are deliberately NOT notified — the version did not change,
-		// and invalidating caches or rebuilding indexes here would be pure waste.
-		m.reopenParticipants()
-		return fmt.Errorf("failed to move database: %w", err)
 	}
 	return nil
 }

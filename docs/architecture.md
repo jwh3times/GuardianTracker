@@ -154,6 +154,13 @@ On startup and periodic checks, the API downloads the current Destiny manifest,
 extracts the SQLite database, opens it through the manifest provider, and notifies
 dependent services to rebuild manifest-derived indexes.
 
+Downloads and extraction enforce the fixed
+[upstream response limits](../SECURITY.md#upstream-response-limits). The pipeline
+finishes staging and closes its files before invoking swap participants or
+replacing the installed database. A rejected download or extraction removes its
+temporary files and leaves the existing database, version, and dependent caches
+intact.
+
 Collections, cosmetics, catalysts, crafting, triumphs, search, item detail,
 Guardian equipment, Guardian recent-activity, and Guardian current-activity views
 all depend on the manifest.

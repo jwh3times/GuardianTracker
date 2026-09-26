@@ -162,6 +162,23 @@ errors; do not change a version independently of its key.
 - **Bungie API client**: configurable RPS (default 10 req/s, burst 20) with rate.Limiter
 - **Bungie API retries**: exponential backoff with Retry-After header respect on 429 responses
 
+### Upstream Response Limits
+
+The API enforces fixed per-response ceilings: **32 MiB** for Bungie JSON,
+including settings, OAuth exchange, and membership responses; **128 MiB** for
+the Manifest archive; and **1 GiB** for the extracted database. Limits count
+actual bytes read, including JSON after transparent HTTP decompression, rather
+than trusting `Content-Length` or ZIP metadata. Oversized responses fail instead
+of returning truncated data; an oversized archive is not retried in the same
+download attempt sequence.
+
+Failed Manifest staging removes temporary files and preserves the installed
+database and dependent caches, including when a stream or output file fails to
+close. These are application resource budgets, not guaranteed upstream maximum
+sizes or total process-memory limits. They have no environment overrides. If
+legitimate payload growth reaches a ceiling, measure the affected response and
+review capacity and headroom before changing the limit and its boundary tests.
+
 ### CORS
 
 - **Strict origin validation** — only explicitly configured origins allowed (set via `CORS_ALLOWED_ORIGINS`)
