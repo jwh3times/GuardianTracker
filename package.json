@@ -3,6 +3,7 @@
   "private": true,
   "description": "Root-level scripts only — application code lives in frontend/ and backend/api-service/.",
   "scripts": {
+    "test:nginx-headers": "node --test scripts/nginx-headers.test.mjs",
     "test:docker-context": "node --test scripts/docker-context-isolation.test.mjs",
     "bootstrap:private": "node scripts/bootstrap-private.mjs",
     "board:blockers": "node scripts/board-blockers.mjs",

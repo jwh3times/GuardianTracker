@@ -158,6 +158,12 @@ From the repository root, `npm run test:docker-context` checks both application
 contexts using synthetic files and Docker's actual `COPY` behavior. It requires
 Docker with Buildx and a running builder; no local credentials are read.
 
+From the repository root, `npm run test:nginx-headers` starts the pinned nginx
+runtime with the production configuration and synthetic assets. It requires a
+running Docker daemon and checks security headers on HTML, the web manifest,
+static assets, 304 responses, and missing assets, while preserving their cache
+policies. Both container probes run in the `Build Docker Images` CI job.
+
 ## Scripts
 
 ```bash

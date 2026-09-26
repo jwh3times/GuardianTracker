@@ -109,11 +109,9 @@ func (j *JWT) RefreshTokenTTL() time.Duration {
 // ValidateToken parses and validates a JWT string, returning its claims.
 func (j *JWT) ValidateToken(tokenString string) (*JWTClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &JWTClaims{}, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-		}
 		return []byte(j.secret), nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithIssuer("guardian-tracker"), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}

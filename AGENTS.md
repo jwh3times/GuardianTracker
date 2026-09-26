@@ -226,6 +226,7 @@ deployed frontend runtime is nginx.
 
 ### Auth and security behavior to preserve
 
+- Access and refresh JWT verification accepts only HS256 and requires the `guardian-tracker` issuer and an unexpired `exp` claim. Session-less development tokens remain supported.
 - Credentialed `GET /api/auth/bungie` creates a 10-minute host-only HttpOnly `SameSite=Lax`, `Path=/` transaction cookie (`__Host-guardian_oauth_transaction` with `Secure` in production; `guardian_oauth_transaction` in development). HMAC-signed v2 state binds its SHA-256 nonce digest; callback/reconnect verify both before code exchange, without legacy fallback. The latest start replaces prior pending browser flows. Valid transaction processing expires the cookie; invalid input preserves it.
 - The access-only Bungie authorization is encrypted at rest with AES-256-GCM and exact current/previous key versions; expiry requires an authenticated reconnect of the same Bungie membership.
 - The shared browser session client atomically persists access JWT/user state in the versioned `guardian_browser_session` localStorage envelope and owns authenticated transport. Web Locks coordinate authorization start, callback, authenticated reconnect, refresh, and logout across tabs; all except local logout require them. `AuthProvider` only subscribes to the public user/authenticated snapshot. The rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
@@ -289,7 +290,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    unformatted content and drifts again on the next format pass.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, declared `govulncheck` tool v1.6.0 via `go tool govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
-4. **build-docker-images** — `npm run test:docker-context` verifies both application `.dockerignore` policies with synthetic fixtures and a real Docker scratch `COPY` probe, then validates application image builds (no push configured). The probe reads only the ignore policies from the workspace, never local environment files.
+4. **build-docker-images** — `npm run test:docker-context` verifies both application `.dockerignore` policies with synthetic fixtures and a real Docker scratch `COPY` probe. `npm run test:nginx-headers` verifies security-header inheritance and cache behavior over HTTP using the pinned nginx runtime and synthetic assets. The job then validates application image builds (no push configured). Neither probe reads local environment files.
 5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
    merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
    Bot-authored PRs are exempt; `/ship` backfills their entries.
@@ -330,6 +331,9 @@ npm run test:workspace-portability
 
 # Docker context isolation (repo root; Docker Buildx + running builder required)
 npm run test:docker-context
+
+# nginx response headers and caching (repo root; running Docker required)
+npm run test:nginx-headers
 
 # Go (from backend/api-service/)
 go test ./...

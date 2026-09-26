@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.1] - 2026-09-26
+
+### Security
+
+- Frontend static assets retain the same security headers as HTML responses,
+  including conditional and missing-asset responses, without changing caching.
+- App JWT validation accepts only HS256 tokens with the Guardian Tracker issuer
+  and a valid expiration. Session-less development tokens remain supported.
+
 ## [1.18.0] - 2026-09-26
 
 ### Added
@@ -1561,7 +1570,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.0...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.1...HEAD
+[1.18.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.0...v1.18.1
 [1.18.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.3...v1.18.0
 [1.17.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.2...v1.17.3
 [1.17.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.1...v1.17.2
