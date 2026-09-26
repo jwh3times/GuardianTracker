@@ -298,7 +298,7 @@ frontend/src/
                                    evidence), and
                                    `APIImportReport` → `RollTargetImportReport` (the last one on a mutation
                                    result, not a query `select`). One shared optimistic recipe (mirrors
-                                   `wishlist.ts`) backs notes update/remove/bulk delete/delete-all; DIM
+                                   `wishlist.ts`) backs notes update/remove/bulk delete/delete-all/delete-import; DIM
                                    import is invalidate-only since the server decides per line what
                                    imported. Exports `invalidateRollTargets(client)`, which joins
                                    `membershipRefresh.ts`'s fan-out — the match report is derived from
@@ -710,7 +710,7 @@ resource's query identity, endpoint, and projection (`toSeal`/`toTriumph`/
 `Triumphs.tsx`.
 `data/rolltargets.ts` (slice 5b, landed outside ADR 0020's own list) owns the
 roll-target list and match-report query identities, endpoints, and projections,
-plus every mutation (notes update, remove, bulk delete, delete-all, DIM import);
+plus every mutation (notes update, remove, bulk delete, delete-all, delete-import, DIM import);
 exposing `invalidateRollTargets(client)`, since the match report is derived from
 owned Bungie inventory and so is membership-scoped like the eleven above. Both
 queries also take an optional `{ enabled }` ANDed with the module's own gate
@@ -901,6 +901,7 @@ Roll targets slice 6 (#371); see the `RollTargetSection.tsx` entry in "File stru
 - **Match failure**: if `useRollTargetMatches()` fails, every saved target still lists — flat, neutral, "Match status unknown" — never as "Still chasing". A `BUNGIE_REAUTH_REQUIRED` `ApiError.code` renders a Reconnect banner (routes to `/reauthorize`); any other failure renders Retry (`refetch`). Management (notes, delete) still works in this state, since it operates on `data/rolltargets.ts`'s separate, independently-successful target-list query.
 - **Management**: inline notes editor (PATCH notes only, mirroring WishList's click-to-edit pattern); a "Select" mode with per-row checkboxes and a "Delete selected" bulk action, capped at `data/rolltargets.ts`'s exported `MAX_BULK_DELETE` (100, mirrors the server's `rolltargets.MaxBulkTargets`) rather than chunking a larger selection into several calls; "Delete all…" reveals an inline `role="alertdialog"` confirmation bar (never `window.confirm`) before calling `useDeleteAllRollTargets`.
 - **DIM import**: a file picker (`<input type="file">`, read via `file.text()`) and a paste `Textarea`, both add-only, both landing on `useImportRollTargets`. The report renders counts first (e.g. "42 imported · 3 unresolved · 5 already saved"), then non-imported lines grouped by outcome; lines whose outcome is "skipped" (comments/headers) are never listed. An "unresolved perk" line's wording comes from `unresolved.reason` (`not-in-pool`/`ambiguous`/`not-a-weapon-perk`), not from the wire's own `detail` string.
+- **Import batches**: `RollTargetImports.tsx` groups the full saved list by immutable `importId`, independently of search, match state, and filters. Each group shows its optional DIM header title (fallback "Untitled DIM import"), ID, earliest surviving target date, and remaining count. Its inline confirmation calls `useDeleteRollTargetImport`, with pending controls and retry after failure; deletion has no selected-ID cap. Only newly added targets belong to a batch; duplicates keep their original source, and old/manual targets remain ungrouped. Delete and re-import creates a new batch.
 - Item name/icon/type resolution goes through `data/collections.ts`'s full item join (`itemByHash`) rather than a second per-hash lookup: `data/items.ts`'s single-item queries are hook calls, and this page can have an arbitrary, unbounded number of distinct weapon hashes across its targets and matches. A hash the join has no entry for falls back to a hash-derived label (`Item <hash>`) rather than a blank row.
 
 ## API response type changes
@@ -930,9 +931,9 @@ Roll targets slice 6 (#371); see the `RollTargetSection.tsx` entry in "File stru
 - `Catalyst.effect?: string` (design.ts) — catalyst perk/effect text on the `/api/catalysts/...` response; rendered on `Catalysts.tsx` cards when present
 - `Triumph.objectives?: TriumphObjective[]` (design.ts) — optional per-objective drill-down on `/api/seals/...` triumphs; `TriumphObjective { label, done, cur, max }`; absent (not an empty array) when the triumph has no objective data, so existing triumphs render unchanged
 - `WishlistEntry.itemId: string` (design.ts) — the wished item's hash, matching `GTItem.id`; lets Collections match its tiles against the wish list from the projected entry instead of the wire `WishListItem.itemHash`
-- `APIRollTarget`: `{ id, itemHash: number | null, anyWeapon, wanted, perks, notes, dateAdded }` — `GET/PATCH /api/rolltargets`; `itemHash` is an explicit wire `null` for an any-weapon target, never item hash 0
+- `APIRollTarget`: `{ id, itemHash: number | null, anyWeapon, wanted, perks, notes, dateAdded, importId?, importTitle? }` — `GET/PATCH /api/rolltargets`; `itemHash` is an explicit wire `null` for an any-weapon target, never item hash 0
 - `APIRollTargetMatchReport`: `{ wanted: APIRollTargetMatch[], unwanted: APIRollTargetMatch[], unmatchedTargets: APIUnmatchedRollTarget[] }` — `GET /api/rolltargets/matches`; `APIRollTargetMatch` carries the owned copy's full `perks` alongside the target's own `targetPerks`, while `APIUnmatchedRollTarget` extends `APIRollTarget` with optional `bestCopy: { itemHash, instanceId, perks, matchedPerks, matchedColumns, targetColumns }` for the service-selected closest partial copy
-- `APIImportReport`: `{ title?, description?, imported, counts: Record<string, number>, lines: APIImportLine[] }` — `POST /api/rolltargets/import` (raw DIM-format text body, not JSON); `APIImportLine.unresolved?: APIUnresolvedPerk` (`{ perkHash, perkName?, reason }`) carries the structured reason only when one specific perk hash is to blame
+- `APIImportReport`: `{ importId?, title?, description?, imported, counts: Record<string, number>, lines: APIImportLine[] }` — `POST /api/rolltargets/import` (raw DIM-format text body, not JSON); `APIImportLine.unresolved?: APIUnresolvedPerk` (`{ perkHash, perkName?, reason }`) carries the structured reason only when one specific perk hash is to blame
 - `RollTarget`, `RollTargetMatch`, `UnmatchedRollTarget`, `RollTargetNearMiss`, `RollTargetMatchReport`, `RollTargetImportReport` (design.ts) — the domain parallels `data/rolltargets.ts` projects onto; `RollTarget.itemHash: string | null` (matches `GTItem.id`'s hash-as-string convention), not the wire's `number | null`; near-miss `itemHash` is projected to the same string convention
 
 ## Styling

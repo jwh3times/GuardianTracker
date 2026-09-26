@@ -1342,6 +1342,26 @@
   gap: var(--s-3);
 }
 
+/* Import titles may be long, unbroken file metadata; IDs must remain readable
+   even inside a narrow mobile card or the delete confirmation. */
+.gt-rt-imports {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.gt-rt-imports .gt-rt-group-head {
+  flex-wrap: wrap;
+}
+.gt-rt-imports .gt-item-name {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.gt-rt-imports [role="alertdialog"] {
+  margin-top: var(--s-3);
+}
+.gt-rt-imports [role="alertdialog"] .gt-btn + .gt-btn {
+  margin-left: var(--s-2);
+}
+
 .gt-rt-row {
   display: flex;
   gap: var(--s-4);

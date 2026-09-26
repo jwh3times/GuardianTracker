@@ -420,6 +420,8 @@ export interface APIDigest {
 
 /** One row from GET/POST/PATCH /api/rolltargets (mirrors handlers.rollTargetResponse). */
 export interface APIRollTarget {
+  importId?: string;
+  importTitle?: string;
   id: string;
   /** null for an any-weapon target — an explicit wire null, never item hash 0. */
   itemHash: number | null;
@@ -452,6 +454,7 @@ export interface APIImportLine {
 
 /** POST /api/rolltargets/import — the body is the raw DIM-format text, not JSON. */
 export interface APIImportReport {
+  importId?: string;
   title?: string;
   description?: string;
   imported: number;

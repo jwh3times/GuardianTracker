@@ -186,6 +186,10 @@ Two words, lowercase, in prose; `rolltargets` in code, `roll_targets` in SQL.
 A file imported from Destiny Item Manager is a _DIM-format file_ — never a
 "wish list", whatever DIM itself calls it.
 
+**Import batch** — the roll targets newly saved by one DIM-format file import.
+Its identity stays distinct even when two files have the same optional DIM
+title; targets that were already saved keep their earlier provenance.
+
 A target's **stance** is whether it is _wanted_ or _unwanted_. An unwanted roll
 is one the player wants to be told about so they can dismantle it; it is DIM's
 "trash" roll. An **any-weapon target** names perks without naming a weapon —

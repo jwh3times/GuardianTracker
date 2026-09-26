@@ -42,6 +42,7 @@ type stubRollTargets struct {
 	deleteAllResult int
 	gotBulkIDs      []rolltargets.TargetID
 	deleteAllCalled bool
+	gotImportID     rolltargets.ImportID
 }
 
 func (s *stubRollTargets) List(_ context.Context, m string) ([]rolltargets.StoredTarget, error) {
@@ -74,6 +75,51 @@ func (s *stubRollTargets) DeleteAll(_ context.Context, m string) (int, error) {
 	return s.deleteAllResult, s.err
 }
 
+func (s *stubRollTargets) DeleteImport(_ context.Context, m string, id rolltargets.ImportID) (int, error) {
+	s.gotMembership, s.gotImportID = m, id
+	return s.deleteAllResult, s.err
+}
+
+func TestBulkDeleteRollTargets_DeleteImportIsMembershipScoped(t *testing.T) {
+	const id = "a765e292-2783-4a64-ae96-92a470bf8202"
+	for _, n := range []int{0, 3} {
+		stub := &stubRollTargets{deleteAllResult: n}
+		w := send(newRollTargetRouter(NewRollTargetsHandler(stub)), http.MethodPost, "/api/rolltargets/bulk", `{"action":"delete_import","importId":"`+id+`","membershipId":"foreign"}`)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status %d: %s", w.Code, w.Body.String())
+		}
+		var result struct{ Deleted, Skipped int }
+		if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if result.Deleted != n || result.Skipped != 0 || stub.gotMembership != "test-member-123" || stub.gotImportID != id {
+			t.Fatalf("result %+v, membership %q, import %q", result, stub.gotMembership, stub.gotImportID)
+		}
+	}
+}
+
+func TestRollTargetHTTP_ImportValidationErrorsAreReadable400(t *testing.T) {
+	for _, tc := range []struct {
+		err                 error
+		path, body, message string
+	}{
+		{rolltargets.ErrInvalidImportID, "/api/rolltargets/bulk", `{"action":"delete_import"}`, "invalid import id"},
+		{rolltargets.ErrImportTitleTooLong, "/api/rolltargets/import", "title:too long", "import title must be 500 characters or fewer"},
+	} {
+		w := send(newRollTargetRouter(NewRollTargetsHandler(&stubRollTargets{err: tc.err})), http.MethodPost, tc.path, tc.body)
+		if w.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d: %s", w.Code, w.Body.String())
+		}
+		var response map[string]string
+		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if response["error"] != tc.message {
+			t.Fatalf("response = %v", response)
+		}
+	}
+}
+
 func (s *stubRollTargets) ImportDIM(_ context.Context, m, text string) (rolltargets.ImportReport, error) {
 	s.gotMembership, s.gotImportText = m, text
 	return s.report, s.err
@@ -103,6 +149,37 @@ func newRollTargetRouter(h *RollTargetsHandler) *gin.Engine {
 }
 
 func rollTargetHash(h uint32) *uint32 { return &h }
+
+func TestRollTargetHTTP_ExposesImportProvenanceOnlyWhenPresent(t *testing.T) {
+	const id = "a765e292-2783-4a64-ae96-92a470bf8202"
+	stub := &stubRollTargets{
+		targets: []rolltargets.StoredTarget{{ID: 1, ImportID: id, ImportTitle: "DIM collection"}, {ID: 2}},
+		report:  rolltargets.ImportReport{ImportID: id, Lines: []rolltargets.ImportLine{{Number: 1, Outcome: rolltargets.OutcomeImported}}},
+	}
+	r := newRollTargetRouter(NewRollTargetsHandler(stub))
+	w := send(r, http.MethodGet, "/api/rolltargets", "")
+	var targets []map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &targets); err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 2 || targets[0]["importId"] != id || targets[0]["importTitle"] != "DIM collection" {
+		t.Fatalf("targets = %s", w.Body.String())
+	}
+	if _, ok := targets[1]["importId"]; ok {
+		t.Fatalf("manual target carries import: %v", targets[1])
+	}
+	if _, ok := targets[1]["importTitle"]; ok {
+		t.Fatalf("manual target carries title: %v", targets[1])
+	}
+	w = send(r, http.MethodPost, "/api/rolltargets/import", "dimwishlist:item=1000&perks=111")
+	var report map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil {
+		t.Fatal(err)
+	}
+	if report["importId"] != id {
+		t.Fatalf("report = %s", w.Body.String())
+	}
+}
 
 func TestGetRollTargets_SerializesWeaponAndAnyWeaponTargets(t *testing.T) {
 	stub := &stubRollTargets{targets: []rolltargets.StoredTarget{
@@ -479,6 +556,9 @@ func (r *fakeBulkImportRepo) RemoveMany(context.Context, string, []rolltargets.T
 	return 0, nil
 }
 func (r *fakeBulkImportRepo) RemoveAll(context.Context, string) (int, error) { return 0, nil }
+func (r *fakeBulkImportRepo) RemoveImport(context.Context, string, rolltargets.ImportID) (int, error) {
+	return 0, nil
+}
 
 // fakeImportPerkPool serves one weapon (hash 1000) with a paired base/enhanced
 // perk, a base-only perk, and an ambiguous one — enough to drive every

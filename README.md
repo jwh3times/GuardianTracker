@@ -13,8 +13,8 @@ Destiny manifest, live weekly data, and persisted Guardian Tracker preferences.
 - Wishlist management with priorities, notes, and live vendor availability.
 - Roll targets: saved perk combinations per weapon (or any weapon), matched
   against the player's owned rolls with closest-copy progress for rolls still
-  being chased, plus DIM-format wish list import (alpha tier, behind a feature
-  flag).
+  being chased, plus DIM-format wish list import with source tracking and
+  deletion by import (alpha tier, behind a feature flag).
 - A Dashboard digest of collectibles acquired since the player's last visit.
 - A weekly planner with milestones, Xûr inventory, selected-character vendor
   context, reset timing, and ranked recommendations.

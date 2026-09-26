@@ -9,6 +9,82 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+func TestRollTargetStore_ImportProvenanceSurvivesEditsAndDuplicates(t *testing.T) {
+	pool := testPool(t)
+	_, userID := createTestUser(t, pool)
+	store := NewRollTargetStore(pool)
+	ctx := context.Background()
+	const firstID = "11111111-1111-4111-8111-111111111111"
+	const secondID = "22222222-2222-4222-8222-222222222222"
+	first, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, "", firstID, "My DIM rolls")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ImportID != firstID || first.ImportTitle != "My DIM rolls" {
+		t.Fatalf("provenance = %+v", first)
+	}
+	if _, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, "", secondID, "New title"); !IsDuplicate(err) {
+		t.Fatalf("duplicate = %v", err)
+	}
+	notes, perks := "edited", []string{"Rampage"}
+	updated, err := store.Update(ctx, userID, first.ID, &perks, &notes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ImportID != firstID || updated.ImportTitle != "My DIM rolls" {
+		t.Fatalf("updated provenance = %+v", updated)
+	}
+	rows, err := store.List(ctx, userID)
+	if err != nil || len(rows) != 1 || rows[0].ImportID != firstID || rows[0].ImportTitle != "My DIM rolls" {
+		t.Fatalf("List = %+v, %v", rows, err)
+	}
+}
+
+func TestRollTargetStore_DeleteImportIsScopedAndUncapped(t *testing.T) {
+	pool := testPool(t)
+	_, me := createTestUser(t, pool)
+	_, other := createTestUser(t, pool)
+	s := NewRollTargetStore(pool)
+	ctx := context.Background()
+	const firstID = "11111111-1111-4111-8111-111111111111"
+	const secondID = "22222222-2222-4222-8222-222222222222"
+	for i := uint32(1); i <= 101; i++ {
+		if _, err := s.Add(ctx, me, &i, true, []string{"Outlaw"}, "", firstID, "Same title"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, row := range []struct {
+		user      int64
+		id, title string
+	}{{me, secondID, "Same title"}, {me, "", ""}, {other, firstID, "Same title"}} {
+		if _, err := s.Add(ctx, row.user, nil, row.id != "", []string{"Outlaw"}, "", row.id, row.title); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, err := s.DeleteImport(ctx, other, secondID); err != nil || n != 0 {
+		t.Fatalf("foreign import = %d, %v", n, err)
+	}
+	if n, err := s.DeleteImport(ctx, me, firstID); err != nil || n != 101 {
+		t.Fatalf("delete = %d, %v", n, err)
+	}
+	if n, err := s.DeleteImport(ctx, me, firstID); err != nil || n != 0 {
+		t.Fatalf("missing import = %d, %v", n, err)
+	}
+	rows, err := s.List(ctx, me)
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("remaining = %+v, %v", rows, err)
+	}
+	for _, row := range rows {
+		if row.ImportID != "" && row.ImportID != secondID {
+			t.Fatalf("unexpected survivor %+v", row)
+		}
+	}
+	rows, err = s.List(ctx, other)
+	if err != nil || len(rows) != 1 || rows[0].ImportID != firstID {
+		t.Fatalf("foreign remaining = %+v, %v", rows, err)
+	}
+}
+
 func TestRollTargetStore_CRUDAndOwnership(t *testing.T) {
 	pool := testPool(t)
 	mid, userID := createTestUser(t, pool)
@@ -22,7 +98,7 @@ func TestRollTargetStore_CRUDAndOwnership(t *testing.T) {
 	}
 
 	hash := uint32(1234567890)
-	tgt, err := store.Add(ctx, userID, &hash, true, []string{"Kill Clip", "Outlaw"}, "pvp roll")
+	tgt, err := store.Add(ctx, userID, &hash, true, []string{"Kill Clip", "Outlaw"}, "pvp roll", "", "")
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -35,14 +111,14 @@ func TestRollTargetStore_CRUDAndOwnership(t *testing.T) {
 
 	// The same roll twice is a duplicate; a different roll on the same weapon
 	// is ordinary, and so is the opposite stance on the same perks.
-	if _, err := store.Add(ctx, userID, &hash, true, []string{"Kill Clip", "Outlaw"}, ""); !IsDuplicate(err) {
+	if _, err := store.Add(ctx, userID, &hash, true, []string{"Kill Clip", "Outlaw"}, "", "", ""); !IsDuplicate(err) {
 		t.Errorf("identical roll: err = %v, want a duplicate", err)
 	}
-	other, err := store.Add(ctx, userID, &hash, true, []string{"Rampage"}, "")
+	other, err := store.Add(ctx, userID, &hash, true, []string{"Rampage"}, "", "", "")
 	if err != nil {
 		t.Fatalf("second roll on the same weapon: %v", err)
 	}
-	unwanted, err := store.Add(ctx, userID, &hash, false, []string{"Kill Clip", "Outlaw"}, "")
+	unwanted, err := store.Add(ctx, userID, &hash, false, []string{"Kill Clip", "Outlaw"}, "", "", "")
 	if err != nil {
 		t.Fatalf("opposite stance on the same perks: %v", err)
 	}
@@ -109,17 +185,17 @@ func TestRollTargetStore_ConstraintsRejectNonsense(t *testing.T) {
 	ctx := context.Background()
 
 	h1, h2, h3 := uint32(1), uint32(2), uint32(3)
-	if _, err := store.Add(ctx, userID, &h1, true, []string{}, ""); err == nil {
+	if _, err := store.Add(ctx, userID, &h1, true, []string{}, "", "", ""); err == nil {
 		t.Error("empty perks array was accepted")
 	}
 	tooMany := make([]string, 11)
 	for i := range tooMany {
 		tooMany[i] = "p"
 	}
-	if _, err := store.Add(ctx, userID, &h2, true, tooMany, ""); err == nil {
+	if _, err := store.Add(ctx, userID, &h2, true, tooMany, "", "", ""); err == nil {
 		t.Error("11 perks were accepted")
 	}
-	if _, err := store.Add(ctx, userID, &h3, true, []string{"Outlaw"}, strings.Repeat("x", 501)); err == nil {
+	if _, err := store.Add(ctx, userID, &h3, true, []string{"Outlaw"}, strings.Repeat("x", 501), "", ""); err == nil {
 		t.Error("a 501-character note was accepted")
 	}
 }
@@ -132,7 +208,7 @@ func TestRollTargetStore_CascadesWithTheUser(t *testing.T) {
 	ctx := context.Background()
 
 	h := uint32(99)
-	if _, err := store.Add(ctx, userID, &h, true, []string{"Outlaw"}, ""); err != nil {
+	if _, err := store.Add(ctx, userID, &h, true, []string{"Outlaw"}, "", "", ""); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	if _, err := pool.Exec(ctx, `DELETE FROM users WHERE membership_id = $1`, mid); err != nil {
@@ -155,9 +231,9 @@ func TestRollTargetStore_BulkDelete_OwnershipScoped(t *testing.T) {
 	_, me := createTestUser(t, pool)
 	_, other := createTestUser(t, pool)
 	h1, h2, h3 := uint32(1001), uint32(1002), uint32(1003)
-	a, _ := s.Add(ctx, me, &h1, true, []string{"Outlaw"}, "")
-	b, _ := s.Add(ctx, me, &h2, true, []string{"Outlaw"}, "")
-	foreign, _ := s.Add(ctx, other, &h3, true, []string{"Outlaw"}, "")
+	a, _ := s.Add(ctx, me, &h1, true, []string{"Outlaw"}, "", "", "")
+	b, _ := s.Add(ctx, me, &h2, true, []string{"Outlaw"}, "", "", "")
+	foreign, _ := s.Add(ctx, other, &h3, true, []string{"Outlaw"}, "", "", "")
 
 	// Delete two owned + one foreign id; only the two owned are removed.
 	removed, err := s.BulkDelete(ctx, me, []int64{a.ID, b.ID, foreign.ID})
@@ -193,13 +269,13 @@ func TestRollTargetStore_DeleteAll_OwnershipScoped(t *testing.T) {
 	_, me := createTestUser(t, pool)
 	_, other := createTestUser(t, pool)
 	h1, h2, h3 := uint32(2001), uint32(2002), uint32(2003)
-	if _, err := s.Add(ctx, me, &h1, true, []string{"Outlaw"}, ""); err != nil {
+	if _, err := s.Add(ctx, me, &h1, true, []string{"Outlaw"}, "", "", ""); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	if _, err := s.Add(ctx, me, &h2, true, []string{"Rampage"}, ""); err != nil {
+	if _, err := s.Add(ctx, me, &h2, true, []string{"Rampage"}, "", "", ""); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
-	if _, err := s.Add(ctx, other, &h3, true, []string{"Outlaw"}, ""); err != nil {
+	if _, err := s.Add(ctx, other, &h3, true, []string{"Outlaw"}, "", "", ""); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 
@@ -229,18 +305,18 @@ func TestRollTargetStore_AnyWeaponTargetsDeduplicate(t *testing.T) {
 	store := NewRollTargetStore(pool)
 	ctx := context.Background()
 
-	first, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, "")
+	first, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, "", "", "")
 	if err != nil {
 		t.Fatalf("Add wildcard: %v", err)
 	}
 	if first.ItemHash != nil {
 		t.Errorf("item hash = %v, want nil", first.ItemHash)
 	}
-	if _, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, ""); !IsDuplicate(err) {
+	if _, err := store.Add(ctx, userID, nil, true, []string{"Outlaw"}, "", "", ""); !IsDuplicate(err) {
 		t.Errorf("identical wildcard: err = %v, want a duplicate", err)
 	}
 	// A different wildcard roll is a different target.
-	if _, err := store.Add(ctx, userID, nil, true, []string{"Rampage"}, ""); err != nil {
+	if _, err := store.Add(ctx, userID, nil, true, []string{"Rampage"}, "", "", ""); err != nil {
 		t.Errorf("second wildcard roll: %v", err)
 	}
 

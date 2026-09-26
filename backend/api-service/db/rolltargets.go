@@ -14,14 +14,16 @@ import (
 // weapon. A pointer rather than a zero value because 0 is a hash the column
 // would accept, and "no weapon" must not be spelled the same as a weapon.
 type RollTarget struct {
-	ID        int64
-	UserID    int64
-	ItemHash  *uint32
-	Wanted    bool
-	Perks     []string
-	Notes     string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID          int64
+	UserID      int64
+	ItemHash    *uint32
+	Wanted      bool
+	Perks       []string
+	Notes       string
+	ImportID    string
+	ImportTitle string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // RollTargetStore handles roll-target DB operations.
@@ -36,7 +38,7 @@ func (s *RollTargetStore) GetUserID(ctx context.Context, membershipID string) (i
 	return id, err
 }
 
-const rollTargetCols = `id, user_id, item_hash, wanted, perks, notes, created_at, updated_at`
+const rollTargetCols = `id, user_id, item_hash, wanted, perks, notes, created_at, updated_at, COALESCE(import_id::text, ''), COALESCE(import_title, '')`
 
 // List returns every roll target for the user, most recently added first.
 func (s *RollTargetStore) List(ctx context.Context, userID int64) ([]RollTarget, error) {
@@ -62,12 +64,12 @@ func (s *RollTargetStore) List(ctx context.Context, userID int64) ([]RollTarget,
 // Add inserts a roll target. A nil hash stores an any-weapon target. Callers
 // should check IsDuplicate on the returned error: the same roll cannot be saved
 // twice, which is what stops a re-imported file from stacking duplicates.
-func (s *RollTargetStore) Add(ctx context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes string) (*RollTarget, error) {
+func (s *RollTargetStore) Add(ctx context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes, importID, importTitle string) (*RollTarget, error) {
 	row := s.pool.QueryRow(ctx,
-		`INSERT INTO roll_targets (user_id, item_hash, wanted, perks, notes)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO roll_targets (user_id, item_hash, wanted, perks, notes, import_id, import_title)
+		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::uuid, NULLIF($7, ''))
 		 RETURNING `+rollTargetCols,
-		userID, itemHashArg(hash), wanted, perks, notes)
+		userID, itemHashArg(hash), wanted, perks, notes, importID, importTitle)
 	t, err := scanRollTarget(row)
 	if err != nil {
 		return nil, err
@@ -130,6 +132,15 @@ func (s *RollTargetStore) DeleteAll(ctx context.Context, userID int64) (int64, e
 	return tag.RowsAffected(), nil
 }
 
+// DeleteImport removes an import batch in one ownership-scoped statement.
+func (s *RollTargetStore) DeleteImport(ctx context.Context, userID int64, importID string) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM roll_targets WHERE user_id = $1 AND import_id = $2::uuid`, userID, importID)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // rowScanner is satisfied by both pgx.Row and pgx.Rows, so one scan helper
 // serves the single-row writes and the list read.
 type rowScanner interface {
@@ -139,7 +150,7 @@ type rowScanner interface {
 func scanRollTarget(r rowScanner) (RollTarget, error) {
 	var t RollTarget
 	var hashInt *int64
-	if err := r.Scan(&t.ID, &t.UserID, &hashInt, &t.Wanted, &t.Perks, &t.Notes, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := r.Scan(&t.ID, &t.UserID, &hashInt, &t.Wanted, &t.Perks, &t.Notes, &t.CreatedAt, &t.UpdatedAt, &t.ImportID, &t.ImportTitle); err != nil {
 		return RollTarget{}, err
 	}
 	if hashInt != nil {

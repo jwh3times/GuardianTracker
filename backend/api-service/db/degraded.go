@@ -57,9 +57,10 @@ type WishlistRepo interface {
 }
 
 type RollTargetRepo interface {
+	DeleteImport(ctx context.Context, userID int64, importID string) (int64, error)
 	GetUserID(ctx context.Context, membershipID string) (int64, error)
 	List(ctx context.Context, userID int64) ([]RollTarget, error)
-	Add(ctx context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes string) (*RollTarget, error)
+	Add(ctx context.Context, userID int64, hash *uint32, wanted bool, perks []string, notes, importID, importTitle string) (*RollTarget, error)
 	Update(ctx context.Context, userID, id int64, perks *[]string, notes *string) (*RollTarget, error)
 	Delete(ctx context.Context, userID, id int64) (bool, error)
 	BulkDelete(ctx context.Context, userID int64, ids []int64) (int64, error)
@@ -183,13 +184,17 @@ func (degradedWishlist) BulkSetPriority(context.Context, int64, []int64, int16) 
 
 type degradedRollTargets struct{}
 
+func (degradedRollTargets) DeleteImport(context.Context, int64, string) (int64, error) {
+	return 0, ErrUnavailable
+}
+
 func (degradedRollTargets) GetUserID(context.Context, string) (int64, error) {
 	return 0, ErrUnavailable
 }
 func (degradedRollTargets) List(context.Context, int64) ([]RollTarget, error) {
 	return nil, ErrUnavailable
 }
-func (degradedRollTargets) Add(context.Context, int64, *uint32, bool, []string, string) (*RollTarget, error) {
+func (degradedRollTargets) Add(context.Context, int64, *uint32, bool, []string, string, string, string) (*RollTarget, error) {
 	return nil, ErrUnavailable
 }
 func (degradedRollTargets) Update(context.Context, int64, int64, *[]string, *string) (*RollTarget, error) {

@@ -47,7 +47,7 @@ func (r *rollTargetRepository) Add(ctx context.Context, membershipID string, tar
 	if err != nil {
 		return rolltargets.StoredTarget{}, err
 	}
-	row, err := r.store.Add(ctx, userID, target.ItemHash, target.Wanted, target.Perks, target.Notes)
+	row, err := r.store.Add(ctx, userID, target.ItemHash, target.Wanted, target.Perks, target.Notes, string(target.ImportID), target.ImportTitle)
 	if err != nil {
 		if db.IsDuplicate(err) {
 			return rolltargets.StoredTarget{}, rolltargets.ErrDuplicate
@@ -111,6 +111,18 @@ func (r *rollTargetRepository) RemoveAll(ctx context.Context, membershipID strin
 	return int(removed), nil
 }
 
+func (r *rollTargetRepository) RemoveImport(ctx context.Context, membershipID string, id rolltargets.ImportID) (int, error) {
+	userID, err := r.userID(ctx, membershipID)
+	if err != nil {
+		return 0, err
+	}
+	removed, err := r.store.DeleteImport(ctx, userID, string(id))
+	if err != nil {
+		return 0, rollTargetError(err)
+	}
+	return int(removed), nil
+}
+
 // userID resolves the internal identity every store call needs from the
 // membership the domain works in.
 func (r *rollTargetRepository) userID(ctx context.Context, membershipID string) (int64, error) {
@@ -131,12 +143,14 @@ func rollTargetIDs(ids []rolltargets.TargetID) []int64 {
 
 func storedTarget(row *db.RollTarget) rolltargets.StoredTarget {
 	return rolltargets.StoredTarget{
-		ID:        rolltargets.TargetID(row.ID),
-		ItemHash:  row.ItemHash,
-		Wanted:    row.Wanted,
-		Perks:     row.Perks,
-		Notes:     row.Notes,
-		CreatedAt: row.CreatedAt,
+		ID:          rolltargets.TargetID(row.ID),
+		ItemHash:    row.ItemHash,
+		Wanted:      row.Wanted,
+		Perks:       row.Perks,
+		Notes:       row.Notes,
+		ImportID:    rolltargets.ImportID(row.ImportID),
+		ImportTitle: row.ImportTitle,
+		CreatedAt:   row.CreatedAt,
 	}
 }
 

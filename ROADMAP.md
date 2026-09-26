@@ -23,13 +23,13 @@ runbooks, and environment-specific operations notes belong under `private/`.
 
 ### God-Roll and Owned-Roll Insights
 
-**Status:** Partially implemented — storage, validation, DIM-format import,
+**Status:** Current scope implemented — storage, validation, DIM-format import,
 matching saved targets against the owned weapons a fresh Bungie profile read
 reports, a REST surface, the Roll targets page (`/rolls`, behind the
 `god-roll` flag), a per-weapon item-drawer section, and closest-owned-copy
-progress for still-chasing targets all exist
-**Gate:** none — the owner approved the player-facing surface 2026-09-23 (#350)
-**Likely size:** Medium (remaining scope)
+progress for still-chasing targets, and import provenance all exist
+**Gate:** Further scope requires an owner decision
+**Likely size:** To be decided for any follow-on work
 
 Show owned weapon rolls for the selected Destiny membership and compare them to
 target rolls.
@@ -49,7 +49,7 @@ Decided:
   before the target saves (`services/rolltargets`); a weapon may hold several
   saved rolls, and only an identical roll is refused. `GET/POST /api/rolltargets`,
   `PATCH/DELETE /api/rolltargets/:id`, `POST /api/rolltargets/bulk` (delete
-  named ids or every target the membership owns), and `POST
+  named ids, one import batch, or every target the membership owns), and `POST
 /api/rolltargets/import` expose this over REST, membership-scoped through
   the caller's JWT alone and gated behind the `god-roll` feature flag (alpha
   tier).
@@ -63,6 +63,12 @@ Decided:
   perks, saved, with a per-line report of what happened and why. The Roll
   targets page's file picker and paste box both reach it, rendering the report
   inline.
+- Each import that adds targets records an immutable import ID and the optional
+  DIM header title on those new targets. Already saved rolls retain their
+  original provenance; older and manually saved targets remain ungrouped.
+  The page lists each surviving import with its title, ID, date, and target count,
+  and offers confirmed deletion of the entire batch. Deleting and importing
+  again creates a new batch; the original file is not retained.
 - Matching saved targets against what the player owns is implemented
   (`services/ownedrolls`, `services/rolltargets/matching.go`). A new package,
   `services/ownedrolls`, reads the membership's vault, character inventories,
@@ -109,12 +115,10 @@ Decided:
 
 Still to settle:
 
-- Recording which DIM file a target came from, deferred as its own card.
 - The mockup's "Best farm: {source}" line (joining acquisition data to
   targets) is out of scope for the drawer section that shipped in #371 and
   remains its own decision.
 - Manual perk authoring (saving a target without a DIM import) is deferred.
-- How an unmatched or unresolved perk is presented honestly to the owner.
 
 ### Notifications and Digests
 

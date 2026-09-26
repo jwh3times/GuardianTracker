@@ -31,6 +31,7 @@ type rollTargetService interface {
 	Remove(ctx context.Context, membershipID string, id rolltargets.TargetID) error
 	DeleteMany(ctx context.Context, membershipID string, ids []rolltargets.TargetID) (rolltargets.BulkResult, error)
 	DeleteAll(ctx context.Context, membershipID string) (int, error)
+	DeleteImport(ctx context.Context, membershipID string, id rolltargets.ImportID) (int, error)
 	ImportDIM(ctx context.Context, membershipID, text string) (rolltargets.ImportReport, error)
 	Matches(ctx context.Context, membershipType int, membershipID string) (rolltargets.MatchReport, error)
 }
@@ -55,14 +56,16 @@ func membershipIDOf(c *gin.Context) string { return c.GetString("membership_id")
 // ItemHash is a pointer so an any-weapon target serialises as an explicit null
 // rather than as item 0, which is a hash the wire would accept.
 type rollTargetResponse struct {
-	ID        string                `json:"id"`
-	ItemHash  *uint32               `json:"itemHash"`
-	AnyWeapon bool                  `json:"anyWeapon"`
-	Wanted    bool                  `json:"wanted"`
-	Perks     []string              `json:"perks"`
-	Notes     string                `json:"notes"`
-	DateAdded string                `json:"dateAdded"`
-	BestCopy  *nearMissCopyResponse `json:"bestCopy,omitempty"`
+	ImportID    rolltargets.ImportID  `json:"importId,omitempty"`
+	ImportTitle string                `json:"importTitle,omitempty"`
+	ID          string                `json:"id"`
+	ItemHash    *uint32               `json:"itemHash"`
+	AnyWeapon   bool                  `json:"anyWeapon"`
+	Wanted      bool                  `json:"wanted"`
+	Perks       []string              `json:"perks"`
+	Notes       string                `json:"notes"`
+	DateAdded   string                `json:"dateAdded"`
+	BestCopy    *nearMissCopyResponse `json:"bestCopy,omitempty"`
 }
 
 func rollTargetResponses(targets []rolltargets.StoredTarget) []rollTargetResponse {
@@ -79,13 +82,15 @@ func rollTargetResponseOf(t rolltargets.StoredTarget) rollTargetResponse {
 		perks = []string{} // serialize as [] not null
 	}
 	return rollTargetResponse{
-		ID:        strconv.FormatInt(int64(t.ID), 10),
-		ItemHash:  t.ItemHash,
-		AnyWeapon: t.AnyWeapon(),
-		Wanted:    t.Wanted,
-		Perks:     perks,
-		Notes:     t.Notes,
-		DateAdded: t.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		ImportID:    t.ImportID,
+		ImportTitle: t.ImportTitle,
+		ID:          strconv.FormatInt(int64(t.ID), 10),
+		ItemHash:    t.ItemHash,
+		AnyWeapon:   t.AnyWeapon(),
+		Wanted:      t.Wanted,
+		Perks:       perks,
+		Notes:       t.Notes,
+		DateAdded:   t.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 }
 
@@ -179,18 +184,19 @@ func (h *RollTargetsHandler) RemoveRollTarget(c *gin.Context) {
 }
 
 // bulkDeleteRollTargetsRequest is the bulk body: "delete" removes the named
-// ids, "delete_all" removes every target the membership owns and carries no
-// ids at all.
+// ids, "delete_all" removes every target the membership owns, and
+// "delete_import" removes targets created by its named import batch.
 type bulkDeleteRollTargetsRequest struct {
-	Action string   `json:"action"`
-	IDs    []string `json:"ids"`
+	ImportID rolltargets.ImportID `json:"importId"`
+	Action   string               `json:"action"`
+	IDs      []string             `json:"ids"`
 }
 
 // BulkDeleteRollTargets handles POST /api/rolltargets/bulk.
 //
 // Missing or foreign ids are skipped and counted, never 404 and never listed
 // — the same rule a single DELETE applies to one id. Response:
-// {"deleted":n,"skipped":m}; delete_all always answers skipped:0, since it
+// {"deleted":n,"skipped":m}; delete_all and delete_import answer skipped:0, since each
 // names nothing that could be missing or foreign.
 func (h *RollTargetsHandler) BulkDeleteRollTargets(c *gin.Context) {
 	var body bulkDeleteRollTargetsRequest
@@ -212,6 +218,13 @@ func (h *RollTargetsHandler) BulkDeleteRollTargets(c *gin.Context) {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": result.Deleted, "skipped": result.Skipped})
+	case "delete_import":
+		deleted, err := h.targets.DeleteImport(c.Request.Context(), membershipID, body.ImportID)
+		if err != nil {
+			handleRollTargetError(c, err, "roll target import delete failed")
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deleted": deleted, "skipped": 0})
 	case "delete_all":
 		deleted, err := h.targets.DeleteAll(c.Request.Context(), membershipID)
 		if err != nil {
@@ -220,7 +233,7 @@ func (h *RollTargetsHandler) BulkDeleteRollTargets(c *gin.Context) {
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": deleted, "skipped": 0})
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete' or 'delete_all'"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "action must be 'delete', 'delete_import' or 'delete_all'"})
 	}
 }
 
@@ -263,6 +276,7 @@ type importLineResponse struct {
 // wants the headline. The per-line list is not optional: a line that did not
 // import has to be visible, or it is indistinguishable from one that did.
 type importReportResponse struct {
+	ImportID    rolltargets.ImportID `json:"importId,omitempty"`
 	Title       string               `json:"title,omitempty"`
 	Description string               `json:"description,omitempty"`
 	Imported    int                  `json:"imported"`
@@ -316,6 +330,7 @@ func importResponseOf(r rolltargets.ImportReport) importReportResponse {
 		})
 	}
 	return importReportResponse{
+		ImportID:    r.ImportID,
 		Title:       r.Title,
 		Description: r.Description,
 		Imported:    r.Imported(),
@@ -492,6 +507,8 @@ func isRollTargetValidationError(err error) bool {
 		rolltargets.ErrTooManyPerks,
 		rolltargets.ErrDuplicatePerk,
 		rolltargets.ErrNotesTooLong,
+		rolltargets.ErrImportTitleTooLong,
+		rolltargets.ErrInvalidImportID,
 		rolltargets.ErrNotAWeapon,
 		rolltargets.ErrUnknownPerk,
 		rolltargets.ErrUnknownPerkName,
@@ -517,6 +534,10 @@ func rollTargetValidationMessage(err error) string {
 		return "the same perk is named twice"
 	case errors.Is(err, rolltargets.ErrNotesTooLong):
 		return "notes must be 500 characters or fewer"
+	case errors.Is(err, rolltargets.ErrImportTitleTooLong):
+		return "import title must be 500 characters or fewer"
+	case errors.Is(err, rolltargets.ErrInvalidImportID):
+		return "invalid import id"
 	case errors.Is(err, rolltargets.ErrNotAWeapon):
 		return "item is not a weapon with perk columns"
 	case errors.Is(err, rolltargets.ErrUnknownPerk):

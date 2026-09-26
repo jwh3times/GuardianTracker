@@ -14,6 +14,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.0] - 2026-09-26
+
+### Added
+
+- DIM-format imports now record an immutable import ID and optional file title
+  on each newly saved roll target. Re-imported duplicates keep their original
+  provenance; older and individually saved targets remain ungrouped.
+- The Roll targets page lists import groups with their remaining target counts
+  and a confirmed delete action. Delete one import and import its file again
+  without removing targets from other imports. Import deletion is scoped to the
+  signed-in membership and supports batches larger than the manual selection
+  limit.
+
 ## [1.17.3] - 2026-09-25
 
 ### Changed
@@ -1548,7 +1561,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.3...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.3...v1.18.0
 [1.17.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.2...v1.17.3
 [1.17.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.1...v1.17.2
 [1.17.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.0...v1.17.1

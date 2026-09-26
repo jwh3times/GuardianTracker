@@ -241,11 +241,14 @@ explicit path membership pair.
 ### Roll target bulk delete — cross-user isolation
 
 `POST /api/rolltargets/bulk` accepts `{"action":"delete","ids":[...]}` or
-`{"action":"delete_all"}`. Both forms resolve the acting user id from the JWT
+`{"action":"delete_all"}` or `{"action":"delete_import","importId":"<uuid>"}`.
+All forms resolve the acting user id from the JWT
 alone before touching storage, and the store's SQL is set-based
 (`id = ANY($1) AND user_id = $2`; `delete_all` is `WHERE user_id = $1`) —
 there is no code path that can delete a row by id without also matching the
-caller's own `user_id`.
+caller's own `user_id`. Import deletion matches both `user_id` and `import_id`
+in one statement; it has no selected-ID cap and returns zero for absent or
+foreign imports.
 
 - Test: as user A, bulk-delete a mix of A's own ids and B's ids in one
   request — the response's `deleted` count must equal only A's ids that
@@ -253,6 +256,11 @@ caller's own `user_id`.
   exist afterward; confirm via a follow-up `GET /api/rolltargets` as B
 - Test: as user A, call `delete_all` — only A's targets are removed; B's
   targets (and B's own subsequent `GET /api/rolltargets`) are unaffected
+- Test: as user A, call `delete_import` with B's import ID — zero deleted;
+  then delete A's batch with over 100 targets and verify all of that batch is
+  gone while other batches and ungrouped targets remain.
+- Test: a malformed or nil UUID returns 400 before storage. A DIM header title
+  over 500 Unicode characters returns 400 before any target is written.
 - Test: an empty `ids` array, an oversized `ids` array (over 100 unique ids),
   or an unrecognized `action` value — each must return 400, not 500, and must
   not reach storage
