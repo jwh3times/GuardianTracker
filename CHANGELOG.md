@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.2] - 2026-09-26
+
+### Security
+
+- Bound upstream JSON responses to 32 MiB, Manifest downloads to 128 MiB, and
+  extracted Manifest databases to 1 GiB. Oversized responses are rejected even
+  when upstream size headers are absent or incorrect.
+- Remove partial Manifest files after failed reads, extraction, or file closure,
+  and retain the previous installed Manifest when a replacement is rejected.
+
 ## [1.18.1] - 2026-09-26
 
 ### Security
@@ -1570,7 +1580,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.1...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.2...HEAD
+[1.18.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.1...v1.18.2
 [1.18.1]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.0...v1.18.1
 [1.18.0]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.3...v1.18.0
 [1.17.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.17.2...v1.17.3

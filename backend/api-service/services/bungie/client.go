@@ -3,6 +3,7 @@ package bungie
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"guardian-tracker/api-service/internal/boundedio"
 	"guardian-tracker/api-service/observability"
 
 	"golang.org/x/time/rate"
@@ -31,7 +33,11 @@ type Client struct {
 	// downloadClient has a long timeout for the multi-hundred-MB manifest zip —
 	// the shared 30s API client would abort mid-download on slow egress.
 	downloadClient *http.Client
+	jsonLimit      int64
+	archiveLimit   int64
 }
+
+const manifestArchiveLimit int64 = 128 << 20
 
 // NewClient creates a new Bungie API client with rate limiting.
 func NewClient(apiKey, baseURL string, rps, burst int) *Client {
@@ -42,6 +48,8 @@ func NewClient(apiKey, baseURL string, rps, burst int) *Client {
 		limiter:        rate.NewLimiter(rate.Limit(rps), burst),
 		cdnBaseURL:     "https://www.bungie.net",
 		downloadClient: &http.Client{Timeout: 10 * time.Minute},
+		jsonLimit:      boundedio.JSONResponseLimit,
+		archiveLimit:   manifestArchiveLimit,
 	}
 }
 
@@ -114,9 +122,9 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 	}
 }
 
-func parseResponse[T any](resp *http.Response) (*T, error) {
+func parseResponse[T any](resp *http.Response, limit int64) (*T, error) {
 	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
+	body, err := boundedio.ReadAll(resp.Body, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -149,7 +157,7 @@ func (c *Client) GetManifest(ctx context.Context) (*ManifestResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[ManifestResponse](resp)
+	return parseResponse[ManifestResponse](resp, c.jsonLimit)
 }
 
 // GetProfile retrieves a user's Destiny 2 profile for the specified components.
@@ -170,7 +178,7 @@ func (c *Client) GetProfile(ctx context.Context, membershipType int, membershipI
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[ProfileResponse](resp)
+	return parseResponse[ProfileResponse](resp, c.jsonLimit)
 }
 
 // GetCharacters retrieves a user's Destiny 2 characters (component 200).
@@ -187,7 +195,7 @@ func (c *Client) GetCharacters(ctx context.Context, membershipType int, membersh
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[CharactersResponse](resp)
+	return parseResponse[CharactersResponse](resp, c.jsonLimit)
 }
 
 // GetActivityHistory retrieves one bounded page of a character's raw activity-
@@ -207,7 +215,7 @@ func (c *Client) GetActivityHistory(ctx context.Context, membershipType int, mem
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[ActivityHistoryResponse](resp)
+	return parseResponse[ActivityHistoryResponse](resp, c.jsonLimit)
 }
 
 // GetPublicMilestones fetches current weekly milestone definitions (no auth needed).
@@ -220,7 +228,7 @@ func (c *Client) GetPublicMilestones(ctx context.Context) (map[string]PublicMile
 	if err != nil {
 		return nil, err
 	}
-	r, err := parseResponse[PublicMilestonesResponse](resp)
+	r, err := parseResponse[PublicMilestonesResponse](resp, c.jsonLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +251,7 @@ func (c *Client) GetCharacterVendors(ctx context.Context, membershipType int, me
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[CharacterVendorsResponse](resp)
+	return parseResponse[CharacterVendorsResponse](resp, c.jsonLimit)
 }
 
 // GetPublicVendors fetches the public vendor inventory (no auth needed; components 400+402).
@@ -257,7 +265,7 @@ func (c *Client) GetPublicVendors(ctx context.Context) (*PublicVendorsResponse, 
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[PublicVendorsResponse](resp)
+	return parseResponse[PublicVendorsResponse](resp, c.jsonLimit)
 }
 
 // GetRecords fetches profile records (component 900) for a user.
@@ -274,7 +282,7 @@ func (c *Client) GetRecords(ctx context.Context, membershipType int, membershipI
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[RecordsProfileResponse](resp)
+	return parseResponse[RecordsProfileResponse](resp, c.jsonLimit)
 }
 
 // GetCommonSettings fetches Destiny 2 core settings (API-key only, no auth needed).
@@ -289,13 +297,9 @@ func (c *Client) GetCommonSettings(ctx context.Context) (*CoreSettings, error) {
 	if err != nil {
 		return nil, fmt.Errorf("GetCommonSettings: %w", err)
 	}
-	defer resp.Body.Close()
-	var r CoreSettingsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
-		return nil, fmt.Errorf("GetCommonSettings decode: %w", err)
-	}
-	if r.ErrorCode != 1 {
-		return nil, &BungieError{ErrorCode: r.ErrorCode, ErrorStatus: r.ErrorStatus, Message: r.Message}
+	r, err := parseResponse[CoreSettingsResponse](resp, c.jsonLimit)
+	if err != nil {
+		return nil, fmt.Errorf("GetCommonSettings: %w", err)
 	}
 	s := r.Response.Destiny2CoreSettings
 	return &CoreSettings{
@@ -325,6 +329,9 @@ func (c *Client) DownloadFileToPath(ctx context.Context, url, dest string) error
 		if lastErr == nil {
 			return nil
 		}
+		if errors.Is(lastErr, boundedio.ErrTooLarge) {
+			return lastErr
+		}
 		observability.Logger(ctx).LogAttrs(ctx, slog.LevelWarn, "manifest download attempt failed",
 			slog.Int("attempt", attempt+1),
 			slog.Int("max_attempts", 3),
@@ -334,7 +341,12 @@ func (c *Client) DownloadFileToPath(ctx context.Context, url, dest string) error
 	return lastErr
 }
 
-func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) error {
+func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) (err error) {
+	defer func() {
+		if err != nil {
+			os.Remove(dest)
+		}
+	}()
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -344,7 +356,7 @@ func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) error
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { err = errors.Join(err, resp.Body.Close()) }()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
 	}
@@ -355,12 +367,14 @@ func (c *Client) downloadToPathOnce(ctx context.Context, url, dest string) error
 	if err != nil {
 		return fmt.Errorf("failed to create %s: %w", dest, err)
 	}
-	if _, err := io.Copy(out, resp.Body); err != nil {
-		out.Close()
-		os.Remove(dest)
-		return fmt.Errorf("failed to write %s: %w", dest, err)
+	if err := copyAndClose(out, resp.Body, c.archiveLimit); err != nil {
+		return fmt.Errorf("failed to write manifest archive: %w", err)
 	}
-	return out.Close()
+	return nil
+}
+
+func copyAndClose(dst io.WriteCloser, src io.Reader, limit int64) error {
+	return errors.Join(boundedio.Copy(dst, src, limit), dst.Close())
 }
 
 // Profile component constants.
