@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { server, API } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
+import { QueryClient } from "@tanstack/react-query";
 import { useItemSearch } from "./search";
 
 /**
@@ -159,5 +160,100 @@ describe("projection", () => {
     await waitFor(() =>
       expect(screen.getByTestId("a")).toHaveTextContent("failed"),
     );
+  });
+});
+
+describe("query cancellation", () => {
+  it("aborts a superseded search without errors or retries and keeps the current result", async () => {
+    const signals = new Map<string, AbortSignal>();
+    const sent: string[] = [];
+    server.use(
+      http.get(`${API}/api/items/search`, async ({ request }) => {
+        const term = new URL(request.url).searchParams.get("q")!;
+        sent.push(term);
+        signals.set(term, request.signal);
+        if (term === "old") {
+          await new Promise<void>((resolve) =>
+            request.signal.addEventListener("abort", () => resolve(), {
+              once: true,
+            }),
+          );
+        }
+        return HttpResponse.json([hit(1, term)]);
+      }),
+    );
+    function SwitchSearch() {
+      const [term, setTerm] = useState("old");
+      return (
+        <>
+          <button onClick={() => setTerm("current")}>change search</button>
+          <SearchProbe term={term} id="search" />
+        </>
+      );
+    }
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
+    });
+    renderWithProviders(<SwitchSearch />, { client });
+    await waitFor(() => expect(signals.has("old")).toBe(true));
+    await userEvent.click(screen.getByText("change search"));
+    await waitFor(() => expect(signals.get("old")?.aborted).toBe(true));
+    await waitFor(() =>
+      expect(screen.getByTestId("search")).toHaveTextContent("current"),
+    );
+    expect(signals.get("current")?.aborted).toBe(false);
+    expect(screen.getByTestId("search")).not.toHaveTextContent("failed");
+    expect(sent).toEqual(["old", "current"]);
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .every(
+          (q) => q.state.error === null && q.state.fetchFailureCount === 0,
+        ),
+    ).toBe(true);
+  });
+
+  it("keeps a shared search alive while another observer still needs it", async () => {
+    let signal: AbortSignal | undefined;
+    let requests = 0;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.get(`${API}/api/items/search`, async ({ request }) => {
+        requests++;
+        signal = request.signal;
+        await pending;
+        return HttpResponse.json([hit(1, "shared")]);
+      }),
+    );
+    function SharedSearch() {
+      const [first, setFirst] = useState(true);
+      return (
+        <>
+          <button onClick={() => setFirst(false)}>remove first</button>
+          {first && <SearchProbe term="shared" id="first" />}
+          <SearchProbe term="shared" id="second" />
+        </>
+      );
+    }
+    renderWithProviders(<SharedSearch />);
+    try {
+      await waitFor(() => expect(signal).toBeDefined());
+      await userEvent.click(screen.getByText("remove first"));
+      expect(signal?.aborted).toBe(false);
+      await act(() => {
+        release();
+        return pending;
+      });
+      await waitFor(() =>
+        expect(screen.getByTestId("second")).toHaveTextContent("shared"),
+      );
+      expect(requests).toBe(1);
+    } finally {
+      release();
+    }
   });
 });

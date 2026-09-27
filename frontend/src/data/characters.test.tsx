@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -562,5 +564,132 @@ describe("useGuardianCurrentActivity", () => {
         "Activity 2",
       ),
     );
+  });
+});
+
+describe("query cancellation", () => {
+  it("aborts all superseded Guardian reads on rapid switches and keeps the current Guardian", async () => {
+    const signals = new Map<string, AbortSignal>();
+    const sent: string[] = [];
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, () =>
+        HttpResponse.json(["char-a", "char-b", "char-c"].map(apiCharacter)),
+      ),
+    );
+    for (const resource of [
+      "equipment",
+      "activity-history",
+      "current-activity",
+    ]) {
+      server.use(
+        http.get(
+          `${API}/api/characters/:type/:id/:characterId/${resource}`,
+          async ({ request, params }) => {
+            const id = String(params.characterId);
+            const key = `${id}/${resource}`;
+            sent.push(key);
+            signals.set(key, request.signal);
+            if (id !== "char-c") {
+              await new Promise<void>((resolve) =>
+                request.signal.addEventListener("abort", () => resolve(), {
+                  once: true,
+                }),
+              );
+            }
+            return HttpResponse.json({
+              characterId: id,
+              state: "ready",
+              fetchedAt: "2026-09-15T00:00:00Z",
+              items: [],
+              activities: [],
+              activityName: id,
+            });
+          },
+        ),
+      );
+    }
+    function SwitchingGuardian() {
+      const { activeCharacter, setActiveCharacter } = useCharacters();
+      if (!activeCharacter) return null;
+      return (
+        <>
+          <button onClick={() => setActiveCharacter("char-b")}>
+            second Guardian
+          </button>
+          <button onClick={() => setActiveCharacter("char-c")}>
+            third Guardian
+          </button>
+          <EquipmentProbe characterId={activeCharacter.id} />
+          <ActivityProbe characterId={activeCharacter.id} />
+          <CurrentActivityProbe characterId={activeCharacter.id} />
+        </>
+      );
+    }
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
+    });
+    renderWithProviders(<SwitchingGuardian />, { client });
+    await waitFor(() => expect(signals.size).toBe(3));
+    await userEvent.click(screen.getByText("second Guardian"));
+    await waitFor(() => expect(signals.size).toBe(6));
+    await userEvent.click(screen.getByText("third Guardian"));
+    await waitFor(() =>
+      expect(screen.getByTestId("equipment")).toHaveTextContent("char-c"),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("activity-history")).toHaveTextContent(
+        "char-c",
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("current-activity")).toHaveTextContent(
+        "char-c",
+      ),
+    );
+    expect(signals.size).toBe(9);
+    for (const [key, signal] of signals)
+      expect(signal.aborted).toBe(!key.startsWith("char-c/"));
+    expect(sent).toHaveLength(9);
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .every(
+          (q) => q.state.error === null && q.state.fetchFailureCount === 0,
+        ),
+    ).toBe(true);
+  });
+
+  it("keeps the roster alive for CharacterProvider and aborts when its final observer unmounts", async () => {
+    let signal: AbortSignal | undefined;
+    let requests = 0;
+    server.use(
+      http.get(`${API}/api/characters/:type/:id`, async ({ request }) => {
+        requests++;
+        signal = request.signal;
+        await new Promise<void>((resolve) =>
+          request.signal.addEventListener("abort", () => resolve(), {
+            once: true,
+          }),
+        );
+        return HttpResponse.json([apiCharacter("char-a")]);
+      }),
+    );
+    function ToggleRoster() {
+      const [shown, setShown] = useState(true);
+      return (
+        <>
+          <button onClick={() => setShown(false)}>remove roster probe</button>
+          {shown && <RosterProbe />}
+        </>
+      );
+    }
+    const view = renderWithProviders(<ToggleRoster />);
+    await waitFor(() => expect(signal).toBeDefined());
+    await userEvent.click(screen.getByText("remove roster probe"));
+    expect(signal?.aborted).toBe(false);
+    view.unmount();
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+    expect(requests).toBe(1);
   });
 });

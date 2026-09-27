@@ -287,6 +287,49 @@ function sameMembership(
   );
 }
 
+// RequestInit null deliberately clears an input Request's signal (fetch semantics).
+function requestSignal(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): AbortSignal | null {
+  return init?.signal !== undefined
+    ? init.signal
+    : typeof Request !== "undefined" && input instanceof Request
+      ? input.signal
+      : null;
+}
+
+// Stop waiting without canceling work which may own rotating session credentials.
+// AbortSignal reasons may be arbitrary values; preserve the caller's exact reason.
+/* oxlint-disable typescript/prefer-promise-reject-errors */
+export function waitForRequest<T>(
+  work: Promise<T>,
+  signal?: AbortSignal | null,
+): Promise<T> {
+  if (!signal) return work;
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => {
+      signal.removeEventListener("abort", abort);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        if (signal.aborted) reject(signal.reason);
+        else resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", abort);
+        reject(signal.aborted ? signal.reason : error);
+      },
+    );
+    if (signal.aborted) abort();
+  });
+}
+
+/* oxlint-enable typescript/prefer-promise-reject-errors */
+
 async function responseJson(response: Response): Promise<unknown> {
   try {
     return (await response.clone().json()) as unknown;
@@ -493,16 +536,22 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     input: RequestInfo | URL,
     init?: RequestInit,
   ): Promise<Response> {
+    const signal = requestSignal(input, init);
+    signal?.throwIfAborted();
     if (isBungieReconnectRequest(input, init)) {
       const captured = this.envelope;
       // Reconnect consumes the transaction cookie. Exclude a new start until
       // its response arrives; any app-session refresh must reuse this lock.
-      return this.runCoordinated("authorization", () => {
-        this.assertRequestAuthority(captured);
-        return this.performRequest(input, init, true);
-      });
+      return waitForRequest(
+        this.runCoordinated("authorization", () => {
+          signal?.throwIfAborted();
+          this.assertRequestAuthority(captured);
+          return this.performRequest(input, init, true);
+        }),
+        signal,
+      );
     }
-    return this.performRequest(input, init);
+    return waitForRequest(this.performRequest(input, init), signal);
   }
 
   private async performRequest(
@@ -510,6 +559,8 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     init?: RequestInit,
     lifecycleLockHeld = false,
   ): Promise<Response> {
+    const signal = requestSignal(input, init);
+    signal?.throwIfAborted();
     const captured = this.envelope;
     this.adoptPersisted();
     if (
@@ -541,7 +592,9 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
       init,
       accessToken,
     );
+    signal?.throwIfAborted();
     const requiresBungieReconnect = await isBungieReauthorization(response);
+    signal?.throwIfAborted();
     this.assertRequestAuthority(captured);
     if (
       response.status !== 401 ||
@@ -553,6 +606,7 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     const capturedUser = captured.projection.user;
 
     const refresh = async () => {
+      signal?.throwIfAborted();
       this.adoptPersisted();
 
       if (this.generation !== generation) {
@@ -563,6 +617,7 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
           nextInput,
           init,
           response,
+          signal,
         );
       }
 
@@ -579,6 +634,7 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
             nextInput,
             init,
             response,
+            signal,
           );
         }
         throw new BrowserSessionError(
@@ -598,6 +654,7 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
           nextInput,
           init,
           response,
+          signal,
         );
       }
 
@@ -621,6 +678,7 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
           nextInput,
           init,
           response,
+          signal,
         );
       }
       if (!replacement) {
@@ -647,13 +705,17 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
         undefined,
         captured.lineage,
       );
+      // Rotation and durable publication above must finish even if its initiator left.
+      signal?.throwIfAborted();
       const retried = await this.dependencies.transport.request(
         nextInput(),
         init,
         replacement.token,
       );
+      signal?.throwIfAborted();
       const retryRequiresBungieReconnect =
         await isBungieReauthorization(retried);
+      signal?.throwIfAborted();
       this.assertRequestAuthority(captured);
       if (retried.status === 401 && !retryRequiresBungieReconnect) {
         this.endGeneration(refreshedGeneration);
@@ -926,7 +988,9 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
     nextInput: () => RequestInfo | URL,
     init: RequestInit | undefined,
     originalResponse: Response,
+    signal: AbortSignal | null,
   ): Promise<Response> {
+    signal?.throwIfAborted();
     const projection = this.envelope.projection;
     if (
       this.pendingEnds > 0 ||
@@ -945,7 +1009,9 @@ class BrowserSessionClientImplementation implements BrowserSessionClient {
       init,
       projection.accessToken,
     );
+    signal?.throwIfAborted();
     const requiresBungieReconnect = await isBungieReauthorization(response);
+    signal?.throwIfAborted();
     this.assertRequestAuthority(captured);
     if (response.status === 401 && !requiresBungieReconnect) {
       this.endGeneration(generation);

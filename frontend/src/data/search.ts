@@ -64,9 +64,10 @@ const NO_RESULTS: SearchResult[] = [];
 export function useItemSearch(term: string) {
   const { data, isLoading, isError } = useQuery({
     queryKey: searchKey(term),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiFetch<APISearchResult[]>(
         `/api/items/search?q=${encodeURIComponent(term)}&limit=20`,
+        { signal },
       ),
     enabled: term.length >= MIN_SEARCH_LENGTH,
     staleTime: 30_000,
