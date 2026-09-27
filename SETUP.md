@@ -246,6 +246,13 @@ aligned; documentation intentionally does not cache their versions. Maintainers
 changing a pin should follow the authored Docker agent guide and run the
 repository policy suite before rebuilding with `--pull --no-cache`.
 
+A tag plus digest selects the exact image contents adopted in review. Daily
+Dependabot checks still propose newer releases, so these pins support frequent
+updates. To review a rebuild published under the same tag, run
+`docker buildx imagetools inspect <image:tag>` and use the multi-platform index
+digest when updating the pin. Base-image pins do not freeze packages downloaded
+by `apk` during a build or guarantee identical application build output.
+
 ## 4. Run Individual Services
 
 Use this path when you are actively editing one service and want faster feedback.
