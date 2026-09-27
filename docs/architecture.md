@@ -242,6 +242,16 @@ load; the membership-independent tree requires the Manifest fence and active loa
 Completed, failed, and abandoned loads leave the in-flight registry; ordinary
 cache hits retain their existing TTL and projections.
 
+Records separately coalesces overlapping component-900 cache misses for
+Catalysts, Crafting, and Seals by membership type/ID, refresh generation, and
+Bungie credential fingerprint. This raw profile data is independent of the
+Manifest, so a Manifest swap neither splits the shared read nor retires its
+result. Callers cancel independently; the last waiter cancels the shared load,
+and a three-minute context deadline releases waiters and prevents late cache
+publication. Publication requires the current membership generation and an
+active load. Finished or abandoned loads leave the registry; cache TTL and the
+original fetch timestamp are preserved.
+
 ## Collection and Acquisition Model
 
 An inventory item can be linked from several manifest collectibles. Collection

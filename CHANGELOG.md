@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.5] - 2026-09-27
+
+### Changed
+
+- Share concurrent cold Records profile reads across Catalysts, Crafting, and
+  Seals. Refresh and credential changes isolate new work, caller cancellation
+  leaves other waiting requests intact, and Manifest changes preserve reusable
+  profile data.
+
 ## [1.18.4] - 2026-09-27
 
 ### Changed
@@ -1596,7 +1605,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.4...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.5...HEAD
+[1.18.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.4...v1.18.5
 [1.18.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.3...v1.18.4
 [1.18.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.2...v1.18.3
 [1.18.2]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.1...v1.18.2
