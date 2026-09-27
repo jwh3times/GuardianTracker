@@ -231,6 +231,17 @@ into the cached analysis. `CollectionsHandler` only binds, authenticates,
 resolves the Bungie token, maps errors, and serializes; it holds none of that
 policy itself. See [ADR 0018](./adr/0018-own-complete-membership-collections.md).
 
+The membership-analysis owner coalesces concurrent cold reads and Manifest-only
+rebuilds. Callers share work only for the same membership type/ID, refresh and
+Manifest generations, and Bungie credential fingerprint. Each caller can cancel
+independently; the last departing caller cancels the shared load. Its separate
+three-minute context deadline releases waiting callers and prevents late cache
+or tree publication, although a context-free Manifest read may finish later.
+Analysis publication still requires both generation fences and an active shared
+load; the membership-independent tree requires the Manifest fence and active load.
+Completed, failed, and abandoned loads leave the in-flight registry; ordinary
+cache hits retain their existing TTL and projections.
+
 ## Collection and Acquisition Model
 
 An inventory item can be linked from several manifest collectibles. Collection
