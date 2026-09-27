@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"guardian-tracker/api-service/cache"
@@ -139,12 +140,16 @@ type Service struct {
 	// this one retires one membership's raw profile records when the user asks
 	// for fresh data (ADR 0018).
 	refresh *membershipstate.Publication
+
+	profileMu      sync.Mutex
+	profileFlights map[profileFlightKey]*profileFlight
+	profileTimeout time.Duration
 }
 
 // NewService creates a new records Service.
 // manifest may be nil — all methods return empty slices gracefully when it is.
 func NewService(b *bungie.Client, m ManifestRepo, c cache.Cache, ttl time.Duration) *Service {
-	s := &Service{bungie: b, manifest: m, cache: c, ttl: ttl}
+	s := &Service{bungie: b, manifest: m, cache: c, ttl: ttl, profileTimeout: profileLoadTimeout}
 	s.publication = manifeststate.New(s.invalidateManifestProjections)
 	// The callback runs inside the publication's critical section, so it only
 	// deletes the entry and never calls back into the publication.
@@ -408,24 +413,6 @@ func (s *Service) InvalidateCache(membershipType int, membershipID string) {
 // Bungie profile data, which a manifest swap does not invalidate.
 func (s *Service) OnVersionChanged(version string) error {
 	return s.publication.Advance(version)
-}
-
-// getProfileRecords fetches and caches the profile records component (900) for a user.
-// The returned time is when the data was actually fetched from Bungie.
-func (s *Service) getProfileRecords(ctx context.Context, membershipType int, membershipID, bungieToken string) (*bungie.RecordsProfileResponse, time.Time, error) {
-	r, err := membershipstate.Load(ctx, s.refresh, s.cache, membershipType, membershipID,
-		recordsCacheKey(membershipType, membershipID), s.ttl,
-		func() (*cachedRecords, error) {
-			resp, err := s.bungie.GetRecords(ctx, membershipType, membershipID, bungieToken)
-			if err != nil {
-				return nil, err
-			}
-			return &cachedRecords{resp: resp, fetchedAt: time.Now().UTC()}, nil
-		})
-	if err != nil {
-		return nil, time.Time{}, err
-	}
-	return r.resp, r.fetchedAt, nil
 }
 
 // coreSettingsCacheKey holds Bungie's Destiny 2 core settings. Not
