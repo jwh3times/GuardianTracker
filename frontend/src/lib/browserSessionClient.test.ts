@@ -1654,3 +1654,103 @@ describe("Bungie reconnect transaction-cookie coordination", () => {
     expect(transport.send).not.toHaveBeenCalled();
   });
 });
+
+describe("request cancellation", () => {
+  it("honors Request signals and explicit null or replacement overrides", async () => {
+    const { client, transport } = setup(authenticatedPersistence());
+    const controller = new AbortController();
+    const reason = new Error("departed");
+    const input = new Request("https://example.test/api/items", {
+      signal: controller.signal,
+    });
+    controller.abort(reason);
+    await expect(client.request(input)).rejects.toBe(reason);
+    await expect(client.request(input, { signal: undefined })).rejects.toBe(
+      reason,
+    );
+    expect(transport.send).not.toHaveBeenCalled();
+    await expect(
+      client.request(input, { signal: null }),
+    ).resolves.toHaveProperty("status", 200);
+    await expect(
+      client.request(input, { signal: new AbortController().signal }),
+    ).resolves.toHaveProperty("status", 200);
+  });
+  it.each(["leader", "follower"])(
+    "lets a %s leave serialized refresh without losing the replacement",
+    async (leaving) => {
+      const { client, transport, persistence, coordinator } = setup(
+        authenticatedPersistence(),
+      );
+      const rotation = deferred<Response>();
+      transport.rotate.mockReturnValue(rotation.promise);
+      transport.send.mockImplementation((_input, _init, token) =>
+        Promise.resolve(response(token === "token-1" ? 401 : 200)),
+      );
+      const a = new AbortController();
+      const b = new AbortController();
+      const leader = client.request("/leader", { signal: a.signal });
+      await vi.waitFor(() => expect(transport.rotate).toHaveBeenCalledTimes(1));
+      const follower = client.request("/follower", { signal: b.signal });
+      await vi.waitFor(() => expect(transport.send).toHaveBeenCalledTimes(2));
+      const reason = new Error("query abandoned");
+      const rejected = (leaving === "leader" ? leader : follower).catch(
+        (error: unknown) => error,
+      );
+      (leaving === "leader" ? a : b).abort(reason);
+      await expect(rejected).resolves.toBe(reason);
+      expect(transport.send).toHaveBeenCalledTimes(2);
+      rotation.resolve(replacementResponse("replacement"));
+      await expect(
+        leaving === "leader" ? follower : leader,
+      ).resolves.toHaveProperty("status", 200);
+      await coordinator.runExclusive(() => Promise.resolve());
+      expect(transport.rotate).toHaveBeenCalledTimes(1);
+      expect(transport.send).toHaveBeenCalledTimes(3);
+      expect(transport.send.mock.calls[2][0]).toBe(
+        leaving === "leader" ? "/follower" : "/leader",
+      );
+      expect(persistence.raw).toContain('"accessToken":"replacement"');
+    },
+  );
+  it("skips rotation when canceled behind a lifecycle lock", async () => {
+    const { client, transport, coordinator } = setup(
+      authenticatedPersistence(),
+    );
+    const hold = deferred<void>();
+    const occupied = coordinator.runExclusive(() => hold.promise);
+    transport.send.mockResolvedValue(response(401));
+    const controller = new AbortController();
+    const pending = client.request("/items", { signal: controller.signal });
+    await vi.waitFor(() => expect(transport.send).toHaveBeenCalledTimes(1));
+    const reason = new Error("left queue");
+    const rejected = pending.catch((error: unknown) => error);
+    controller.abort(reason);
+    await expect(rejected).resolves.toBe(reason);
+    hold.resolve();
+    await occupied;
+    await coordinator.runExclusive(() => Promise.resolve());
+    expect(transport.rotate).not.toHaveBeenCalled();
+  });
+});
+
+it("stops waiting for 401 inspection without initiating refresh or clearing session", async () => {
+  const { client, transport, coordinator } = setup(authenticatedPersistence());
+  const body = deferred<unknown>();
+  const initial = response(401);
+  const parsed = response(401);
+  const parse = vi.spyOn(parsed, "json").mockReturnValue(body.promise);
+  vi.spyOn(initial, "clone").mockReturnValue(parsed);
+  transport.send.mockResolvedValue(initial);
+  const controller = new AbortController();
+  const pending = client.request("/items", { signal: controller.signal });
+  await vi.waitFor(() => expect(parse).toHaveBeenCalled());
+  const reason = new Error("left parsing");
+  const rejected = pending.catch((error: unknown) => error);
+  controller.abort(reason);
+  await expect(rejected).resolves.toBe(reason);
+  body.resolve({});
+  await coordinator.runExclusive(() => Promise.resolve());
+  expect(transport.rotate).not.toHaveBeenCalled();
+  expect(client.getSnapshot().status).toBe("authenticated");
+});

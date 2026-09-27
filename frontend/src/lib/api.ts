@@ -3,7 +3,7 @@ import {
   browserSessionClient,
   BROWSER_SESSION_API_URL,
 } from "./browserSessionBrowser";
-import { BrowserSessionError } from "./browserSessionClient";
+import { BrowserSessionError, waitForRequest } from "./browserSessionClient";
 import {
   currentReturnPath,
   markBungieReconnect,
@@ -44,11 +44,19 @@ async function responseErrorBody(res: Response): Promise<APIErrorBody> {
   return (await res.json().catch(() => ({}))) as APIErrorBody;
 }
 
-async function redirectForBungieReconnect(res: Response): Promise<void> {
+async function redirectForBungieReconnect(
+  res: Response,
+  signal?: AbortSignal | null,
+): Promise<void> {
+  signal?.throwIfAborted();
   if (res.status !== 401) return;
 
   const snapshot = browserSessionClient.getSnapshot();
-  const errorBody = await responseErrorBody(res.clone());
+  const errorBody = await waitForRequest(
+    responseErrorBody(res.clone()),
+    signal,
+  );
+  signal?.throwIfAborted();
   if (errorBody.code !== "BUNGIE_REAUTH_REQUIRED") return;
   // Parsing yields; a response must not route a projection adopted meanwhile.
   if (browserSessionClient.getSnapshot() !== snapshot) {
@@ -71,6 +79,8 @@ export async function apiFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  const signal = init?.signal;
+  signal?.throwIfAborted();
   const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type"))
     headers.set("Content-Type", "application/json");
@@ -81,15 +91,18 @@ export async function apiFetch<T>(
       headers,
     });
   } catch (error) {
+    signal?.throwIfAborted();
     if (error instanceof BrowserSessionError) {
       throw new ApiError(error.message, error.status ?? 503, error.code);
     }
     throw error;
   }
-  await redirectForBungieReconnect(res);
+  await redirectForBungieReconnect(res, signal);
+  signal?.throwIfAborted();
 
   if (!res.ok) {
-    const errorBody = await responseErrorBody(res);
+    const errorBody = await waitForRequest(responseErrorBody(res), signal);
+    signal?.throwIfAborted();
     throw new ApiError(
       errorBody.error || `API error ${res.status}`,
       res.status,
@@ -98,7 +111,8 @@ export async function apiFetch<T>(
     );
   }
 
-  const text = await res.text();
+  const text = await waitForRequest(res.text(), signal);
+  signal?.throwIfAborted();
   return (text ? JSON.parse(text) : undefined) as T;
 }
 

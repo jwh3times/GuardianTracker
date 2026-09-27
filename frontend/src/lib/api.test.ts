@@ -78,7 +78,7 @@ describe("apiFetch response adapter", () => {
     });
     const response = new Response(null, { status: 401 });
     const parsed = new Response(null, { status: 401 });
-    vi.spyOn(parsed, "json").mockReturnValue(pendingBody);
+    const parse = vi.spyOn(parsed, "json").mockReturnValue(pendingBody);
     vi.spyOn(response, "clone").mockReturnValue(parsed);
     vi.spyOn(browserSessionClient, "request").mockResolvedValue(response);
     const original = { status: "authenticated" as const, user: sampleUser };
@@ -86,7 +86,7 @@ describe("apiFetch response adapter", () => {
       .spyOn(browserSessionClient, "getSnapshot")
       .mockReturnValue(original);
     const request = apiFetch("/api/thing");
-    await vi.waitFor(() => expect(parsed.json).toHaveBeenCalled());
+    await vi.waitFor(() => expect(parse).toHaveBeenCalled());
     snapshot.mockReturnValue({ status: "anonymous" });
     finishParsing({
       error: "Reconnect Bungie",
@@ -94,5 +94,44 @@ describe("apiFetch response adapter", () => {
     });
     await expect(request).rejects.toMatchObject({ code: "SESSION_CHANGED" });
     expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
+  });
+  it.each([200, 403, 401])(
+    "preserves abort reason during delayed %s body parsing without marking reconnect",
+    async (status) => {
+      let finish!: (body: never) => void;
+      const pendingBody = new Promise<never>((resolve) => {
+        finish = resolve;
+      });
+      const result = new Response(null, { status });
+      const parsed = status === 401 ? result.clone() : result;
+      const parse =
+        status === 200
+          ? vi.spyOn(parsed, "text").mockReturnValue(pendingBody)
+          : vi.spyOn(parsed, "json").mockReturnValue(pendingBody);
+      if (status === 401) vi.spyOn(result, "clone").mockReturnValue(parsed);
+      vi.spyOn(browserSessionClient, "request").mockResolvedValue(result);
+      const controller = new AbortController();
+      const pending = apiFetch("/api/thing", { signal: controller.signal });
+      await vi.waitFor(() => expect(parse).toHaveBeenCalled());
+      const reason = new Error("query departed");
+      const rejected = pending.catch((error: unknown) => error);
+      controller.abort(reason);
+      await expect(rejected).resolves.toBe(reason);
+      finish(
+        (status === 200 ? "{}" : { code: "BUNGIE_REAUTH_REQUIRED" }) as never,
+      );
+      await Promise.resolve();
+      expect(sessionStorage.getItem("guardian_bungie_reconnect")).toBeNull();
+    },
+  );
+  it("preserves even a session-error abort reason and skips pre-aborted transport", async () => {
+    const request = vi.spyOn(browserSessionClient, "request");
+    const controller = new AbortController();
+    const reason = new BrowserSessionError("SESSION_CHANGED", "caller reason");
+    controller.abort(reason);
+    await expect(
+      apiFetch("/api/thing", { signal: controller.signal }),
+    ).rejects.toBe(reason);
+    expect(request).not.toHaveBeenCalled();
   });
 });

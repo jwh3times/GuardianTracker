@@ -183,9 +183,10 @@ export function useCharacterRoster() {
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: charactersKey(membershipType, membershipId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiFetch<APICharacter[]>(
         `/api/characters/${membershipType}/${membershipId}`,
+        { signal },
       ),
     enabled: membershipType != null && !!membershipId,
     select: toCharacters,
@@ -216,9 +217,10 @@ export function useGuardianEquipment(characterId: string | undefined) {
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: equipmentKey(membershipType, membershipId, characterId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiFetch<APIEquipmentDetail>(
         `/api/characters/${membershipType}/${membershipId}/${characterId}/equipment`,
+        { signal },
       ),
     enabled: membershipType != null && !!membershipId && characterId != null,
     select: toEquipment,
@@ -249,9 +251,10 @@ export function useGuardianActivityHistory(characterId: string | undefined) {
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: activityHistoryKey(membershipType, membershipId, characterId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiFetch<APIActivityHistory>(
         `/api/characters/${membershipType}/${membershipId}/${characterId}/activity-history`,
+        { signal },
       ),
     enabled: membershipType != null && !!membershipId && characterId != null,
     select: toActivityHistory,
@@ -283,9 +286,10 @@ export function useGuardianCurrentActivity(characterId: string | undefined) {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: currentActivityKey(membershipType, membershipId, characterId),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiFetch<APICurrentActivity>(
         `/api/characters/${membershipType}/${membershipId}/${characterId}/current-activity`,
+        { signal },
       ),
     enabled: membershipType != null && !!membershipId && characterId != null,
     select: toCurrentActivity,

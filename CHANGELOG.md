@@ -14,6 +14,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.6] - 2026-09-27
+
+### Changed
+
+- Cancel unused Search and Guardian requests when searches or character selections
+  change. Other consumers retain shared reads, and canceling a read during session
+  refresh preserves the refresh rotation and replacement session for other callers.
+
 ## [1.18.5] - 2026-09-27
 
 ### Changed
@@ -1605,7 +1613,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.5...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.6...HEAD
+[1.18.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.5...v1.18.6
 [1.18.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.4...v1.18.5
 [1.18.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.3...v1.18.4
 [1.18.3]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.2...v1.18.3
