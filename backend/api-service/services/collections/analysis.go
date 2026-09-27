@@ -2,6 +2,7 @@ package collections
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -66,6 +67,10 @@ type MembershipAnalysis struct {
 
 	treeMu     sync.RWMutex
 	treeStruct *TreeStructure // user-independent; rebuilt after a manifest swap
+
+	flightsMu   sync.Mutex
+	flights     map[analysisFlightKey]*analysisFlight
+	loadTimeout time.Duration
 }
 
 func NewMembershipAnalysis(
@@ -83,6 +88,7 @@ func NewMembershipAnalysis(
 		nodes:           nodes,
 		cache:           c,
 		cacheTTL:        cacheTTL,
+		loadTimeout:     analysisLoadTimeout,
 	}
 	// Both callbacks run inside their publication's critical section, so each
 	// only drops state and never calls back into a publication.
@@ -178,37 +184,54 @@ func itemHashString(itemHash uint32) string {
 }
 
 func (m *MembershipAnalysis) getAnalysis(ctx context.Context, membershipType int, membershipID, accessToken string) (*analysis, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	cacheKey := analysisCacheKey(membershipType, membershipID)
 
 	// Captured before the cache read, not just before the write: an entry a
 	// concurrent refresh is about to clear is still coherent to serve, but
 	// anything loaded from here on belongs to this refresh generation.
 	sinceRefresh := m.refresh.Begin(membershipType, membershipID)
+	sinceSwap := m.publication.Begin()
 
 	if cached, found := m.cache.Get(cacheKey); found {
+		if a, ok := cached.(*analysis); ok && a.builtUnder == sinceSwap {
+			// A current cache hit does no shared-work allocation or TTL update.
+			return a, nil
+		}
+	}
+	return m.sharedAnalysis(ctx, analysisFlightKey{
+		membershipType: membershipType, membershipID: membershipID,
+		manifest: sinceSwap, refresh: sinceRefresh,
+		credential: sha256.Sum256([]byte(accessToken)),
+	}, accessToken)
+}
+
+func (m *MembershipAnalysis) loadAnalysis(ctx context.Context, key analysisFlightKey, accessToken string, ifActive func(func())) (*analysis, bool, error) {
+	// Recheck after joining: the previous flight may have filled the cache
+	// between this caller's miss and acquiring the registry lock.
+	if cached, found := m.cache.Get(analysisCacheKey(key.membershipType, key.membershipID)); found {
 		if a, ok := cached.(*analysis); ok {
-			// The manifest-derived half of a cached analysis goes stale on a
-			// manifest swap, but the expensive half — `collected`, a rate-limited
-			// Bungie profile fetch — does not. Rebuild only what the manifest
-			// owns and keep the profile data, so a swap costs a catalog read
-			// instead of a refetch storm across every active user. This is why
-			// `collections:*` is not evicted when the manifest version changes.
-			return m.refreshManifestParts(ctx, cacheKey, a, sinceRefresh)
+			// A swap retires only the manifest-derived half. Keep the expensive
+			// profile read and its fetchedAt while rebuilding its projection.
+			refreshed, err := m.refreshManifestParts(ctx, a, key.manifest, ifActive)
+			return refreshed, err == nil && refreshed != a, err
 		}
 	}
 
 	if err := m.manifestService.EnsureReady(ctx); err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrManifestNotReady, err)
+		return nil, false, fmt.Errorf("%w: %v", ErrManifestNotReady, err)
 	}
 
 	logger := observability.Logger(ctx)
 	logger.LogAttrs(ctx, slog.LevelInfo, "fetching collections",
-		slog.Int("membership_type", membershipType),
-		observability.ID("membership", membershipID),
+		slog.Int("membership_type", key.membershipType),
+		observability.ID("membership", key.membershipID),
 	)
-	profile, err := m.bungieClient.GetProfile(ctx, membershipType, membershipID, accessToken, []int{bungie.ComponentCollectibles})
+	profile, err := m.bungieClient.GetProfile(ctx, key.membershipType, key.membershipID, accessToken, []int{bungie.ComponentCollectibles})
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch profile: %w", err)
+		return nil, false, fmt.Errorf("failed to fetch profile: %w", err)
 	}
 
 	collected := make(map[uint32]bool)
@@ -230,18 +253,16 @@ func (m *MembershipAnalysis) getAnalysis(ctx context.Context, membershipType int
 	}
 	logger.LogAttrs(ctx, slog.LevelInfo, "collection ownership loaded",
 		slog.Int("collected_items", len(collected)),
-		observability.ID("membership", membershipID),
+		observability.ID("membership", key.membershipID),
 	)
 
-	// Captured after the profile fetch and before the first catalog read: the
-	// fence covers the manifest-derived work, and a swap during a slow Bungie
-	// call must not retire an analysis whose manifest half has not started yet.
-	attempt := m.publication.Begin()
-	catalog, tree, err := m.manifestParts(ctx, attempt)
+	// The flight's generation was captured before the profile read. A swap
+	// while that read waits must separate new callers from the old work too.
+	catalog, tree, err := m.manifestParts(ctx, key.manifest, ifActive)
 	if err != nil {
 		// A cold read reports the manifest as unavailable rather than
 		// returning an empty collection as a success.
-		return nil, err
+		return nil, false, err
 	}
 
 	a := &analysis{
@@ -251,10 +272,9 @@ func (m *MembershipAnalysis) getAnalysis(ctx context.Context, membershipType int
 		privacy:    profile.Response.ProfileCollectibles.Privacy,
 		tree:       tree,
 		fetchedAt:  time.Now().UTC(),
-		builtUnder: attempt,
+		builtUnder: key.manifest,
 	}
-	publishAnalysis(attempt, sinceRefresh, func() { m.cache.Set(cacheKey, a, m.cacheTTL) })
-	return a, nil
+	return a, true, nil
 }
 
 // publishAnalysis installs a freshly built analysis only if both fences still
@@ -280,7 +300,7 @@ func publishAnalysis(sinceSwap manifeststate.Attempt, sinceRefresh membershipsta
 // One attempt spans catalog access, presentation-node access, tree
 // construction, and the tree's own publication, so the two halves can never be
 // paired across a manifest swap.
-func (m *MembershipAnalysis) manifestParts(ctx context.Context, attempt manifeststate.Attempt) ([]items.AcquisitionFacts, *TreeStructure, error) {
+func (m *MembershipAnalysis) manifestParts(ctx context.Context, attempt manifeststate.Attempt, ifActive func(func())) ([]items.AcquisitionFacts, *TreeStructure, error) {
 	catalog, err := m.catalog.Catalog(ctx)
 	if err != nil {
 		if errors.Is(err, ErrManifestNotReady) {
@@ -289,7 +309,7 @@ func (m *MembershipAnalysis) manifestParts(ctx context.Context, attempt manifest
 		return nil, nil, fmt.Errorf("collections: item catalog unavailable: %w", err)
 	}
 
-	tree, err := m.treeStructure(attempt, catalog)
+	tree, err := m.treeStructure(attempt, catalog, ifActive)
 	if err != nil {
 		if errors.Is(err, ErrManifestNotReady) {
 			return nil, nil, err
@@ -302,7 +322,7 @@ func (m *MembershipAnalysis) manifestParts(ctx context.Context, attempt manifest
 // treeStructure returns the cached user-independent tree, building it once from
 // the (already-loaded) catalog plus all presentation nodes. A tree built under a
 // retired generation still answers this request but is not left behind.
-func (m *MembershipAnalysis) treeStructure(attempt manifeststate.Attempt, catalog []items.AcquisitionFacts) (*TreeStructure, error) {
+func (m *MembershipAnalysis) treeStructure(attempt manifeststate.Attempt, catalog []items.AcquisitionFacts, ifActive func(func())) (*TreeStructure, error) {
 	m.treeMu.RLock()
 	ts := m.treeStruct
 	m.treeMu.RUnlock()
@@ -314,7 +334,7 @@ func (m *MembershipAnalysis) treeStructure(attempt manifeststate.Attempt, catalo
 		return nil, err
 	}
 	ts = buildTreeStructure(nodes, catalog)
-	attempt.Publish(func() { m.storeTree(ts) })
+	attempt.Publish(func() { ifActive(func() { m.storeTree(ts) }) })
 	return ts, nil
 }
 
@@ -392,22 +412,21 @@ func (m *MembershipAnalysis) OnVersionChanged(version string) error {
 }
 
 // refreshManifestParts returns an analysis whose manifest-derived fields belong
-// to the current manifest generation, reusing the caller's profile data, and
-// re-caches it when it had to rebuild. It returns `a` unchanged when the
-// generation it was built under is still current, so the common path allocates
-// nothing.
+// to the flight's manifest generation, reusing the caller's profile data. The
+// flight publishes a replacement only while both generation fences and its
+// active-waiter guard allow it. It returns `a` unchanged when no rebuild is
+// needed, so the caller must not refresh the existing cache entry's TTL.
 //
 // It never mutates `a`: concurrent requests share that pointer without a lock,
 // so a replacement is built and cached in its place.
-func (m *MembershipAnalysis) refreshManifestParts(ctx context.Context, cacheKey string, a *analysis, sinceRefresh membershipstate.Attempt) (*analysis, error) {
+func (m *MembershipAnalysis) refreshManifestParts(ctx context.Context, a *analysis, attempt manifeststate.Attempt, ifActive func(func())) (*analysis, error) {
 	// One attempt covers the staleness question and everything the answer
 	// causes, so a swap landing mid-rebuild cannot leave the replacement behind.
-	attempt := m.publication.Begin()
-	if a.builtUnder.Current() {
+	if a.builtUnder == attempt {
 		return a, nil
 	}
 
-	catalog, tree, err := m.manifestParts(ctx, attempt)
+	catalog, tree, err := m.manifestParts(ctx, attempt, ifActive)
 	if err != nil {
 		if errors.Is(err, ErrManifestNotReady) {
 			// Mid-swap. Serving the previous manifest's labels for one more
@@ -427,6 +446,5 @@ func (m *MembershipAnalysis) refreshManifestParts(ctx context.Context, cacheKey 
 		fetchedAt:  a.fetchedAt,
 		builtUnder: attempt,
 	}
-	publishAnalysis(attempt, sinceRefresh, func() { m.cache.Set(cacheKey, refreshed, m.cacheTTL) })
 	return refreshed, nil
 }

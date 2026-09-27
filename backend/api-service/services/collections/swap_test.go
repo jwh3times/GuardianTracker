@@ -51,7 +51,7 @@ func TestRefreshManifestParts_RebuildsManifestHalfKeepsProfileHalf(t *testing.T)
 	swapped(t, m, "v2")
 
 	key := analysisCacheKey(3, "member-1")
-	got, err := m.refreshManifestParts(context.Background(), key, stale, m.refresh.Begin(3, "member-1"))
+	got, err := m.getAnalysis(context.Background(), 3, "member-1", "token")
 	if err != nil {
 		t.Fatalf("refreshManifestParts: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestRefreshManifestParts_CurrentGenerationIsANoOp(t *testing.T) {
 	m := newAnalysis(t, catalog, &fakeNodes{nodes: fixtureNodes()})
 	fresh := m.cached(3, "member-1", &analysis{collected: map[uint32]bool{}})
 
-	got, err := m.refreshManifestParts(context.Background(), analysisCacheKey(3, "member-1"), fresh, m.refresh.Begin(3, "member-1"))
+	got, err := m.getAnalysis(context.Background(), 3, "member-1", "token")
 	if err != nil {
 		t.Fatalf("refreshManifestParts: %v", err)
 	}
@@ -117,8 +117,8 @@ func TestRefreshManifestParts_UnstampedAnalysisRebuilds(t *testing.T) {
 	catalog := &fakeCatalog{facts: fixtureCatalog()}
 	m := newAnalysis(t, catalog, &fakeNodes{nodes: fixtureNodes()})
 
-	got, err := m.refreshManifestParts(context.Background(), analysisCacheKey(3, "member-1"),
-		&analysis{collected: map[uint32]bool{}}, m.refresh.Begin(3, "member-1"))
+	m.cache.Set(analysisCacheKey(3, "member-1"), &analysis{collected: map[uint32]bool{}}, time.Hour)
+	got, err := m.getAnalysis(context.Background(), 3, "member-1", "token")
 	if err != nil {
 		t.Fatalf("refreshManifestParts: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestRefreshManifestParts_ManifestNotReadyServesStale(t *testing.T) {
 	stale := m.cached(3, "member-1", &analysis{collected: map[uint32]bool{1000: true}})
 	swapped(t, m, "v2")
 
-	got, err := m.refreshManifestParts(context.Background(), analysisCacheKey(3, "member-1"), stale, m.refresh.Begin(3, "member-1"))
+	got, err := m.getAnalysis(context.Background(), 3, "member-1", "token")
 	if err != nil {
 		t.Fatalf("a mid-swap refresh must not fail the request: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestRefreshManifestParts_RetiredGenerationIsNotCached(t *testing.T) {
 	catalog.onRead = func() { swapped(t, m, "v3") } // a second swap, mid-rebuild
 
 	key := analysisCacheKey(3, "member-1")
-	got, err := m.refreshManifestParts(context.Background(), key, stale, m.refresh.Begin(3, "member-1"))
+	got, err := m.getAnalysis(context.Background(), 3, "member-1", "token")
 	if err != nil {
 		t.Fatalf("refreshManifestParts: %v", err)
 	}
@@ -198,11 +198,12 @@ func TestTreeStructure_SharedUntilTheNextSwap(t *testing.T) {
 	nodes := &fakeNodes{nodes: fixtureNodes()}
 	m := newAnalysis(t, &fakeCatalog{facts: catalog}, nodes)
 
-	first, err := m.treeStructure(m.publication.Begin(), catalog)
+	commit := func(f func()) { f() }
+	first, err := m.treeStructure(m.publication.Begin(), catalog, commit)
 	if err != nil {
 		t.Fatalf("treeStructure: %v", err)
 	}
-	second, err := m.treeStructure(m.publication.Begin(), catalog)
+	second, err := m.treeStructure(m.publication.Begin(), catalog, commit)
 	if err != nil {
 		t.Fatalf("treeStructure: %v", err)
 	}
@@ -211,7 +212,7 @@ func TestTreeStructure_SharedUntilTheNextSwap(t *testing.T) {
 	}
 
 	swapped(t, m, "v2")
-	third, err := m.treeStructure(m.publication.Begin(), catalog)
+	third, err := m.treeStructure(m.publication.Begin(), catalog, commit)
 	if err != nil {
 		t.Fatalf("treeStructure: %v", err)
 	}
