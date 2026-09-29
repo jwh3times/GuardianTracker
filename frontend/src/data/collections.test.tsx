@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -227,6 +228,90 @@ describe("membership refresh", () => {
     // A second request is the only thing that proves the key.
     await waitFor(() => expect(gets).toBe(2));
   });
+});
+
+describe("query cancellation", () => {
+  it("aborts a superseded refresh refetch and settles on the latest one", async () => {
+    const signals: AbortSignal[] = [];
+    server.use(
+      http.get(`${API}/api/collections/:type/:id`, async ({ request }) => {
+        signals.push(request.signal);
+        const n = signals.length;
+        if (n === 2) {
+          await new Promise<void>((resolve) =>
+            request.signal.addEventListener("abort", () => resolve(), {
+              once: true,
+            }),
+          );
+        }
+        return HttpResponse.json({
+          ...collectionsPayload(),
+          fetchedAt: `v${n}`,
+        });
+      }),
+      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
+        HttpResponse.json({ success: true, message: "ok" }),
+      ),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
+    });
+
+    renderWithProviders(
+      <>
+        <FullProbe />
+        <RefreshProbe />
+      </>,
+      { client },
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("full")).toHaveTextContent("v1"),
+    );
+
+    await userEvent.click(screen.getByText("refresh"));
+    await waitFor(() => expect(signals).toHaveLength(2));
+    await userEvent.click(screen.getByText("refresh"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("full")).toHaveTextContent("v3"),
+    );
+    expect(signals.map((s) => s.aborted)).toEqual([false, true, false]);
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .every(
+          (q) => q.state.error === null && q.state.fetchFailureCount === 0,
+        ),
+    ).toBe(true);
+  });
+
+  it.each([
+    ["counts-only", () => <SummaryProbe />],
+    ["full", () => <FullProbe />],
+  ])(
+    "aborts the %s read when its final observer unmounts",
+    async (_, probe) => {
+      let signal: AbortSignal | undefined;
+      server.use(
+        http.get(`${API}/api/collections/:type/:id`, async ({ request }) => {
+          signal = request.signal;
+          await new Promise<void>((resolve) =>
+            request.signal.addEventListener("abort", () => resolve(), {
+              once: true,
+            }),
+          );
+          return HttpResponse.json(collectionsPayload());
+        }),
+      );
+
+      const view = renderWithProviders(probe());
+      await waitFor(() => expect(signal).toBeDefined());
+      expect(signal?.aborted).toBe(false);
+      view.unmount();
+      await waitFor(() => expect(signal?.aborted).toBe(true));
+    },
+  );
 });
 
 /** The shared fixture; this module owns transport, not payload shape. */

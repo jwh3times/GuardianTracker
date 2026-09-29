@@ -98,11 +98,12 @@ resets its membership-keyed local envelope through a registered
 identity-boundary callback rather than a provider remount. See
 [ADR 0017](./adr/0017-own-the-browser-session-projection.md).
 
-Search and the Character roster, equipment, activity-history, and
-current-activity queries pass TanStack Query's cancellation signal through
-`apiFetch` to transport. Changing the query key or removing its last observer
-aborts an unfinished request when no other observer needs it; shared consumers
-keep their request alive. Cancellation reverts query state rather than showing
+Search, both Collections variants, roll-target matches, and the Character
+roster, equipment, activity-history, and current-activity queries pass TanStack
+Query's cancellation signal through `apiFetch` to transport. Changing the query
+key, removing its last observer, or a membership refresh superseding an
+unfinished refetch aborts that request when no other observer needs it; shared
+consumers keep their request alive. Cancellation reverts query state rather than showing
 an API failure or retrying an obsolete read.
 The session client stops canceled callers from starting a queued refresh or
 replaying their request, and `apiFetch` suppresses reconnect routing from an

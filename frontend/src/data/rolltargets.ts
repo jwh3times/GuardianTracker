@@ -240,8 +240,10 @@ export function useRollTargetMatches({
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ROLL_TARGETS_MATCHES_KEY,
-    queryFn: () =>
-      apiFetch<APIRollTargetMatchReport>("/api/rolltargets/matches"),
+    queryFn: ({ signal }) =>
+      apiFetch<APIRollTargetMatchReport>("/api/rolltargets/matches", {
+        signal,
+      }),
     enabled: enabled && !!user,
     select: toMatchReport,
   });

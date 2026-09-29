@@ -90,9 +90,10 @@ export function useCollectionsSummary({
   const { membershipType, membershipId } = useCollectionsMembership();
   const query = useQuery({
     queryKey: collectionsKey(membershipType, membershipId, false),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiFetch<APIMembershipCollections>(
         `/api/collections/${membershipType}/${membershipId}`,
+        { signal },
       ),
     enabled: enabled && membershipType != null && !!membershipId,
     select: toCollectionsSummary,
@@ -120,9 +121,10 @@ export function useCollections({
   const { membershipType, membershipId } = useCollectionsMembership();
   const query = useQuery({
     queryKey: collectionsKey(membershipType, membershipId, true),
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiFetch<APIMembershipCollections>(
         `/api/collections/${membershipType}/${membershipId}?include=all`,
+        { signal },
       ),
     enabled: enabled && membershipType != null && !!membershipId,
     select: toCollections,
