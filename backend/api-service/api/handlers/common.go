@@ -70,3 +70,18 @@ func getBungieToken(c *gin.Context, membershipID string, tokenStore *auth.TokenS
 	}
 	return token, true
 }
+
+// abandonedByClient answers a request whose caller has gone away. It applies
+// only when the request's own context was canceled — a disconnect or a browser
+// abort — and the failure is that cancellation. A detached shared load canceled
+// by something else, a server deadline, or a real failure that coincides with a
+// disconnect is still reported as the failure it is.
+//
+// Failure paths call it first. It writes no body: nobody is left to read one.
+func abandonedByClient(c *gin.Context, err error) bool {
+	if !errors.Is(err, context.Canceled) || !errors.Is(handlerContext(c).Err(), context.Canceled) {
+		return false
+	}
+	c.AbortWithStatus(observability.StatusClientClosedRequest)
+	return true
+}

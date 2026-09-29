@@ -105,6 +105,7 @@ func TestAccessLevel(t *testing.T) {
 		{route: "/ready", status: 200, want: "DEBUG"},
 		{route: "/api/items", status: 200, want: "INFO"},
 		{route: "/api/items", status: 404, want: "WARN"},
+		{route: "/api/items", status: StatusClientClosedRequest, want: "INFO"},
 		{route: "/api/items", status: 500, want: "ERROR"},
 	} {
 		if got := accessLevel(tc.route, tc.status).String(); got != tc.want {

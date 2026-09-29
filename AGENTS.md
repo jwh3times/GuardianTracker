@@ -252,7 +252,9 @@ bodies, authorization headers, User-Agent values, or routine client IPs.
 Membership, session, user, and character identifiers are deterministic 24-hex
 pseudonyms in application logs; exact values remain only in the PostgreSQL audit
 trail. Successful app requests log at info, 4xx at warn, 5xx at error, and
-successful health probes at debug.
+successful health probes at debug. A request abandoned by its client (the
+request context canceled and the failure is that cancellation) is recorded as
+499 at info with no error-level handler log.
 
 ## CI/CD
 

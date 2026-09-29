@@ -44,6 +44,9 @@ func (h *WeeklyHandler) GetWeekly(c *gin.Context) {
 	}
 
 	result, err := h.service.GetWeekly(c.Request.Context(), membershipType, membershipID, bungieToken, characterID)
+	if abandonedByClient(c, err) {
+		return
+	}
 	if err != nil {
 		logger := observability.Logger(c.Request.Context())
 		if characterID != "" {

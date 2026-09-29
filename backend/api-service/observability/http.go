@@ -11,6 +11,13 @@ import (
 
 const RequestIDHeader = "X-Request-ID"
 
+// StatusClientClosedRequest records a request whose caller disconnected or
+// canceled before a response was ready (nginx's 499). No client receives it:
+// it exists so the access record names the outcome instead of calling it a
+// server fault. Browser query cancellation makes it routine, so it logs at
+// info rather than warn.
+const StatusClientClosedRequest = 499
+
 // HTTPMiddleware owns request IDs, request-scoped logging, access records, and
 // panic recovery. It intentionally records route templates rather than URLs.
 func HTTPMiddleware(base *slog.Logger) gin.HandlerFunc {
@@ -67,6 +74,8 @@ func accessLevel(route string, status int) slog.Level {
 	switch {
 	case status >= http.StatusInternalServerError:
 		return slog.LevelError
+	case status == StatusClientClosedRequest:
+		return slog.LevelInfo
 	case status >= http.StatusBadRequest:
 		return slog.LevelWarn
 	case route == "/health" || route == "/ready":

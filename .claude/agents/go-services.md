@@ -105,7 +105,7 @@ backend/api-service/
                                            — compares the whole membershipType+membershipId pair against
                                            the JWT claims and aborts the context on mismatch…)
   api/handlers/storeerror.go           ← HandleStoreError(c, err, logMsg) — maps db.ErrUnavailable to a
-                                           503 DB_UNAVAILABLE and anything else to a logged 500 INTERNAL_ERROR;
+                                           503 DB_UNAVAILABLE, a client-abandoned request to a bodyless 499, and anything else to a logged 500 INTERNAL_ERROR;
                                            mirrors handleBungieError
   services/bungie/client.go            ← HTTP client with rate limiting + retry
   services/bungie/manifest.go          ← Manifest download, version tracking, SQLite extraction;
@@ -621,7 +621,7 @@ if err != nil {
 
 `HandleStoreError(c, err, logMsg) bool` maps `errors.Is(err, db.ErrUnavailable)`
 to `503 {"error": "...", "code": "DB_UNAVAILABLE"}` and anything else to a
-logged `500 INTERNAL_ERROR`. The admin/audit/account handlers route direct
+logged `500 INTERNAL_ERROR` (a request the client abandoned answers a bodyless 499 first). The admin/audit/account handlers route direct
 store errors through it, so a missing database produces one response shape
 everywhere instead of the bare `{"error": "database not configured"}` early
 handlers used to emit. `WishlistHandler` and `PreferencesHandler` no longer call
@@ -851,7 +851,7 @@ made a milestone's missing-count badge silently not appear.
 - Use the request-scoped `*slog.Logger` attached to `context.Context`; every request has a server-owned UUID returned as `X-Request-ID`.
 - Access records use the matched route template, method, status, duration, and response bytes. Never log raw URLs/query strings, bodies, authorization headers, User-Agent values, or routine client IPs.
 - Use deterministic 24-hex pseudonyms (first 12 bytes of SHA-256) for membership, session, user, and character identifiers. Exact values belong only in `audit_log`.
-- Log successful health probes at debug, successful application requests at info, 4xx at warn, and 5xx/panic recovery at error.
+- Log successful health probes at debug, successful application requests at info, 4xx at warn, and 5xx/panic recovery at error. A client-abandoned request is `observability.StatusClientClosedRequest` (499) at info: failure paths call `abandonedByClient(c, err)` first, which applies only when the request's own context was canceled and the error is `context.Canceled`.
 
 ## Environment variables
 

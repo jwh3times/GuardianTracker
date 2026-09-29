@@ -14,6 +14,18 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.10] - 2026-09-29
+
+### Fixed
+
+- Record API requests abandoned by their client as cancellations rather than server
+  faults. When a browser aborts a superseded read or disconnects, the API now logs
+  the request as status 499 at info and writes no error-level log line; before, it
+  answered with a 500 internal error and logged an error. Search, Guardian,
+  Collections, and roll-target-match cancellation made this routine. A server
+  deadline, or a real failure that coincides with a disconnect, is still reported
+  as a failure.
+
 ## [1.18.9] - 2026-09-29
 
 ### Changed
@@ -1641,7 +1653,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.9...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.10...HEAD
+[1.18.10]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.9...v1.18.10
 [1.18.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.8...v1.18.9
 [1.18.8]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.7...v1.18.8
 [1.18.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.6...v1.18.7

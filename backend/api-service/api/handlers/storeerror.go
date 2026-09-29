@@ -28,6 +28,9 @@ func HandleStoreError(c *gin.Context, err error, logMsg string) bool {
 	if err == nil {
 		return false
 	}
+	if abandonedByClient(c, err) {
+		return true
+	}
 	if errors.Is(err, db.ErrUnavailable) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "This feature needs the user data database, which isn't configured on this server.",

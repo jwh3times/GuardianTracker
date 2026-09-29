@@ -182,6 +182,9 @@ func isValidMembershipID(id string) bool {
 }
 
 func handleBungieError(c *gin.Context, err error) {
+	if abandonedByClient(c, err) {
+		return
+	}
 	if errors.Is(err, collections.ErrManifestNotReady) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error": "The item database is still downloading — try again in a moment.",
