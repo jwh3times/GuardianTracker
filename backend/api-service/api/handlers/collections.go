@@ -181,6 +181,8 @@ func isValidMembershipID(id string) bool {
 	return true
 }
 
+const bungieRateLimitMessage = "Bungie API rate limit exceeded. Please try again later."
+
 func handleBungieError(c *gin.Context, err error) {
 	if abandonedByClient(c, err) {
 		return
@@ -192,15 +194,19 @@ func handleBungieError(c *gin.Context, err error) {
 		})
 		return
 	}
+	if errors.Is(err, bungie.ErrRateLimited) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": bungieRateLimitMessage, "code": "RATE_LIMITED"})
+		return
+	}
 	var bungieErr *bungie.BungieError
 	if errors.As(err, &bungieErr) {
-		switch bungieErr.ErrorCode {
-		case 5:
+		switch {
+		case bungieErr.ErrorCode == 5:
 			c.JSON(http.StatusForbidden, gin.H{"error": "User has their Destiny 2 profile set to private", "code": "PRIVACY_RESTRICTION"})
-		case 7:
+		case bungieErr.ErrorCode == 7:
 			c.JSON(http.StatusNotFound, gin.H{"error": "Destiny 2 account not found", "code": "ACCOUNT_NOT_FOUND"})
-		case 36:
-			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Bungie API rate limit exceeded. Please try again later.", "code": "RATE_LIMITED", "retryAfter": bungieErr.ThrottleSeconds})
+		case bungie.IsThrottle(bungieErr.ErrorCode):
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": bungieRateLimitMessage, "code": "RATE_LIMITED", "retryAfter": bungieErr.ThrottleSeconds})
 		default:
 			ctx := handlerContext(c)
 			observability.Logger(ctx).WarnContext(ctx, "Bungie API request failed",

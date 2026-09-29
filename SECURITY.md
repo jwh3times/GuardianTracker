@@ -160,7 +160,7 @@ errors; do not change a version independently of its key.
 ### Rate Limiting
 
 - **Bungie API client**: configurable RPS (default 10 req/s, burst 20) with rate.Limiter
-- **Bungie API retries**: exponential backoff with Retry-After header respect on 429 responses
+- **Bungie API retries**: transport errors, HTTP 429, HTTP 5xx, and Bungie's envelope throttle codes (31, 35–37, 51, 54–57) are retried within a per-call budget. Backoff is linear (1s, 2s, 3s) unless Bungie names a wait: `Retry-After` on a 429 or `ThrottleSeconds` on an envelope throttle. A throttle naming zero seconds still takes the linear floor, and a named wait over 10 seconds is returned rather than held. An exhausted throttle surfaces as HTTP 429 `RATE_LIMITED`, carrying `retryAfter` when Bungie supplied `ThrottleSeconds`.
 
 ### Upstream Response Limits
 

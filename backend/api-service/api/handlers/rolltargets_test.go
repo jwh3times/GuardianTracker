@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -724,6 +725,8 @@ func TestGetRollTargetMatches_InventoryFailuresHaveTheirOwnStatus(t *testing.T) 
 		{"bungie authorization gone", ownedrolls.ErrNoCredential, http.StatusUnauthorized, "BUNGIE_REAUTH_REQUIRED"},
 		{"manifest not ready", ownedrolls.ErrPerksUnavailable, http.StatusServiceUnavailable, "MANIFEST_NOT_READY"},
 		{"bungie rate limited", &bungie.BungieError{ErrorCode: 36, ThrottleSeconds: 5}, http.StatusTooManyRequests, "RATE_LIMITED"},
+		{"bungie per-user throttle", &bungie.BungieError{ErrorCode: 57}, http.StatusTooManyRequests, "RATE_LIMITED"},
+		{"bungie http 429 exhausted", fmt.Errorf("max retries exceeded: %w", bungie.ErrRateLimited), http.StatusTooManyRequests, "RATE_LIMITED"},
 		{"bungie failed", &bungie.BungieError{ErrorCode: 1618}, http.StatusBadGateway, "BUNGIE_ERROR"},
 	}
 	for _, tc := range cases {
