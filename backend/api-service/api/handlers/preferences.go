@@ -35,6 +35,9 @@ type preferencesReadResponse struct {
 // GetPreferences handles GET /api/preferences.
 func (h *PreferencesHandler) GetPreferences(c *gin.Context) {
 	result, err := h.service.Get(c.Request.Context(), c.GetString("membership_id"))
+	if abandonedByClient(c, err) {
+		return
+	}
 	if err != nil {
 		ctx := handlerContext(c)
 		observability.Logger(ctx).ErrorContext(ctx, "preference listing failed", observability.Err(err))
@@ -76,6 +79,9 @@ func (h *PreferencesHandler) UpdatePreferences(c *gin.Context) {
 }
 
 func handlePreferencesError(c *gin.Context, err error, logMsg string) {
+	if abandonedByClient(c, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, preferences.ErrInvalidCardStyle), errors.Is(err, preferences.ErrOnboardingReset):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

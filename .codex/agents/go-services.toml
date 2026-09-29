@@ -848,7 +848,7 @@ made a milestone's missing-count badge silently not appear.
 - Use the request-scoped `*slog.Logger` attached to `context.Context`; every request has a server-owned UUID returned as `X-Request-ID`.
 - Access records use the matched route template, method, status, duration, and response bytes. Never log raw URLs/query strings, bodies, authorization headers, User-Agent values, or routine client IPs.
 - Use deterministic 24-hex pseudonyms (first 12 bytes of SHA-256) for membership, session, user, and character identifiers. Exact values belong only in `audit_log`.
-- Log successful health probes at debug, successful application requests at info, 4xx at warn, and 5xx/panic recovery at error.
+- Log successful health probes at debug, successful application requests at info, 4xx at warn, and 5xx/panic recovery at error. A client-abandoned request is `observability.StatusClientClosedRequest` (499) at info: failure paths call `abandonedByClient(c, err)` first, which applies only when the request's own context was canceled and the error is `context.Canceled`.
 
 ## Environment variables
 

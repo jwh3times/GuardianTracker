@@ -415,6 +415,12 @@ attaches a request-scoped `log/slog` logger to the Go context. Access records us
 the matched route template rather than the raw URL and include method, status,
 duration, and response bytes. Successful health probes are debug records;
 successful application requests are info, 4xx are warning, and 5xx are error.
+A request whose client disconnected or aborted before its response was ready
+is recorded as status 499 at info, with no error-level handler log: Bungie,
+roll-target, store, preferences, Wish list, Digest, and Weekly failure paths
+first check whether the failure is the request's own cancellation. A server
+deadline, a detached shared load canceled by something else, or a real failure
+that coincides with a disconnect is still reported as that failure.
 
 Application logs never include query strings, bodies, authorization headers,
 User-Agent values, or routine client IPs. Membership, session, user, and

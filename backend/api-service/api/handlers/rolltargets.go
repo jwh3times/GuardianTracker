@@ -452,6 +452,9 @@ func rollTargetIDParam(c *gin.Context) (rolltargets.TargetID, bool) {
 // 404 on purpose: the domain already refuses to tell them apart, and a 403 here
 // would confirm another user's target ids.
 func handleRollTargetError(c *gin.Context, err error, logMsg string) {
+	if abandonedByClient(c, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, rolltargets.ErrUnavailable):
 		c.JSON(http.StatusServiceUnavailable, gin.H{

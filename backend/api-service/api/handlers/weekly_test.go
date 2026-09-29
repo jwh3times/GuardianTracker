@@ -13,10 +13,14 @@ import (
 
 type fakeWeeklyService struct {
 	characterID string
+	err         error
 }
 
 func (f *fakeWeeklyService) GetWeekly(_ context.Context, _ int, _, _, characterID string) (*weekly.Weekly, error) {
 	f.characterID = characterID
+	if f.err != nil {
+		return nil, f.err
+	}
 	return &weekly.Weekly{}, nil
 }
 
