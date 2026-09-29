@@ -14,6 +14,20 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.11] - 2026-09-29
+
+### Fixed
+
+- Retry Bungie throttles reported inside a normal response. Every throttle code
+  Bungie defines (31, 35–37, 51, 54–57) is now retried within the existing retry
+  budget, waiting the `ThrottleSeconds` Bungie names, or 1s, 2s, 3s when it names
+  zero. A requested wait longer than 10 seconds is returned instead of held open.
+- Report Bungie rate limiting consistently as HTTP 429 `RATE_LIMITED`. Previously
+  only throttle code 36 did; the other throttle codes returned 502 `BUNGIE_ERROR`,
+  and an HTTP 429 that outlasted the retry budget returned 500 `INTERNAL_ERROR`,
+  including on roll-target matches.
+- The Bungie client no longer waits after its final retry attempt.
+
 ## [1.18.10] - 2026-09-29
 
 ### Fixed
@@ -1653,7 +1667,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.10...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.11...HEAD
+[1.18.11]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.10...v1.18.11
 [1.18.10]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.9...v1.18.10
 [1.18.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.8...v1.18.9
 [1.18.8]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.7...v1.18.8

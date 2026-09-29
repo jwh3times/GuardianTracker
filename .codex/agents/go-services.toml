@@ -105,6 +105,11 @@ backend/api-service/
                                            503 DB_UNAVAILABLE, a client-abandoned request to a bodyless 499, and anything else to a logged 500 INTERNAL_ERROR;
                                            mirrors handleBungieError
   services/bungie/client.go            ← HTTP client with rate limiting + retry
+                                           (`fetch` retries transport errors, 429, 5xx, and envelope throttle codes
+                                           — `IsThrottle` in throttle.go — with linear 1s/2s/3s backoff unless
+                                           Retry-After/ThrottleSeconds names a wait; a named throttle wait over 10s
+                                           is returned, not held. Exhausted throttles: `*BungieError` or
+                                           `ErrRateLimited`, both mapped to 429 RATE_LIMITED by handleBungieError)
   services/bungie/manifest.go          ← Manifest download, version tracking, SQLite extraction;
                                            RegisterParticipant/RegisterObserver coordinate the file swap
                                            (see "Manifest repository, provider, and swap seam" below)

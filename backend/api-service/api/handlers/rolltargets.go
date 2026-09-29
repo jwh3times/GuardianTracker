@@ -501,7 +501,7 @@ func handleRollTargetError(c *gin.Context, err error, logMsg string) {
 
 func isBungieError(err error) bool {
 	var bungieErr *bungie.BungieError
-	return errors.As(err, &bungieErr)
+	return errors.As(err, &bungieErr) || errors.Is(err, bungie.ErrRateLimited)
 }
 
 func isRollTargetValidationError(err error) bool {
