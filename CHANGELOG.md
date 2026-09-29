@@ -14,6 +14,34 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.9] - 2026-09-29
+
+### Changed
+
+- Cancel unused Collections and roll-target match requests. A membership refresh
+  that supersedes an unfinished reload, or leaving the page before it loads, now
+  stops the earlier request instead of leaving it running on the server beside its
+  replacement. Repeated refreshes no longer stack Collections analysis or
+  owned-inventory reads, and other consumers of the same data keep their shared
+  request.
+
+## [1.18.8] - 2026-09-28
+
+### Changed
+
+- Updated Node.js 26.9.0 → 26.10.0 for frontend tooling: `.nvmrc`, both frontend
+  Dockerfiles, and the Playwright image build (Dependabot, completed by hand).
+  No application behavior changed.
+
+## [1.18.7] - 2026-09-28
+
+### Changed
+
+- Updated five frontend development dependencies (Dependabot):
+  `@vitest/coverage-v8` 5.0.1 → 5.0.2, `oxlint-tsgolint` 7.0.2002 → 7.0.2003,
+  `prettier` 3.9.8 → 3.9.9, `vite` 8.3.0 → 8.3.1, and `vitest` 5.0.1 → 5.0.2.
+  No application behavior changed.
+
 ## [1.18.6] - 2026-09-27
 
 ### Changed
@@ -1613,7 +1641,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.6...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.9...HEAD
+[1.18.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.8...v1.18.9
+[1.18.8]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.7...v1.18.8
+[1.18.7]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.6...v1.18.7
 [1.18.6]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.5...v1.18.6
 [1.18.5]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.4...v1.18.5
 [1.18.4]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.3...v1.18.4

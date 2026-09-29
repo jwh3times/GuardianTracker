@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -560,5 +561,90 @@ describe("invalidation", () => {
     await waitFor(() =>
       expect(screen.getByTestId("targets")).toHaveTextContent("v2"),
     );
+  });
+});
+
+function RefreshAndMatchesProbe() {
+  const { refresh } = useMembershipRefresh();
+  return (
+    <>
+      <button onClick={refresh}>refresh</button>
+      <MatchesProbe />
+    </>
+  );
+}
+
+describe("matches query cancellation", () => {
+  // Each read is a live owned-inventory profile request upstream, so a
+  // refetch superseded by a second refresh must stop, not run to completion.
+  it("aborts a superseded refresh refetch and settles on the latest one", async () => {
+    const signals: AbortSignal[] = [];
+    server.use(
+      http.get(`${API}/api/rolltargets/matches`, async ({ request }) => {
+        signals.push(request.signal);
+        const n = signals.length;
+        if (n === 2) {
+          await new Promise<void>((resolve) =>
+            request.signal.addEventListener("abort", () => resolve(), {
+              once: true,
+            }),
+          );
+        }
+        return HttpResponse.json(
+          matchReport({
+            wanted: Array.from({ length: n }, () => ({})),
+          }),
+        );
+      }),
+      http.post(`${API}/api/collections/:type/:id/refresh`, () =>
+        HttpResponse.json({ success: true, message: "ok" }),
+      ),
+    );
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 1, retryDelay: 0 } },
+    });
+
+    renderWithProviders(<RefreshAndMatchesProbe />, { client });
+    await waitFor(() =>
+      expect(screen.getByTestId("matches")).toHaveTextContent("wanted:1|"),
+    );
+
+    await userEvent.click(screen.getByText("refresh"));
+    await waitFor(() => expect(signals).toHaveLength(2));
+    await userEvent.click(screen.getByText("refresh"));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("matches")).toHaveTextContent("wanted:3|"),
+    );
+    expect(signals.map((s) => s.aborted)).toEqual([false, true, false]);
+    expect(
+      client
+        .getQueryCache()
+        .getAll()
+        .every(
+          (q) => q.state.error === null && q.state.fetchFailureCount === 0,
+        ),
+    ).toBe(true);
+  });
+
+  it("aborts the read when its final observer unmounts", async () => {
+    let signal: AbortSignal | undefined;
+    server.use(
+      http.get(`${API}/api/rolltargets/matches`, async ({ request }) => {
+        signal = request.signal;
+        await new Promise<void>((resolve) =>
+          request.signal.addEventListener("abort", () => resolve(), {
+            once: true,
+          }),
+        );
+        return HttpResponse.json(matchReport());
+      }),
+    );
+
+    const view = renderWithProviders(<MatchesProbe />);
+    await waitFor(() => expect(signal).toBeDefined());
+    expect(signal?.aborted).toBe(false);
+    view.unmount();
+    await waitFor(() => expect(signal?.aborted).toBe(true));
   });
 });
