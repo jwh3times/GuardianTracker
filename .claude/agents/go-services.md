@@ -105,7 +105,7 @@ backend/api-service/
                                            — compares the whole membershipType+membershipId pair against
                                            the JWT claims and aborts the context on mismatch…)
   api/handlers/storeerror.go           ← HandleStoreError(c, err, logMsg) — maps db.ErrUnavailable to a
-                                           503 DB_UNAVAILABLE and anything else to a logged 500 INTERNAL_ERROR;
+                                           503 DB_UNAVAILABLE, a client-abandoned request to a bodyless 499, and anything else to a logged 500 INTERNAL_ERROR;
                                            mirrors handleBungieError
   services/bungie/client.go            ← HTTP client with rate limiting + retry
   services/bungie/manifest.go          ← Manifest download, version tracking, SQLite extraction;
@@ -621,7 +621,7 @@ if err != nil {
 
 `HandleStoreError(c, err, logMsg) bool` maps `errors.Is(err, db.ErrUnavailable)`
 to `503 {"error": "...", "code": "DB_UNAVAILABLE"}` and anything else to a
-logged `500 INTERNAL_ERROR`. The admin/audit/account handlers route direct
+logged `500 INTERNAL_ERROR` (a request the client abandoned answers a bodyless 499 first). The admin/audit/account handlers route direct
 store errors through it, so a missing database produces one response shape
 everywhere instead of the bare `{"error": "database not configured"}` early
 handlers used to emit. `WishlistHandler` and `PreferencesHandler` no longer call
