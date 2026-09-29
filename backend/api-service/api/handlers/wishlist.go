@@ -198,6 +198,9 @@ func parseEntryID(c *gin.Context) (wishlist.EntryID, bool) {
 // wire. Each case is a distinction the domain drew deliberately, and flattening
 // any two of them here would put the meaning back in the handler.
 func handleWishlistError(c *gin.Context, err error, logMsg string) {
+	if abandonedByClient(c, err) {
+		return
+	}
 	switch {
 	case errors.Is(err, wishlist.ErrUnavailable):
 		c.JSON(http.StatusServiceUnavailable, gin.H{

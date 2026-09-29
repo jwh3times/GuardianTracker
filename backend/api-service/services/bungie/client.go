@@ -35,6 +35,8 @@ type Client struct {
 	downloadClient *http.Client
 	jsonLimit      int64
 	archiveLimit   int64
+	// sleep is the retry backoff wait; tests replace it to observe the waits.
+	sleep func(context.Context, time.Duration) error
 }
 
 const manifestArchiveLimit int64 = 128 << 20
@@ -50,6 +52,7 @@ func NewClient(apiKey, baseURL string, rps, burst int) *Client {
 		downloadClient: &http.Client{Timeout: 10 * time.Minute},
 		jsonLimit:      boundedio.JSONResponseLimit,
 		archiveLimit:   manifestArchiveLimit,
+		sleep:          sleepCtx,
 	}
 }
 
@@ -74,39 +77,55 @@ func (c *Client) doRequest(ctx context.Context, req *http.Request) (*http.Respon
 	return c.httpClient.Do(req)
 }
 
-func (c *Client) doRequestWithRetry(ctx context.Context, req *http.Request, maxRetries int) (*http.Response, error) {
+// fetch sends req, retrying transport errors, HTTP 429, HTTP 5xx, and Bungie
+// envelope throttles up to maxRetries times, and returns the final body.
+//
+// Backoff is linear (1s, 2s, 3s, ...) unless Bungie names a wait: Retry-After
+// on a 429, ThrottleSeconds on an envelope throttle. A throttle that names
+// zero seconds still takes the linear floor, because Bungie has returned a
+// momentary throttle carrying 0. A named wait above maxThrottleRetryWait is
+// not held: the throttle is returned for the caller to report. Nothing waits
+// after the last attempt.
+func (c *Client) fetch(ctx context.Context, req *http.Request, maxRetries int) ([]byte, error) {
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		reqClone := req.Clone(ctx)
-		resp, err := c.doRequest(ctx, reqClone)
-		if err != nil {
+		backoff := time.Duration(attempt+1) * time.Second
+		resp, err := c.doRequest(ctx, req.Clone(ctx))
+		switch {
+		case err != nil:
 			lastErr = err
-			if err := sleepCtx(ctx, time.Duration(attempt+1)*time.Second); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if resp.StatusCode == http.StatusTooManyRequests {
+		case resp.StatusCode == http.StatusTooManyRequests:
 			resp.Body.Close()
-			waitTime := time.Duration(attempt+1) * time.Second
 			if s, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil {
-				waitTime = time.Duration(s) * time.Second
+				backoff = time.Duration(s) * time.Second
 			}
-			lastErr = fmt.Errorf("rate limited by Bungie API")
-			if err := sleepCtx(ctx, waitTime); err != nil {
-				return nil, err
-			}
-			continue
-		}
-		if resp.StatusCode >= 500 {
+			lastErr = ErrRateLimited
+		case resp.StatusCode >= 500:
 			resp.Body.Close()
 			lastErr = fmt.Errorf("server error: %d", resp.StatusCode)
-			if err := sleepCtx(ctx, time.Duration(attempt+1)*time.Second); err != nil {
+		default:
+			body, err := readResponse(resp, c.jsonLimit)
+			if err != nil {
 				return nil, err
 			}
-			continue
+			throttle := envelopeThrottle(body)
+			if throttle == nil {
+				return body, nil
+			}
+			if throttle.ThrottleSeconds > 0 {
+				backoff = time.Duration(throttle.ThrottleSeconds) * time.Second
+			}
+			if attempt == maxRetries || backoff > maxThrottleRetryWait {
+				return body, nil
+			}
+			lastErr = throttle
 		}
-		return resp, nil
+		if attempt == maxRetries {
+			break
+		}
+		if err := c.sleep(ctx, backoff); err != nil {
+			return nil, err
+		}
 	}
 	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
 }
@@ -122,12 +141,19 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 	}
 }
 
-func parseResponse[T any](resp *http.Response, limit int64) (*T, error) {
+// readResponse reads a bounded response body and closes it.
+func readResponse(resp *http.Response, limit int64) ([]byte, error) {
 	defer resp.Body.Close()
 	body, err := boundedio.ReadAll(resp.Body, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
+	return body, nil
+}
+
+// decodeResponse decodes a Bungie envelope, returning a *BungieError for any
+// ErrorCode other than Success.
+func decodeResponse[T any](body []byte) (*T, error) {
 	var base BungieResponse
 	if err := json.Unmarshal(body, &base); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
@@ -153,11 +179,11 @@ func (c *Client) GetManifest(ctx context.Context) (*ManifestResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	body, err := c.fetch(ctx, req, 3)
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[ManifestResponse](resp, c.jsonLimit)
+	return decodeResponse[ManifestResponse](body)
 }
 
 // GetProfile retrieves a user's Destiny 2 profile for the specified components.
@@ -174,11 +200,11 @@ func (c *Client) GetProfile(ctx context.Context, membershipType int, membershipI
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	body, err := c.fetch(ctx, req, 3)
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[ProfileResponse](resp, c.jsonLimit)
+	return decodeResponse[ProfileResponse](body)
 }
 
 // GetCharacters retrieves a user's Destiny 2 characters (component 200).
@@ -191,11 +217,11 @@ func (c *Client) GetCharacters(ctx context.Context, membershipType int, membersh
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	body, err := c.fetch(ctx, req, 3)
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[CharactersResponse](resp, c.jsonLimit)
+	return decodeResponse[CharactersResponse](body)
 }
 
 // GetActivityHistory retrieves one bounded page of a character's raw activity-
@@ -211,11 +237,11 @@ func (c *Client) GetActivityHistory(ctx context.Context, membershipType int, mem
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	body, err := c.fetch(ctx, req, 3)
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[ActivityHistoryResponse](resp, c.jsonLimit)
+	return decodeResponse[ActivityHistoryResponse](body)
 }
 
 // GetPublicMilestones fetches current weekly milestone definitions (no auth needed).
@@ -224,11 +250,11 @@ func (c *Client) GetPublicMilestones(ctx context.Context) (map[string]PublicMile
 	if err != nil {
 		return nil, fmt.Errorf("GetPublicMilestones: %w", err)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	body, err := c.fetch(ctx, req, 2)
 	if err != nil {
 		return nil, err
 	}
-	r, err := parseResponse[PublicMilestonesResponse](resp, c.jsonLimit)
+	r, err := decodeResponse[PublicMilestonesResponse](body)
 	if err != nil {
 		return nil, err
 	}
@@ -247,11 +273,11 @@ func (c *Client) GetCharacterVendors(ctx context.Context, membershipType int, me
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	body, err := c.fetch(ctx, req, 2)
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[CharacterVendorsResponse](resp, c.jsonLimit)
+	return decodeResponse[CharacterVendorsResponse](body)
 }
 
 // GetPublicVendors fetches the public vendor inventory (no auth needed; components 400+402).
@@ -261,11 +287,11 @@ func (c *Client) GetPublicVendors(ctx context.Context) (*PublicVendorsResponse, 
 	if err != nil {
 		return nil, fmt.Errorf("GetPublicVendors: %w", err)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	body, err := c.fetch(ctx, req, 2)
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[PublicVendorsResponse](resp, c.jsonLimit)
+	return decodeResponse[PublicVendorsResponse](body)
 }
 
 // GetRecords fetches profile records (component 900) for a user.
@@ -278,11 +304,11 @@ func (c *Client) GetRecords(ctx context.Context, membershipType int, membershipI
 	if accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 3)
+	body, err := c.fetch(ctx, req, 3)
 	if err != nil {
 		return nil, err
 	}
-	return parseResponse[RecordsProfileResponse](resp, c.jsonLimit)
+	return decodeResponse[RecordsProfileResponse](body)
 }
 
 // GetCommonSettings fetches Destiny 2 core settings (API-key only, no auth needed).
@@ -293,11 +319,11 @@ func (c *Client) GetCommonSettings(ctx context.Context) (*CoreSettings, error) {
 	if err != nil {
 		return nil, fmt.Errorf("GetCommonSettings: %w", err)
 	}
-	resp, err := c.doRequestWithRetry(ctx, req, 2)
+	body, err := c.fetch(ctx, req, 2)
 	if err != nil {
 		return nil, fmt.Errorf("GetCommonSettings: %w", err)
 	}
-	r, err := parseResponse[CoreSettingsResponse](resp, c.jsonLimit)
+	r, err := decodeResponse[CoreSettingsResponse](body)
 	if err != nil {
 		return nil, fmt.Errorf("GetCommonSettings: %w", err)
 	}

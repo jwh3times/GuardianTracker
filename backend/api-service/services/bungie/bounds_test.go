@@ -83,8 +83,11 @@ func (f responseTransport) RoundTrip(r *http.Request) (*http.Response, error) { 
 func TestJSONBoundsValidateWholeBodyAndClose(t *testing.T) {
 	for _, body := range []string{`{"ErrorCode":1} {}`, `{"ErrorCode":1}junk`, `{malformed`, strings.Repeat("x", 33)} {
 		b := &trackedBody{Reader: strings.NewReader(body)}
-		if value, err := parseResponse[ManifestResponse](&http.Response{Body: b}, 32); err == nil || value != nil {
-			t.Fatalf("accepted %q", body)
+		raw, err := readResponse(&http.Response{Body: b}, 32)
+		if err == nil {
+			if value, decodeErr := decodeResponse[ManifestResponse](raw); decodeErr == nil || value != nil {
+				t.Fatalf("accepted %q", body)
+			}
 		}
 		if !b.closed {
 			t.Fatal("body not closed")

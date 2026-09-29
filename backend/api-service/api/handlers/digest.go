@@ -53,6 +53,9 @@ func (h *DigestHandler) GetDigest(c *gin.Context) {
 	}
 
 	result, err := h.digest.GetDigest(c.Request.Context(), membershipType, membershipID, bungieToken)
+	if abandonedByClient(c, err) {
+		return
+	}
 	if err != nil {
 		ctx := handlerContext(c)
 		observability.Logger(ctx).ErrorContext(ctx, "digest request failed", observability.Err(err))
