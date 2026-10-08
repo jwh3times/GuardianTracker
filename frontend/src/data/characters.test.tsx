@@ -3,8 +3,9 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { server, API, sampleUser } from "../test/testServer";
+import { aborted, observeSentRequests } from "../test/sentRequests";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCharacters } from "../contexts/CharacterContext";
 import {
@@ -569,6 +570,7 @@ describe("useGuardianCurrentActivity", () => {
 
 describe("query cancellation", () => {
   it("aborts all superseded Guardian reads on rapid switches and keeps the current Guardian", async () => {
+    const observed = observeSentRequests();
     const signals = new Map<string, AbortSignal>();
     const sent: string[] = [];
     server.use(
@@ -588,13 +590,9 @@ describe("query cancellation", () => {
             const id = String(params.characterId);
             const key = `${id}/${resource}`;
             sent.push(key);
-            signals.set(key, request.signal);
+            signals.set(key, observed.signal(request));
             if (id !== "char-c") {
-              await new Promise<void>((resolve) =>
-                request.signal.addEventListener("abort", () => resolve(), {
-                  once: true,
-                }),
-              );
+              await aborted(observed.signal(request));
             }
             return HttpResponse.json({
               characterId: id,
@@ -661,17 +659,14 @@ describe("query cancellation", () => {
   });
 
   it("keeps the roster alive for CharacterProvider and aborts when its final observer unmounts", async () => {
+    const observed = observeSentRequests();
     let signal: AbortSignal | undefined;
     let requests = 0;
     server.use(
       http.get(`${API}/api/characters/:type/:id`, async ({ request }) => {
         requests++;
-        signal = request.signal;
-        await new Promise<void>((resolve) =>
-          request.signal.addEventListener("abort", () => resolve(), {
-            once: true,
-          }),
-        );
+        signal = observed.signal(request);
+        await aborted(observed.signal(request));
         return HttpResponse.json([apiCharacter("char-a")]);
       }),
     );

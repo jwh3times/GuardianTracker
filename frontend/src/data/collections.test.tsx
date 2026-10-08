@@ -2,8 +2,9 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { server, API, sampleCollections, sampleUser } from "../test/testServer";
+import { aborted, observeSentRequests } from "../test/sentRequests";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCollections, useCollectionsSummary } from "./collections";
 import { useMembershipRefresh } from "./membershipRefresh";
@@ -232,17 +233,14 @@ describe("membership refresh", () => {
 
 describe("query cancellation", () => {
   it("aborts a superseded refresh refetch and settles on the latest one", async () => {
+    const observed = observeSentRequests();
     const signals: AbortSignal[] = [];
     server.use(
       http.get(`${API}/api/collections/:type/:id`, async ({ request }) => {
-        signals.push(request.signal);
+        signals.push(observed.signal(request));
         const n = signals.length;
         if (n === 2) {
-          await new Promise<void>((resolve) =>
-            request.signal.addEventListener("abort", () => resolve(), {
-              once: true,
-            }),
-          );
+          await aborted(observed.signal(request));
         }
         return HttpResponse.json({
           ...collectionsPayload(),
@@ -292,15 +290,12 @@ describe("query cancellation", () => {
   ])(
     "aborts the %s read when its final observer unmounts",
     async (_, probe) => {
+      const observed = observeSentRequests();
       let signal: AbortSignal | undefined;
       server.use(
         http.get(`${API}/api/collections/:type/:id`, async ({ request }) => {
-          signal = request.signal;
-          await new Promise<void>((resolve) =>
-            request.signal.addEventListener("abort", () => resolve(), {
-              once: true,
-            }),
-          );
+          signal = observed.signal(request);
+          await aborted(observed.signal(request));
           return HttpResponse.json(collectionsPayload());
         }),
       );

@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { API, server } from "../../test/testServer";
 import { toCollections } from "../../lib/collectionsView";
 import type { APIDifficulty, APIMembershipCollections } from "../../types/api";

@@ -1,5 +1,12 @@
 import "@testing-library/jest-dom";
-import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  aroundEach,
+  beforeAll,
+  beforeEach,
+  vi,
+} from "vitest";
 import { server } from "./testServer";
 
 // Node 22+ defines an experimental global `localStorage` that is undefined
@@ -48,7 +55,10 @@ afterEach(() => {
 
 // One MSW lifecycle for every suite — individual files keep using
 // server.use(...) for per-test overrides (resetHandlers clears them).
-beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeAll(() => server.listen({ onUnhandledFrame: "error" }));
+// Each test runs inside its own server boundary, so a request still in flight
+// when a test ends resolves against that test's handlers, not the next one's.
+aroundEach((runTest) => server.boundary(runTest)());
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 

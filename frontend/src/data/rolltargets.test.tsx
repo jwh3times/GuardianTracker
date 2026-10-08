@@ -2,8 +2,9 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, it, expect } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { server, API } from "../test/testServer";
+import { aborted, observeSentRequests } from "../test/sentRequests";
 import { renderWithProviders } from "../test/renderWithProviders";
 import {
   useBulkDeleteRollTargets,
@@ -578,17 +579,14 @@ describe("matches query cancellation", () => {
   // Each read is a live owned-inventory profile request upstream, so a
   // refetch superseded by a second refresh must stop, not run to completion.
   it("aborts a superseded refresh refetch and settles on the latest one", async () => {
+    const observed = observeSentRequests();
     const signals: AbortSignal[] = [];
     server.use(
       http.get(`${API}/api/rolltargets/matches`, async ({ request }) => {
-        signals.push(request.signal);
+        signals.push(observed.signal(request));
         const n = signals.length;
         if (n === 2) {
-          await new Promise<void>((resolve) =>
-            request.signal.addEventListener("abort", () => resolve(), {
-              once: true,
-            }),
-          );
+          await aborted(observed.signal(request));
         }
         return HttpResponse.json(
           matchReport({
@@ -628,15 +626,12 @@ describe("matches query cancellation", () => {
   });
 
   it("aborts the read when its final observer unmounts", async () => {
+    const observed = observeSentRequests();
     let signal: AbortSignal | undefined;
     server.use(
       http.get(`${API}/api/rolltargets/matches`, async ({ request }) => {
-        signal = request.signal;
-        await new Promise<void>((resolve) =>
-          request.signal.addEventListener("abort", () => resolve(), {
-            once: true,
-          }),
-        );
+        signal = observed.signal(request);
+        await aborted(observed.signal(request));
         return HttpResponse.json(matchReport());
       }),
     );

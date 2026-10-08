@@ -1,7 +1,8 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
-import { http, HttpResponse, delay } from "msw";
+import { http, HttpResponse } from "msw/http";
+import { delay } from "msw/utils/delay";
 import { API, sampleWishlist, server } from "../../test/testServer";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { WishList } from "./WishList";
