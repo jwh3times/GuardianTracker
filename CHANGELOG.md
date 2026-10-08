@@ -14,6 +14,49 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.17] - 2026-10-08
+
+### Security
+
+- Updated the API's indirect `golang.org/x/text` dependency from 0.40.0 to 0.42.0
+  to clear GO-2026-6629, a panic on crafted input in `x/text/secure/precis` that
+  `govulncheck` traced from the PostgreSQL connection pool setup. The other
+  indirect `golang.org/x` modules (`crypto`, `mod`, `net`, `sync`, `tools`,
+  `telemetry`) moved one release forward with it.
+
+## [1.18.16] - 2026-10-07
+
+### Changed
+
+- Updated `@tanstack/react-query` from 5.104.0 to 5.104.1.
+
+## [1.18.15] - 2026-10-05
+
+### Changed
+
+- Updated `@types/node` from 26.6.3 to 26.6.4, `@vitest/coverage-v8` and Vitest
+  from 5.0.2 to 5.0.3, and Vite from 8.3.1 to 8.3.2.
+
+## [1.18.14] - 2026-10-02
+
+### Changed
+
+- Updated oxlint from 1.85.0 to 1.86.0.
+
+## [1.18.13] - 2026-10-01
+
+### Changed
+
+- Refreshed the pinned `nginxinc/nginx-unprivileged:1.31.6-alpine3.24`
+  production-image digest.
+
+## [1.18.12] - 2026-09-29
+
+### Changed
+
+- Updated `@tanstack/react-query` from 5.103.2 to 5.104.0 and `@types/node` from
+  26.6.2 to 26.6.3.
+
 ## [1.18.11] - 2026-09-29
 
 ### Fixed
@@ -1667,7 +1710,13 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.11...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.17...HEAD
+[1.18.17]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.16...v1.18.17
+[1.18.16]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.15...v1.18.16
+[1.18.15]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.14...v1.18.15
+[1.18.14]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.13...v1.18.14
+[1.18.13]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.12...v1.18.13
+[1.18.12]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.11...v1.18.12
 [1.18.11]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.10...v1.18.11
 [1.18.10]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.9...v1.18.10
 [1.18.9]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.8...v1.18.9
