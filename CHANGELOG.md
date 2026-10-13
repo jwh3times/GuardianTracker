@@ -14,6 +14,40 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.21] - 2026-10-13
+
+### Security
+
+- The Go toolchain pin moved from 1.26.6 to 1.26.9 everywhere it is declared —
+  `go.mod`, both workflows' `GO_VERSION`, and the documented Staticcheck
+  command — and the API's indirect `golang.org/x/net` dependency moved from
+  0.58.0 to 0.60.0. Together they clear nine advisories `govulncheck` traced
+  from API code into `net/http`, `net/textproto`, `crypto/tls`, and
+  `x/net/http2`: GO-2026-6603, GO-2026-6605, GO-2026-6607, GO-2026-6608,
+  GO-2026-6610, GO-2026-6611, GO-2026-6612, GO-2026-6613, and GO-2026-6617.
+  The indirect `golang.org/x/crypto` (0.55.0 to 0.57.0) and `golang.org/x/sys`
+  (0.47.0 to 0.48.0) modules moved with it.
+
+## [1.18.20] - 2026-10-08
+
+### Changed
+
+- Refreshed the pinned `nginxinc/nginx-unprivileged:1.31.6-alpine3.24`
+  production-image digest.
+
+## [1.18.19] - 2026-10-08
+
+### Changed
+
+- Updated `@vitejs/plugin-react` from 6.1.1 to 6.1.2, jsdom from 30.1.1 to
+  30.1.2, oxlint from 1.86.0 to 1.87.0, and PostCSS from 8.5.28 to 8.5.29.
+
+## [1.18.18] - 2026-10-08
+
+### Changed
+
+- Updated the transitive `source-map-js` dependency from 1.2.1 to 1.2.2.
+
 ## [1.18.17] - 2026-10-08
 
 ### Security
@@ -1710,7 +1744,11 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.17...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.21...HEAD
+[1.18.21]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.20...v1.18.21
+[1.18.20]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.19...v1.18.20
+[1.18.19]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.18...v1.18.19
+[1.18.18]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.17...v1.18.18
 [1.18.17]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.16...v1.18.17
 [1.18.16]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.15...v1.18.16
 [1.18.15]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.14...v1.18.15
