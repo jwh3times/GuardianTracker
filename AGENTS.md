@@ -309,9 +309,7 @@ and retain reports/evidence for 14 days; visual stays optional.
 
 Every third-party workflow `uses:` entry is pinned to a reviewed 40-character
 release commit with a readable `# vX.Y.Z` comment. The `github-actions`
-Dependabot ecosystem advances both the SHA and comment. `actions/setup-node`
-remains at v7.0.0 until the fix tracked by upstream issue 1596 reaches a v7
-release; take the first patched v7 update proposed by Dependabot.
+Dependabot ecosystem advances both the SHA and comment.
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
