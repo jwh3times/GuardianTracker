@@ -22,6 +22,11 @@ actually built:
   landed, whether delivered immediately or, for ADRs 0014–0021, after being
   sequenced.
 
+The index's **Delivery status** column abbreviates these. **Current** marks a
+record whose `Status` is plain **Accepted**, **Sequenced** one whose
+implementation is still landing, and **Implemented in `vX.Y.Z`** one whose
+implementation has landed.
+
 A record may also carry a **Supersedes in part** or **Superseded in part by**
 line. Supersession here is narrow and bidirectional: it names the exact statement
 that changed rather than reissuing the record, and both records link to each
@@ -46,12 +51,12 @@ other. See [ADR 0021](./0021-own-preferences-synchronization.md), the first one,
 | [0012](./0012-session-issuance-owns-the-session-lifecycle.md)    | Session issuance owns the session lifecycle    | Current                                                                                                     |
 | [0013](./0013-own-the-application-cache-contract.md)             | Application cache ownership                    | Current                                                                                                     |
 | [0014](./0014-own-manifest-derived-publication.md)               | Manifest-derived publication ownership         | Sequenced; fence landed in `v1.0.14`; Items, Records, Efficiency, and Collections adopted; Weekly continues |
-| [0015](./0015-own-item-acquisition-facts-in-items.md)            | Item acquisition facts owned by Items          | Sequenced; Items slice landed in `v1.0.15`, downstream adoption continues                                   |
+| [0015](./0015-own-item-acquisition-facts-in-items.md)            | Item acquisition facts owned by Items          | Implemented in `v1.3.31`                                                                                    |
 | [0016](./0016-own-acquisition-recommendation-outcomes.md)        | Acquisition recommendation outcomes            | Implemented in `v1.3.35`                                                                                    |
 | [0017](./0017-own-the-browser-session-projection.md)             | Browser session projection                     | Implemented in `v1.3.10`                                                                                    |
 | [0018](./0018-own-complete-membership-collections.md)            | Complete membership collections                | Implemented in `v1.3.29`                                                                                    |
 | [0019](./0019-own-wish-list-and-preferences.md)                  | Wish list and Preferences ownership            | Implemented in `v1.3.31`                                                                                    |
 | [0020](./0020-own-frontend-data-access.md)                       | Frontend data access                           | Implemented in `v1.3.54`                                                                                    |
 | [0021](./0021-own-preferences-synchronization.md)                | Preferences synchronization                    | Implemented in `v1.3.54`                                                                                    |
-| [0022](./0022-github-owns-task-status.md)                        | GitHub owns task status                        | Current                                                                                                     |
+| [0022](./0022-github-owns-task-status.md)                        | GitHub owns task status                        | Implemented in `v1.3.6`                                                                                     |
 | [0023](./0023-since-last-visit-digest-snapshot.md)               | Snapshot-owned since-last-visit digest         | Implemented in `v1.8.0`                                                                                     |

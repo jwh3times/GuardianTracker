@@ -27,6 +27,9 @@ this split exists to eliminate.
 | `README.md`                                   | Public contributors                | Project overview, feature summary, quick commands, doc index                                                                        |
 | `SETUP.md`                                    | Developers                         | Local setup, env files, ports, tests, Compose, Minikube                                                                             |
 | `docs/README.md`                              | Maintainers                        | Public/private documentation boundary and doc ownership                                                                             |
+| `CONTEXT.md`                                  | Developers/agents                  | Project glossary: domain vocabulary and seam names, one owner per term                                                              |
+| `docs/product.md`                             | Contributors/maintainers           | Durable product intent and audience; not status                                                                                     |
+| `docs/agents/*.md`                            | AI coding agents                   | Per-repo configuration for engineering skills: issue tracker, triage labels, domain docs, human follow-ups                          |
 | `docs/architecture.md`                        | Developers/reviewers               | Implemented runtime shape, data flow, route groups, security posture                                                                |
 | `docs/adr/*.md`                               | Maintainers                        | Durable decisions future work must preserve or supersede                                                                            |
 | `ROADMAP.md`                                  | Contributors/maintainers           | Not-yet-implemented public work, gates, likely size                                                                                 |
@@ -44,7 +47,7 @@ this split exists to eliminate.
 | `.claude/agents/penetration-tester.md`        | penetration-tester subagent        | Attack surface, security controls, intentional gaps                                                                                 |
 | `.claude/agents/code-reviewer.md`             | code-reviewer subagent             | Review rules, what to flag, intentional exceptions                                                                                  |
 | `.claude/agents/kubernetes-infrastructure.md` | kubernetes-infrastructure subagent | Minikube topology, manifests, configmaps, scripts                                                                                   |
-| `.claude/agents/docker-containers.md`         | docker-containers subagent         | Dockerfiles, image builds, base image versions                                                                                      |
+| `.claude/agents/docker-containers.md`         | docker-containers subagent         | Dockerfiles, image builds, build-context policy                                                                                     |
 | `scripts/sync-agents.mjs`                     | Maintainers                        | Generates `.codex/agents/` from `.claude/agents/` and `.claude/skills/` from `.agents/skills/`; edit when the sync contract changes |
 
 ## Private docs boundary
@@ -138,8 +141,8 @@ are portable and permission-free:
 
 - API endpoints: grep `(GET|POST|PUT|DELETE|PATCH)\(` in
   `backend/api-service/api/router.go`
-- JWT claims: grep `Claims\[|MapClaims|token_type` in `backend/api-service/auth/jwt.go`
-- Env vars: grep `Getenv|getEnv|getIntEnv` in `backend/api-service/config/config.go`
+- JWT claims: read the `JWTClaims` struct (grep `JWTClaims|json:"`) in `backend/api-service/auth/jwt.go`
+- Env vars: grep `get[A-Za-z0-9]*Env\(|getJWTAccessTTL|Getenv` in `backend/api-service/config/config.go` — every `get*Env` helper, not only `getEnv`/`getIntEnv`
 - Docker base images: grep `^FROM` in the Dockerfiles; read Compose/workflow
   `image:` values from their YAML rather than copying versions from docs
 - K8s topology: inspect tracked `k8s/*.yaml`, the startup/shutdown scripts, and

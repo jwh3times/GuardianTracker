@@ -101,7 +101,7 @@ Fix OAuth callback dropping the state parameter on retry
 
 The root `VERSION` file is the project version source of truth. It must contain a
 plain three-part SemVer value in `<major>.<minor>.<build>` form, such as
-`0.2.0`.
+`1.18.0`.
 
 Every merge to `main` creates an annotated tag and GitHub Release named
 `v<major>.<minor>.<build>`. The workflow auto-increments the build number within
@@ -150,6 +150,7 @@ Every PR must pass these GitHub Actions jobs before it can merge:
 | **Test Frontend**       | type-check, lint, Vitest with coverage thresholds, production build                                                                                      |
 | **Test Go Services**    | `go vet`, Staticcheck 2026.1, declared `govulncheck` v1.6.0 via `go tool`, `go test -race` with the coverage gate; DB integration tests against Postgres |
 | **Build Docker Images** | builds both production Docker images (build validation; no push)                                                                                         |
+| **Browser E2E + Axe**   | Playwright functional and axe accessibility suite against the hermetic stack (`.github/workflows/browser.yml`)                                           |
 | **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.sh`); exempt for bot-authored PRs        |
 
 Third-party actions in `.github/workflows/` must use a reviewed 40-character
@@ -162,9 +163,9 @@ is enforced through a code-scanning merge rule rather than as a required status
 check. See [AGENTS.md → CI/CD](./AGENTS.md#cicd) for the full explanation, including
 how Dependabot PRs are handled.
 
-The separate browser workflow reports failures normally but is not initially in
-branch protection. Promote `Browser E2E + Axe` after ten consecutive clean runs.
-`Browser Visual Regression` remains advisory.
+`Browser E2E + Axe` runs in the separate browser workflow and is a required
+check. `Browser Visual Regression`, in the same workflow, reports failures
+normally but remains advisory.
 
 ## Reporting bugs & requesting features
 

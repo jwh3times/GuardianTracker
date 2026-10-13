@@ -66,7 +66,7 @@ game's clock, not the application's, and cannot anchor a digest keyed to a visit
 boundary.
 
 The application also persists no history. Seven migrations define `users`,
-`bungie_tokens`, `feature_flags`, `refresh_sessions`, `audit_log`, `role_audit`,
+`bungie_tokens`, `feature_flags`, `refresh_sessions`, `audit_log`,
 `user_preferences`, and `wishlist_items`. Collections are fetched live and
 cached in memory only. There is nothing to diff against.
 

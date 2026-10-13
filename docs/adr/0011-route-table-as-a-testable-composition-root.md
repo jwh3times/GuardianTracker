@@ -76,6 +76,10 @@ injectable interval. `corsMiddleware` becomes `middleware.CORS` beside the
 - `main_test.go` is gone; its CORS cases moved to
   `api/middleware/middleware_test.go`. `package main` has no tests because it
   no longer holds anything to test.
+  - Update (2026-10-13): `main_test.go` exists again. It was re-added on
+    2026-08-25 and now tests composition helpers that live in `package main` —
+    token-persistence dependency selection and Manifest observer ordering. It
+    still holds no route or middleware tests; those stay on the route table.
 - `db.Stores.Available()` keeps its remaining caller (`auth.NewAuthz`) and the
   pruner gate, unchanged from ADR-less B4 reasoning: a background loop that can
   only ever fail is noise, not resilience.

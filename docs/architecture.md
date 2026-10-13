@@ -19,9 +19,10 @@ React/Vite frontend (:5273)
   custom `gt-*` design system.
 - **API:** Go + Gin HTTP service with Bungie OAuth, JWT access/refresh tokens,
   manifest management, collection analysis, weekly recommendations, search,
-  wishlist, preferences, a since-last-visit digest, roles, flags, admin
-  endpoints, and structured request logging.
-- **Postgres:** users, wishlist, preferences and onboarding completion,
+  wishlist, roll targets, preferences, a since-last-visit digest, characters,
+  records (catalysts, crafting, seals), roles, flags, admin endpoints, and
+  structured request logging.
+- **Postgres:** users, wishlist, roll targets, preferences and onboarding completion,
   since-last-visit digest state, encrypted Bungie access authorization,
   Guardian Tracker refresh sessions, roles, feature flags, and audit log.
 - **SQLite:** local copy of the Bungie Destiny 2 manifest, downloaded and
@@ -119,8 +120,8 @@ endpoints require an exact allowlisted browser origin. This cookie policy assume
 the frontend and API are same-site; a cross-site deployment would require a new
 cookie and CSRF decision.
 
-Authorization reads the current role from the DB-backed revocation cache rather
-than trusting the JWT role hint.
+Authorization reads the current role from the DB-backed revocation cache; the
+JWT carries no role claim.
 
 ## Roles, Flags, and Admin
 
@@ -298,12 +299,16 @@ inferred across an item's full source union. See
 Primary route groups:
 
 - auth: Bungie login, initial callback, authenticated Bungie reconnect, Guardian
-  Tracker session refresh, logout, logout-all
+  Tracker session refresh, access-token validation (`GET /api/auth/validate`),
+  logout, logout-all
 - account: Guardian Tracker user snapshot, role opt-in, feature flags
 - collections: collection tree, refresh, item views, item perk pools
 - weekly: recommendations, Xur inventory and authenticated location, milestones,
   reset countdowns; authenticated vendor calls validate and follow the selected
-  character because Bungie's vendor inventory can be class-specific
+  character because Bungie's vendor inventory can be class-specific; gated
+  behind the `weekly-planner` feature flag
+- search: item search over the in-memory manifest index
+  (`GET /api/items/search`); gated behind the `global-search` feature flag
 - wishlist: user-scoped CRUD
 - rolltargets: user-scoped CRUD, bulk delete (named ids, one import batch, or every target the
   membership owns), DIM-format wish list import, and a match report joining
@@ -312,7 +317,7 @@ Primary route groups:
   each unmatched target when some, but not all, unique target perk columns are
   satisfied; membership is
   read solely from the JWT — unlike
-  collections, characters, catalysts, crafting, and seals, no route or
+  collections, characters, digest, catalysts, crafting, and seals, no route or
   request body carries a membership; gated behind the `god-roll` feature flag
   (alpha tier); called from the frontend's Roll targets page (`/rolls`) and,
   scoped to the open item, the Collections item detail drawer's per-weapon
@@ -331,19 +336,22 @@ Primary route groups:
 - preferences: user preferences plus irreversible first-run onboarding completion
 - digest: since-last-visit collectible digest, advancing the visit clock as a
   side effect
-- records: catalysts, crafting, seals
+- records: catalysts, crafting, seals; catalysts and crafting are gated behind
+  the `catalysts-crafting` feature flag and seals behind `triumphs-seals`
 - characters: Destiny membership characters, owner-only equipped-item detail,
   one bounded page of recent completed activity, and a best-effort current
   activity for one character; activity history and current activity resolve
   names through the manifest and omit Bungie instance IDs
 - admin: users, roles, flags, audit log
 - health: `/health` liveness and `/ready` readiness; readiness requires the
-  manifest and, when a database pool is configured, a successful database ping
+  manifest and, when a database pool is configured, a successful database ping;
+  the public `GET /api/manifest/status` reports manifest state
 
 See `backend/api-service/api/router.go` for the authoritative route
-registration. Authentication is applied once to the authenticated group rather
-than per route, and the invariants — every `/api` route behind the JWT gate,
-each flag-gated route enforcing its own flag key, admin routes refusing
+registration. Authentication is applied through one shared JWT gate on the
+authenticated groups rather than per route, and the invariants — every `/api`
+route behind the JWT gate except the four deliberately public ones (manifest
+status, Bungie login start, callback, and refresh), each flag-gated route enforcing its own flag key, admin routes refusing
 non-admins and degraded builds — are asserted against the built route table in
 `api/router_test.go`. See
 [ADR 0011](./adr/0011-route-table-as-a-testable-composition-root.md).
@@ -447,7 +455,8 @@ environment runs in development mode and is not production parity.
   current/previous key versions.
 - CORS allows only configured origins.
 - Membership-scoped routes (collections, collections refresh, characters,
-  catalysts, crafting, seals) authorize the caller's whole Destiny membership
+  character equipment, character activity history, character current activity,
+  digest, catalysts, crafting, seals) authorize the caller's whole Destiny membership
   pair — platform type and ID, not ID alone — before any Bungie call or cached
   data is touched.
 - API server timeouts, body limits, no-sniff/referrer headers, and no-store auth

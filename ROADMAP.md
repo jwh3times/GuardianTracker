@@ -130,7 +130,9 @@ Guardian Tracker currently runs only as a local application, so this waits on
 [Production Deployment Path](#production-deployment-path).
 
 Send opt-in reminders when weekly or vendor data contains missing or wishlisted
-items.
+items. This is outbound delivery (for example email); the in-app
+since-last-visit digest on the Dashboard has already shipped and is not part of
+this item.
 
 Decisions to settle:
 

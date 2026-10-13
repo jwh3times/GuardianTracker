@@ -49,7 +49,7 @@ private companion. See [ADR 0022](../adr/0022-github-owns-task-status.md).
 - **Set a field**: `gh project item-edit --id <item-id> --project-id <project-id> --field-id <field-id> --text "..."` (or `--number`, or `--single-select-option-id`)
 
 Fields: `Chain` (single-select), `Order` (number), `Blocked By` (text), `Gate`
-(text), `ADR` (text), `Status` (single-select).
+(text), `ADR` (text), `Status` (single-select), `Triage` (single-select).
 
 **Drafts versus issues.** Unclaimed work is a draft item; an issue is created
 when the work is claimed, which keeps the open-issue list readable as live
@@ -68,7 +68,7 @@ slice label no item carries, and exits non-zero when it finds any. Clear each to
 through your `gh` session, so it runs locally; CI tests only its parsing.
 
 **Which repository.** File public by default. Use the private companion
-(`jwh3times/GuardianTracker-private`) only when the body would need a
+repository only when the body would need a
 credential, a real provider/cost/account identifier, or exploitable security
 detail.
 

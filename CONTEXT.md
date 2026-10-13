@@ -265,7 +265,7 @@ or mid-swap; that is a 503, not an error.
 `services/weekly` uses from `services/collections`: the user's missing-item
 hashes. Consumer-side, so `weekly` does not import `collections` at all, and
 difficulty classification goes to `services/sources` directly rather than
-through `collections.ClassifyDifficulty`. Required, never nil — a reader that
+through `collections`. Required, never nil — a reader that
 degraded to an empty set would report a complete collection.
 
 **Wish list Entries** (`wishlist.Entries`) — the early-constructed owner of
@@ -395,9 +395,10 @@ load-bearing, which is why it is two components rather than one with a flag.
 **Composition root** — `main.go`, and only `main.go`: it loads configuration,
 constructs services and handlers, declares swap participation, and serves. It
 holds no logic of its own. The route table it hands to `api.NewRouter` lives in
-`api/router.go`. **Authenticated group** (`authed`) — the one place the JWT gate
-is applied; every authenticated route registers on it rather than naming the
-middleware itself. See
+`api/router.go`. **Authenticated group** (`authed`, plus `authedAuthRoutes` for
+the authenticated `/api/auth` routes) — the JWT gate is built once and applied
+only to these two groups; every authenticated route registers on one of them
+rather than naming the middleware itself. See
 [ADR 0011](./docs/adr/0011-route-table-as-a-testable-composition-root.md).
 
 **Load-through** (`cache.Load` / `cache.LoadIf`) — the way a cached value is
@@ -424,7 +425,8 @@ absent database must not hide pages. See
 [ADR 0006](./docs/adr/0006-roles-feature-flags-and-admin-authorization.md).
 
 **Session issuer** (`auth.SessionIssuer`) — the owner of the browser session
-lifecycle: `AuthorizeURL`, `Login`, `Refresh`, `EndSession`, `EndAllSessions`.
+lifecycle: `AuthorizeURL`, `Login`, `Reconnect`, `Refresh`, `EndSession`,
+`EndAllSessions`.
 It decides what a session is; the Gin handlers decide only what that looks like
 over HTTP. Failures cross the seam as `auth.SessionError`, whose `Reason` is
 also the audit reason string, so the two cannot drift. See

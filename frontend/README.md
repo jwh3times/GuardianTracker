@@ -65,7 +65,8 @@ src/
 ```
 
 The production feature slices are `admin`, `auth`, `collections`, `cosmetics`,
-`dashboard`, `guardian`, `onboarding`, `settings`, `weekly`, and `wishlist`.
+`dashboard`, `guardian`, `onboarding`, `rolltargets`, `settings`, `weekly`, and
+`wishlist`.
 Tests are colocated with the source they cover.
 
 `design/` is a frozen historical prototype, not a second implementation source.
@@ -81,9 +82,9 @@ Their order is load-bearing and documented in `src/contexts/AppProviders.tsx`.
 
 Authenticated routes render inside `AppShell`, which provides desktop and
 mobile navigation, global search, settings access, and the selected-character
-control. Page routes include Dashboard, Collections, Cosmetics, Wishlist, This
-Week, Catalysts & Crafting, Triumphs & Seals, Settings, and the admin-only
-console. Feature-flag and admin checks in the UI supplement server-side
+control. Page routes include Dashboard, Collections, Cosmetics, Wishlist, the
+flag-gated Roll targets page (`/rolls`), This Week, Catalysts & Crafting,
+Triumphs & Seals, Settings, and the admin-only console. Feature-flag and admin checks in the UI supplement server-side
 authorization; they do not replace it. The Guardian route shows only the
 selected character's current equipment, a bounded recent-completed-activity
 timeline, and a best-effort current-activity panel. Activity names resolve
@@ -151,8 +152,10 @@ The frontend `.dockerignore` excludes local environment variants, credentials,
 certificates, caches, generated bundles, and browser reports/auth state at every
 directory depth. The root `.env.example` is retained as a value-free template.
 Local `.env` files therefore do not configure the nginx image. `VITE_*` settings
-are public build-time configuration; the current Dockerfile builds with source
-defaults and does not inject settings from nginx's runtime environment.
+are public build-time configuration. The Dockerfile's one build-time input is
+the `VITE_OAUTH_COMPLETION_ORIGIN` build argument, which Compose passes from the
+root `.env`; everything else builds with source defaults, and nothing is
+injected from nginx's runtime environment.
 
 From the repository root, `npm run test:docker-context` checks both application
 contexts using synthetic files and Docker's actual `COPY` behavior. It requires

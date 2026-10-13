@@ -1,7 +1,12 @@
 # ADR 0015: Own Item Acquisition Facts in Items
 
-- Status: Accepted — implementation sequenced in [#172](https://github.com/jwh3times/GuardianTracker/issues/172)
+- Status: Accepted — implemented in `v1.3.31`
 - Date: 2026-08-16
+
+Every slice has landed. `services/items` published `AcquisitionFactsReader` and
+Item HTTP handling adopted `Lookup` in `v1.0.15`, Collections adopted `Catalog`
+in `v1.3.25`, and the Wish List adopted `Lookup` in `v1.3.31`, leaving
+`services/items` the only projector of Item acquisition facts.
 
 ## Context
 
@@ -93,11 +98,11 @@ state. Errors and unknown hashes are not cached.
 - **Perks and catalysts** remain neighboring Items capabilities outside
   `AcquisitionFactsReader`.
 
-Implementation removes duplicated source grouping, Item projection, handler-local
+Implementation removed duplicated source grouping, Item projection, handler-local
 raw Manifest interfaces, and obsolete implementation-shaped tests. The
-[#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff sequences
-it, and the real-Manifest verification below remains a gate the handoff runs
-before this ADR's slice opens.
+[#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff sequenced
+it, and the real-Manifest verification below was a gate the handoff ran before
+this ADR's slice opened.
 
 ## Alternatives considered
 
@@ -137,7 +142,8 @@ facts.
 - New Items tests cover known-empty, unknown, unavailable, deterministic source
   union, representative-only farm-only, defensive copies, bounded caching,
   coherent batches, and ADR 0014 stale-publication races.
-- Before implementation, ADR 0003 requires a current real-Manifest comparison of
+- Before implementation, ADR 0003 required a current real-Manifest comparison of
   multi-Collectible Items, acquisition-source parity, catalog cardinality, and
-  representative ordering. If a deterministic representative order changes any
-  farm-only outcome, implementation stops for a separate decision.
+  representative ordering. Had a deterministic representative order changed any
+  farm-only outcome, implementation would have stopped for a separate decision.
+- Implementation was sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeded slice by slice.

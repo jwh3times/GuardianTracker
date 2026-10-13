@@ -1,6 +1,6 @@
 # ADR 0017: Own the Browser Session Projection
 
-- Status: Implemented in `v1.3.10`
+- Status: Accepted — implemented in `v1.3.10`
 - Date: 2026-08-17
 
 ## Context
@@ -253,4 +253,4 @@ client owns only the browser projection and transport orchestration.
   unsupported browsers cannot establish or renew a session and must use a
   compatible browser. Logout remains locally final without attempting an
   uncoordinated cookie mutation.
-- Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.
+- Implementation was sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeded slice by slice.

@@ -34,16 +34,23 @@ npm run lint       # Oxlint, including type-aware TypeScript checks
 npm run lint:fix   # Apply safe Oxlint fixes
 ```
 
-Oxlint is the sole linter. Type-aware analysis uses `oxlint-tsgolint` 7.0.2001;
-23 rules from typescript-eslint's `recommended-type-checked-only` preset run as
-warnings for `src/`, `vite.config.ts`, and all 10 TypeScript files under `e2e/`.
+Oxlint is the sole linter. Type-aware analysis uses `oxlint-tsgolint` at the
+version pinned in `frontend/package.json`; 23 rules from typescript-eslint's
+`recommended-type-checked-only` preset run as warnings for `src/`,
+`vite.config.ts`, and every TypeScript file under `e2e/`.
 They expose the type-safety cleanup backlog without blocking CI.
 `playwright.config.ts` remains native-rule-only because tsgolint does not match
 it even though `frontend/e2e/tsconfig.json` includes it. The root TypeScript
 configuration includes Node ambient types, and the e2e project extends it.
-Native `react/react-compiler` also runs as a warning and replaces the individual
-recommended-latest compiler rules; preserve that intentional severity and
-suppression policy. TypeScript 7 is the project compiler; `npm run type-check`
+The React Compiler checks are configured as individual native rules in
+`frontend/.oxlintrc.json` — `react/error-boundaries`, `react/globals`,
+`react/immutability`, `react/incompatible-library`,
+`react/preserve-manual-memoization`, `react/purity`, `react/refs`,
+`react/set-state-in-effect`, `react/set-state-in-render`,
+`react/static-components`, `react/unsupported-syntax`, `react/use-memo`, and
+`react/void-use-memo` — each as a warning; there is no single
+`react/react-compiler` rule. Preserve that intentional severity and suppression
+policy. TypeScript 7 is the project compiler; `npm run type-check`
 (`tsc --noEmit`) remains the main frontend project's type gate, and Prettier
 remains the formatter. The standalone e2e project currently reports six
 pre-existing Playwright fixture typing errors under both TypeScript 6 and 7;
@@ -280,6 +287,19 @@ frontend/src/
                                    Exports `invalidateSeals(client)` as this resource's invalidation
                                    entry point. Read by `Triumphs.tsx`. This is the last of the eleven
                                    ADR 0020 resource slices (E4–E14).
+    digest.ts                     ← Since-last-visit digest (ADR 0023), landed after ADR 0020's own
+                                   eleven-resource list but following its pattern exactly. Private
+                                   query key `["digest", membershipType, membershipId]`; endpoint
+                                   `GET /api/digest/:membershipType/:membershipId`; projects
+                                   `APIDigest` → `Digest` via `toDigest`/`toAcquiredItem`, keeping
+                                   `previousVisitAt` absent when the wire omits it. The backend owns
+                                   the diff, the visit freeze, and the `ready`/`first-visit`/
+                                   `unavailable` status; this module only reads and projects it.
+                                   `useDigest()` takes no arguments — it reads the signed-in membership
+                                   from `useAuth()` — and returns
+                                   `{ digest, isLoading, isError, error, retry }`. Exports
+                                   `invalidateDigest(client)`, which joins `membershipRefresh.ts`'s
+                                   fan-out. Read by `Dashboard.tsx`.
     rolltargets.ts                ← Roll targets (slice 5b, behind the `god-roll` flag), landed after
                                    ADR 0020's own eleven-resource list but following its pattern exactly.
                                    Two private query keys sharing one root — `["rollTargets", "list"]`
@@ -432,7 +452,7 @@ frontend/src/
                                    `standard`; moved here from a private copy in `data/flags.ts` in E11
                                    so `data/admin.ts` could share it) (used by admin kit + Settings)
     utils.ts                   ← cn() Tailwind class merger (used by LoadingSpinner + Toast)
-    errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code
+    errorState.ts              ← errorState(error) → ErrorStateCopy; branches on ApiError.code/status
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (reads data/search.ts's
                                    useItemSearch, navigates to /collections?item=<hash>); character
@@ -539,7 +559,9 @@ frontend/src/
                                    neutrally with a Reconnect/Retry banner; see "Roll targets page
                                    features" below), RollTargetImport.tsx (file picker + paste box, both
                                    landing on `data/rolltargets.ts`'s `useImportRollTargets`; renders the
-                                   DIM import report), RollTargetRow.tsx (one target's card: icon/name or
+                                   DIM import report), RollTargetImports.tsx (groups the saved list by
+                                   import batch and deletes one batch; see "Import batches" below),
+                                   RollTargetRow.tsx (one target's card: icon/name or
                                    the any-weapon phrase, perk chips, note, select/edit/delete — shared by
                                    "Still chasing" and the neutral failure-state list), RollTargetMatchCard.tsx
                                    (one target's "You have it"/unwanted card: heading, perks, note, then
@@ -637,10 +659,11 @@ path, projection to a domain type, every mutation, and its own invalidation.
 **Do not declare a raw inline `useQuery`/`useIdentityMutation` call in a
 feature for a resource that already has a `src/data/` module** — read the
 module's hook instead. Preferences (`data/preferences.ts`, ADR 0021, E15) is a
-twelfth `src/data/` module that owns its resource the same way but deliberately
+further `src/data/` module that owns its resource the same way but deliberately
 uses no React Query — see its entry in "File structure" above. Roll targets
-(`data/rolltargets.ts`, slice 5b, behind the `god-roll` flag) landed later,
-outside ADR 0020's own eleven-resource list but following its pattern exactly.
+(`data/rolltargets.ts`, slice 5b, behind the `god-roll` flag) and the
+since-last-visit Digest (`data/digest.ts`, ADR 0023) landed later, outside
+ADR 0020's own eleven-resource list but following its pattern exactly.
 
 This boundary is machine-enforced, not just convention (ADR 0020, E16):
 `.oxlintrc.json` makes `no-restricted-imports` an error for `src/features/**`
@@ -653,7 +676,7 @@ The OAuth starter and initial callback delegate to the shared browser session
 client. Its browser transport owns `fetch`, credential attachment, and refresh;
 `apiFetch` shapes REST responses/errors and routes Bungie reauthorization.
 
-`ApiError` carries `.status` (HTTP status) and `.code` (backend machine-readable code). Use `errorState(error)` from `lib/errorState.ts` to map errors to UI copy — it branches on `PRIVACY_RESTRICTION`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`.
+`ApiError` carries `.status` (HTTP status) and `.code` (backend machine-readable code). Use `errorState(error)` from `lib/errorState.ts` to map errors to UI copy — it branches on `PRIVACY_RESTRICTION`, `REFRESH_UNAVAILABLE`, `MANIFEST_NOT_READY` (or any 503), `BUNGIE_ERROR` (or any 502), `FEATURE_DISABLED`, and `TIER_LOCKED`.
 
 **Every view that renders a `useQuery` result must have an `isError` branch that renders `<QueryErrorPanel error={...} onRetry={refetch} />`.** A failed fetch must never fall through to the same-looking empty state as "you have zero of these" — that gap previously shipped on WishList, Admin, This Week, and header search. The one narrow exception is a dropdown-style menu (header search) where a `gt-card` panel would break the container's layout; use a one-line message there instead, matching `AppShell.tsx`'s `SearchBar`.
 
@@ -947,7 +970,7 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Style with the `gt-*` class vocabulary (e.g. `gt-card`, `gt-panel`, `gt-item`, `gt-badge`). Reach for the shared components in `components/` (`primitives`, `composite`, `Icon`) before writing markup by hand.
 - Rarity/difficulty theming: set `data-rarity` (`exotic|legendary|rare|uncommon|common`) or `data-diff` (`easy|moderate|challenging`) on a wrapper; children read the resolved `--rarity` / `--diff` custom properties.
 - Dynamic numeric values are passed as inline CSS custom properties (e.g. `style={{ "--val": pct }}`), cast as needed. Avoid other inline styles where a `gt-*` class exists.
-- Layout is fixed: sidebar nav, comfortable density, cyan "signal" accent. Tailwind is still installed for the `LoadingSpinner` / `Toast` primitives and `ErrorBoundary` only — do not add new Tailwind-styled UI.
+- Layout is fixed: sidebar nav, comfortable density, cyan "signal" accent. Tailwind is still installed for the `LoadingSpinner` / `Toast` primitives only (the two `cn()` callers; `ErrorBoundary` uses `gt-page`) — do not add new Tailwind-styled UI.
 - User-adjustable prefs (card style, "for you" badges) come from `usePreferences()` — do not hardcode them.
 
 ## Testing
@@ -956,10 +979,10 @@ The app uses the **Guardian Tracker design system**, not Tailwind utilities:
 - Setup file: `src/test/setup.ts` (MSW server + fixtures in `src/test/testServer.ts`)
 - Tests are colocated with the code they cover: lib tests in `lib/`, component tests in `components/`, and each feature's page tests inside `features/<feature>/`
 - Data-access modules (`src/data/`) get contract tests colocated as `<resource>.test.tsx` (e.g. `data/wishlist.test.tsx`), exercising the public hooks — not the private projection function — for query identity/shape, projection, and optimistic rollback/settle behavior (ADR 0020). Feature tests for a migrated resource drop wire-shape assertions and keep visible behavior only. `data/membershipRefresh.test.tsx` (E16) additionally reads every `data/*.ts` module's source via `import.meta.glob` and fails if a module reading the signed-in membership has neither a matching `invalidate<Resource>` entry point wired into `fanOut` nor a named entry in `REFRESH_EXEMPTIONS`.
-- `renderWithProviders` (`src/test/renderWithProviders.tsx`) is the standard way to render a page under test — it mounts `ui` inside `AppProviders` + `MemoryRouter`, and, when `authed` (default `true`), also wraps `AuthedProviders` and seeds the atomic browser-session envelope with `seedBrowserSession` (`src/test/browserSession.ts`). Options: `route`, `initialEntries`, `initialIndex`, `authed`, `client` (a fresh retry-disabled `QueryClient` by default). Pass a `<Routes>` element as `ui` when a test needs real route matching. Three test files deliberately keep their own hand-rolled tower instead of `renderWithProviders`: `contexts/contexts.test.tsx` (tests the contexts directly), `features/auth/OAuthCallback.test.tsx` (needs `StrictMode` mounted as a double-invoke regression guard), and `lib/units.test.tsx` (renders providers in isolation). Reach for `renderWithProviders` for any new page test rather than hand-rolling a tower.
+- `renderWithProviders` (`src/test/renderWithProviders.tsx`) is the standard way to render a page under test — it mounts `ui` inside `AppProviders` + `MemoryRouter`, and, when `authed` (default `true`), also wraps `AuthedProviders` and seeds the atomic browser-session envelope with `seedBrowserSession` (`src/test/browserSession.ts`). Options: `route`, `initialEntries`, `initialIndex`, `authed`, `client` (a fresh retry-disabled `QueryClient` by default). Pass a `<Routes>` element as `ui` when a test needs real route matching. A few test files deliberately keep their own hand-rolled tower instead of `renderWithProviders`, including `contexts/contexts.test.tsx` and `contexts/identityBoundary.test.tsx` (test the contexts and the identity boundary directly), `features/auth/OAuthCallback.test.tsx` (needs `StrictMode` mounted as a double-invoke regression guard), `features/collections/useCollectionsBrowser.test.tsx` (a hook test), and `lib/units.test.tsx` (renders providers in isolation). Reach for `renderWithProviders` for any new page test rather than hand-rolling a tower.
 - Run: `npm test` (from `frontend/`)
 - Test behavior, not implementation: prefer `getByRole`, `getByText`, `findBy*` over snapshot tests
-- Mock `AuthContext` when testing pages that call `useAuth()`
+- Do not mock `AuthContext` for a page that calls `useAuth()` — `renderWithProviders` seeds a real browser session instead. A module mock of `AuthContext` is the exception, for a component test that must control the auth snapshot directly
 - Do not use `MockedProvider` from Apollo — there is no Apollo Client in this project
 - Browser suites live under `frontend/e2e/` and use Playwright (version pinned in `frontend/package.json`) plus `@axe-core/playwright`. Run `npm run e2e` for functional + accessibility + destructive-auth projects and `npm run e2e:visual` for visual comparison.
 - Start `docker compose --profile e2e up -d --wait e2e-postgres` first and set `E2E_FIXED_TIME=2026-07-18T18:00:00Z`. Playwright launches fake Bungie, the real API, and Vite; never substitute live Bungie calls.

@@ -42,7 +42,7 @@ For the full port map — Docker Compose, Kubernetes, dev/cross-service wiring �
 ### Key directories
 
 - `backend/api-service/` — Go API: `api/router.go` (the route table; `main.go` is a composition root and registers no routes), `api/handlers/` (Gin handlers), `auth/` (JWT issue/verify, middleware, HMAC-signed OAuth state, roles, revocation, encrypted token store, `SessionIssuer` owning login/reconnect/refresh/logout), `db/` (Postgres stores + embedded migrations, audit log, users/roles/flags/wishlist/roll targets/prefs/digest; `Stores` fields are interfaces backed by degraded implementations — never nil — when there is no database; `db/adapters/` translates stores into consumer-side interfaces, including the membership-keyed Preferences, Wish list, Roll targets, and Digest repositories), `services/` (bungie client, manifest, manifeststate, membershipstate, collections, records, weekly, recommendations, search, items, characters, efficiency, sources, preferences, wishlist, rolltargets, ownedrolls, digest), `config/`, `cache/`.
-- `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `data/` (ADR 0020 data-access modules, one per domain resource — owns query identity, projection, mutations, and invalidation; all eleven resources have landed — Wish list, Collections, Weekly, Characters, Items, Search, Flags, Admin, Catalysts, Crafting, and Seals — plus a `membershipRefresh` module owning the cross-resource cache-refresh fan-out over the six membership-scoped ones and a completeness test that fails if a membership-scoped module skips it, and `preferences.ts`, ADR 0021's framework-neutral membership-keyed preferences client, which deliberately uses no React Query and is that fan-out's one named exemption; `features/**` and `components/**` are barred by an oxlint `no-restricted-imports` zone from importing `@tanstack/react-query` or `types/api`, so only `data/` may), `lib/`, `types/`.
+- `frontend/src/` — React app: `features/` (pages), `components/`, `contexts/` (AuthContext, FlagsContext), `data/` (ADR 0020 data-access modules, one per domain resource — owns query identity, projection, mutations, and invalidation; ADR 0020's eleven resources have all landed — Wish list, Collections, Weekly, Characters, Items, Search, Flags, Admin, Catalysts, Crafting, and Seals — and Digest and Roll targets joined later, for thirteen — plus a `membershipRefresh` module owning the cross-resource cache-refresh fan-out over the eight membership-scoped ones (Catalysts, Characters, Collections, Crafting, Digest, Roll targets, Seals, Weekly) and a completeness test that fails if a membership-scoped module skips it, and `preferences.ts`, ADR 0021's framework-neutral membership-keyed preferences client, which deliberately uses no React Query and is that fan-out's one named exemption; `features/**` and `components/**` are barred by an oxlint `no-restricted-imports` zone from importing `@tanstack/react-query` or `types/api`, so only `data/` may), `lib/`, `types/`.
 - `database/init/01-init.sql` — Postgres bootstrap for Docker Compose; `k8s/` — Minikube manifests.
 - `frontend/e2e/` — Playwright functional, accessibility, and visual browser tests.
 - `backend/api-service/cmd/fake-bungie/` — Test-only Bungie/manifest fixture service.
@@ -199,7 +199,7 @@ showing the private branch name.
 **Never commit real secrets. Use `.env` locally and keep generated/private files out of git.**
 
 Frontend tooling uses the exact Node.js 26 patch in the root `.nvmrc`.
-`frontend/package.json` accepts the Node 26 line only; CI and both frontend
+`frontend/package.json` accepts the Node 26 line only; CI and all three frontend
 Dockerfiles use the exact `.nvmrc` patch. Node 26 remains Current until its
 scheduled LTS transition on October 28, 2026; this project intentionally accepts
 that short-term churn because Node is frontend development/build tooling and the
@@ -236,7 +236,7 @@ deployed frontend runtime is nginx.
 - Single-device logout preserves Bungie authorization; logout-all evicts it.
 - Membership-scoped routes (collections, collections refresh, characters,
   character equipment, character activity history, character current activity,
-  catalysts, crafting, seals) authorize the caller's whole Destiny membership
+  catalysts, crafting, seals, digest) authorize the caller's whole Destiny membership
   pair — platform type and ID, not ID alone — and abort the request on
   mismatch before any Bungie call or cache access.
 - Admin access is controlled by explicit membership ID configuration. Self-service role updates lock the current database row, reject admins, and commit `role.optin` audit events atomically without session/token-version changes. Successful bootstrap admin upserts evict the local authorization cache; cross-replica cache propagation retains its 60-second window.
@@ -269,7 +269,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    main-branch synchronization, local documentation-link, jest-dom-shim, and
    changelog-footer policies, and tests the parsing behind `npm run board:blockers`
    (which itself reads the private board locally, not in CI). The Node policy keeps
-   `.nvmrc`, both workflows, both frontend Dockerfiles, package engine metadata, and Node ambient
+   `.nvmrc`, both workflows, all three frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as
    the three Compose PostgreSQL services — Dependabot's `docker-compose` ecosystem does not see
@@ -313,7 +313,7 @@ Dependabot ecosystem advances both the SHA and comment.
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
-**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v0.2.0`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit.
+**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v1.18.26`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit.
 
 ### Branch protection (`main`)
 
@@ -456,7 +456,7 @@ Task status lives on GitHub, not in this repository's files. See
 - **Board:** the private user-level Project `Guardian Tracker`
   (<https://github.com/users/jwh3times/projects/4>), linked to both the public
   repository and the private companion. Fields: `Chain`, `Order`, `Blocked By`,
-  `Gate`, `ADR`, `Status`.
+  `Gate`, `ADR`, `Status`, `Triage`.
 - **Issues go in the public repository by default.** File in the private
   companion only when the body would need a credential, a real
   provider/cost/account identifier, or exploitable security detail.
@@ -532,8 +532,8 @@ of it. Never edit a generated file: change the authored source and re-run the sy
 `format-check` fails on drift.
 
 **Never symlink `.claude/skills/<name>` to `.agents/skills/<name>` (or vice versa)
-instead of running the sync.** This repo has `git config core.symlinks` set to
-`false`, so `git add` on a symlinked directory silently stages the real file
+instead of running the sync.** Git for Windows sets the per-clone `core.symlinks` to
+`false`, and on such a clone `git add` on a symlinked directory silently stages the real file
 contents instead of a link — a commit would duplicate every file rather than
 recording one. A directory-walking generator also can't see into a symlink
 (`entry.isDirectory()` is false for a symlink), so it would treat the linked-to
@@ -560,7 +560,7 @@ Default canonical vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 ### Domain docs
 
-Single-context layout: root `CONTEXT.md` (created lazily) + existing `docs/adr/`. See `docs/agents/domain.md`.
+Single-context layout: root `CONTEXT.md` + existing `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Known Limitations
 

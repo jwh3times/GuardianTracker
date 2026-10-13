@@ -132,7 +132,7 @@ foreach ($deployment in $deployments) {
 # Step 5: Set up port forwarding
 Write-Host "`n5. Setting up port forwarding..." -ForegroundColor Cyan
 
-# Kill any existing port forwarding on port 5273
+# Kill any existing port forwarding on ports 5273 and 8081
 Write-Host "   Cleaning up existing port forwards..." -ForegroundColor Yellow
 Get-Process | Where-Object {$_.ProcessName -eq "kubectl" -and $_.CommandLine -like "*port-forward*"} | Stop-Process -Force -ErrorAction SilentlyContinue
 
@@ -145,12 +145,20 @@ $portForwardJob = Start-Job -ScriptBlock {
     kubectl port-forward service/frontend 5273:80
 }
 
+# The built frontend calls the API at http://localhost:8081 from the browser,
+# and the api-service Service is ClusterIP, so it needs its own forward.
+Write-Host "   Starting port forward to API (localhost:8081 -> api-service:8081)..." -ForegroundColor Yellow
+$apiPortForwardJob = Start-Job -ScriptBlock {
+    kubectl port-forward service/api-service 8081:8081
+}
+
 # Wait a moment for port forwarding to establish
 Start-Sleep -Seconds 3
 
 # Test if port forwarding is working
 try {
     $response = Invoke-WebRequest -Uri "http://localhost:5273" -Method Head -TimeoutSec 5 -ErrorAction Stop
+    $apiResponse = Invoke-WebRequest -Uri "http://localhost:8081/health" -TimeoutSec 5 -ErrorAction Stop
     Write-Host "   Port forwarding established successfully" -ForegroundColor Green
 } catch {
     Write-Host "   WARNING: Port forwarding may not be ready yet. You can test manually." -ForegroundColor Yellow
@@ -166,7 +174,8 @@ kubectl get pods
 
 Write-Host "`nService URLs:" -ForegroundColor Cyan
 Write-Host "  Frontend: http://localhost:5273" -ForegroundColor White
-Write-Host "  (Port forwarding job ID: $($portForwardJob.Id))" -ForegroundColor Gray
+Write-Host "  API:      http://localhost:8081" -ForegroundColor White
+Write-Host "  (Port forwarding job IDs: $($portForwardJob.Id), $($apiPortForwardJob.Id))" -ForegroundColor Gray
 
 Write-Host "`nNext Steps:" -ForegroundColor Cyan
 Write-Host "  1. Open http://localhost:5273 in your browser" -ForegroundColor White
@@ -177,6 +186,6 @@ Write-Host "`nUseful Commands:" -ForegroundColor Cyan
 Write-Host "  Check pods: kubectl get pods" -ForegroundColor White
 Write-Host "  Check services: kubectl get services" -ForegroundColor White
 Write-Host "  View logs: kubectl logs <pod-name>" -ForegroundColor White
-Write-Host "  Stop port forwarding: Stop-Job $($portForwardJob.Id)" -ForegroundColor White
+Write-Host "  Stop port forwarding: Stop-Job $($portForwardJob.Id), $($apiPortForwardJob.Id)" -ForegroundColor White
 
 Write-Host "`n=== Startup Complete ===" -ForegroundColor Green

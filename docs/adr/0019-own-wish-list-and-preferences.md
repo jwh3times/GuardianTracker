@@ -1,6 +1,6 @@
 # ADR 0019: Own Wish List and Preferences
 
-- Status: Implemented in `v1.3.31`
+- Status: Accepted — implemented in `v1.3.31`
 - Date: 2026-08-17
 - Superseded in part by
   [ADR 0021](./0021-own-preferences-synchronization.md): the Boundaries
@@ -403,4 +403,4 @@ domain invariants. The combined interface would be broad and shallow.
   than their encoded byte count.
 - Concurrent preference patches cannot restore stale fields, and onboarding
   completion remains irreversible and server-stamped.
-- Implementation is sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeds slice by slice.
+- Implementation was sequenced by the [#172](https://github.com/jwh3times/GuardianTracker/issues/172) handoff and proceeded slice by slice.

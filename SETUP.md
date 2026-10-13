@@ -12,8 +12,9 @@ secrets, and incident notes belong under `private/`, which is gitignored.
 - Docker Desktop for the recommended full-stack local environment.
 - Go 1.26+ for backend development.
 - The exact Node.js 26 patch in the root `.nvmrc` for frontend development.
-  `frontend/package.json` accepts the Node 26 line only; CI and both frontend
-  Dockerfiles use the exact `.nvmrc` patch, and npm rejects other Node lines.
+  `frontend/package.json` accepts the Node 26 line only; CI and all three
+  frontend Dockerfiles use the exact `.nvmrc` patch, and npm rejects other Node
+  lines.
 - A Bungie application for API and OAuth credentials.
 - Minikube only if you need to validate the Kubernetes manifests.
 - The 1Password CLI only if you are an authorized maintainer restoring the
@@ -143,8 +144,15 @@ Optional values:
 | `ADMIN_MEMBERSHIP_IDS`                  | Comma-separated Bungie membership IDs pinned to admin at login                 |
 | `CORS_ALLOWED_ORIGINS`                  | Explicit browser origins allowed to call the API                               |
 | `JWT_ACCESS_TTL`                        | Access-token lifetime as a Go duration (default `30m`)                         |
+| `CACHE_TTL_RECORDS`                     | Records cache lifetime as a Go duration (default `10m`)                        |
+| `DB_MAX_CONNS`                          | Maximum PostgreSQL pool connections (default `4`)                              |
 | `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                        |
 | `LOG_FORMAT`                            | `text` or `json`; defaults to `text` in development and `json` in production   |
+
+Docker Compose passes the API only the variables named in its `environment`
+list, so the root `.env` cannot set `JWT_ACCESS_TTL` (fixed at `30m` there and
+in the Minikube ConfigMap), `CACHE_TTL_RECORDS`, or `DB_MAX_CONNS`. Set those in
+`backend/api-service/.env` when running the API with `go run`.
 
 Do not commit `.env`, generated secrets, manifest databases, cloud credentials, or
 production runbooks.
@@ -212,8 +220,10 @@ nested source modules named `data`.
 Each context retains only its root `.env.example` template from the environment
 file family. Compose passes API settings through its runtime `environment`
 configuration. Local frontend environment files do not configure the built nginx
-image; Vite configuration is public build-time input, and the current Dockerfile
-uses the checked-in source defaults.
+image; Vite configuration is public build-time input. The image build reads no
+`frontend/.env*` file: its one build-time input is the
+`VITE_OAUTH_COMPLETION_ORIGIN` build argument Compose passes from the root
+`.env`, and everything else uses the checked-in source defaults.
 
 Open:
 
@@ -292,6 +302,11 @@ template, the script restarts it so a reused local tag cannot leave old pods
 running. Newly created deployments and pod-template changes already consume the
 rebuilt images and are not restarted a second time.
 
+When the rollout completes, the script forwards both the frontend
+(<http://localhost:5273>) and the API (<http://localhost:8081>) to the local
+machine. The browser calls the API directly at `http://localhost:8081`, so both
+forwards must stay running.
+
 See [k8s/README.md](./k8s/README.md) for script details and troubleshooting.
 
 ## Ports
@@ -333,6 +348,7 @@ Minikube mappings:
 | frontend Deployment        | `containerPort 8080`            | nginx                                  |
 | frontend Service           | `80 -> 8080`                    | `NodePort`                             |
 | `startup.ps1` port-forward | `localhost:5273 -> frontend:80` | local browser access                   |
+| `startup.ps1` port-forward | `localhost:8081 -> api-service` | API calls from the browser             |
 
 ## Tests and Checks
 
@@ -363,9 +379,18 @@ Backend:
 cd backend/api-service
 go test ./...
 go vet ./...
-GOTOOLCHAIN=go1.26.9 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ./test-local.ps1
 ```
+
+Staticcheck, from `backend/api-service/` in a POSIX shell:
+
+```bash
+GOTOOLCHAIN=go1.26.9 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+```
+
+The `VAR=value command` prefix is POSIX shell syntax. In PowerShell, set
+`$env:GOTOOLCHAIN` to the same `go1.26.9` value first, then run the command
+without the prefix.
 
 `GOTOOLCHAIN` is not optional. Staticcheck 2026.1 is built by whatever Go is
 active, and on a toolchain newer than the pin it cannot decode the standard

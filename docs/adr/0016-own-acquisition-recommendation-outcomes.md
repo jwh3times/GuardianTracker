@@ -1,6 +1,6 @@
 # ADR 0016: Own Acquisition Recommendation Outcomes
 
-- Status: Implemented in `v1.3.35`
+- Status: Accepted — implemented in `v1.3.35`
 - Date: 2026-08-17
 
 Every slice has landed. Sources exposes a named difficulty tier, Efficiency
@@ -11,6 +11,11 @@ closed the frontend projection: `lib/difficulty.ts` owns the one tolerant wire
 adapter, `lib/weeklyView.ts` owns the payload projection, and `weeklyQuery`
 hangs it on the query seam so no feature module casts weekly JSON to a design
 type.
+
+Update (2026-10-13): `weeklyQuery` no longer exists.
+[ADR 0020](./0020-own-frontend-data-access.md) moved the query seam to
+`frontend/src/data/weekly.ts`, whose `useWeekly` hook now carries that
+projection.
 
 The badge defect this decision set out to fix is corrected. Repairing it also
 exposed a latent WCAG AA failure the defect had been masking — `--c-challenging`
