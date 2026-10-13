@@ -14,6 +14,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.26] - 2026-10-13
+
+### Changed
+
+- Removed the agent guide's instruction to hold `actions/setup-node` at v7.0.0.
+  The hold waited on a patched `brace-expansion` (GHSA-3jxr-9vmj-r5cp, upstream
+  issue 1596), which v7.1.0 ships and v1.18.22 adopted.
+
 ## [1.18.25] - 2026-10-13
 
 ### Changed
@@ -1774,7 +1782,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.25...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.26...HEAD
+[1.18.26]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.25...v1.18.26
 [1.18.25]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.24...v1.18.25
 [1.18.24]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.23...v1.18.24
 [1.18.23]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.22...v1.18.23
