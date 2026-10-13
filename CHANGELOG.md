@@ -14,6 +14,36 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.25] - 2026-10-13
+
+### Changed
+
+- The changelog now records the three Dependabot releases v1.18.22 through
+  v1.18.24, which merged without entries.
+
+## [1.18.24] - 2026-10-13
+
+### Changed
+
+- Updated `@tanstack/react-virtual` from 3.14.13 to 3.14.14, `@types/node` from
+  26.6.4 to 26.6.5, Vite from 8.3.2 to 8.3.4, and `@playwright/test` from 1.63.0
+  to 1.64.0. The pinned Playwright browser image moved to `v1.64.0-noble` with
+  it.
+
+## [1.18.23] - 2026-10-13
+
+### Changed
+
+- Frontend Node tooling moved from 26.10.0 to 26.11.1: `.nvmrc`, which CI reads,
+  and the Node pins in all three frontend Dockerfiles.
+
+## [1.18.22] - 2026-10-13
+
+### Changed
+
+- Updated the pinned `actions/setup-node` workflow action from v7.0.0 to v7.1.0
+  and `actions/upload-artifact` from v7.0.1 to v7.0.2.
+
 ## [1.18.21] - 2026-10-13
 
 ### Security
@@ -1744,7 +1774,11 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.21...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.25...HEAD
+[1.18.25]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.24...v1.18.25
+[1.18.24]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.23...v1.18.24
+[1.18.23]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.22...v1.18.23
+[1.18.22]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.21...v1.18.22
 [1.18.21]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.20...v1.18.21
 [1.18.20]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.19...v1.18.20
 [1.18.19]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.18...v1.18.19
