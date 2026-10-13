@@ -51,6 +51,7 @@ func PerIPRateLimit(rps float64, burst int) gin.HandlerFunc {
 		if !b.limiter.Allow() {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error": "Too many requests. Try again shortly.",
+				"code":  "RATE_LIMITED",
 			})
 			return
 		}

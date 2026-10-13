@@ -25,6 +25,10 @@ everywhere bumps the user's token version. Authorization reads current role and
 revocation state from the DB-backed revocation cache rather than trusting JWT
 role hints.
 
+Update (2026-10-13): the access JWT no longer carries a role claim at all. The
+resolved role reaches the browser only in session response bodies, as a display
+value.
+
 ## Consequences
 
 - Browser code never receives Bungie OAuth tokens.

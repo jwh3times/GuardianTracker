@@ -26,3 +26,7 @@ last admin is blocked.
 - Admin and tier checks belong in middleware or handlers, not only in React.
 - Every new privileged endpoint must define its server-side authorization rule.
 - Changes to roles, flags, or audit semantics require docs and tests.
+
+Update (2026-10-13): the access JWT no longer carries a role claim. The display
+role is returned in session response bodies; authorization still reads the role
+from Postgres.
