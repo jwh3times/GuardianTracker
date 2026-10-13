@@ -5,6 +5,10 @@ Primary mark:
 - Purple accent: #ae7ee2
 - Dark ground: #04080d
 
+The assets live in `frontend/public/`, where Vite serves them from the site
+root; this directory keeps only this note and `favicon-snippet.html`. Paths
+below are relative to `frontend/public/`.
+
 Included:
 - `guardian-tracker.svg` — scalable vector mark on transparent background
 - `guardian-tracker-dark.svg` — scalable vector on the required dark rounded tile

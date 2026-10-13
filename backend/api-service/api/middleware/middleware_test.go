@@ -15,16 +15,21 @@ func TestPerIPRateLimit_Blocks(t *testing.T) {
 	r.GET("/x", PerIPRateLimit(1, 2), func(c *gin.Context) { c.Status(200) })
 
 	codes := []int{}
+	var lastBody string
 	for i := 0; i < 4; i++ {
 		w := httptest.NewRecorder()
 		req := httptest.NewRequest("GET", "/x", nil)
 		req.RemoteAddr = "10.0.0.1:1234"
 		r.ServeHTTP(w, req)
 		codes = append(codes, w.Code)
+		lastBody = w.Body.String()
 	}
 	// burst 2 → first two pass, then 429s.
 	if codes[0] != 200 || codes[1] != 200 || codes[2] != 429 || codes[3] != 429 {
 		t.Fatalf("codes = %v, want [200 200 429 429]", codes)
+	}
+	if !strings.Contains(lastBody, `"code":"RATE_LIMITED"`) {
+		t.Fatalf("429 body = %s, want code RATE_LIMITED", lastBody)
 	}
 	// A different IP has its own bucket.
 	w := httptest.NewRecorder()

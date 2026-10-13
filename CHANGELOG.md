@@ -14,6 +14,18 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.28] - 2026-10-13
+
+### Changed
+
+- The per-IP rate limiter on the sign-in endpoints now includes
+  `"code": "RATE_LIMITED"` in its 429 response, matching the API's other error
+  responses.
+- Documentation follow-ups from the audit: the Go subagent definition lists the
+  login-failure and Bungie reconnect audit events, ADRs 0002 and 0006 note that
+  the access JWT no longer carries a role claim, and the icon-pack README says
+  its assets live in `frontend/public/`.
+
 ## [1.18.27] - 2026-10-13
 
 ### Fixed
@@ -1812,7 +1824,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.27...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.28...HEAD
+[1.18.28]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.27...v1.18.28
 [1.18.27]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.26...v1.18.27
 [1.18.26]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.25...v1.18.26
 [1.18.25]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.24...v1.18.25
