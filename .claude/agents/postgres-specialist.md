@@ -79,8 +79,8 @@ rows, err := db.Query(
 PostgreSQL is the primary persistence layer for all user data. The api-service connects at startup via `DATABASE_URL`. Schema is applied automatically by the migration runner (`db/migrate.go`) — no manual DDL is needed.
 
 **Connection:** `pgx/v5/pgxpool` (pure Go, no CGO required)  
-**Schema DDL:** `db/migrations/0001_init.sql` (embedded; applied atomically in a transaction)  
-**Bootstrap role:** `database/init/01-init.sql` — creates the `guardian_app` least-privilege role (run once after server provisioning)
+**Schema DDL:** `db/migrations/*.sql` (embedded; each file applied atomically in a transaction)  
+**Bootstrap role:** `database/init/01-init.sql` — dev-only Docker Compose bootstrap that creates the `guardian_app` least-privilege role with a hardcoded development password; Compose mounts it into the Postgres init directory, so it runs once on a fresh data volume. It is not a production provisioning script
 
 ### Migration runner
 
@@ -90,11 +90,11 @@ PostgreSQL is the primary persistence layer for all user data. The api-service c
 
 | File                         | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db/db.go`                   | Pool creation (`NewPool`); `Close`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `db/db.go`                   | Pool creation (`Connect(ctx, cfg)`), returning the `*pgxpool.Pool` the caller closes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `db/migrate.go`              | Migration runner; `schema_migrations` table                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `db/stores.go`               | `Stores` struct — interface fields (`UserRepo`, `TokenRepo`, `WishlistRepo`, `RollTargetRepo`, `PrefsRepo`, `DigestRepo`, `FlagRepo`, `AuditRepo`, `Pinger`), never nil; `NewStores(nil)` returns the degraded set; `Available() bool` reports whether persistence is real                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `db/degraded.go`             | `ErrUnavailable` sentinel + the eight store interfaces + degraded implementations whose every method returns `ErrUnavailable`. Admin/audit/account handlers, which call a store directly, map it to a 503 via `handlers.HandleStoreError`; wishlist, roll targets, preferences, and digest instead go through their own domain adapter and typed handler error mapping (see the `db/adapters/*.go` rows below)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `db/users.go`                | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `db/users.go`                | `UserStore` — upsert, get by membership ID, bump token_version, per-device sessions (CreateSession, RotateSession, DeleteSession, DeleteUserSessions)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `db/tokens.go`               | `BungieTokenStore` — encrypted Bungie OAuth authorization                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `db/wishlist.go`             | `WishlistStore` — wishlist CRUD, user-scoped; `BulkDelete`/`BulkSetPriority` for `POST /api/wishlist/bulk` (user-scoped `id = ANY($1)`; foreign/missing ids silently skipped; `RowsAffected()` drives the partial-success `{updated, skipped}` response). Consumed only through `db/adapters/wishlist.go` — `services/wishlist` never imports `db` directly                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `db/rolltargets.go`          | `RollTargetStore` — roll target CRUD, user-scoped (`GetUserID`, `List`, `Add`, `Update`, `Delete`); `Add` takes a nullable `*uint32` hash (nil = any-weapon target) and a `wanted bool`; `perks` persists as a `TEXT[]` of display names, not plug hashes. `BulkDelete`/`DeleteAll` for `POST /api/rolltargets/bulk` (`id = ANY($1) AND user_id = $2` / `WHERE user_id = $1`; foreign/missing ids silently skipped; `RowsAffected()` drives the `{deleted, skipped}` response). `DeleteImport` deletes by both `user_id` and UUID `import_id` in one statement, without an ID-list cap. Migration 0012 adds nullable `import_id`/`import_title`, a 500-character title check, a title-requires-ID check, and a partial `(user_id, import_id)` index. Provenance is excluded from uniqueness and unchanged by updates. Consumed only through `db/adapters/rolltargets.go`. Backs `services/rolltargets`, routed at `/api/rolltargets` (`api/handlers/rolltargets.go`), gated behind the `god-roll` feature flag (migration 0011) |
@@ -105,7 +105,7 @@ PostgreSQL is the primary persistence layer for all user data. The api-service c
 | `db/adapters/preferences.go` | Membership-keyed adapter for `services/preferences`; resolves the internal user ID, translates storage values, and maps `db.ErrUnavailable` to the Preferences domain sentinel                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `db/adapters/digest.go`      | Membership-keyed adapter for `services/digest` (ADR 0023); resolves the internal user ID for every call and maps `db.ErrUnavailable` to `digest.ErrUnavailable`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `db/audit.go`                | Unified append-only audit trail store (`audit_log`): best-effort `Log`, in-transaction `insertAudit`, filtered/keyset `List`, retention prune                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `db/flags.go`                | `FlagsStore` — feature flag get/list/upsert                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `db/flags.go`                | `FlagStore` — feature flag `List`/`Get`/`Update` (no insert or upsert; flag rows are seeded by migrations)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 Self-service role updates use `UserStore.SetSelfRole`: lock the current user row
 with `FOR UPDATE`, reject a current admin, conditionally update only a non-admin,
@@ -137,23 +137,25 @@ reuse a version number for different key material.
 
 **Sentinel errors:**
 
-- `db.ErrTokensNotFound` — translated to `auth.ErrTokensNotFound` in the adapter in `main.go`
-- `db.ErrNoUserRow` — translated to `auth.ErrNoUserRow` in the adapter
+- `db.ErrTokensNotFound` — translated to `auth.ErrTokensNotFound` by the token adapter in `db/adapters/adapters.go`
+- `db.ErrNoUserRow` — translated to `auth.ErrNoUserRow` by the same adapter
 
 ### PostgreSQL schema overview
 
 ```sql
--- Users: one Guardian Tracker user row per tracked Destiny membership; role is the resolved tier
-users (id, membership_id, membership_type, display_name, platform,
-       role, token_version, created_at, updated_at)
+-- Users: one Guardian Tracker user row per tracked Destiny membership; role
+-- (migration 0002) is the resolved tier as a SMALLINT rank
+users (id, membership_id UNIQUE, membership_type, display_name, token_version,
+       created_at, last_login_at, role)
 
 -- Bungie OAuth authorization: access-only for current public-client rows;
 -- refresh columns retained for schema and legacy-row compatibility
-bungie_tokens (id, user_id FK, access_token_enc, refresh_token_enc,
+bungie_tokens (user_id PK/FK, access_token_enc, refresh_token_enc,
                access_expires_at, refresh_expires_at, key_version, updated_at)
 
--- Per-device refresh sessions (migration 0003)
-refresh_sessions (id, user_id FK, jti, expires_at, created_at, updated_at)
+-- Per-device refresh sessions (migration 0003); id is the JWT `sid` claim
+refresh_sessions (id TEXT PK, user_id FK, membership_id, current_jti, user_agent,
+                  created_at, last_used_at, expires_at)
 
 -- Wishlist: user-scoped, enriched with manifest data at read time
 wishlist_items (id, user_id FK, item_hash, priority, notes, created_at, updated_at)
@@ -172,8 +174,8 @@ roll_targets (id, user_id FK, item_hash NULL, wanted BOOLEAN, perks TEXT[],
               notes, import_id UUID NULL, import_title TEXT NULL, created_at, updated_at)
 
 -- User preferences
-user_preferences (id, user_id FK, card_style, personalize, onboarded_at NULL,
-                  created_at, updated_at)
+user_preferences (user_id PK/FK, card_style, personalize, updated_at,
+                  onboarded_at NULL)
 
 -- Since-last-visit digest state (migration 0008, ADR 0023): one row per user,
 -- replaced atomically on each new visit; no history table
@@ -183,14 +185,16 @@ digest_state (user_id PK/FK, last_activity_at, visit_started_at,
 -- Feature flags (migration 0002; 0011 flips god-roll to enabled at its
 -- existing alpha min_tier, since RequireFlag 404s a disabled flag for
 -- everyone including admins and roll targets became reachable over REST)
-feature_flags (id, key, enabled, min_tier, created_at, updated_at)
+feature_flags (key PK, name, description, category, min_tier, enabled,
+               sort_order, updated_at)
 
 -- Audit log: append-only (migration 0004 — replaces role_audit)
-audit_log (id, type, actor_id, target_id, outcome, details JSONB,
-           ip_address, user_agent, created_at)
+audit_log (id, event_type, outcome, actor_user_id FK NULL, actor_membership_id,
+           target_user_id FK NULL, session_id NULL, ip INET NULL, user_agent,
+           details JSONB, created_at)
 
 -- Migration tracking
-schema_migrations (version)
+schema_migrations (version PK, applied_at)
 ```
 
 ### Running PostgreSQL locally for development
@@ -200,16 +204,9 @@ schema_migrations (version)
 # For isolated DB testing, use test-local.ps1 in backend/api-service/:
 ./test-local.ps1   # spins up pinned postgres:18.6-alpine3.24 on 127.0.0.1:5533 as gt-test-pg
 
-# Or manually:
-docker run --name guardian-pg `
-  -e POSTGRES_PASSWORD=devpassword `
-  -e POSTGRES_USER=guardian_app `
-  -e POSTGRES_DB=guardian_tracker `
-  -p 127.0.0.1:5432:5432 `
-  -d postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
-
-# Bootstrap least-privilege role (one-time after server provisioning)
-Get-Content database/init/01-init.sql | docker exec -i guardian-pg psql -U postgres -d guardian_tracker
+# database/init/01-init.sql is the dev-only Compose bootstrap: Compose mounts it
+# into the Postgres init directory, so it creates the guardian_app role once on a
+# fresh data volume. Do not pipe it into another server by hand.
 # Application schema is applied automatically at startup via db.Migrate()
 ```
 

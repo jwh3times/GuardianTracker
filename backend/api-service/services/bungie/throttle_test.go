@@ -141,6 +141,26 @@ func TestExhaustedHTTP429IsRateLimited(t *testing.T) {
 	}
 }
 
+func TestLongRetryAfterIsRateLimitedWithoutWaiting(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		w.Header().Set("Retry-After", "60")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer srv.Close()
+	c := NewClient("k", srv.URL, 100, 100)
+	waits := recordWaits(c)
+
+	_, err := c.GetManifest(context.Background())
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("err = %v, want ErrRateLimited", err)
+	}
+	if calls.Load() != 1 || len(*waits) != 0 {
+		t.Errorf("calls = %d waits = %v, want one call and no wait", calls.Load(), *waits)
+	}
+}
+
 func TestThrottleWaitStopsWhenTheCallerLeaves(t *testing.T) {
 	srv, calls := throttleThenOK(t, 100, 36, 5)
 	c := NewClient("k", srv.URL, 100, 100)

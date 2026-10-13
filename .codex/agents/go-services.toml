@@ -23,8 +23,8 @@ backend/api-service/
   auth/revocation.go                   ← JWT revocation: checks token_version (Guardian Tracker user-wide) + session
                                            existence (per-device) via RevocationChecker; 60s in-memory
                                            cache; also resolves role from DB for RequireAdmin/RequireTier
-  auth/roles.go                        ← Role tiers (standard/beta/alpha/admin) + RequireAdmin/RequireTier
-                                           tier-gating middleware
+  auth/roles.go                        ← Role tiers (standard/beta/alpha/admin) + Authz, whose RequireAdmin/
+                                           RequireTier/RequireFlag methods are the gating middleware
   auth/session.go                      ← SessionIssuer: owns the browser session lifecycle
                                            (AuthorizeURL/Login/Reconnect/Refresh/EndSession/EndAllSessions);
                                            failures cross as SessionError{Reason,...} — see
@@ -98,6 +98,18 @@ backend/api-service/
   api/handlers/admin.go                ← Admin console: user roster, role management, feature-flag
                                            config, audit log feed
   api/handlers/health.go               ← Health, ready, manifest status endpoints
+  api/handlers/records.go              ← RecordsHandler: catalysts, crafting, and seals endpoints
+  api/handlers/weekly.go               ← WeeklyHandler: GET /api/weekly/recommendations
+  api/handlers/search.go               ← SearchHandler: GET /api/items/search (503 SEARCH_NOT_READY
+                                           until the index is built)
+  api/handlers/audit.go                ← AuditHandler: admin audit feed (GET /api/admin/audit)
+  api/handlers/flagresolver.go         ← Server-enforced flag keys (Flag* constants) + FlagResolver, the
+                                           60s-cached flag catalog behind Authz.RequireFlag
+  api/middleware/                      ← Cross-cutting Gin middleware: bodylimit.go (MaxBodyBytes),
+                                           ratelimit.go (PerIPRateLimit on the auth routes), security.go
+                                           (APISecurityHeaders, NoStore, CORS, RequireAllowedOrigin)
+  observability/                       ← logging.go (slog setup, request-scoped logger, Pseudonym) and
+                                           http.go (HTTPMiddleware: request IDs, access records, 499)
   api/handlers/common.go               ← Shared handler helpers (parseMembershipParams, ownershipCheck
                                            — compares the whole membershipType+membershipId pair against
                                            the JWT claims and aborts the context on mismatch…)
@@ -123,6 +135,9 @@ backend/api-service/
                                            manifeststate.Publication (Manifest axis) and a
                                            membershipstate.Publication (refresh axis, ADR 0018);
                                            publishAnalysis takes them Manifest-outside, membership-inside
+  services/collections/flights.go      ← Per-membership analysis flight coalescing: concurrent loads for
+                                           one membership and generation share one detached, deadline-
+                                           bounded build (sharedAnalysis/runAnalysis)
   services/collections/service.go      ← Service: the outer of ADR 0018's two construction stages,
                                            built after Weekly in main.go. Owns GetSummary (cheap counted
                                            tree, no items/availability), GetFull (adds every catalogued
@@ -188,6 +203,10 @@ backend/api-service/
   services/manifest/provider.go        ← Shared lazy-opening repository; implements bungie.SwapParticipant
                                            (CloseForSwap/Reopen) for the hourly manifest swap; satisfies all
                                            consumer ManifestRepo interfaces
+  services/manifest/chunked.go         ← queryDefsChunked: the shared chunked definition-lookup loop
+  services/manifest/perks.go           ← Weapon perk-pool derivation (PerkColumn/PerkPlug, plug filtering)
+  services/manifest/catalysts.go       ← Exotic catalyst-perk detection (WeaponCatalyst)
+  services/manifest/catalyst_links.go  ← Repository.GetCatalystLinks: exotic weapon → catalyst entries
   services/manifeststate/publication.go ← ADR 0014 generation fence: Begin captures a generation, Attempt.
                                            Publish installs only while it is current, Advance retires
                                            outstanding work and runs the owner's invalidation atomically.
@@ -262,7 +281,8 @@ backend/api-service/
                                            ErrUnknownPerk, ErrPerksUnavailable, ErrNoTargets,
                                            ErrTooManyTargets, ErrUnavailable), the membership-keyed
                                            Repository port (List/Add/Update/Remove plus bulk RemoveMany/
-                                           RemoveAll), and the PerkPool port satisfied by *items.Service
+                                           RemoveAll and RemoveImport, which deletes one import batch), and
+                                           the PerkPool port satisfied by *items.Service
                                            (GetWeaponPerks, PlugNames, WeaponPerkNames). Perks are stored
                                            as display names, not plug hashes —
                                            a perk's base/enhanced variants share one name but no manifest
@@ -271,7 +291,7 @@ backend/api-service/
                                            identical roll is refused, per migration 0010); routed at
                                            `/api/rolltargets` (see api/handlers/rolltargets.go below),
                                            gated behind the `god-roll` feature flag (migration 0011).
-  services/rolltargets/service.go      ← Service: List/Add/Update/Remove/DeleteMany/DeleteAll.
+  services/rolltargets/service.go      ← Service: List/Add/Update/Remove/DeleteMany/DeleteAll/DeleteImport.
                                            NewService(repo, perks, owned) takes an OwnedRollReader as its
                                            third argument; owned may be nil, which leaves CRUD/import intact
                                            and makes Matches report
@@ -385,6 +405,8 @@ backend/api-service/
                                            Reopen) in addition to being a bungie.ManifestObserver
                                            (OnVersionChanged kicks BuildIndex); async rebuild on update,
                                            aborted mid-scan if a swap starts
+  services/records/profile_flights.go  ← getProfileRecords: fenced profile-records cache read plus
+                                           per-membership flight coalescing (shareProfile/loadProfile)
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; OnVersionChanged (ManifestObserver)
                                            advances its owner-local publication and evicts its three
@@ -401,9 +423,9 @@ backend/api-service/
   db/db.go, db/migrate.go              ← Postgres pool; migration runner (each migration runs in a tx)
   db/stores.go                         ← Stores struct — interface fields, never nil; NewStores(nil)
                                            returns the degraded set; Available() reports whether a real DB backs it
-  db/degraded.go                       ← ErrUnavailable sentinel; the seven store interfaces (UserRepo,
-                                           TokenRepo, WishlistRepo, PrefsRepo, DigestRepo, FlagRepo,
-                                           AuditRepo) + Pinger; degraded implementations whose every
+  db/degraded.go                       ← ErrUnavailable sentinel; the eight store interfaces (UserRepo,
+                                           TokenRepo, WishlistRepo, RollTargetRepo, PrefsRepo, DigestRepo,
+                                           FlagRepo, AuditRepo) + Pinger; degraded implementations whose every
                                            method returns ErrUnavailable
   db/migrations/0001_init.sql          ← Base schema DDL
   db/migrations/0002_roles_flags.sql   ← Adds role column to users, feature_flags table, role_audit
@@ -433,13 +455,19 @@ backend/api-service/
                                            (min_tier stays alpha/2); roll targets became reachable over
                                            REST in #367 and RequireFlag 404s a disabled flag for
                                            everyone including admins
+  db/migrations/0012_roll_target_import_provenance.sql ← Adds nullable roll_targets.import_id (UUID)
+                                           and import_title (<=500 chars, requires an import_id) plus a
+                                           partial (user_id, import_id) index; provenance is excluded
+                                           from the uniqueness rule
   db/users.go                          ← UserStore — upsert, get, bump token_version, per-device sessions
-                                           (CreateSession, RotateSession, DeleteSession, DeleteAllSessions)
+                                           (CreateSession, RotateSession, DeleteSession, DeleteUserSessions)
   db/tokens.go                         ← BungieTokenStore — encrypted Bungie OAuth tokens
   db/wishlist.go, db/prefs.go          ← DB stores for wishlist and preferences
   db/rolltargets.go                    ← RollTargetStore — user-scoped GetUserID/List/Add/Update/Delete/
-                                           BulkDelete/DeleteAll over roll_targets; Add takes a nil
-                                           *uint32 hash for an any-weapon target and a wanted bool; Update
+                                           BulkDelete/DeleteAll/DeleteImport over roll_targets; Add takes a
+                                           nil *uint32 hash for an any-weapon target, a wanted bool, and the
+                                           import batch's importID/importTitle (empty for a manual add);
+                                           DeleteImport deletes one batch by user_id and import_id; Update
                                            patches perks/notes independently (nil argument leaves that
                                            column alone); BulkDelete/DeleteAll are both
                                            `WHERE ... AND user_id = $N` set-based deletes, never a bare
@@ -463,7 +491,8 @@ backend/api-service/
                                            internal user IDs and maps db.ErrUnavailable to digest.ErrUnavailable
   db/audit.go                          ← Unified append-only audit trail store (audit_log): best-effort
                                            Log, in-transaction insertAudit, filtered/keyset List, prune
-  db/flags.go                          ← Feature flags store (get all, get by key, upsert)
+  db/flags.go                          ← FlagStore — feature flags List/Get/Update (no insert or upsert;
+                                           rows are seeded by migrations)
 ```
 
 ## Endpoints
@@ -517,7 +546,7 @@ backend/api-service/
 | GET    | `/health`                                                                     | None                          | Liveness probe                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | GET    | `/ready`                                                                      | None                          | Readiness probe; requires the manifest and, when a DB pool is configured, a successful database ping                                                                                                                                                                                                                                                                                                                                                                    |
 
-Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`, `FORBIDDEN`, `TIER_LOCKED`, `DB_UNAVAILABLE`, `LAST_ADMIN`, `ROLE_NOT_ALLOWED`, `ADMIN_OPT_IN`, `FEATURE_DISABLED`, `CHARACTER_NOT_FOUND`.
+Error responses: `{ "error": "...", "code": "MACHINE_CODE" }`. Codes: `PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`, `FORBIDDEN`, `TIER_LOCKED`, `DB_UNAVAILABLE`, `LAST_ADMIN`, `ROLE_NOT_ALLOWED`, `ADMIN_OPT_IN`, `FEATURE_DISABLED`, `CHARACTER_NOT_FOUND`, `BUNGIE_REAUTH_REQUIRED`, `OWNED_ROLLS_UNAVAILABLE`, `SEARCH_NOT_READY`, `TOKEN_ERROR`. This list is a snapshot — grep the handlers and `auth/` for `"code":` before relying on it being complete.
 
 ## Bungie OAuth flow
 
@@ -630,7 +659,7 @@ handlers used to emit. `WishlistHandler` and `PreferencesHandler` no longer call
 a store at all: each maps its own domain's typed errors (`wishlist.ErrUnavailable`,
 `preferences.ErrUnavailable`, ...) through its own `handleWishlistError` /
 equivalent after the database adapter has removed the storage vocabulary.
-`auth.RequireTier`'s own 503 (no store involved — it never reads one) uses
+`Authz.RequireTier`'s own 503 (no store involved — it never reads one) uses
 matching wording so both paths read as the same failure.
 
 `Stores.Available() bool` is the only legitimate "is there a real database"
@@ -657,7 +686,7 @@ sentinel rather than `db.ErrUnavailable` directly — see "Session issuer" above
 
 `jwtHelper.Middleware(revoker)` — required auth, returns 401 if JWT is invalid, missing, wrong `token_type`, revoked (token_version mismatch), or session doesn't exist. Sets `membership_id`, `membership_type`, `display_name`, `platform`, `token_version` on Gin context.
 
-`auth.RequireAdmin` / `auth.RequireTier(tier)` — role-gating middleware placed after `jwtHelper.Middleware`. **Role is always read from the DB-backed RevocationChecker cache, never from the JWT claim** — so role changes propagate within the 60s window without requiring a new token.
+`authz.RequireAdmin()` / `authz.RequireTier(tier)` — role-gating middleware, methods on `*auth.Authz` (`auth/roles.go`), placed after `jwtHelper.Middleware`. **Role is always read from the DB-backed RevocationChecker cache, never from the JWT claim** — so role changes propagate within the 60s window without requiring a new token.
 
 `authz.RequireFlag(enforceFlags, handlers.Flag*)` — composes after `jwtHelper.Middleware` on the weekly, search, catalysts, crafting, seals, and roll target routes (`FlagWeeklyPlanner`, `FlagGlobalSearch`, `FlagCatalystsCrafting`, `FlagTriumphsSeals`, `FlagGodRoll`). `FlagGodRoll` gates the whole `/api/rolltargets` group at once, via `api/router.go`'s `authed.Group("/rolltargets", d.Authz.RequireFlag(...))` rather than a per-route argument. **Fails open**: a disabled flag returns 404 `FEATURE_DISABLED`, an enabled flag above the caller's tier returns 403 `TIER_LOCKED`, but a nil resolver, degraded mode, store error, or unknown key allows the request through instead of blocking it.
 
@@ -677,7 +706,7 @@ with no database configured); the `sid` JWT claim holds the session ID:
 
 - `POST /api/auth/refresh` reads the refresh JWT only from its cookie; `SessionIssuer.Refresh` compare-and-swaps the session's refresh `jti` (`SessionStore.RotateSession`). A replayed (already-rotated) token is detected as reuse → **revokes the whole session** (401, even if the revoking commit errors). Successful refresh rotates the cookie; definitive failures expire it.
 - Sessions are independent → fully multi-device. `expires_at` slides forward on each rotation.
-- Sessions are capped per user (`maxSessionsPerUser`); an hourly `startSessionPruner` deletes expired rows.
+- Sessions are capped per user (`maxSessionsPerUser`); an hourly `db.StartSessionPruner` (`db/pruner.go`) deletes expired rows.
 - `POST /api/auth/logout` — `SessionIssuer.EndSession` ends only the current session (`DeleteSession`); other devices stay signed in; membership-wide Bungie authorization preserved.
 - `POST /api/auth/logout/all` — `SessionIssuer.EndAllSessions` bumps `token_version` + deletes all sessions (`DeleteUserSessions`) + evicts the Bungie authorization.
 - Pre-`0003` tokens (no `sid`) are adopted into a fresh session on their first `SessionIssuer.Refresh` call.
@@ -692,8 +721,10 @@ Events persisted to `audit_log`: login, logout, logout-all, refresh success/fail
 serves; it registers no routes itself.
 
 - **Authentication is applied once per group**, not per route:
-  `authed := api.Group("", d.JWT.Middleware(d.Revoker))`. Register every
-  authenticated route on `authed`, or on the `admin` subgroup inside it. Do not
+  one `jwtGate := d.JWT.Middleware(d.Revoker)` is attached to
+  `authed := api.Group("", jwtGate)` and to `authedAuthRoutes` (reconnect,
+  validate, profile, logout). Register every other authenticated route on
+  `authed`, or on the `admin` subgroup inside it. Do not
   reintroduce a per-route `Middleware(...)` argument — the 24× repetition it
   replaced is what made "forgot the middleware on the new route" a silent way to
   publish an unauthenticated endpoint.
@@ -739,7 +770,7 @@ serves; it registers no routes itself.
 - `Catalyst` struct has `Type` (weapon type), `Icon` (record icon), and `Effect` (catalyst-perk effect text) fields
 - `Effect` is resolved by `resolveCatalystEffect`: links the catalyst record to its weapon via `GetCatalystLinks()` objective-hash overlap first (unambiguous on both the weapon and record side), then a stripped-name match, then a catalyst-plug-name match, falling back to the record's own description and then `""`
 - The three Manifest-derived projections (weapon types, exotic weapons, catalyst links) load through `manifeststate.LoadIf` under one owner-local publication. `OnVersionChanged` (`bungie.ManifestObserver`) advances that publication and evicts exactly those keys, so an in-flight old-generation load may finish for its caller but cannot repopulate the shared cache. Per-user `records:*` profile entries are untouched — they hold raw Bungie data, which a manifest swap does not invalidate
-- `InvalidateCache(membershipType, membershipId)` is `s.refresh.Advance(...)` on Records' own `membershipstate.Publication` (ADR 0018): it advances that membership's generation and drops cached profile records inside one critical section, so a load already in flight cannot republish stale profile data after the refresh returns. `getProfileRecords` fetches through `membershipstate.Load`, which captures the generation before the cache read. Records is one of `collections.Service`'s `RefreshParticipant`s, called from `RefreshMembership` on `POST /api/collections/:membershipType/:membershipId/refresh`
+- `InvalidateCache(membershipType, membershipId)` is `s.refresh.Advance(...)` on Records' own `membershipstate.Publication` (ADR 0018): it advances that membership's generation and drops cached profile records inside one critical section, so a load already in flight cannot republish stale profile data after the refresh returns. `getProfileRecords` (`services/records/profile_flights.go`) does not go through `membershipstate.Load`: it captures the generation itself with `s.refresh.Begin(...)` before the cache read and coalesces concurrent loads for one membership into a shared flight. Only Characters loads through `membershipstate.Load`; Collections likewise calls `m.refresh.Begin` directly. Records is one of `collections.Service`'s `RefreshParticipant`s, called from `RefreshMembership` on `POST /api/collections/:membershipType/:membershipId/refresh`
 - `Triumph.Objectives []TriumphObjective` (`omitempty`) — per-objective drill-down built by `GetSeals`: excludes explicitly-hidden objectives (`RecordObjective.Visible *bool`; `nil` = absent = visible — a plain `bool` would decode Bungie's absent-field-means-visible default backwards), falls back to `Objective N` for a blank `progressDescription` (numbered over the objectives that survive visibility filtering), normalizes a zero `completionValue` to `Max=1`, and forces `Done=true`/`Cur==Max` on every objective when the parent record is redeemed regardless of stale objective payloads. The existing top-level `Triumph.Cur`/`Max` is unchanged for response compatibility.
 
 ## Source vocabulary (`services/sources`)
@@ -860,14 +891,20 @@ made a milestone's missing-count badge silently not appear.
 ```
 PORT, GO_ENV, BUNGIE_API_KEY, BUNGIE_CLIENT_ID
 AUTH_REDIRECT_URI, JWT_SECRET, JWT_ACCESS_TTL, JWT_EXPIRY_HOURS (legacy), JWT_REFRESH_EXPIRY_DAYS
-DATABASE_URL, TOKEN_ENCRYPTION_KEY, TOKEN_ENCRYPTION_KEY_VERSION
+DATABASE_URL, DB_MAX_CONNS, TOKEN_ENCRYPTION_KEY, TOKEN_ENCRYPTION_KEY_VERSION
 TOKEN_ENCRYPTION_KEY_PREVIOUS, TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION
 ADMIN_MEMBERSHIP_IDS, AUDIT_RETENTION_DAYS, TRUSTED_PROXIES
-BUNGIE_API_BASE_URL, BUNGIE_API_RPS, BUNGIE_API_BURST
+AUTH_RATE_LIMIT_RPS, AUTH_RATE_LIMIT_BURST, MAX_BODY_BYTES
+BUNGIE_API_BASE_URL, BUNGIE_AUTHORIZE_URL, BUNGIE_TOKEN_URL, BUNGIE_CDN_BASE_URL
+BUNGIE_API_RPS, BUNGIE_API_BURST
 MANIFEST_DB_PATH, MANIFEST_CHECK_INTERVAL
 CACHE_ENABLED, CACHE_TTL_COLLECTIONS, CACHE_TTL_RECORDS
-CORS_ALLOWED_ORIGINS, LOG_LEVEL, LOG_FORMAT, HTTP_TIMEOUT_SECONDS
+CORS_ALLOWED_ORIGINS, LOG_LEVEL, LOG_FORMAT
+E2E_FIXED_TIME (browser-test clock; development only)
 ```
+
+`config/config.go` is the source of truth — every variable is read there through
+a `get*Env` helper.
 
 ## Testing
 
@@ -898,12 +935,6 @@ serves `/health`, OAuth/profile/vendor/milestone/settings fixtures, and a tiny
 runtime-generated zipped SQLite manifest. PUT/DELETE `/__e2e/scenario` controls
 mutable scenarios. It must never contact or proxy the real Bungie API and must
 never listen beyond loopback.
-
-## Hot reload (development)
-
-```powershell
-air   # from backend/api-service/ (requires .air.toml)
-```
 
 ## Running locally (without Kubernetes)
 

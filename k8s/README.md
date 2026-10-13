@@ -51,7 +51,9 @@ Windows Command Prompt. Startup:
    and frontend disruption budget;
 4. restarts only an existing deployment whose applied pod template did not
    already trigger a rollout; and
-5. forwards <http://localhost:5273> to the frontend service.
+5. forwards <http://localhost:5273> to the frontend service and
+   <http://localhost:8081> to the API service. The browser calls the API
+   directly at that address, so both forwards must be running.
 
 Shutdown removes the Kubernetes resources and port forwarding, then optionally
 removes the local images or stops Minikube.

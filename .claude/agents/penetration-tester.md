@@ -102,7 +102,7 @@ Session issuance is centralized in `auth.SessionIssuer`; a login whose session r
 
 - Test: call any admin endpoint with a standard/beta/alpha role JWT — must return 403 (`FORBIDDEN`)
 - Test: call any admin endpoint without a JWT — must return 401
-- Test: `PUT /api/admin/users/:id/role` — attempt to remove the admin role from the only remaining admin — must return 400 (`LAST_ADMIN`)
+- Test: `PUT /api/admin/users/:id/role` — attempt to remove the admin role from the only remaining admin — must return 409 (`LAST_ADMIN`)
 - Test: `PUT /api/account/role` with `"admin"` in the body — must return 403 (`ADMIN_OPT_IN`)
 - Test: after an admin changes another user's role via `PUT /api/admin/users/:id/role`, confirm the target user's existing access token is rejected within the RevocationChecker cache window (token_version bumped)
 - Test: `GET /api/admin/audit` — call as a non-admin user — must return 403
@@ -350,7 +350,7 @@ The `guardian_browser_session` localStorage envelope contains the short-lived ac
 api-service returns `gin.H{"error": "...", "code": "MACHINE_CODE"}` for errors.
 
 - Test: trigger various error conditions (invalid membershipId, bad JWT, missing Bungie token) — verify responses don't include stack traces, internal file paths, connection strings, or other internal details
-- Confirm: the `code` field uses only the defined machine-readable values (`BUNGIE_REAUTH_REQUIRED`, `PRIVACY_RESTRICTION`, `ACCOUNT_NOT_FOUND`, `RATE_LIMITED`, `MANIFEST_NOT_READY`, `BUNGIE_ERROR`, `INTERNAL_ERROR`)
+- Confirm: the `code` field uses only the machine-readable values the API defines — `ACCOUNT_NOT_FOUND`, `ADMIN_OPT_IN`, `BUNGIE_ERROR`, `BUNGIE_REAUTH_REQUIRED`, `CHARACTER_NOT_FOUND`, `DB_UNAVAILABLE`, `FEATURE_DISABLED`, `FORBIDDEN`, `INTERNAL_ERROR`, `LAST_ADMIN`, `MANIFEST_NOT_READY`, `OWNED_ROLLS_UNAVAILABLE`, `PRIVACY_RESTRICTION`, `RATE_LIMITED`, `ROLE_NOT_ALLOWED`, `SEARCH_NOT_READY`, `TIER_LOCKED`, `TOKEN_ERROR`. Before reporting an unlisted code as a violation, grep `backend/api-service/api` and `backend/api-service/auth` for `"code":` — this list is a snapshot and new codes are added with features
 
 ### Request IDs and application-log privacy
 

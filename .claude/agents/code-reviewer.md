@@ -19,7 +19,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 **Middleware usage**
 
-- Every endpoint under `/api/` that accesses user-specific data must use `jwtHelper.Middleware(revoker)` in the route definition.
+- Every endpoint under `/api/` that accesses user-specific data must be registered on a JWT-gated group in `api/router.go` (`authed`, or `authedAuthRoutes` for the authenticated auth routes). The gate is applied once per group, not per route — see [Route table](#route-table).
 - Flag handlers that call `c.Get("membership_id")` without the JWT middleware protecting the route.
 - `OptionalMiddleware` no longer exists — do not reference it.
 
@@ -50,7 +50,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 **Cache invalidation**
 
 - `collections.Service.RefreshMembership` (called by the `RefreshCollections` handler) must invalidate each backend owner's cache through that owner's own `InvalidateCache` method (`RefreshParticipant`), not by formatting cache keys inline. Flag any handler or service that constructs a cache key string itself to call `cache.Delete`.
-- A `RefreshParticipant`'s `InvalidateCache` must be one fenced transition through that owner's own `membershipstate.Publication` (`Advance`, ADR 0018) — advancing the membership's generation and evicting the cache entry inside the same critical section — not a bare `cache.Delete`. A bare delete lets an older in-flight load, still keyed to the pre-refresh generation, refill the entry after the refresh reports success; `*collections.MembershipAnalysis`, `*characters.Service`, and `*records.Service` all route their per-membership loads through `membershipstate.Load`, which captures the generation before the cache read, so flag a participant whose load path bypasses it.
+- A `RefreshParticipant`'s `InvalidateCache` must be one fenced transition through that owner's own `membershipstate.Publication` (`Advance`, ADR 0018) — advancing the membership's generation and evicting the cache entry inside the same critical section — not a bare `cache.Delete`. A bare delete lets an older in-flight load, still keyed to the pre-refresh generation, refill the entry after the refresh reports success; every owner must capture the generation before its cache read and publish only through that attempt. `*characters.Service` does so through `membershipstate.Load`; `*collections.MembershipAnalysis` and `*records.Service` call `refresh.Begin(...)` directly because they add their own flight coalescing (`services/collections/flights.go`, `services/records/profile_flights.go`) — both forms are correct. Flag a load path that reads or fills the cache without capturing the generation first, not one that merely avoids `membershipstate.Load`.
 
 **Cache load-through**
 
@@ -84,14 +84,14 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 ## Route table
 
-- Routes live in `api/router.go`, never in `main.go`. Authentication is applied per group (`authed := api.Group("", d.JWT.Middleware(d.Revoker))`) — flag any route registered with a per-route JWT middleware argument, and any `/api` route registered outside `authed` that is not a deliberate, allowlisted public route.
+- Routes live in `api/router.go`, never in `main.go`. Authentication is applied per group: one `jwtGate := d.JWT.Middleware(d.Revoker)` is attached to `authedAuthRoutes` (reconnect, validate, profile, logout) and to `authed` (everything else) — flag any route registered with a per-route JWT middleware argument, and any `/api` route registered outside those two groups that is not a deliberate, allowlisted public route.
 - A new public `/api` route must also appear in `publicAPIRoutes` in `api/router_test.go`. Flag a change that adds one without it, or that moves the allowlist into the router package — the test owns it so the router cannot exempt itself.
 - A new flag-gated route must be added to `TestFlagGatedRoutesEnforceTheirOwnFlag`. `RequireFlag` fails open on an unresolvable key, so a wrong or mistyped key gates nothing and produces no error. See [ADR 0011](../../docs/adr/0011-route-table-as-a-testable-composition-root.md).
 
 **Roles and admin authorization**
 
-- Every admin endpoint must use `auth.RequireAdmin` middleware after `jwtHelper.Middleware(revoker)` in the route definition. Flag admin-only handlers that rely only on `jwtHelper.Middleware`.
-- Every tier-gated endpoint must use `auth.RequireTier(tier)`. Flag tier checks implemented inline in handler code.
+- Every admin endpoint must be registered on the `admin` subgroup of `authed`, which applies `d.Authz.RequireAdmin()` once for the group. Flag admin-only handlers reachable through the JWT gate alone.
+- Every tier-gated endpoint must use `d.Authz.RequireTier(tier)`. `RequireAdmin`, `RequireTier`, and `RequireFlag` are methods on `*auth.Authz` (`auth/roles.go`), not package-level functions. Flag tier checks implemented inline in handler code.
 - The role used by `RequireAdmin`/`RequireTier` must come from the DB-backed `RevocationChecker` cache, not a JWT claim. Flag any handler that reads a role directly from the Gin context without going through the revocation middleware.
 - `PUT /api/account/role` must reject attempts to set role to `admin` and must reject callers who already have the `admin` role. Flag if either guard is absent.
 - `PUT /api/admin/users/:id/role` must enforce last-admin protection inside a DB transaction. Flag if the check happens outside a transaction or after the update.
@@ -168,7 +168,7 @@ There is **one** Go backend service: `backend/api-service`. There is no graphql-
 
 - Browser tests must use `cmd/fake-bungie`, the runtime-generated fixture manifest, and loopback `e2e-postgres`; flag any live Bungie dependency or committed loose manifest database.
 - The visual job builds `frontend/Dockerfile.playwright`, whose `ARG PLAYWRIGHT_IMAGE` pins the tag and digest literally; `scripts/node-version-policy.test.mjs` requires that tag to equal the `@playwright/test` version in `frontend/package-lock.json`. No ecosystem bumps it — Dependabot's npm update never edits a Dockerfile — so a Playwright bump must carry a matching ARG change, produced by `npm run sync:image-pins` (which also covers the `.nvmrc`-driven `node` pins in all three frontend Dockerfiles). Treat a bump whose ARG was not updated as the defect, not the updated pin. Keep `workers: 1`, exactly one functional CI retry, and destructive auth sequenced after shared journeys.
-- Browser workflow failures must not be hidden with `continue-on-error`. E2E + axe stays advisory until ten clean runs and then becomes required; visual regression remains advisory.
+- Browser workflow failures must not be hidden with `continue-on-error`. `Browser E2E + Axe` is a required check; visual regression remains advisory.
 
 ## Intentional exceptions (do not flag)
 

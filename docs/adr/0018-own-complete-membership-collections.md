@@ -1,6 +1,6 @@
 # ADR 0018: Own Complete Membership Collections
 
-- Status: Implemented in `v1.3.29`
+- Status: Accepted — implemented in `v1.3.29`
 - Date: 2026-08-17
 
 ## Context

@@ -100,6 +100,9 @@ func (c *Client) fetch(ctx context.Context, req *http.Request, maxRetries int) (
 				backoff = time.Duration(s) * time.Second
 			}
 			lastErr = ErrRateLimited
+			if backoff > maxThrottleRetryWait {
+				return nil, fmt.Errorf("retry-after exceeds wait limit: %w", lastErr)
+			}
 		case resp.StatusCode >= 500:
 			resp.Body.Close()
 			lastErr = fmt.Errorf("server error: %d", resp.StatusCode)

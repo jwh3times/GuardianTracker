@@ -1,6 +1,6 @@
 # ADR 0020: Own Frontend Data Access
 
-- Status: Implemented in `v1.3.54`
+- Status: Accepted — implemented in `v1.3.54`
 - Date: 2026-08-20
 
 ## Context

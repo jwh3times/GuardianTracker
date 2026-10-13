@@ -8,8 +8,7 @@ Primary mark:
 Included:
 - `guardian-tracker.svg` — scalable vector mark on transparent background
 - `guardian-tracker-dark.svg` — scalable vector on the required dark rounded tile
-- `guardian-tracker.ico` — multi-resolution ICO (byte-identical to `favicon.ico`, so only `favicon.ico` is served)
-- `favicon.ico` — same ICO using the conventional browser filename
+- `favicon.ico` — multi-resolution ICO under the conventional browser filename. The pack's `guardian-tracker.ico` was byte-identical and is not kept in this repository; the served copy is `frontend/public/favicon.ico`
 - `png-transparent/` — transparent PNGs of the mark
 - `png-dark/` — PNGs on the #04080d rounded-square tile (recommended for browser/app use)
 

@@ -4,7 +4,7 @@
 - Date: 2026-08-16
 
 Implementation is incremental: the shared fence landed in `v1.0.14`, and Items,
-Records, and Efficiency now use owner-local publications. Weekly and Collections
+Records, Efficiency, and Collections now use owner-local publications. Weekly
 adoption remains sequenced work, so this ADR is not yet fully implemented.
 
 ## Context

@@ -81,8 +81,12 @@ environment files nor needs to pull a base image. `Build Docker Images` runs thi
 probe before application builds.
 
 Compose supplies API secrets through runtime `environment` configuration. Local
-frontend env files are excluded from image inputs; the current frontend
-Dockerfile uses source defaults, with no runtime nginx environment injection.
+frontend env files are excluded from image inputs, and there is no runtime nginx
+environment injection. The frontend Dockerfile builds with source defaults
+except for one build argument, `VITE_OAUTH_COMPLETION_ORIGIN` (empty by
+default), which Compose passes from the root `.env` for the development-only
+tunnel OAuth handoff. The production stage also declares a `HEALTHCHECK` that
+probes nginx on its listening port.
 Treat any deliberate Vite build configuration as public browser-visible input.
 
 ## Docker Compose host exposure

@@ -14,6 +14,35 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.27] - 2026-10-13
+
+### Fixed
+
+- A Bungie HTTP 429 whose `Retry-After` names more than 10 seconds is now
+  reported as rate limited immediately instead of holding the request open for
+  the full wait. The 10-second limit previously applied only to throttles
+  reported inside a normal response.
+- The Minikube startup script now forwards the API to `localhost:8081` alongside
+  the frontend. The browser calls the API at that address, so a Minikube
+  deployment previously loaded the page but could not reach the API.
+
+### Changed
+
+- Corrected the public documentation against the code after a full audit. The
+  contributor guide now lists `Browser E2E + Axe` as a required check; the
+  security and architecture docs no longer describe a role hint in the JWT and
+  now cover the inbound auth rate limiter, the request-body cap, digest
+  ownership checks, and previously unlisted routes and feature-flag gates; the
+  setup guide documents `CACHE_TTL_RECORDS` and `DB_MAX_CONNS` and which
+  settings Compose does not pass through.
+- ADR 0015 is marked implemented in `v1.3.31`, ADR statuses follow one
+  vocabulary, and ADRs describing since-changed code carry dated update notes.
+- The agent operating guide and subagent definitions match the current schema,
+  store and route names, error codes, lint rules, and frontend data modules.
+- Corrected four earlier changelog entries: the `golang.org/x/mod` versions in
+  1.18.17, a wish-list claim in 1.3.25 that shipped in 1.3.31, and the dates of
+  1.3.58 and 1.3.9.
+
 ## [1.18.26] - 2026-10-13
 
 ### Changed
@@ -93,8 +122,9 @@ No unreleased changes.
 - Updated the API's indirect `golang.org/x/text` dependency from 0.40.0 to 0.42.0
   to clear GO-2026-6629, a panic on crafted input in `x/text/secure/precis` that
   `govulncheck` traced from the PostgreSQL connection pool setup. The other
-  indirect `golang.org/x` modules (`crypto`, `mod`, `net`, `sync`, `tools`,
-  `telemetry`) moved one release forward with it.
+  indirect `golang.org/x` modules moved forward with it: `mod` from 0.38.0 to
+  0.41.0, and `crypto`, `net`, `sync`, `tools`, and `telemetry` by one release
+  each.
 
 ## [1.18.16] - 2026-10-07
 
@@ -808,7 +838,7 @@ No unreleased changes.
 - Refreshed the pinned `nginxinc/nginx-unprivileged:1.31.5-alpine3.24`
   production-image digest.
 
-## [1.3.58] - 2026-09-13
+## [1.3.58] - 2026-09-14
 
 ### Fixed
 
@@ -1302,9 +1332,9 @@ No unreleased changes.
 
 - Collections now reads every item's name, icon, type, rarity, acquisition
   sources, and farm-only status from the shared item-facts owner instead of
-  deriving its own projection from the manifest. The collection grid, item
-  drawer, and wish list can no longer describe the same item differently. The
-  REST shape and the values it carries are unchanged.
+  deriving its own projection from the manifest. The collection grid and item
+  drawer can no longer describe the same item differently. The REST shape and
+  the values it carries are unchanged.
 - A manifest swap now refreshes a cached collection analysis under a generation
   fence: the manifest-derived half is rebuilt from one coherent manifest, the
   rate-limited Bungie ownership fetch is kept, and analysis that began before
@@ -1497,7 +1527,7 @@ No unreleased changes.
   application composition and regression coverage for cross-tab account changes,
   logout, delayed work, and application remounts.
 
-## [1.3.9] - 2026-09-05
+## [1.3.9] - 2026-09-06
 
 ### Changed
 
@@ -1782,7 +1812,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.26...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.27...HEAD
+[1.18.27]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.26...v1.18.27
 [1.18.26]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.25...v1.18.26
 [1.18.25]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.24...v1.18.25
 [1.18.24]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.23...v1.18.24
