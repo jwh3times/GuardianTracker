@@ -385,11 +385,11 @@ go vet ./...
 Staticcheck, from `backend/api-service/` in a POSIX shell:
 
 ```bash
-GOTOOLCHAIN=go1.26.9 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+GOTOOLCHAIN=go1.26.10 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
 ```
 
 The `VAR=value command` prefix is POSIX shell syntax. In PowerShell, set
-`$env:GOTOOLCHAIN` to the same `go1.26.9` value first, then run the command
+`$env:GOTOOLCHAIN` to the same `go1.26.10` value first, then run the command
 without the prefix.
 
 `GOTOOLCHAIN` is not optional. Staticcheck 2026.1 is built by whatever Go is
