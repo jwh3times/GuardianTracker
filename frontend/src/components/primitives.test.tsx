@@ -45,13 +45,23 @@ describe("DataFreshnessChip", () => {
     expect(screen.getByText("Updated 5m ago")).toBeInTheDocument();
   });
 
+  it("names the refresh button with its visible label first", () => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    render(
+      <DataFreshnessChip updatedAt={fiveMinAgo} onRefresh={() => undefined} />,
+    );
+    expect(screen.getByRole("button")).toHaveAccessibleName(
+      "Updated 5m ago, refresh data",
+    );
+  });
+
   it("shows a placeholder when no timestamp exists", () => {
     render(<DataFreshnessChip />);
     const chip = screen.getByText("Updated —");
     expect(chip).toBeInTheDocument();
     expect(chip.tagName).toBe("SPAN");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(chip).not.toHaveAccessibleName("Refresh data");
+    expect(chip).not.toHaveAccessibleName(/refresh data/i);
   });
 
   it("shows the refreshing state while a refresh is in flight", () => {

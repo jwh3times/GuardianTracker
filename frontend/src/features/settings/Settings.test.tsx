@@ -146,7 +146,7 @@ describe("Settings page", () => {
     );
     renderSettings();
     await screen.findByText("Settings");
-    fireEvent.click(screen.getByRole("button", { name: "Refresh data" }));
+    fireEvent.click(screen.getByRole("button", { name: /refresh data/i }));
     await waitFor(() => expect(refreshed).toBe(true));
   });
 
