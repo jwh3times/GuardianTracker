@@ -337,7 +337,7 @@ npm run test:nginx-headers
 
 # Go (from backend/api-service/)
 go test ./...
-GOTOOLCHAIN=go1.26.9 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...   # pin required; see below
+GOTOOLCHAIN=go1.26.10 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...   # pin required; see below
 go tool govulncheck ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
@@ -380,7 +380,7 @@ without writing.
 
 ### Staticcheck needs the pinned toolchain
 
-`GOTOOLCHAIN=go1.26.9` on the Staticcheck line is required, not decoration.
+`GOTOOLCHAIN=go1.26.10` on the Staticcheck line is required, not decoration.
 Staticcheck 2026.1 is compiled by whatever Go is active, and on a newer
 toolchain it cannot decode the standard library's export data, so it fails while
 loading and analyzes nothing at all. Every error names a stdlib package rather
