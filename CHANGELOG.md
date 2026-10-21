@@ -14,6 +14,58 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.34] - 2026-10-20
+
+### Security
+
+- The Go toolchain pin moved from 1.26.9 to 1.26.10 everywhere it is declared —
+  `go.mod`, both workflows' `GO_VERSION`, and the documented Staticcheck
+  command. It clears GO-2026-6809, which distrusts compromised intermediate
+  certificates in `crypto/x509` and which `govulncheck` traced from the API's
+  bounded response reader into `x509.Certificate.Verify`.
+
+### Changed
+
+- The changelog now records the five Dependabot releases v1.18.29 through
+  v1.18.33, which merged without entries.
+
+## [1.18.33] - 2026-10-18
+
+### Changed
+
+- Updated five frontend development dependencies (Dependabot):
+  `@tanstack/react-virtual` 3.14.15 → 3.14.17, `@testing-library/user-event`
+  14.6.7 → 14.6.8, `@vitest/coverage-v8` 5.0.3 → 5.0.4, `postcss` 8.5.29 →
+  8.5.30, and `vitest` 5.0.3 → 5.0.4. No application behavior changed.
+
+## [1.18.32] - 2026-10-15
+
+### Changed
+
+- Updated `@tanstack/react-query` from 5.104.1 to 5.104.2 (Dependabot).
+
+## [1.18.31] - 2026-10-15
+
+### Changed
+
+- Refreshed the pinned `nginxinc/nginx-unprivileged:1.31.6-alpine3.24`
+  production-image digest.
+
+## [1.18.30] - 2026-10-14
+
+### Changed
+
+- The API image's `golang` builder moved from 1.27.1-alpine to 1.27.2-alpine
+  (Dependabot).
+
+## [1.18.29] - 2026-10-14
+
+### Changed
+
+- Updated three frontend dependencies (Dependabot): `@tanstack/react-virtual`
+  3.14.14 → 3.14.15, `oxlint-tsgolint` 7.0.2003 → 7.0.2004, and `prettier`
+  3.9.9 → 3.9.10. No application behavior changed.
+
 ## [1.18.28] - 2026-10-13
 
 ### Changed
@@ -1824,7 +1876,13 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.28...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.34...HEAD
+[1.18.34]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.33...v1.18.34
+[1.18.33]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.32...v1.18.33
+[1.18.32]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.31...v1.18.32
+[1.18.31]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.30...v1.18.31
+[1.18.30]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.29...v1.18.30
+[1.18.29]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.28...v1.18.29
 [1.18.28]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.27...v1.18.28
 [1.18.27]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.26...v1.18.27
 [1.18.26]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.25...v1.18.26
