@@ -355,7 +355,8 @@ export function DataFreshnessChip({
         if (!refreshing) onRefresh?.();
       }}
       disabled={refreshing}
-      aria-label="Refresh data"
+      // WCAG 2.5.3: the accessible name must contain the visible label.
+      aria-label={`${label}, refresh data`}
       title="Refresh data"
     >
       {content}
