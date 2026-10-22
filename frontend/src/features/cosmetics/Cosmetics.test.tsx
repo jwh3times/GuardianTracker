@@ -25,10 +25,10 @@ beforeAll(() => {
     configurable: true,
     get: () => 1000,
   });
-  // @tanstack/react-virtual v3.14.5 measures the scroll container via
-  // offsetHeight (not getBoundingClientRect). Without this stub the virtualizer
+  // @tanstack/virtual-core v3.19.6 measures the scroll container via
+  // clientHeight (not getBoundingClientRect). Without this stub the virtualizer
   // sees a zero-height viewport and renders no tiles.
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     configurable: true,
     get: () => 800,
   });

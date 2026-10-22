@@ -16,10 +16,10 @@ beforeAll(() => {
     configurable: true,
     get: () => 1000,
   });
-  // @tanstack/react-virtual v3.14.5 uses offsetWidth/offsetHeight (via getRect)
+  // @tanstack/virtual-core v3.19.6 uses clientWidth/clientHeight (via getRect)
   // rather than getBoundingClientRect to measure the scroll container.
-  // Stub offsetHeight so the virtualizer sees a non-zero viewport height.
-  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+  // Stub clientHeight so the virtualizer sees a non-zero viewport height.
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     configurable: true,
     get: () => 800,
   });
