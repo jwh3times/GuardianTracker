@@ -14,6 +14,61 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.39] - 2026-10-22
+
+### Changed
+
+- The frontend's type-aware oxlint run now reports zero warnings, down from 75.
+  Most were corrected in code rather than silenced: react-router `navigate()`
+  promises are explicitly discarded, assertions the compiler already satisfied
+  are gone, Vitest mocks and Playwright helper values are typed, and test
+  callbacks with nothing to await are no longer `async`. Exported hooks and
+  helpers in component files, `CategoryTree`'s intended prop-to-state sync, and
+  the React Compiler notice on `useVirtualizer` keep the existing
+  `oxlint-disable-next-line` convention. No application behavior changed.
+- The changelog now records the four Dependabot releases v1.18.35 through
+  v1.18.38, which merged without entries.
+
+## [1.18.38] - 2026-10-22
+
+### Changed
+
+- Updated `@tanstack/react-query` 5.104.3 → 5.104.4, `@tanstack/react-virtual`
+  3.14.20 → 3.14.21, and `postcss` 8.5.30 → 8.5.31 (Dependabot). The new
+  `@tanstack/virtual-core` 3.19.6 measures the scroll container with
+  `clientHeight` instead of `offsetHeight`, so the jsdom stubs in the cosmetics
+  tests moved with it. No application behavior changed.
+
+## [1.18.37] - 2026-10-22
+
+### Changed
+
+- The production frontend image's `nginxinc/nginx-unprivileged` base moved from
+  1.31.6-alpine3.24 to 1.31.7-alpine3.24 (Dependabot).
+
+## [1.18.36] - 2026-10-20
+
+### Changed
+
+- Frontend tooling moved from Node.js 26.11.1 to 26.12.0 in `.nvmrc` and all
+  three frontend Dockerfiles (Dependabot).
+
+## [1.18.35] - 2026-10-20
+
+### Changed
+
+- Updated frontend dependencies (Dependabot): `react` and `react-dom` 19.3.0 →
+  19.3.1, `@tanstack/react-query` 5.104.2 → 5.104.3, `@tanstack/react-virtual`
+  3.14.17 → 3.14.20, `@playwright/test` 1.64.0 → 1.64.1 (with the matching
+  Playwright image pin), `@axe-core/playwright` 4.13.0 → 4.14.0,
+  `@vitest/coverage-v8` 5.0.4 → 5.0.5, `jsdom` 30.1.2 → 30.1.3, and `oxlint`
+  1.87.0 → 1.88.0.
+
+### Fixed
+
+- The data-freshness chip's refresh button now includes its visible label in its
+  accessible name (WCAG 2.5.3), which axe-core 4.14.0 began flagging.
+
 ## [1.18.34] - 2026-10-20
 
 ### Security
@@ -1876,7 +1931,12 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.34...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.39...HEAD
+[1.18.39]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.38...v1.18.39
+[1.18.38]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.37...v1.18.38
+[1.18.37]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.36...v1.18.37
+[1.18.36]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.35...v1.18.36
+[1.18.35]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.34...v1.18.35
 [1.18.34]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.33...v1.18.34
 [1.18.33]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.32...v1.18.33
 [1.18.32]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.31...v1.18.32
