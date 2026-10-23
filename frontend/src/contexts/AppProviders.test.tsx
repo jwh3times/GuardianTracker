@@ -99,7 +99,15 @@ describe("render helper routing", () => {
   it("honours initialEntries and initialIndex for history-depth tests", () => {
     function BackButton() {
       const nav = useNavigate();
-      return <button onClick={() => nav(-1)}>back</button>;
+      return (
+        <button
+          onClick={() => {
+            void nav(-1);
+          }}
+        >
+          back
+        </button>
+      );
     }
     renderWithProviders(
       <>

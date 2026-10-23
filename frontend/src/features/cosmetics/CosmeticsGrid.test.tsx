@@ -23,18 +23,17 @@ beforeAll(() => {
     configurable: true,
     get: () => 800,
   });
-  HTMLElement.prototype.getBoundingClientRect = () =>
-    ({
-      width: 1000,
-      height: 800,
-      top: 0,
-      left: 0,
-      right: 1000,
-      bottom: 800,
-      x: 0,
-      y: 0,
-      toJSON: () => {},
-    }) as DOMRect;
+  HTMLElement.prototype.getBoundingClientRect = () => ({
+    width: 1000,
+    height: 800,
+    top: 0,
+    left: 0,
+    right: 1000,
+    bottom: 800,
+    x: 0,
+    y: 0,
+    toJSON: () => {},
+  });
 });
 afterAll(() => vi.unstubAllGlobals());
 
@@ -54,7 +53,7 @@ function makeItems(n: number): GTItem[] {
 
 describe("CosmeticsGrid", () => {
   it("renders visible tiles and fires onOpen when one is clicked", () => {
-    const onOpen = vi.fn();
+    const onOpen = vi.fn<(item: GTItem) => void>();
     render(<CosmeticsGrid items={makeItems(30)} onOpen={onOpen} />);
     fireEvent.click(screen.getByText("Item 0"));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "0" }));

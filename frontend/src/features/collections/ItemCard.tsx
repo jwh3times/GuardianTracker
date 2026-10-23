@@ -3,8 +3,6 @@ import { Icon } from "../../components/Icon";
 import { Badge, Button, ItemTile } from "../../components/primitives";
 import type { GTItem } from "../../types/design";
 
-type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
-
 export type ItemCardDensity = "grid" | "list" | "compact";
 
 interface ItemCardProps {
@@ -161,10 +159,7 @@ export function ItemCard({
             {item.type}
             {item.slot ? ` · ${item.slot}` : ""}
           </div>
-          <div
-            className="gt-item-badges"
-            style={{ marginTop: "var(--s-1)" } as CSS}
-          >
+          <div className="gt-item-badges" style={{ marginTop: "var(--s-1)" }}>
             <Badge kind={r} dot />
             {item.farmOnly && <Badge kind="farmonly">Farm only</Badge>}
           </div>

@@ -43,11 +43,11 @@ function trackingClient() {
   });
   const invalidated: string[] = [];
   const original = client.invalidateQueries.bind(client);
-  client.invalidateQueries = ((filters?: { queryKey?: readonly unknown[] }) => {
+  client.invalidateQueries = (filters?: { queryKey?: readonly unknown[] }) => {
     const head = filters?.queryKey?.[0];
     if (typeof head === "string") invalidated.push(head);
     return original(filters as never);
-  }) as typeof client.invalidateQueries;
+  };
   return Object.assign(client, { invalidated });
 }
 

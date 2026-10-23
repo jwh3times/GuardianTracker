@@ -57,7 +57,7 @@ export function OnboardingTour() {
   useEffect(() => {
     if (state.phase !== "tour") return;
     const route = TOUR_ROUTES[state.step];
-    if (location.pathname !== route) navigate(route);
+    if (location.pathname !== route) void navigate(route);
   }, [location.pathname, navigate, state]);
 
   useEffect(() => {

@@ -146,7 +146,9 @@ export function ThisWeek() {
         <XurModule
           xur={w?.xur ?? null}
           activeClassName={activeCharacter?.cls}
-          onSelect={(hash) => navigate("/collections?item=" + hash)}
+          onSelect={(hash) => {
+            void navigate("/collections?item=" + hash);
+          }}
         />
         <MilestoneModule milestones={w?.milestones ?? []} />
       </div>

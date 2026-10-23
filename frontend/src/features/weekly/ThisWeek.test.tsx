@@ -217,7 +217,7 @@ describe("ThisWeek page", () => {
     );
   });
 
-  it("renders the loading spinner while the query is in flight", async () => {
+  it("renders the loading spinner while the query is in flight", () => {
     server.use(
       http.get(`${API}/api/weekly/recommendations`, async () => {
         await delay(40);

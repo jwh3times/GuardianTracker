@@ -26,7 +26,7 @@ describe("CosmeticTile", () => {
   });
 
   it("calls onOpen when clicked", () => {
-    const onOpen = vi.fn();
+    const onOpen = vi.fn<(item: GTItem) => void>();
     render(
       <CosmeticTile item={{ ...item, collected: false }} onOpen={onOpen} />,
     );

@@ -38,7 +38,12 @@ function PathProbe() {
 function BackButton() {
   const nav = useNavigate();
   return (
-    <button onClick={() => nav(-1)} type="button">
+    <button
+      onClick={() => {
+        void nav(-1);
+      }}
+      type="button"
+    >
       go back
     </button>
   );

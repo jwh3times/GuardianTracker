@@ -32,18 +32,17 @@ beforeAll(() => {
     configurable: true,
     get: () => 800,
   });
-  HTMLElement.prototype.getBoundingClientRect = () =>
-    ({
-      width: 1000,
-      height: 800,
-      top: 0,
-      left: 0,
-      right: 1000,
-      bottom: 800,
-      x: 0,
-      y: 0,
-      toJSON: () => {},
-    }) as DOMRect;
+  HTMLElement.prototype.getBoundingClientRect = () => ({
+    width: 1000,
+    height: 800,
+    top: 0,
+    left: 0,
+    right: 1000,
+    bottom: 800,
+    x: 0,
+    y: 0,
+    toJSON: () => {},
+  });
 });
 afterAll(() => {
   vi.unstubAllGlobals();

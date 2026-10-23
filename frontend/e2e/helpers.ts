@@ -60,7 +60,11 @@ export async function completeOnboarding(page: Page) {
 export async function readBrowserAuth(page: Page) {
   return page.evaluate(
     ({ sessionKey, legacyRefreshKey }) => {
-      const envelope = JSON.parse(localStorage.getItem(sessionKey) ?? "null");
+      const envelope = JSON.parse(
+        localStorage.getItem(sessionKey) ?? "null",
+      ) as {
+        projection?: { status?: string; accessToken?: string; user?: unknown };
+      } | null;
       const projection = envelope?.projection;
       return {
         token:

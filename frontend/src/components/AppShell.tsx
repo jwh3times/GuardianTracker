@@ -212,7 +212,7 @@ function SearchBar() {
                 onClick={() => {
                   setOpen(false);
                   setQ("");
-                  navigate(`/collections?item=${i.id}`);
+                  void navigate(`/collections?item=${i.id}`);
                 }}
               >
                 <ItemTile

@@ -32,6 +32,7 @@ export function CategoryTree({
   // intentional.
   useEffect(() => {
     if (!expand || expand.length === 0) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- syncs the external expand prop, see above
     setOpen((s) => {
       const n = new Set(s);
       for (const id of expand) n.add(id);

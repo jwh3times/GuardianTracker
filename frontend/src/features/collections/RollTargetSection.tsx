@@ -114,7 +114,9 @@ export function RollTargetSection({
           targets={targets}
           error={matchesErrorObj}
           onRetry={retryMatches}
-          onReconnect={() => navigate("/reauthorize")}
+          onReconnect={() => {
+            void navigate("/reauthorize");
+          }}
         />
       ) : !matchesReady ? (
         <div className="gt-perks-loading">Checking your copies…</div>

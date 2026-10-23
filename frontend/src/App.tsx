@@ -147,8 +147,12 @@ const FlaggedRoute: React.FC<{
     return (
       <LockedFeature
         flag={st.flag}
-        onChangeTier={() => navigate("/settings")}
-        onBack={() => navigate("/dashboard")}
+        onChangeTier={() => {
+          void navigate("/settings");
+        }}
+        onBack={() => {
+          void navigate("/dashboard");
+        }}
       />
     );
   }

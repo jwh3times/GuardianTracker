@@ -39,7 +39,9 @@ export function Dashboard() {
   const { user } = useAuth();
   const { activeCharacter } = useCharacters();
   const navigate = useNavigate();
-  const go = (path: string) => navigate(path);
+  const go = (path: string) => {
+    void navigate(path);
+  };
 
   // Shares the "missing" collections cache entry with Settings and the
   // Collections page (one fetch across all three) via the shared query helper.
@@ -323,7 +325,7 @@ export function Dashboard() {
                   onClick={() => go("/this-week")}
                 >
                   <Icon
-                    name={action.icon as any}
+                    name={action.icon}
                     size="1.2rem"
                     style={{ color: iconColor }}
                   />
@@ -346,7 +348,7 @@ export function Dashboard() {
                       </div>
                     )}
                   </div>
-                  <Badge kind={action.badge as any} dot />
+                  <Badge kind={action.badge} dot />
                 </button>
               );
             })

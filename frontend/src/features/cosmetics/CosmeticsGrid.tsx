@@ -38,6 +38,7 @@ export function CosmeticsGrid({
   }, []);
 
   const rowCount = Math.ceil(items.length / cols);
+  // oxlint-disable-next-line react/incompatible-library -- no React Compiler in this build, so nothing memoizes around useVirtualizer
   const rows = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,

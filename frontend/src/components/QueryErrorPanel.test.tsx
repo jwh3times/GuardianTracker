@@ -51,7 +51,7 @@ describe("QueryErrorPanel", () => {
   });
 
   it("wires Retry to the caller's refetch", () => {
-    const onRetry = vi.fn();
+    const onRetry = vi.fn<() => void>();
     render(<QueryErrorPanel error={undefined} onRetry={onRetry} />);
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(onRetry).toHaveBeenCalledTimes(1);
