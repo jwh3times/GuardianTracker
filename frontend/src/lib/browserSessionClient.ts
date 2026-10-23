@@ -354,10 +354,13 @@ function isBungieReconnectRequest(
       : undefined;
   if ((init?.method ?? request?.method ?? "GET").toUpperCase() !== "POST")
     return false;
-  const url = new URL(
-    request?.url ?? String(input),
-    "https://guardian-tracker.invalid",
-  );
+  const href =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+  const url = new URL(href, "https://guardian-tracker.invalid");
   return url.pathname === "/api/auth/bungie/reconnect";
 }
 

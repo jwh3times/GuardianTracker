@@ -92,6 +92,7 @@ export const FlagsProvider: React.FC<{ children: ReactNode }> = ({
   );
 };
 
+// oxlint-disable-next-line react/only-export-components
 export function useFlags(): FlagsContextType {
   const ctx = useContext(FlagsContext);
   if (!ctx) {
@@ -101,6 +102,7 @@ export function useFlags(): FlagsContextType {
 }
 
 /** Resolved gating state for a single flag key. */
+// oxlint-disable-next-line react/only-export-components
 export function useFlag(key: string): FlagState {
   return useFlags().flagState(key);
 }

@@ -280,7 +280,9 @@ export function RollTargets() {
               <MatchFailureBanner
                 error={matchesErrorObj}
                 onRetry={retryMatches}
-                onReconnect={() => navigate("/reauthorize")}
+                onReconnect={() => {
+                  void navigate("/reauthorize");
+                }}
               />
               <section aria-labelledby="rt-neutral-title">
                 <h2 id="rt-neutral-title" className="gt-section-title">

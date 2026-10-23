@@ -122,7 +122,7 @@ export function createApplicationIdentity(
 
   return {
     getSnapshot: () => scope,
-    subscribe(listener: () => void): () => void {
+    subscribe: (listener: () => void): (() => void) => {
       listeners.add(listener);
       if (pendingRetirement) {
         void pendingRetirement.cancelQueries({}, { silent: true });

@@ -51,7 +51,7 @@ export function ItemTile({
 }
 
 /* ---------------- BADGE ---------------- */
-export const BADGE_COLOR: Record<string, string> = {
+const BADGE_COLOR: Record<string, string> = {
   exotic: "var(--c-exotic)",
   legendary: "var(--c-legendary)",
   rare: "var(--c-rare)",
@@ -272,6 +272,7 @@ export function StatTile({
 }
 
 /* ---------------- COUNTDOWN CHIP ---------------- */
+// oxlint-disable-next-line react/only-export-components
 export function fmtDur({
   d = 0,
   h = 0,

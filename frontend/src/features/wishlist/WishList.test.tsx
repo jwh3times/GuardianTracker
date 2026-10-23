@@ -63,7 +63,7 @@ describe("WishList page", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the loading state before data arrives", async () => {
+  it("renders the loading state before data arrives", () => {
     const { container } = renderPage(<WishList />);
     // PageHead + spinner card render synchronously while the query is pending
     expect(container.querySelector(".gt-page")).not.toBeNull();

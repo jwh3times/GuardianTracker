@@ -5,8 +5,6 @@ import { DIFF_LABEL } from "../../lib/constants";
 import { RollTargetSection } from "./RollTargetSection";
 import type { GTItem, ItemCatalyst, PerkColumn } from "../../types/design";
 
-type CSS = React.CSSProperties & Record<`--${string}`, string | number>;
-
 export function ItemDetailDrawer({
   item,
   onClose,
@@ -60,7 +58,7 @@ export function ItemDetailDrawer({
           <div>
             <div
               className="gt-item-badges"
-              style={{ marginBottom: "var(--s-1)" } as CSS}
+              style={{ marginBottom: "var(--s-1)" }}
             >
               <Badge kind={item.rarity} dot lg />
             </div>

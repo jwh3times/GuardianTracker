@@ -180,7 +180,9 @@ export function Settings() {
             <Button
               variant="primary"
               icon="shield"
-              onClick={() => navigate("/admin")}
+              onClick={() => {
+                void navigate("/admin");
+              }}
             >
               Open Admin Console
             </Button>

@@ -7,6 +7,7 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | null>(null);
 
+// oxlint-disable-next-line react/only-export-components
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {

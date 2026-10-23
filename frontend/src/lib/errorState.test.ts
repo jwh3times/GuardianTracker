@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { errorState, type ErrorStateCopy } from "./errorState";
+import { errorState } from "./errorState";
 import { ApiError } from "./api";
 
 describe("errorState", () => {
@@ -15,7 +15,7 @@ describe("errorState", () => {
       icon: "refresh",
       title: "Reconnecting…",
       body: "Your session is refreshing. Give it a moment, then try again.",
-    } as ErrorStateCopy);
+    });
 
     // Explicitly verify it's NOT the manifest warming copy.
     expect(result.title).not.toBe("Warming up…");

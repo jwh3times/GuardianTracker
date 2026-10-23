@@ -132,7 +132,7 @@ describe("AppShell interactions", () => {
     );
   }
 
-  it("renders the shell content and nav", async () => {
+  it("renders the shell content and nav", () => {
     renderShell();
     expect(screen.getByText("shell-child")).toBeInTheDocument();
     expect(screen.getByText("Triumphs & Seals")).toBeInTheDocument();
@@ -608,7 +608,7 @@ describe("ErrorBoundary", () => {
 
   it("wires the reload action", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const reload = vi.fn();
+    const reload = vi.fn<() => void>();
     const original = window.location;
     Object.defineProperty(window, "location", {
       configurable: true,

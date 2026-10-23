@@ -13,7 +13,7 @@ function item(over: Partial<APIDestinyItem> & { itemHash: string }) {
     acquisitionSources: [],
     isExotic: false,
     ...over,
-  } as APIDestinyItem;
+  };
 }
 
 // Weapons(10) ─ Hand Cannons(11): items 100 (collected), 200 (on sale)
@@ -141,7 +141,7 @@ describe("wire → domain mapping", () => {
           icon: "/icons/fb.png",
         }),
       },
-    } as unknown as APIMembershipCollections);
+    });
     const i = v.itemByHash("100")!;
     expect(i.rarity).toBe("exotic");
     expect(i.acquisitionSources).toEqual([
@@ -169,7 +169,7 @@ describe("wire → domain mapping", () => {
           acquisitionSources: [],
         }),
       },
-    } as unknown as APIMembershipCollections);
+    });
     const i = v.itemByHash("100")!;
     expect(i.rarity).toBe("legendary");
     expect(i.acquisitionSources).toEqual([]);
@@ -181,7 +181,7 @@ describe("wire → domain mapping", () => {
       items: {
         "100": item({ itemHash: "100", farmOnly: true }),
       },
-    } as unknown as APIMembershipCollections);
+    });
     expect(v.itemByHash("100")!.farmOnly).toBe(true);
   });
 });
@@ -301,7 +301,7 @@ describe("absent optional fields", () => {
     const v = toCollections({
       ...full,
       availableNow: undefined,
-    } as unknown as APIMembershipCollections);
+    });
     expect(v.allItems().every((i) => !i.availableNow)).toBe(true);
     expect(v.allItems().every((i) => i.availFrom === undefined)).toBe(true);
   });
@@ -310,7 +310,7 @@ describe("absent optional fields", () => {
     const v = toCollections({
       ...full,
       collectedHashes: undefined,
-    } as unknown as APIMembershipCollections);
+    });
     expect(v.allItems().every((i) => !i.collected)).toBe(true);
   });
 
@@ -318,7 +318,7 @@ describe("absent optional fields", () => {
     const v = toCollections({
       ...full,
       items: { "100": full.items!["100"] },
-    } as unknown as APIMembershipCollections);
+    });
     expect(v.itemsUnder("11").map((i) => i.id)).toEqual(["100"]);
     expect(v.itemByHash("200")).toBeNull();
   });

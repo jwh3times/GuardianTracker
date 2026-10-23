@@ -351,7 +351,7 @@ describe("Catalysts page", () => {
     expect(screen.queryByText("Catalysts & Crafting")).not.toBeInTheDocument();
   });
 
-  it("renders the loading spinner while the query is in flight", async () => {
+  it("renders the loading spinner while the query is in flight", () => {
     server.use(
       http.get(`${API}/api/catalysts/:type/:id`, async () => {
         await delay(40);

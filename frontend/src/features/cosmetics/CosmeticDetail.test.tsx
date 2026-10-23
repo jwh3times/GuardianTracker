@@ -24,7 +24,7 @@ describe("CosmeticDetail", () => {
   });
 
   it("renders details and closes on scrim click", () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn<() => void>();
     render(<CosmeticDetail item={item} onClose={onClose} />);
     const dialog = screen.getByRole("dialog", { name: "Calus Selected" });
     expect(dialog).toBeInTheDocument();
@@ -35,14 +35,14 @@ describe("CosmeticDetail", () => {
   });
 
   it("does not react to Escape when item is null", () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn<() => void>();
     render(<CosmeticDetail item={null} onClose={onClose} />);
     fireEvent.keyDown(document.body, { key: "Escape" });
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it("closes on Escape when open", () => {
-    const onClose = vi.fn();
+    const onClose = vi.fn<() => void>();
     render(<CosmeticDetail item={item} onClose={onClose} />);
     fireEvent.keyDown(document.body, { key: "Escape" });
     expect(onClose).toHaveBeenCalled();

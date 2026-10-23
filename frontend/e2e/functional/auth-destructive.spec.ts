@@ -20,7 +20,9 @@ test.describe.serial("cookie-backed session lifecycle", () => {
 
     await page.evaluate(
       ({ sessionKey, legacyRefreshKey }) => {
-        const envelope = JSON.parse(localStorage.getItem(sessionKey)!);
+        const envelope = JSON.parse(localStorage.getItem(sessionKey)!) as {
+          projection: { accessToken: string };
+        };
         envelope.projection.accessToken = "deliberately-expired-access-token";
         localStorage.setItem(sessionKey, JSON.stringify(envelope));
         localStorage.removeItem(legacyRefreshKey);
@@ -91,7 +93,9 @@ test.describe.serial("cookie-backed session lifecycle", () => {
     await Promise.all(
       [page, second].map((tab) =>
         tab.evaluate(async (modulePath) => {
-          const { apiFetch } = await import(modulePath);
+          const { apiFetch } = (await import(modulePath)) as {
+            apiFetch: (path: string) => Promise<unknown>;
+          };
           await apiFetch("/api/auth/profile");
         }, "/src/lib/api.ts"),
       ),

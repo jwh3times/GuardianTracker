@@ -141,7 +141,7 @@ describe("Triumphs page", () => {
     expect(screen.getByText("1 seals · 0 gilded")).toBeInTheDocument();
   });
 
-  it("renders the loading spinner while the query is in flight", async () => {
+  it("renders the loading spinner while the query is in flight", () => {
     server.use(
       http.get(`${API}/api/seals/:type/:id`, async () => {
         await delay(40);
