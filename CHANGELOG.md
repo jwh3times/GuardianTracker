@@ -14,6 +14,29 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.41] - 2026-10-25
+
+### Fixed
+
+- The Windows workspace-portability suite no longer fails intermittently with
+  `EPERM` while removing its temporary fixtures. The fake `op.exe` fixture is a
+  copy of `node.exe`, and Windows can keep a just-exited executable locked
+  briefly, so each test's immediate cleanup now retries with `rmSync`'s built-in
+  backoff. No application or script behavior changed.
+
+### Changed
+
+- The changelog now records the Dependabot release v1.18.40, which merged
+  without an entry.
+
+## [1.18.40] - 2026-10-25
+
+### Changed
+
+- Updated `@tanstack/react-query` 5.104.4 → 5.104.5, `react-router` 8.4.0 →
+  8.5.0, and `oxlint` 1.88.0 → 1.89.0 (Dependabot). No application behavior
+  changed.
+
 ## [1.18.39] - 2026-10-22
 
 ### Changed
@@ -1931,7 +1954,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.39...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.41...HEAD
+[1.18.41]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.40...v1.18.41
+[1.18.40]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.39...v1.18.40
 [1.18.39]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.38...v1.18.39
 [1.18.38]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.37...v1.18.38
 [1.18.37]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.36...v1.18.37

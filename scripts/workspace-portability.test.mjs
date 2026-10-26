@@ -40,6 +40,18 @@ function run(command, args, options = {}) {
   });
 }
 
+// Windows can briefly keep a just-exited fixture executable (op.exe is a copy
+// of node.exe) locked, so an immediate removal fails with EPERM. rmSync's
+// retries back off linearly on EBUSY, EPERM, and ENOTEMPTY.
+function removeTree(path) {
+  rmSync(path, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 100,
+  });
+}
+
 function git(root, ...args) {
   const result = run("git", ["-c", "core.excludesFile=", "-C", root, ...args]);
   assert.equal(
@@ -594,7 +606,7 @@ test("bootstrap defaults to public-only and never requires private access", () =
     assert.match(result.stdout, /Public workspace is ready/);
     assert.equal(result.stderr, "");
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -608,7 +620,7 @@ test("bootstrap recognizes an existing independent private repository", () => {
     assert.equal(result.status, 0, combinedOutput(result));
     assert.match(result.stdout, /clone already present/);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -634,7 +646,7 @@ test("bootstrap refuses a populated private directory without listing it", () =>
       "preserve me\n",
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -660,7 +672,7 @@ test("failed 1Password authorization is sanitized and changes no files", () => {
     assert.doesNotMatch(output, /PRIVATE-VAULT|PRIVATE-ITEM|PRIVATE-FIELD/);
     assert.equal(run("git", ["-C", root, "status", "--short"]).stdout, "");
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -686,7 +698,7 @@ test("bootstrap accepts a quoted whitespace-bearing 1Password reference", () => 
       /must contain exactly one approved variable mapping/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -727,7 +739,7 @@ test("Node bootstrap quotes a whitespace-bearing 1Password reference", () => {
       /--op-reference must be a single/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -785,7 +797,7 @@ test("Node bootstrap removes its temporary reference after an unavailable 1Passw
     assert.match(combinedOutput(result), /1Password CLI is not available/);
     assert.deepEqual(readdirSync(temporaryRoot), []);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -826,7 +838,7 @@ test("Node bootstrap removes its temporary reference after failed 1Password auth
     );
     assert.deepEqual(readdirSync(temporaryRoot), []);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -866,7 +878,7 @@ test("Node bootstrap accepts a quoted whitespace-bearing reference file", () => 
       /reference file must contain exactly one approved variable mapping/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -893,7 +905,7 @@ test("bootstrap rejects extra 1Password environment mappings before authorizatio
     assert.doesNotMatch(combinedOutput(result), new RegExp(noisySentinel));
     assert.equal(run("git", ["-C", root, "status", "--short"]).stdout, "");
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -930,7 +942,7 @@ test("bootstrap evaluates committed ignore negations before invoking 1Password",
       /private repository reference file is not protected/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -947,7 +959,7 @@ test("bootstrap rejects unsafe repository transports before invoking Git", () =>
     assert.doesNotMatch(combinedOutput(result), /PRIVATE-HELPER-SENTINEL/);
     assert.equal(run("git", ["-C", root, "status", "--short"]).stdout, "");
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -978,7 +990,7 @@ test("bootstrap keeps a resolved URL out of the initial Git arguments", () => {
       /PRIVATE-REPOSITORY-SENTINEL/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1012,7 +1024,7 @@ test("bootstrap disables Trace2 for every Git invocation", () => {
     assert.ok(traceLines.every((line) => line === "0|0|0"));
     assert.equal(existsSync(tracePath), false);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1044,7 +1056,7 @@ test("bootstrap strips 1Password credentials from every Git invocation", () => {
       environmentLines.every((line) => line === "missing|missing|missing"),
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1077,7 +1089,7 @@ test("1Password mode forwards only the resolved URL into the internal bootstrap"
       /PRIVATE-OP-FORWARD-SENTINEL/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1106,7 +1118,7 @@ test("status reports only high-level state when private work is absent or uninit
       /PUBLIC-DIRTY-SENTINEL|PRIVATE-DOCUMENT-SENTINEL/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1130,7 +1142,7 @@ test("status strips 1Password credentials from every Git invocation", () => {
       environmentLines.every((line) => line === "missing|missing|missing"),
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1147,7 +1159,7 @@ test("status evaluates the complete committed ignore semantics", () => {
     assert.notEqual(result.status, 0);
     assert.match(result.stdout, /\.env: missing; UNSAFE/);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1187,7 +1199,7 @@ test("status redacts private Git metadata and reports independent dirty state", 
       /PRIVATE-BRANCH-SENTINEL|PRIVATE-COMMIT-SENTINEL|PRIVATE-FILE-SENTINEL|PRIVATE-REMOTE-SENTINEL/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1208,7 +1220,7 @@ test("status fails generically for invalid private Git metadata", () => {
     );
     assert.doesNotMatch(combinedOutput(result), new RegExp(metadataSentinel));
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1220,7 +1232,7 @@ test("status fails when plaintext targets rely on no committed ignore rule", () 
     assert.notEqual(result.status, 0);
     assert.match(result.stdout, /UNSAFE: no repository ignore rule/);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1236,7 +1248,7 @@ test("status rejects an uncommitted replacement for a required ignore rule", () 
     assert.notEqual(result.status, 0);
     assert.match(result.stdout, /UNSAFE: no repository ignore rule/);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1257,7 +1269,7 @@ test("status disables global Git Trace2 targets", () => {
     assert.equal(result.status, 0, combinedOutput(result));
     assert.equal(existsSync(tracePath), false);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1284,9 +1296,9 @@ test(
       );
     } finally {
       if (existsSync(privatePath)) {
-        rmSync(privatePath, { recursive: true, force: true });
+        removeTree(privatePath);
       }
-      rmSync(root, { recursive: true, force: true });
+      removeTree(root);
     }
   },
 );
@@ -1321,9 +1333,9 @@ test(
       assert.equal(existsSync(join(junctionTarget, ".git")), false);
     } finally {
       if (existsSync(privatePath)) {
-        rmSync(privatePath, { recursive: true, force: true });
+        removeTree(privatePath);
       }
-      rmSync(root, { recursive: true, force: true });
+      removeTree(root);
     }
   },
 );
@@ -1355,10 +1367,10 @@ test(
       assert.doesNotMatch(combinedOutput(result), new RegExp(noisySentinel));
     } finally {
       if (existsSync(privateConfig)) {
-        rmSync(privateConfig, { recursive: true, force: true });
+        removeTree(privateConfig);
       }
-      rmSync(junctionTarget, { recursive: true, force: true });
-      rmSync(root, { recursive: true, force: true });
+      removeTree(junctionTarget);
+      removeTree(root);
     }
   },
 );
@@ -1398,9 +1410,9 @@ test(
       assert.equal(existsSync(join(root, ".env")), false);
     } finally {
       if (existsSync(privatePath)) {
-        rmSync(privatePath, { recursive: true, force: true });
+        removeTree(privatePath);
       }
-      rmSync(root, { recursive: true, force: true });
+      removeTree(root);
     }
   },
 );
@@ -1434,7 +1446,7 @@ test("secret restoration never overwrites an existing target", () => {
       /EXISTING-PLAINTEXT-SENTINEL|OP-MUST-NOT-RUN-SENTINEL/,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1471,7 +1483,7 @@ test("secret restoration strips 1Password credentials from every Git invocation"
       environmentLines.every((line) => line === "missing|missing|missing"),
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1496,7 +1508,7 @@ test("secret restoration evaluates the complete committed ignore semantics", () 
     assert.equal(existsSync(fakeOp.markerPath), false);
     assert.match(combinedOutput(result), /committed public ignore rules/);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1527,7 +1539,7 @@ test("failed secret injection removes only its script-owned temporary file", () 
       "",
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1548,7 +1560,7 @@ test("secret restoration validates and installs a complete dotenv target", () =>
     assert.doesNotMatch(restored, /op:\/\//);
     assert.match(restored, /^GO_ENV=development$/m);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1571,7 +1583,7 @@ test("secret restoration rejects unmatched dotenv quotes and removes the temp", 
       "",
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1600,7 +1612,7 @@ test("secret restoration rejects malformed content outside the YAML scaffold", (
       "",
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1621,7 +1633,7 @@ test("secret restoration accepts quoted Kubernetes stringData scalars", () => {
       true,
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1643,7 +1655,7 @@ for (const scalar of ["12345", "true", "null"]) {
         false,
       );
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTree(root);
     }
   });
 }
@@ -1678,7 +1690,7 @@ test("secret restoration preflights every target before installing any output", 
       "",
     );
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
@@ -1713,7 +1725,7 @@ test("secret restoration requires its temporary plaintext path to be committed-i
     assert.doesNotMatch(combinedOutput(result), new RegExp(noisySentinel));
     assert.equal(run("git", ["-C", root, "status", "--short"]).stdout, "");
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTree(root);
   }
 });
 
