@@ -501,7 +501,7 @@ Before reporting completed agent work, create or update a private-companion
 follow-up issue for every required human action, add it to the shared project,
 label it `ready-for-human`, and publish linked step-by-step instructions in the
 private wiki. This overrides public-by-default and unclaimed-draft rules for
-these follow-ups. Read [the human-follow-up procedure](./docs/agents/human-followups.md)
+these follow-ups. Read [the human-follow-up procedure](./docs/agents/human-follow-up.md)
 whenever completed work leaves a human action; it defines deduplication, evidence,
 privacy, and handoff completion. Engineering tasks the agent can perform remain
 agent work.

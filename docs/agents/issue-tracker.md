@@ -78,7 +78,7 @@ detail.
 ## Required human follow-ups
 
 When completed agent work leaves any required human action, follow
-[Human follow-ups](human-followups.md) before reporting completion. These are
+[Human follow-ups](human-follow-up.md) before reporting completion. These are
 private-companion issues on the shared project with `ready-for-human` labels and
 linked private-wiki procedures, even if not yet claimed. This exception takes
 precedence over the default repository and draft rules above.
@@ -113,3 +113,44 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 - **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
 - **Claim**: `gh issue edit <n> --add-assignee @me` — the session's first write.
 - **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+
+## Public repository
+
+jwh3times/GuardianTracker
+
+## Private issue repository
+
+`discover: git -C private remote get-url origin` — the companion's issues, used only when a body
+would need a credential, a real provider/cost/account identifier, or exploitable security detail
+(see "Which repository" above), and for required human follow-ups.
+
+## Board
+
+jwh3times 4
+
+## Board fields
+
+- `Status`: `Todo` / `In Progress` / `Done`. There is no blocked option: blocking is carried by
+  `Blocked By` and native `blocked_by` edges, and assignment marks work in flight (ADR 0024).
+- `Blocked By` (text): the blocker, or a cleared value starting with `Ready`, `Unblocked` or
+  `Shipped` (`Ready — <blocker> completed <date> (#<n>)`). Nothing clears it when a blocker closes:
+  after a merge, run `npm run board:blockers` and clear every item it lists. A draft's ordering
+  lives only here; wire native `blocked_by` edges once it is an issue.
+- `Gate` (text): what must be true before work can start, `none` when nothing.
+- `Chain`: `B — Collections & Wish list`, `C — Acquisition recommendations`,
+  `E — Frontend ownership`, `Ops`, `Product`, `Maintenance`; `Order` (number): position within the
+  chain.
+- `ADR` (text): the controlling ADR number (`0020`), when there is one.
+- `Triage`: mirrors the triage label — `ready-for-agent`, `ready-for-human`, `needs-info`,
+  `needs-triage`, `wontfix`.
+
+## New work
+
+draft item — work nobody has committed to stays a board draft; running `/to-spec`, `/to-tickets`
+or `/wayfinder`, or claiming the draft, creates its issue (ADR 0024).
+
+## Security findings
+
+A draft security advisory on `jwh3times/GuardianTracker`, never a public issue (`SECURITY.md`). An
+accepted residual risk is recorded in the companion's `security-limitations.md` (ADR 0022). A
+private follow-up issue may hold only a sanitized coordination action and the advisory reference.

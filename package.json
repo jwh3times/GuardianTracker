@@ -10,6 +10,8 @@
     "sync:main": "node scripts/sync-main.mjs",
     "sync:agents": "node scripts/sync-agents.mjs",
     "sync:agents:check": "node scripts/sync-agents.mjs --check",
+    "lint:agents": "node scripts/lint-agent-neutrality.mjs",
+    "test:policy": "node --test scripts/sync-agents.test.mjs scripts/lint-agent-neutrality.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs scripts/board-blockers.test.mjs",
     "sync:image-pins": "node scripts/sync-image-pins.mjs",
     "test:docs-links": "node --test scripts/documentation-links.test.mjs",
     "test:go-toolchain-policy": "node --test scripts/go-toolchain-policy.test.mjs",
