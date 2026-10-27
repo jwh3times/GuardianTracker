@@ -28,6 +28,28 @@ Primary stack:
 - Do not remove user-authored work unless explicitly asked.
 - When changing user-facing behavior, update the relevant public docs in the same change.
 
+## Development flow
+
+The Matt Pocock skill flow is the binding process for code changes.
+
+- **Gate:** every code change starts from a ready issue — a `ready-for-agent`
+  issue whose body is a `/to-spec` spec, a `/to-tickets` ticket, or a `/triage`
+  brief, or a `bug` issue worked through `/diagnosing-bugs`. With no ready issue,
+  stop before the first edit and route the user to the next command. Reading
+  code, running tests, and answering questions need no issue.
+- **User-invoked phases:** the human starts `/wayfinder`, `/grill-with-docs`,
+  `/to-spec`, `/to-tickets`, `/implement`, and `/triage`. At a phase boundary,
+  name the next command, give a one-line reason, and wait. Inside a phase, use
+  `/tdd`, `/code-review`, `/diagnosing-bugs`, `/domain-modeling`,
+  `/codebase-design`, `/prototype`, and `/research` whenever they fit.
+- **Exempt:** dependency bumps, changes touching only docs and agent config,
+  release prep, and an explicit user waiver recorded in the PR body as
+  `Flow waived by the user: <reason>`.
+
+Read [docs/agents/dev-flow.md](./docs/agents/dev-flow.md) before the first edit
+of any task, and when opening a PR: it holds the routing table, which paths
+count as code, the exemptions, and the branch and PR-body linking rules.
+
 ## Architecture
 
 Two services: a Go API backend and a React frontend that calls it directly over REST.
@@ -421,6 +443,8 @@ Public docs:
 - `CLAUDE.md` - thin `@AGENTS.md` importer plus Claude Code-specific mechanics
 - `docs/agents/` - per-repo configuration for third-party engineering skills
   (issue tracker, triage labels, domain docs); see `## Agent skills` below
+- `docs/agents/dev-flow.md` - the binding development flow: ready-issue gate,
+  routing, exemptions, and branch/PR issue linking
 - `docs/maintainers/workspace-recovery.md` - value-free private-workspace and
   machine-local configuration recovery runbook for authorized maintainers
 
@@ -460,10 +484,12 @@ Task status lives on GitHub, not in this repository's files. See
 - **Issues go in the public repository by default.** File in the private
   companion only when the body would need a credential, a real
   provider/cost/account identifier, or exploitable security detail.
-- **Unclaimed work is a project draft item, not an issue.** An issue is created
-  when a slice is claimed, so the open-issue list reads as live status. Convert
-  the draft, then wire native `blocked_by` edges — drafts have no number, so
-  their ordering is carried by the `Blocked By` field.
+- **An issue is created when work is committed to** ([ADR 0024](./docs/adr/0024-committing-to-work-creates-the-issue.md)):
+  running `/to-spec`, `/to-tickets`, or `/wayfinder`, or claiming a draft.
+  Uncommitted work is a project draft item. When committed work started as a
+  draft, convert or replace that draft so each piece of work has one item, and
+  wire native `blocked_by` edges — drafts have no number, so their ordering is
+  carried by the `Blocked By` field.
 - **The ready frontier is computed, not asserted:** open items with no open
   blocker and no assignee.
 - Record point-in-time findings as comments on the issue they informed. Do not

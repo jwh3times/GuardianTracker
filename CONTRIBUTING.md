@@ -68,17 +68,23 @@ For agent-specific operating context, read **[AGENTS.md](./AGENTS.md)**.
 `main` is protected: **direct pushes are blocked**, and all changes land via pull
 request once CI is green.
 
-1. Branch off the latest `main`:
+1. Branch off the latest `main`. Work on an issue carries its number in the
+   branch name:
 
    ```bash
    git switch main && git pull
-   git switch -c <type>/<short-description>   # e.g. feat/wishlist-sort, fix/oauth-redirect
+   git switch -c <type>/<issue#>-<slug>   # e.g. feat/512-wishlist-sort, fix/518-oauth-redirect
    ```
+
+   A change with no issue — a small docs fix or a dependency bump — uses
+   `<type>/<slug>`, e.g. `docs/fix-setup-typo`.
 
 2. Make your change, keeping commits focused.
 3. Run the formatters and tests locally (see below) before pushing.
-4. Open a PR against `main`. Fill out the PR template — describe what changed, why,
-   and how you verified it.
+4. Open a PR against `main`. Start the body with `Closes #N` when the PR finishes
+   the issue, or `Part of #N` when it is one slice of a larger issue that stays
+   open — a number in the title alone does not link the issue. Then fill out the
+   PR template — describe what changed, why, and how you verified it.
 5. Ensure all required status checks pass. The branch must be **up to date with
    `main`** (strict checks) before it can merge.
 

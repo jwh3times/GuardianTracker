@@ -4,6 +4,10 @@
 - Date: 2026-09-04
 - Supersedes in part: [ADR 0001](./0001-public-private-documentation-boundary.md); see
   [Supersession](#supersession)
+- Superseded in part by
+  [ADR 0024](./0024-committing-to-work-creates-the-issue.md): unclaimed work
+  that `/to-spec`, `/to-tickets`, or `/wayfinder` has committed to is an issue,
+  not a draft item. Every other decision here remains in force.
 
 ## Context
 

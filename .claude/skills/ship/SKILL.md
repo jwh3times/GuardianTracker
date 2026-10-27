@@ -27,7 +27,9 @@ job verifies the prediction still holds at merge time.
 ### 1. Preconditions — stop if any fail
 
 - **Not on `main`.** `main` is protected; work must be on a branch. If on `main`,
-  stop and offer to create one (`git checkout -b agent/<topic>`).
+  stop and offer to create one named per
+  [`docs/agents/dev-flow.md`](../../../docs/agents/dev-flow.md#linking-work-to-its-issue)
+  (`<type>/<issue#>-<slug>`, or `<type>/<slug>` for an exempt change).
 - **Clean working tree.** Run `git status --porcelain`. If anything is uncommitted,
   stop and ask the user whether to commit it — do not commit silently.
 - **`gh` authenticated.** `gh auth status` must succeed.
@@ -222,9 +224,23 @@ Then check whether a PR already exists for this branch:
 gh pr list --head "$(git branch --show-current)" --state open --json number -q '.[0].number'
 ```
 
-- **No PR** → `gh pr create --base main` with a title and a body derived from the
-  changelog section you just wrote.
-- **PR exists** → `gh pr edit <number>` to refresh the body. Do not open a second PR.
+The body's **link line** comes first, above everything derived from the changelog.
+[`docs/agents/dev-flow.md`](../../../docs/agents/dev-flow.md#linking-work-to-its-issue)
+owns the rules; choose the line from the branch and the user:
+
+- **Issue-backed branch** (`<type>/<issue#>-<slug>`) → `Closes #<issue#>` when this
+  PR finishes the issue, `Part of #<issue#>` when it is one slice of a spec that
+  stays open. When you cannot tell which, ask.
+- **Waived by the user** → `Flow waived by the user: <reason>`, in the user's words.
+- **Exempt change** (dependency bump, docs and agent config only, release prep) →
+  no link line.
+
+Then:
+
+- **No PR** → `gh pr create --base main` with a title and a body: the link line,
+  then the content derived from the changelog section you just wrote.
+- **PR exists** → `gh pr edit <number>` to refresh the body, keeping the existing
+  link line as its first line. Do not open a second PR.
 
 ### 9. Report
 
