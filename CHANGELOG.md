@@ -14,6 +14,45 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.44] - 2026-10-26
+
+### Changed
+
+- The engineering skill flow is now the binding development process for coding
+  agents. Every code change starts from a ready issue — a `ready-for-agent`
+  spec, ticket, or triage brief, or a `bug` issue worked through
+  `/diagnosing-bugs` — and an agent with none routes the user to the next
+  command instead of editing. `AGENTS.md` states the gate and
+  `docs/agents/dev-flow.md` holds the routing, what counts as code, the
+  exemptions (dependency bumps, docs and agent config, release prep, and an
+  explicit user waiver), and the issue-linking rules.
+- Branches for issue work are named `<type>/<issue#>-<slug>`, and the PR body
+  opens with `Closes #N` or `Part of #N`. `/ship` now writes that line first and
+  keeps it when refreshing a PR; `CONTRIBUTING.md` documents both.
+- ADR 0024 supersedes ADR 0022's draft rule in part: running `/to-spec`,
+  `/to-tickets`, or `/wayfinder` commits to work and creates its issue, so only
+  uncommitted work stays a project draft item.
+- The changelog now records the Dependabot releases v1.18.42 and v1.18.43,
+  which merged without entries.
+
+## [1.18.43] - 2026-10-26
+
+### Changed
+
+- Updated the API image's `golang` build stage 1.27.2 → 1.27.3 and `alpine`
+  runtime 3.24.2 → 3.24.3, and the frontend Node tooling 26.12.0 → 26.12.1
+  across `.nvmrc` and all three frontend Dockerfiles, with a refreshed
+  Playwright `v1.64.1-noble` image digest (Dependabot, with the pin sync). No
+  application behavior changed.
+
+## [1.18.42] - 2026-10-26
+
+### Changed
+
+- Updated `@tanstack/react-virtual` 3.14.21 → 3.14.22, `oxlint-tsgolint`
+  7.0.2004 → 7.0.2005, and `vite` 8.3.4 → 8.3.5 (Dependabot). No application
+  behavior changed.
+
 ## [1.18.41] - 2026-10-25
 
 ### Fixed
@@ -1954,7 +1993,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.41...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.44...HEAD
+[1.18.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.43...v1.18.44
+[1.18.43]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.42...v1.18.43
+[1.18.42]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.41...v1.18.42
 [1.18.41]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.40...v1.18.41
 [1.18.40]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.39...v1.18.40
 [1.18.39]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.38...v1.18.39
