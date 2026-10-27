@@ -51,11 +51,14 @@ private companion. See [ADR 0022](../adr/0022-github-owns-task-status.md).
 Fields: `Chain` (single-select), `Order` (number), `Blocked By` (text), `Gate`
 (text), `ADR` (text), `Status` (single-select), `Triage` (single-select).
 
-**Drafts versus issues.** Unclaimed work is a draft item; an issue is created
-when the work is claimed, which keeps the open-issue list readable as live
-status. A draft has no repository or number, so **native dependencies cannot
-attach to it** — carry the order in the `Blocked By` field and wire real
-`blocked_by` edges after converting the draft to an issue.
+**Drafts versus issues.** An issue is created when work is committed to —
+`/to-spec`, `/to-tickets`, or `/wayfinder` publishes it, or a draft is claimed
+([ADR 0024](../adr/0024-committing-to-work-creates-the-issue.md)). Uncommitted
+work is a draft item. Add each published issue to the project, and convert or
+replace the draft it came from, if any, so each piece of work has one item. A
+draft has no repository or number, so **native dependencies cannot attach to
+it** — carry the order in the `Blocked By` field and wire real `blocked_by`
+edges after converting the draft to an issue.
 
 **Stale blockers.** Nothing clears `Blocked By` text when its blocker closes, and
 an open item still naming a finished blocker drops silently out of the computed
