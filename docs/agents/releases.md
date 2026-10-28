@@ -31,18 +31,9 @@ when ambiguous
 
 `bash scripts/next-version.sh`
 
-## Unreleased placeholder
-
-`No unreleased changes.`
-
 ## Changelog check
 
 `test "$(bash scripts/next-version.sh)" = "$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | head -1)" && node --test scripts/changelog-footer-policy.test.mjs`
 — the required **Changelog Version** check's comparison in `.github/workflows/ci-cd.yml`, then the
 footer policy **Format Check** enforces (every section linked, each comparing from the one below,
 `[Unreleased]` from the newest).
-
-## Release commit message
-
-`docs: update docs and changelog for v<version>` — the release-prep commit
-`docs/agents/dev-flow.md` exempts by name.

@@ -11,6 +11,8 @@ the frontend checks need `frontend/node_modules` (`npm ci` in `frontend/`).
   `npm run format`
 - `frontend/`, only when `frontend/` changed: `npm run type-check` and `npm run lint`
   (**Test Frontend**)
+- `frontend/`, only when `frontend/` changed: `npm test -- --coverage` (**Test Frontend**'s
+  Vitest suite, about 10 seconds)
 - `backend/api-service/`, only when `backend/` changed: `test -z "$(gofmt -l .)"`
   (**Format Check**), fixed by `gofmt -w .`; then `go vet ./...` (**Test Go Services**). Without
   a Go toolchain both are left to CI.
@@ -24,7 +26,7 @@ the frontend checks need `frontend/node_modules` (`npm ci` in `frontend/`).
   Docker running: `npm run test:docker-context` and `npm run test:nginx-headers`
   (**Build Docker Images**)
 
-Vitest coverage and the production build (**Test Frontend**), Staticcheck, `govulncheck` and
+The production build (**Test Frontend**), Staticcheck, `govulncheck` and
 `go test -race` against Postgres (**Test Go Services**), the image builds (**Build Docker
 Images**), **Browser E2E + Axe**, the non-required Windows portability job and CodeQL run only in
 CI.

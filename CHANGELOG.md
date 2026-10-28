@@ -14,6 +14,20 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.46] - 2026-10-28
+
+### Changed
+
+- The shared agent skills are refreshed from `jwh3times/skills`. A repository
+  setting with a shared default (the release commit message, the empty
+  `Unreleased` line) is now written in `docs/agents/` only to override it, so
+  `docs/agents/releases.md` drops the two that matched.
+- `/ship` now runs the frontend Vitest suite among its fast checks when
+  `frontend/` changed, so a failing unit test is caught before the push instead
+  of in **Test Frontend**.
+- `npm run lint:agents` names the checkout it linted, and
+  `node scripts/lint-agent-neutrality.mjs <root>` lints another checkout.
+
 ## [1.18.45] - 2026-10-27
 
 ### Changed
@@ -2012,7 +2026,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.45...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.46...HEAD
+[1.18.46]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.45...v1.18.46
 [1.18.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.44...v1.18.45
 [1.18.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.43...v1.18.44
 [1.18.43]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.42...v1.18.43
