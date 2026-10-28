@@ -14,6 +14,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.47] - 2026-10-28
+
+### Changed
+
+- The shared agent skills are refreshed from `jwh3times/skills`: code spans
+  that broke across a line in the skills and their settings now stay on one
+  line. No behavior changes.
+
 ## [1.18.46] - 2026-10-28
 
 ### Changed
