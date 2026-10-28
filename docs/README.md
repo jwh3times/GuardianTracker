@@ -26,7 +26,7 @@ Each kind of information has one living owner:
 | [k8s/README.md](../k8s/README.md)                                             | Minikube validation procedure                                                     |
 | [AGENTS.md](../AGENTS.md)                                                     | Canonical, self-contained operating guide for coding agents                       |
 | [CLAUDE.md](../CLAUDE.md)                                                     | Thin AGENTS.md importer plus Claude Code-only mechanics                           |
-| [docs/agents/](./agents/)                                                     | Per-repository configuration for third-party engineering skills                   |
+| [docs/agents/](./agents/)                                                     | Per-repository conventions and the settings the installed agent skills read       |
 
 Community policy is defined by the
 [Code of Conduct](../CODE_OF_CONDUCT.md), [support policy](../SUPPORT.md),

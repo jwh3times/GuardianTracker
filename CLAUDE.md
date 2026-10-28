@@ -18,8 +18,10 @@ sync contract in AGENTS.md.
 ### Skills
 
 Docs freshness is handled at push time by the `/ship` skill
-(`.claude/skills/ship/SKILL.md`), not by a per-turn hook. `/ship` invokes the
-`docs-updater` subagent against the branch diff, classifies the release as major,
-minor, or build-only, updates `VERSION` for major and minor releases, writes the
-`CHANGELOG.md` section for the version the merge will mint, runs the fast checks,
-pushes, and opens or updates the PR. Run it when a branch is ready for review.
+(`.claude/skills/ship/SKILL.md`), not by a per-turn hook. `/ship` runs the
+`docs-updater` skill in a subagent against the branch diff, classifies the release as
+major, minor, or build-only, updates `VERSION` for major and minor releases, writes the
+`CHANGELOG.md` section for the version the merge will mint, files the branch's human
+follow-ups, runs the fast checks, pushes, and opens or updates the PR. Run it when a
+branch is ready for review; `/end-session` runs `docs-updater` on a session's work too.
+Both are shared skills installed from `jwh3times/skills` — see AGENTS.md's Agent skills section.
