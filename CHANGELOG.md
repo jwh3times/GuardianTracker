@@ -14,6 +14,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.47] - 2026-10-28
+
+### Changed
+
+- The shared agent skills are refreshed from `jwh3times/skills`: code spans
+  that broke across a line in the skills and their settings now stay on one
+  line. No behavior changes.
+
 ## [1.18.46] - 2026-10-28
 
 ### Changed
@@ -2026,7 +2034,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.46...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.47...HEAD
+[1.18.47]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.46...v1.18.47
 [1.18.46]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.45...v1.18.46
 [1.18.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.44...v1.18.45
 [1.18.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.43...v1.18.44
