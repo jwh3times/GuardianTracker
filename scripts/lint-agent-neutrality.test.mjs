@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { lintNeutrality } from "./lint-agent-neutrality.mjs";
 
@@ -95,4 +97,19 @@ test("published skills get the same checks, and links must stay inside their ski
       assert.match(problems[2], /skills\/ship\/settings\/ship\.md: contains "\.Codex\/"/);
     },
   );
+});
+
+test("the CLI lints the root it is given and names it", () => {
+  const script = fileURLToPath(new URL("./lint-agent-neutrality.mjs", import.meta.url));
+  withFixture({ ".agents/skills/x/SKILL.md": "Clean.\n" }, (root) => {
+    const run = spawnSync(process.execPath, [script, root], { encoding: "utf8" });
+    assert.equal(run.status, 0);
+    assert.ok(run.stdout.includes(`in ${root} are tool-neutral`), run.stdout);
+  });
+  withFixture({ ".agents/skills/x/SKILL.md": "See .Codex/x.\n" }, (root) => {
+    const run = spawnSync(process.execPath, [script, root], { encoding: "utf8" });
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /lint failed in /);
+    assert.match(run.stderr, /contains "\.Codex\/"/);
+  });
 });

@@ -18,7 +18,11 @@
 // The same checks cover `skills/`, where jwh3times/skills publishes skills that install as
 // .agents/skills/<name>/ elsewhere. A relative link there must stay inside its own skill folder.
 //
-//   node scripts/lint-agent-neutrality.mjs   # exit 1 and list every problem found
+//   node scripts/lint-agent-neutrality.mjs          # exit 1 and list every problem found
+//   node scripts/lint-agent-neutrality.mjs <root>   # lint another checkout instead
+//
+// Without <root> it lints the repository this copy of the script lives in, not the working
+// directory, and names the root it linted either way.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
@@ -46,7 +50,8 @@ function listFiles(root, dir) {
     if (entry.isDirectory()) results.push(...listFiles(root, rel));
     else if (entry.isFile()) results.push(rel);
   }
-  return results.sort();
+  // An explicit code-unit comparator: the default order, which type-aware linters require spelled out.
+  return results.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
 // True when `rel` (POSIX, repo-relative) will exist once the generator has run. A path inside a
@@ -124,12 +129,13 @@ export function lintNeutrality(root = defaultRoot) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {
-  const problems = lintNeutrality();
+  const root = process.argv[2] ? path.resolve(process.argv[2]) : defaultRoot;
+  const problems = lintNeutrality(root);
   if (problems.length) {
-    console.error("Agent tool-neutrality lint failed:");
+    console.error(`Agent tool-neutrality lint failed in ${root}:`);
     for (const problem of problems) console.error(`  ${problem}`);
     process.exitCode = 1;
   } else {
-    console.log("Agent and skill sources are tool-neutral.");
+    console.log(`Agent and skill sources in ${root} are tool-neutral.`);
   }
 }
