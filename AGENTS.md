@@ -599,7 +599,8 @@ and repository-specific behavior goes into a setting. Each skill reads this
 repository's facts at run time from settings files in `docs/agents/` — `workspace.md`,
 `issue-tracker.md`, `human-follow-up.md`, `docs.md` (the documentation `Doc map`),
 `releases.md`, `ship.md` and `handoffs.md`. A setting with a shared default is written
-there only to override it; a skill proposes any other missing setting on its first run. Re-running the install is the update:
+there only to override it; a skill proposes any other missing setting on its first run.
+Re-running the install is the update:
 
 ```bash
 npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s ship -s docs-updater -a codex --copy -y
