@@ -110,8 +110,10 @@ For each issue the session touched:
 - **Blocked** — comment the blocker, and set the `Board fields` that record it.
 - **Understanding changed** — correct the body, or comment the correction. An issue describing the
   wrong problem costs more than a missing one.
-- **Newly discovered work** — open an issue for it, label it, add it to the `Board` and set its
-  fields. Work that never reaches the board is invisible to the next session.
+- **Newly discovered work** — record it as `New work` says: an issue, labelled and added to the
+  `Board`; or a `Board` draft item (`gh project item-create`), left for the work's commitment to
+  turn into an issue. Set its board fields either way. Work that never reaches the board is
+  invisible to the next session.
 
 A security finding follows the `Security findings` route, never a public issue before its fix
 ships. Keep private-repository links and content out of public issues, PRs, and commits. Leave
@@ -125,12 +127,12 @@ already started (docs-updater, `ship`): reconcile those rather than duplicating 
 
 ## 5. Docs
 
-Run the `docs-updater` skill on the session's work, in a subagent where the harness has one, told
-to follow `.agents/skills/docs-updater/SKILL.md`; otherwise follow it yourself. A subagent cannot
-ask the user, so complete its settings first, here, by following its step 0. Use `fix` mode for
-work not yet merged, and `check` mode for work `ship` already refreshed and merged, opening an
-issue for any drift it reports. Merged work whose `ship` report owed a wiki search gets one more run
-in `fix` mode, limited to the wikis: those stale references are fixed, not filed.
+Run the `docs-updater` skill on the session's work, in a subagent where the harness has one, told to
+follow `.agents/skills/docs-updater/SKILL.md`; otherwise follow it yourself. A subagent cannot ask
+the user, so complete its settings first, here, by following its step 0. Use `fix` mode for work not
+yet merged, and `check` mode for work `ship` already refreshed and merged, recording any drift it
+reports as new work, as step 3 does. Merged work whose `ship` report owed a wiki search gets one
+more run in `fix` mode, limited to the wikis: those stale references are fixed, not filed.
 Tell it this is `end-session`, and give it the session's discoveries as a list of changes beside
 the diff: decisions and findings land in the `Doc map`
 documents whose **when** they match, honoring each one's marker. Run step 4's procedure for any

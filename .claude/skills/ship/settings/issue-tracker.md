@@ -38,6 +38,15 @@ repository keeps them there.
 - **Discover:** `gh project field-list <number> --owner <owner> --format json`, and existing
   skills and docs for how each field is used.
 
+## New work
+
+- **Read by:** end-session
+- **Value:** how work found during a session, and not yet committed to, is recorded: `issue` (an
+  issue, labelled and added to the `Board`) or `draft item` (a draft item on the `Board`, which
+  becomes an issue only when the work is committed to, by the rule the repository records).
+- **Discover:** `AGENTS.md`, the ADRs and this file's own sections, for a rule that keeps
+  uncommitted work as board drafts; `issue` when nothing says so.
+
 ## Security findings
 
 - **Read by:** docs-updater, end-session
