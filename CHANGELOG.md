@@ -14,6 +14,25 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.45] - 2026-10-27
+
+### Changed
+
+- The `ship`, `end-session`, `handoff` and `lets-go` agent skills now install
+  from the shared `jwh3times/skills` repository instead of being maintained
+  here, and the `docs-updater` subagent becomes a skill installed the same way
+  (ADR 0025). What the skills need to know about this repository lives in
+  settings files under `docs/agents/`, which each skill proposes on its first
+  run; `docs/agents/human-followups.md` becomes the `human-follow-up.md`
+  settings file, and the follow-up procedure ships with the skills.
+  `/end-session` keeps newly discovered work that nobody has committed to as a
+  project draft item, as ADR 0024 decides.
+- `/handoff` and `/lets-go` read how the Handoffs folder reaches each machine
+  from that machine's `~/.config/handoffs/config`, proposed on their first run.
+- The required Format Check now also runs `npm run lint:agents`, which rejects
+  agent and skill sources that would read wrongly from their mirrored copies,
+  and runs the repository policy tests through the new `npm run test:policy`.
+
 ## [1.18.44] - 2026-10-26
 
 ### Changed
@@ -1993,7 +2012,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.44...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.45...HEAD
+[1.18.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.44...v1.18.45
 [1.18.44]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.43...v1.18.44
 [1.18.43]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.42...v1.18.43
 [1.18.42]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.41...v1.18.42

@@ -285,10 +285,10 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 `.nvmrc`:
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `node --test scripts/sync-agents.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/documentation-links.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs scripts/board-blockers.test.mjs`,
-   which exercises the generator's own logic and enforces the repository's workflow-action,
-   Go security-tool, Node-version, PostgreSQL-image, workspace-portability, safe
-   main-branch synchronization, local documentation-link, jest-dom-shim, and
+   It also runs `npm run test:policy` (the `node --test` list of every policy test in the root
+   `package.json`), which exercises the generator's and the tool-neutrality lint's own logic
+   and enforces the repository's workflow-action, Go security-tool, Node-version,
+   PostgreSQL-image, workspace-portability, safe main-branch synchronization, local documentation-link, jest-dom-shim, and
    changelog-footer policies, and tests the parsing behind `npm run board:blockers`
    (which itself reads the private board locally, not in CI). The Node policy keeps
    `.nvmrc`, both workflows, all three frontend Dockerfiles, package engine metadata, and Node ambient
@@ -311,7 +311,11 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    (generated from `.agents/skills/`) is out of sync with its source. Fix:
    `npm run sync:agents`. Run `./frontend/node_modules/.bin/prettier --write "**/*.md"`
    first if you edited a skill's markdown — regenerating before formatting mirrors
-   unformatted content and drifts again on the next format pass.
+   unformatted content and drifts again on the next format pass. After the sync check it runs
+   `npm run lint:agents` (`scripts/lint-agent-neutrality.mjs`), which rejects agent and skill
+   sources that read wrongly from their mirrored copies: a bare `$0`–`$9` in a `SKILL.md`
+   (Claude Code substitutes the invocation's arguments), a relative link that breaks under the
+   mirror's directory, or a blind `claude`→`Codex` substitution artifact.
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, declared `govulncheck` tool v1.6.0 via `go tool govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — `npm run test:docker-context` verifies both application `.dockerignore` policies with synthetic fixtures and a real Docker scratch `COPY` probe. `npm run test:nginx-headers` verifies security-header inheritance and cache behavior over HTTP using the pinned nginx runtime and synthetic assets. The job then validates application image builds (no push configured). Neither probe reads local environment files.
@@ -356,6 +360,11 @@ npm run test:docker-context
 
 # nginx response headers and caching (repo root; running Docker required)
 npm run test:nginx-headers
+
+# Repository policy tests and agent-config checks (repo root; Format Check runs all three)
+npm run test:policy
+npm run sync:agents:check
+npm run lint:agents
 
 # Go (from backend/api-service/)
 go test ./...
@@ -441,8 +450,9 @@ Public docs:
 - `docs/adr/` - public architecture decisions
 - `AGENTS.md` - canonical, tool-neutral agent operating guide (this file)
 - `CLAUDE.md` - thin `@AGENTS.md` importer plus Claude Code-specific mechanics
-- `docs/agents/` - per-repo configuration for third-party engineering skills
-  (issue tracker, triage labels, domain docs); see `## Agent skills` below
+- `docs/agents/` - per-repo conventions and settings the installed skills read
+  (issue tracker, triage labels, domain docs, development flow, and the shared
+  skills' settings files); see `## Agent skills` below
 - `docs/agents/dev-flow.md` - the binding development flow: ready-issue gate,
   routing, exemptions, and branch/PR issue linking
 - `docs/maintainers/workspace-recovery.md` - value-free private-workspace and
@@ -501,10 +511,12 @@ Before reporting completed agent work, create or update a private-companion
 follow-up issue for every required human action, add it to the shared project,
 label it `ready-for-human`, and publish linked step-by-step instructions in the
 private wiki. This overrides public-by-default and unclaimed-draft rules for
-these follow-ups. Read [the human-follow-up procedure](./docs/agents/human-follow-up.md)
-whenever completed work leaves a human action; it defines deduplication, evidence,
-privacy, and handoff completion. Engineering tasks the agent can perform remain
-agent work.
+these follow-ups. Whenever completed work leaves a human action, read
+[the human-follow-up settings](./docs/agents/human-follow-up.md) (destination, label,
+board, wiki) and the `## Procedure` they point to, which ships with the shared skills
+([`.agents/skills/end-session/settings/human-follow-up.md`](./.agents/skills/end-session/settings/human-follow-up.md)):
+it defines deduplication, evidence, privacy, and handoff completion. Engineering tasks
+the agent can perform remain agent work.
 
 ### Rules for every architecture-deepening slice
 
@@ -536,20 +548,22 @@ Specialized agent definitions live in `.claude/agents/`. If your tool supports
 subagents, dispatch them; if not, read the file for the relevant area as repo notes —
 they are useful either way.
 
-| Task                                                                                                                          | Agent                       | Definition                                    |
-| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------- |
-| Go backend — Gin handlers, JWT/auth, Bungie OAuth, manifest, collections, records, weekly, search, roles/flags/admin          | `go-services`               | `.claude/agents/go-services.md`               |
-| React frontend — pages, components, design system (`gt-*`), React Query, AuthContext, FlagsContext, Vitest tests              | `react-frontend`            | `.claude/agents/react-frontend.md`            |
-| PostgreSQL schema, migrations, token store, audit log; SQLite manifest queries                                                | `postgres-specialist`       | `.claude/agents/postgres-specialist.md`       |
-| Kubernetes manifests, Minikube, kubectl, secrets, configmaps                                                                  | `kubernetes-infrastructure` | `.claude/agents/kubernetes-infrastructure.md` |
-| Dockerfiles, image builds, layer caching                                                                                      | `docker-containers`         | `.claude/agents/docker-containers.md`         |
-| Security testing — OAuth, JWT, CSRF, data isolation, XSS, CORS, admin endpoints                                               | `penetration-tester`        | `.claude/agents/penetration-tester.md`        |
-| Code review — correctness, security, pattern violations                                                                       | `code-reviewer`             | `.claude/agents/code-reviewer.md`             |
-| Documentation sync — README.md, SETUP.md, docs/architecture.md, ROADMAP.md, CHANGELOG.md, SECURITY.md, AGENTS.md, agent files | `docs-updater`              | `.claude/agents/docs-updater.md`              |
+| Task                                                                                                                 | Agent                       | Definition                                    |
+| -------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------- |
+| Go backend — Gin handlers, JWT/auth, Bungie OAuth, manifest, collections, records, weekly, search, roles/flags/admin | `go-services`               | `.claude/agents/go-services.md`               |
+| React frontend — pages, components, design system (`gt-*`), React Query, AuthContext, FlagsContext, Vitest tests     | `react-frontend`            | `.claude/agents/react-frontend.md`            |
+| PostgreSQL schema, migrations, token store, audit log; SQLite manifest queries                                       | `postgres-specialist`       | `.claude/agents/postgres-specialist.md`       |
+| Kubernetes manifests, Minikube, kubectl, secrets, configmaps                                                         | `kubernetes-infrastructure` | `.claude/agents/kubernetes-infrastructure.md` |
+| Dockerfiles, image builds, layer caching                                                                             | `docker-containers`         | `.claude/agents/docker-containers.md`         |
+| Security testing — OAuth, JWT, CSRF, data isolation, XSS, CORS, admin endpoints                                      | `penetration-tester`        | `.claude/agents/penetration-tester.md`        |
+| Code review — correctness, security, pattern violations                                                              | `code-reviewer`             | `.claude/agents/code-reviewer.md`             |
+
+Documentation sync is not a subagent: it is the `docs-updater` skill (see
+[Agent skills](#agent-skills)), which `/ship` and `/end-session` run in a subagent.
 
 `.claude/agents/` and `.agents/skills/` are the **source of truth** — the former is
-the Claude Code convention; the latter is where third-party skill installers write
-(and where a human edits a skill by hand), so installing or updating a skill stays a
+the Claude Code convention; the latter is where skill installers write (and where a
+skill written by hand would live), so installing or updating a skill stays a
 one-way operation with no manual copying. The generated mirrors — `.codex/agents/*.toml`
 and `.claude/skills/**` — are produced from them by `scripts/sync-agents.mjs`
 (via `npm run sync:agents`) and committed. The mirror covers a skill's entire
@@ -561,10 +575,11 @@ of it. Never edit a generated file: change the authored source and re-run the sy
 instead of running the sync.** Git for Windows sets the per-clone `core.symlinks` to
 `false`, and on such a clone `git add` on a symlinked directory silently stages the real file
 contents instead of a link — a commit would duplicate every file rather than
-recording one. A directory-walking generator also can't see into a symlink
-(`entry.isDirectory()` is false for a symlink), so it would treat the linked-to
-skill as untracked source and, in write mode, delete the mirrored copy as an
-orphan. Both failure modes have happened in this repo; regenerate instead.
+recording one. A link would also let a write to the mirror land in the authored
+source. So `npm run sync:agents` removes any link it finds under `.codex/agents/` or
+`.claude/skills/` (`npx skills update` creates exactly that link) before it writes
+the real copies, and `npm run sync:agents:check` reports a link as orphaned;
+the authored trees may hold no links at all. Regenerate instead.
 
 Codex has no per-agent tool allowlist, so the `tools:`, `model:`, and `color:`
 frontmatter keys are dropped in the generated TOML rather than translated. The one
@@ -573,6 +588,28 @@ file-writing tool (`Write`, `Edit`, `MultiEdit`, `NotebookEdit`) gets
 `sandbox_mode = "read-only"`.
 
 ## Agent skills
+
+### Shared skills
+
+`end-session`, `handoff`, `lets-go`, `ship` and `docs-updater` are installed from the
+public [`jwh3times/skills`](https://github.com/jwh3times/skills) repository
+([ADR 0025](./docs/adr/0025-shared-skills-install-from-jwh3times-skills.md)) and are
+never edited here: a local edit is lost on the next install, so a fix goes upstream
+and repository-specific behavior goes into a setting. Each skill reads this
+repository's facts at run time from settings files in `docs/agents/` — `workspace.md`,
+`issue-tracker.md`, `human-follow-up.md`, `docs.md` (the documentation `Doc map`),
+`releases.md`, `ship.md` and `handoffs.md` — and proposes any missing setting on its
+first run. Re-running the install is the update:
+
+```bash
+npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s ship -s docs-updater -a codex --copy -y
+npm run sync:agents
+```
+
+`.prettierignore` excludes the five installed folders and the generated
+`.claude/skills/`, so the root Markdown check never reformats installed bytes.
+The other skills under `.agents/skills/` are the vendored `mattpocock/skills` set
+recorded in `skills-lock.json`; the sections below configure them.
 
 ### Issue tracker
 

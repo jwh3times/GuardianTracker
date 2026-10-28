@@ -254,7 +254,7 @@ Image tags and reviewed digests are owned by the Dockerfiles, Compose file, and
 workflows. Dependabot and repository policy tests keep coupled declarations
 aligned; documentation intentionally does not cache their versions. Maintainers
 changing a pin should follow the authored Docker agent guide and run the
-repository policy suite before rebuilding with `--pull --no-cache`.
+repository policy suite (`npm run test:policy`) before rebuilding with `--pull --no-cache`.
 
 A tag plus digest selects the exact image contents adopted in review. Daily
 Dependabot checks still propose newer releases, so these pins support frequent
@@ -360,6 +360,15 @@ npm run test:workspace-portability
 
 This exercises the bootstrap, secret-restoration, and status helpers with local
 fixtures. CI runs the same suite on Windows PowerShell 5.1 and PowerShell 7.
+
+Repository policy tests and agent-config checks (repository root), the same
+commands the `Format Check` CI job runs:
+
+```powershell
+npm run test:policy
+npm run sync:agents:check
+npm run lint:agents
+```
 
 Docker build context isolation (repository root; requires Docker with Buildx and
 a running builder):
