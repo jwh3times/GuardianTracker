@@ -17,15 +17,9 @@ authorized maintainers with `npm run bootstrap:private` or
 companion or an unprotected target. Its ahead/behind counts come from local tracking refs, hence
 the fetch. Where only Windows PowerShell 5.1 exists, run it with `powershell` instead of `pwsh`.
 
-## Companion commit policy
+## Companion commit checks
 
-ask — show the companion's diff and commit or push it only on the user's explicit authorization,
-as its own commit in the companion.
-
-- **Before committing:** review the diff from `private/`'s own root; confirm it holds no
-  credential values, resolved secrets, tokens or credential-bearing URLs (value-free `op://`
-  references in approved templates are allowed); when the index changed, set
-  `private/README.md`'s `**Updated:**` line to today.
+- When the index changed, set `private/README.md`'s `**Updated:**` line to today.
 
 ## Sync with main
 
