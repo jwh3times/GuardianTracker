@@ -67,8 +67,7 @@ updates only the public checkout.
 ## Generated-config check
 
 `npm run sync:agents:check` (inside the required **Format Check**), regenerated with
-`./frontend/node_modules/.bin/prettier --write "**/*.md"` then `npm run sync:agents` — when agent
-sources changed (`.agents/skills/`, `.claude/agents/`).
+`./frontend/node_modules/.bin/prettier --write "**/*.md"` then `npm run sync:agents` — always: it is quick, and it also catches an orphaned mirror.
 
 ## Final portability check
 

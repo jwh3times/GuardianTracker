@@ -12,16 +12,11 @@ backfill — a merged Dependabot PR (exempt from **Changelog Version**) or a PR 
 gets its section on the next ship.
 
 - **Ignore:** `v0.*`, `v1.0.*` and `v1.1.*` — released sections archived in `docs/changelog/`
-  (`0.x.md`, `1.0-1.1.md`), not missing; and the 4-part `v0.1.0.x` tags. Archiving another line
-  adds its pattern here.
+  (`0.x.md`, `1.0-1.1.md`), not missing. Archiving another line adds its pattern here.
 
 ## Version file
 
 `VERSION` — the bare `<major>.<minor>.<build>` target line
-
-## Bump command
-
-`printf '%s\n' <version> > VERSION`
 
 ## Ask before bumping
 
