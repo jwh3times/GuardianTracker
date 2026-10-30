@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.50] - 2026-10-30
+
+### Changed
+
+- The shared agent skills are refreshed from `jwh3times/skills`, which now give
+  most settings a default, so the ones that matched leave `docs/agents/`.
+  `/end-session` runs the generated-config check every time, not only when
+  agent sources changed. `/handoff` names `npm run bootstrap:private` for a
+  machine without `private/`, and `/lets-go` offers it.
+
 ## [1.18.49] - 2026-10-30
 
 ### Changed
@@ -2054,7 +2064,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.49...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.50...HEAD
+[1.18.50]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.49...v1.18.50
 [1.18.49]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.48...v1.18.49
 [1.18.48]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.47...v1.18.48
 [1.18.47]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.46...v1.18.47
