@@ -34,7 +34,6 @@ updates only the public checkout.
 - `backend/api-service/.e2e/` — the manifest and search index the E2E API writes
 - `backend/api-service/coverage` (extensionless profile), `coverage/`, `*.coverprofile`, `*.out`,
   `*.test`, `*.exe`, `*.tsbuildinfo` — ignored matches only
-- stray scratch files at the repository root or under `private/`, named one by one
 
 ## Never-remove paths
 
@@ -46,7 +45,6 @@ updates only the public checkout.
 - `.private-workspace/` — the machine-local 1Password reference file
 - `.private-bootstrap-*/` — a bootstrap's staged clone; one left behind may hold the companion
 - `docker-compose.override.yml`, `.claude/settings.local.json`, `.vscode/`
-- `.claude/worktrees/` — removing one is the user's decision; it may hold unpushed commits
 - `node_modules/`, `frontend/node_modules/` — the root Markdown Prettier check runs from it
 
 ## Dev stack

@@ -33,6 +33,8 @@
 - `docs/architecture.md` — implemented runtime shape, data flow, route groups, data model,
   security posture. **When:** a route group's surface (`api/router.go`), the data model
   (`backend/api-service/db/migrations/`), or the runtime/infrastructure shape changes.
+- `CONTEXT.md` — the domain glossary, written through `domain-modeling`. `frozen`: report a term the
+  code contradicts instead of editing it.
 - `docs/adr/*.md` — accepted decisions. `frozen`: report a contradiction between an accepted ADR
   and the code instead of editing either. An ADR's `Status` line and its index row move to
   "implemented in `vX.Y.Z`" in the change that ships its final slice, not here.
@@ -41,6 +43,7 @@
   implements a roadmap item (remove or revise it), or a gate changes.
 - `CHANGELOG.md` — Keep a Changelog, one dated section per merge, compare-link footer.
   `ship-owned`.
+- `VERSION` — the version file `ship` bumps. `ship-owned`.
 - `docs/changelog/*.md` — release notes archived from `CHANGELOG.md`. `frozen`.
 - `SECURITY.md` — reporting process, controls, security model, production checklist, credential
   rotation. **When:** auth, role, flag, admin, audit, cookie/origin or other security behavior
@@ -54,6 +57,9 @@
 - `frontend/README.md` — frontend structure, scripts, and the browser and visual-test procedure.
   **When:** `frontend/package.json` scripts, `frontend/playwright.config.ts`, or the
   `frontend/src/` layout changes.
+- `frontend/design/README.md` — the historical design prototype, kept as design history. `frozen`.
+- `frontend/design/icons/README.md` — the icon pack: its colors, files and sizes. **When:** an icon
+  file in `frontend/public/` is added, removed or regenerated.
 - `k8s/README.md` — the Minikube validation workflow. **When:** `k8s/*.yaml`, the startup/shutdown
   scripts, or a prerequisite changes.
 - `docs/maintainers/workspace-recovery.md` — the value-free private-workspace recovery runbook.
