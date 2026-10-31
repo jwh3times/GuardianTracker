@@ -157,7 +157,7 @@ Every PR must pass these GitHub Actions jobs before it can merge:
 | **Test Go Services**    | `go vet`, Staticcheck 2026.1, declared `govulncheck` v1.6.0 via `go tool`, `go test -race` with the coverage gate; DB integration tests against Postgres                                                                                                                         |
 | **Build Docker Images** | builds both production Docker images (build validation; no push)                                                                                                                                                                                                                 |
 | **Browser E2E + Axe**   | Playwright functional and axe accessibility suite against the hermetic stack (`.github/workflows/browser.yml`)                                                                                                                                                                   |
-| **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.sh`); exempt for bot-authored PRs                                                                                                                                |
+| **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.mjs`); exempt for bot-authored PRs                                                                                                                               |
 
 Third-party actions in `.github/workflows/` must use a reviewed 40-character
 commit SHA followed by a `# vX.Y.Z` release comment. The format job tests this

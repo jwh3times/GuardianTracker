@@ -20,8 +20,9 @@ the frontend checks need `frontend/node_modules` (`npm ci` in `frontend/`).
   then `npm run sync:agents`, committing the regenerated mirrors
 - repo root: `npm run lint:agents` (**Format Check**)
 - repo root: `npm run test:policy` (**Format Check**'s policy tests, about 20 seconds)
-- repo root, only when `scripts/next-version.sh` or `scripts/next-version.test.sh` changed:
-  `bash scripts/next-version.test.sh` (**Changelog Version**)
+- repo root: `node scripts/check-docs.mjs` (**Format Check**)
+- repo root, only when `scripts/next-version.mjs` or `scripts/check-changelog.mjs` changed:
+  `node --test scripts/next-version.test.mjs scripts/check-changelog.test.mjs` (**Changelog Version**)
 - repo root, only when a `Dockerfile*`, `.dockerignore` or `frontend/nginx.conf` changed, with
   Docker running: `npm run test:docker-context` and `npm run test:nginx-headers`
   (**Build Docker Images**)

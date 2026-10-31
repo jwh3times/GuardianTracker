@@ -320,7 +320,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, declared `govulncheck` tool v1.6.0 via `go tool govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — `npm run test:docker-context` verifies both application `.dockerignore` policies with synthetic fixtures and a real Docker scratch `COPY` probe. `npm run test:nginx-headers` verifies security-header inheritance and cache behavior over HTTP using the pinned nginx runtime and synthetic assets. The job then validates application image builds (no push configured). Neither probe reads local environment files.
 5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
-   merge will mint (`scripts/next-version.sh`, the same oracle `version.yml` uses).
+   merge will mint (`scripts/next-version.mjs`, the same oracle `version.yml` uses).
    Bot-authored PRs are exempt; `/ship` backfills their entries.
 
 The workflow also runs **Test Workspace Portability (Windows)** as a non-required
@@ -606,6 +606,10 @@ Re-running the install is the update:
 npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s ship -s docs-updater -a codex --copy -y
 npm run sync:agents
 ```
+
+`scripts/sync-agents.mjs`, `lint-agent-neutrality.mjs`, `sync-main.mjs`,
+`next-version.mjs`, `check-changelog.mjs` and `check-docs.mjs` (and their tests) are
+canonical in `jwh3times/skills` too: fix them there, then copy them here.
 
 `.prettierignore` excludes the five installed folders and the generated
 `.claude/skills/`, so the root Markdown check never reformats installed bytes.
