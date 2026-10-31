@@ -118,12 +118,6 @@ Used by `/wayfinder`. The **map** is a single issue with **child** issues as tic
 
 jwh3times/GuardianTracker
 
-## Private issue repository
-
-`discover: git -C private remote get-url origin` — the companion's issues, used only when a body
-would need a credential, a real provider/cost/account identifier, or exploitable security detail
-(see "Which repository" above), and for required human follow-ups.
-
 ## Board
 
 jwh3times 4
@@ -151,6 +145,5 @@ or `/wayfinder`, or claiming the draft, creates its issue (ADR 0024).
 
 ## Security findings
 
-A draft security advisory on `jwh3times/GuardianTracker`, never a public issue (`SECURITY.md`). An
-accepted residual risk is recorded in the companion's `security-limitations.md` (ADR 0022). A
-private follow-up issue may hold only a sanitized coordination action and the advisory reference.
+The default. An accepted residual risk is recorded in the companion's `security-limitations.md`
+(ADR 0022).

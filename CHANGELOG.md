@@ -14,6 +14,46 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.51] - 2026-10-30
+
+### Changed
+
+- The doc map in `docs/agents/docs.md` now covers `CONTEXT.md` (`frozen`),
+  `VERSION` (`ship-owned`) and the design and icon notes under
+  `frontend/design/`, so `/docs-updater` audits them too. `/end-session`
+  handles worktrees and scratch files through its own rules rather than
+  cleanup-list entries.
+
+## [1.18.50] - 2026-10-30
+
+### Changed
+
+- The shared agent skills are refreshed from `jwh3times/skills`, which now give
+  most settings a default, so the ones that matched leave `docs/agents/`.
+  `/end-session` runs the generated-config check every time, not only when
+  agent sources changed. `/handoff` names `npm run bootstrap:private` for a
+  machine without `private/`, and `/lets-go` offers it.
+
+## [1.18.49] - 2026-10-30
+
+### Changed
+
+- The shared agent skills are refreshed from `jwh3times/skills`. Agents commit
+  in `private/` only after asking, by one procedure every repository shares,
+  which also confirms the companion is private before pushing;
+  `docs/agents/workspace.md` keeps only this repository's own check, under
+  `Companion commit checks`. `/ship` reports an open PR that claims the same
+  version again, and `/lets-go` installs from a changed lockfile.
+- The changelog now records the Dependabot release v1.18.48, which merged
+  without an entry.
+
+## [1.18.48] - 2026-10-29
+
+### Changed
+
+- Refreshed the pinned `postgres:18.6-alpine3.24` image digest in
+  `docker-compose.yml` (Dependabot). No application behavior changed.
+
 ## [1.18.47] - 2026-10-28
 
 ### Changed
@@ -2034,7 +2074,11 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.47...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.51...HEAD
+[1.18.51]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.50...v1.18.51
+[1.18.50]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.49...v1.18.50
+[1.18.49]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.48...v1.18.49
+[1.18.48]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.47...v1.18.48
 [1.18.47]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.46...v1.18.47
 [1.18.46]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.45...v1.18.46
 [1.18.45]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.44...v1.18.45

@@ -17,15 +17,9 @@ authorized maintainers with `npm run bootstrap:private` or
 companion or an unprotected target. Its ahead/behind counts come from local tracking refs, hence
 the fetch. Where only Windows PowerShell 5.1 exists, run it with `powershell` instead of `pwsh`.
 
-## Companion commit policy
+## Companion commit checks
 
-ask — show the companion's diff and commit or push it only on the user's explicit authorization,
-as its own commit in the companion.
-
-- **Before committing:** review the diff from `private/`'s own root; confirm it holds no
-  credential values, resolved secrets, tokens or credential-bearing URLs (value-free `op://`
-  references in approved templates are allowed); when the index changed, set
-  `private/README.md`'s `**Updated:**` line to today.
+- When the index changed, set `private/README.md`'s `**Updated:**` line to today.
 
 ## Sync with main
 
@@ -40,7 +34,6 @@ updates only the public checkout.
 - `backend/api-service/.e2e/` — the manifest and search index the E2E API writes
 - `backend/api-service/coverage` (extensionless profile), `coverage/`, `*.coverprofile`, `*.out`,
   `*.test`, `*.exe`, `*.tsbuildinfo` — ignored matches only
-- stray scratch files at the repository root or under `private/`, named one by one
 
 ## Never-remove paths
 
@@ -52,7 +45,6 @@ updates only the public checkout.
 - `.private-workspace/` — the machine-local 1Password reference file
 - `.private-bootstrap-*/` — a bootstrap's staged clone; one left behind may hold the companion
 - `docker-compose.override.yml`, `.claude/settings.local.json`, `.vscode/`
-- `.claude/worktrees/` — removing one is the user's decision; it may hold unpushed commits
 - `node_modules/`, `frontend/node_modules/` — the root Markdown Prettier check runs from it
 
 ## Dev stack
@@ -73,8 +65,7 @@ updates only the public checkout.
 ## Generated-config check
 
 `npm run sync:agents:check` (inside the required **Format Check**), regenerated with
-`./frontend/node_modules/.bin/prettier --write "**/*.md"` then `npm run sync:agents` — when agent
-sources changed (`.agents/skills/`, `.claude/agents/`).
+`./frontend/node_modules/.bin/prettier --write "**/*.md"` then `npm run sync:agents` — always: it is quick, and it also catches an orphaned mirror.
 
 ## Final portability check
 
