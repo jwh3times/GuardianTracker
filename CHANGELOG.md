@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.51] - 2026-10-30
+
+### Changed
+
+- The doc map in `docs/agents/docs.md` now covers `CONTEXT.md` (`frozen`),
+  `VERSION` (`ship-owned`) and the design and icon notes under
+  `frontend/design/`, so `/docs-updater` audits them too. `/end-session`
+  handles worktrees and scratch files through its own rules rather than
+  cleanup-list entries.
+
 ## [1.18.50] - 2026-10-30
 
 ### Changed
@@ -2064,7 +2074,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.50...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.51...HEAD
+[1.18.51]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.50...v1.18.51
 [1.18.50]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.49...v1.18.50
 [1.18.49]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.48...v1.18.49
 [1.18.48]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.47...v1.18.48
