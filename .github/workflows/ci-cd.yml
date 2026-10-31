@@ -76,6 +76,10 @@ jobs:
       - name: Check Prettier formatting (repo markdown)
         run: ./frontend/node_modules/.bin/prettier --check "**/*.md"
 
+      # Local links and anchors resolve, and the doc map lists every document.
+      - name: Check the docs
+        run: node scripts/check-docs.mjs
+
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -292,8 +296,8 @@ jobs:
         with:
           fetch-depth: 0 # tags are required to compute the next version
 
-      - name: Test the next-version oracle
-        run: bash scripts/next-version.test.sh
+      - name: Test the next-version oracle and the changelog check
+        run: node --test scripts/next-version.test.mjs scripts/check-changelog.test.mjs
 
       - name: Verify CHANGELOG's top version matches the tag this merge will mint
         env:
@@ -309,17 +313,4 @@ jobs:
             exit 0
           fi
 
-          expected=$(bash scripts/next-version.sh)
-          actual=$(sed -nE 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/p' CHANGELOG.md | head -1)
-
-          if [ -z "$actual" ]; then
-            echo "::error::CHANGELOG.md contains no versioned section (expected a '## [x.y.z] - date' heading)."
-            exit 1
-          fi
-
-          if [ "$actual" != "$expected" ]; then
-            echo "::error::CHANGELOG.md's top version is ${actual}, but merging this PR will mint v${expected}. Rebase onto main and re-run /ship."
-            exit 1
-          fi
-
-          echo "CHANGELOG top version ${actual} matches the tag this merge will mint."
+          node scripts/check-changelog.mjs

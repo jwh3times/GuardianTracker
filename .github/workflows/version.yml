@@ -56,9 +56,9 @@ jobs:
             build="${version##*.}"
             echo "Commit already has ${tag}; reusing it instead of creating another build."
           else
-            # The build-number rule lives in scripts/next-version.sh so that CI's
+            # The build-number rule lives in scripts/next-version.mjs so that CI's
             # Changelog Version guard and the /ship skill compute the identical value.
-            version=$(bash scripts/next-version.sh)
+            version=$(node scripts/next-version.mjs)
             tag="v${version}"
             build="${version##*.}"
 

@@ -21,12 +21,6 @@ the fetch. Where only Windows PowerShell 5.1 exists, run it with `powershell` in
 
 - When the index changed, set `private/README.md`'s `**Updated:**` line to today.
 
-## Sync with main
-
-`npm run sync:main` — preflights both checkouts for uncommitted changes, then fast-forwards each
-clean one from `origin/main`; a missing `private/` is skipped. `npm run sync:main -- --skip-private`
-updates only the public checkout.
-
 ## Safe-to-remove paths
 
 - `frontend/playwright-report/`, `frontend/test-results/`, `frontend/playwright/.auth/`

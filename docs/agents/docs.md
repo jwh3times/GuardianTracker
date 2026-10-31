@@ -124,8 +124,8 @@ task status, ADR 0022).
 
 From the repository root:
 
+- `node scripts/check-docs.mjs` — local links and anchors, and `Doc map` coverage
 - `./frontend/node_modules/.bin/prettier --check "**/*.md"` (fix with `--write`) — the frontend
   run cannot reach Markdown outside `frontend/`
-- `npm run test:docs-links` — local links and heading anchors in every Markdown file
 - `node --test scripts/go-toolchain-policy.test.mjs scripts/postgres-pin-policy.test.mjs` — the
   policies that read `AGENTS.md`, `SETUP.md` and the agent files

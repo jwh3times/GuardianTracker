@@ -21,7 +21,7 @@ const definitions = new Map(
   ]),
 );
 
-// `Changelog Version` checks the top heading against scripts/next-version.sh and
+// `Changelog Version` checks the top heading against scripts/next-version.mjs and
 // never looks down here, so without this test the footer drifts one version per
 // release: a heading with no definition renders as plain text instead of a link,
 // and `[Unreleased]` keeps comparing from a stale tag.

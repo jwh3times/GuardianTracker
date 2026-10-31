@@ -14,6 +14,34 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.54] - 2026-10-31
+
+### Changed
+
+- The version, changelog, docs and sync scripts are now the canonical ones
+  from `jwh3times/skills`, and the shared skills are refreshed to match.
+  **Changelog Version** also requires a section for every released build
+  outside the archived lines. **Format Check** now runs
+  `node scripts/check-docs.mjs`, which replaces the documentation links test
+  and also requires the doc map to list every document.
+- The changelog now records the Dependabot releases v1.18.52 and v1.18.53,
+  which merged without an entry.
+
+## [1.18.53] - 2026-10-30
+
+### Changed
+
+- Bumped `@tanstack/react-query` from 5.104.5 to 5.105.0,
+  `@tanstack/react-virtual` from 3.14.22 to 3.14.23, `oxlint` from 1.89.0 to
+  1.90.0 and `postcss` from 8.5.31 to 8.5.32 in `frontend/` (Dependabot).
+
+## [1.18.52] - 2026-10-30
+
+### Changed
+
+- Refreshed the pinned `golang` image digest in
+  `backend/api-service/Dockerfile` from `b8c9b82` to `d200d2d` (Dependabot).
+
 ## [1.18.51] - 2026-10-30
 
 ### Changed
@@ -2074,7 +2102,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.51...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.54...HEAD
+[1.18.54]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.53...v1.18.54
+[1.18.53]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.52...v1.18.53
+[1.18.52]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.51...v1.18.52
 [1.18.51]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.50...v1.18.51
 [1.18.50]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.49...v1.18.50
 [1.18.49]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.48...v1.18.49
