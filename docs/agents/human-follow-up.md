@@ -11,15 +11,6 @@ or production change. Before publishing, verify through GitHub that the destinat
 companion and is private. Keep its remote, issue links, wiki links and operational identifiers out
 of public files, issues and PR bodies.
 
-## Follow-up destination
-
-`discover: git -C private remote get-url origin` — issues in the private companion, selected
-explicitly with `-R`, even for follow-ups from public work.
-
-## Follow-up label
-
-`ready-for-human` (create it if absent; remove a conflicting `ready-for-agent`)
-
 ## Follow-up board
 
 same as Board — `Triage` `ready-for-human`, `Status` `Todo`; a prerequisite goes in `Blocked By`
