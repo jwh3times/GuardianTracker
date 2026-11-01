@@ -64,6 +64,9 @@ jobs:
       - name: Check agent config sync (Codex agents + Claude skills)
         run: npm run sync:agents:check
 
+      - name: Check installed skills match the lock
+        run: node scripts/check-skills.mjs
+
       - name: Check agent sources are tool-neutral
         run: npm run lint:agents
 
