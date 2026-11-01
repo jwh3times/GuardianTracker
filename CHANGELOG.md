@@ -14,6 +14,13 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.57] - 2026-11-01
+
+### Added
+
+- `THIRD_PARTY_NOTICES.md` carries the MIT license notice of the installed
+  `mattpocock/skills` skills, which install without it.
+
 ## [1.18.56] - 2026-11-01
 
 ### Changed
@@ -2122,7 +2129,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.56...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.57...HEAD
+[1.18.57]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.56...v1.18.57
 [1.18.56]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.55...v1.18.56
 [1.18.55]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.54...v1.18.55
 [1.18.54]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.53...v1.18.54
