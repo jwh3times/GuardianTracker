@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.55] - 2026-10-31
+
+### Changed
+
+- The development flow and shared-skills text in `AGENTS.md` now come from
+  `jwh3times/skills`: `scripts/sync-agents.mjs` writes them between marked
+  lines, and its check fails when they drift. `docs/agents/dev-flow.md` and
+  `docs/agents/triage-labels.md` hold only what this repository adds to the
+  shared defaults, and the shared skills are refreshed to match.
+
 ## [1.18.54] - 2026-10-31
 
 ### Changed
@@ -2102,7 +2112,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.54...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.55...HEAD
+[1.18.55]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.54...v1.18.55
 [1.18.54]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.53...v1.18.54
 [1.18.53]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.52...v1.18.53
 [1.18.52]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.51...v1.18.52

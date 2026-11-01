@@ -31,20 +31,3 @@ The production build (**Test Frontend**), Staticcheck, `govulncheck` and
 `go test -race` against Postgres (**Test Go Services**), the image builds (**Build Docker
 Images**), **Browser E2E + Axe**, the non-required Windows portability job and CodeQL run only in
 CI.
-
-## Issue link
-
-- **Branch pattern:** `<type>/<issue#>-<slug>`, `<type>` one of `feat`, `fix`, `chore`, `docs`,
-  `test`, `refactor` (e.g. `feat/512-wishlist-sort`). Exempt work drops the number
-  (`docs/drop-setup-node-hold`); Dependabot names its own.
-- **Link line:** `Closes #<n>` when the PR finishes the issue; `Part of #<n>` for one slice of a
-  spec that stays open. It is the body's first line, above the template's `# Summary`.
-- **Waiver line:** `Flow waived by the user: <reason>`.
-- **Exempt:**
-  - dependency bumps — Dependabot PRs, `chore(deps)` commits, the `npm run sync:image-pins`
-    commit, a toolchain or module pin moved to clear a `govulncheck` advisory
-  - changes touching only docs and agent config (every `*.md`, `docs/`, `.claude/`, `.agents/`,
-    `.codex/`, `skills-lock.json`, `.github/ISSUE_TEMPLATE/`)
-  - release prep (the `docs: update docs and changelog for v<version>` commit, its `VERSION`
-    change, and changelog backfills)
-- **Defined in:** `docs/agents/dev-flow.md`.

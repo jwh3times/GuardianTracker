@@ -65,8 +65,8 @@
 - `docs/maintainers/workspace-recovery.md` — the value-free private-workspace recovery runbook.
   **When:** the public recovery contract changes (`scripts/bootstrap-private*`,
   `scripts/restore-private-secrets.ps1`, `scripts/workspace-status.ps1`, `scripts/sync-main.mjs`).
-- `docs/agents/*.md` — conventions and settings the skills read; `dev-flow.md` holds the gate,
-  exemptions and linking rules. **When:** a convention, route or setting changes.
+- `docs/agents/*.md` — conventions and settings the skills read; `dev-flow.md` holds what this
+  repository adds to the shared flow. **When:** a convention, route or setting changes.
 - `.claude/agents/*.md` — area notes for the subagents, mirrored to `.codex/agents/`. **When:**
   `go-services.md`: endpoints, JWT, OAuth, manifest flow; `react-frontend.md`: structure, query
   patterns, pages; `postgres-specialist.md`: schema and migrations; `penetration-tester.md`: the
