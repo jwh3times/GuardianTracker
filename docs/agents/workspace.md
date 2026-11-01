@@ -58,7 +58,8 @@ the fetch. Where only Windows PowerShell 5.1 exists, run it with `powershell` in
 
 ## Generated-config check
 
-`npm run sync:agents:check` (inside the required **Format Check**), regenerated with
+`npm run sync:agents:check && node scripts/check-skills.mjs` (inside the required **Format Check**),
+regenerated with
 `./frontend/node_modules/.bin/prettier --write "**/*.md"` then `npm run sync:agents` — always: it is quick, and it also catches an orphaned mirror.
 
 ## Final portability check
