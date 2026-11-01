@@ -54,6 +54,8 @@
 - `SUPPORT.md` — public support and issue-reporting guidance. **When:** the issue templates or
   support route change.
 - `CODE_OF_CONDUCT.md`, `LICENSE` — `owner-only`.
+- `THIRD_PARTY_NOTICES.md` — the license notices of third-party files kept here. `owner-only`: report
+  the change when a skill's source changes.
 - `frontend/README.md` — frontend structure, scripts, and the browser and visual-test procedure.
   **When:** `frontend/package.json` scripts, `frontend/playwright.config.ts`, or the
   `frontend/src/` layout changes.
