@@ -14,6 +14,25 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.62] - 2026-11-03
+
+### Changed
+
+- Frontend tooling moves from Node 26.12.1 to 26.13.0 everywhere it is pinned:
+  `.nvmrc`, which CI reads, and all three frontend Dockerfiles. The
+  Playwright browser-test image is re-pinned to the current digest of its
+  republished `v1.64.1-noble` tag (Dependabot, finished by hand).
+- The changelog now records the Dependabot release v1.18.61, which merged
+  without an entry.
+
+## [1.18.61] - 2026-11-03
+
+### Changed
+
+- Bumped `github.com/jackc/pgx/v5` from 5.11.0 to 5.12.0 in
+  `backend/api-service/`, with its transitive `github.com/jackc/puddle/v2`
+  moving from 2.2.2 to 2.2.3 (Dependabot).
+
 ## [1.18.60] - 2026-11-02
 
 ### Changed
@@ -2154,7 +2173,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.60...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.62...HEAD
+[1.18.62]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.61...v1.18.62
+[1.18.61]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.60...v1.18.61
 [1.18.60]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.59...v1.18.60
 [1.18.59]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.58...v1.18.59
 [1.18.58]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.57...v1.18.58
