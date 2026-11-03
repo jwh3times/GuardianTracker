@@ -14,6 +14,31 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.60] - 2026-11-02
+
+### Changed
+
+- `end-session` now closes every session with the same report: what it did,
+  the docs it searched and updated, open PRs and security alert counts, and
+  the human steps owed before the next session.
+- The changelog now records the Dependabot releases v1.18.58 and v1.18.59,
+  which merged without an entry.
+
+## [1.18.59] - 2026-11-02
+
+### Changed
+
+- Bumped the `dpage/pgadmin4` image in `docker-compose.yml` from 9.17 to 9.19
+  (Dependabot).
+
+## [1.18.58] - 2026-11-02
+
+### Changed
+
+- Bumped `@tanstack/react-virtual` from 3.14.23 to 3.14.24, `react-router`
+  from 8.5.0 to 8.5.1 and `@types/node` from 26.6.5 to 26.6.6 in `frontend/`
+  (Dependabot).
+
 ## [1.18.57] - 2026-11-01
 
 ### Added
@@ -2129,7 +2154,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.57...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.60...HEAD
+[1.18.60]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.59...v1.18.60
+[1.18.59]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.58...v1.18.59
+[1.18.58]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.57...v1.18.58
 [1.18.57]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.56...v1.18.57
 [1.18.56]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.55...v1.18.56
 [1.18.55]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.54...v1.18.55
