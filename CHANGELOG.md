@@ -14,6 +14,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.63] - 2026-11-04
+
+### Changed
+
+- Board guidance: once a draft becomes an issue, a blocker that is another
+  issue is recorded only as a native `blocked_by` edge, and the `Blocked By`
+  field holds only what blocks it from outside the project.
+
 ## [1.18.62] - 2026-11-03
 
 ### Changed
@@ -2173,7 +2181,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.62...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.63...HEAD
+[1.18.63]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.62...v1.18.63
 [1.18.62]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.61...v1.18.62
 [1.18.61]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.60...v1.18.61
 [1.18.60]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.59...v1.18.60
