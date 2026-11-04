@@ -135,7 +135,9 @@ jwh3times 4
 - `Blocked By` (text): the blocker, or a cleared value starting with `Ready`, `Unblocked` or
   `Shipped` (`Ready — <blocker> completed <date> (#<n>)`). Nothing clears it when a blocker closes:
   after a merge, run `npm run board:blockers` and clear every item it lists. A draft's ordering
-  lives only here; wire native `blocked_by` edges once it is an issue.
+  lives only here; wire native `blocked_by` edges once it is an issue. On an issue, a blocker that
+  is another issue is only a native edge, and this field holds what blocks it from outside the
+  project.
 - `Gate` (text): what must be true before work can start, `none` when nothing.
 - `Chain`: `B — Collections & Wish list`, `C — Acquisition recommendations`,
   `E — Frontend ownership`, `Ops`, `Product`, `Maintenance`; `Order` (number): position within the

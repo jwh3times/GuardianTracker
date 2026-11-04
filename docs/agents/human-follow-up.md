@@ -13,8 +13,8 @@ of public files, issues and PR bodies.
 
 ## Follow-up board
 
-same as Board — `Triage` `ready-for-human`, `Status` `Todo`; a prerequisite goes in `Blocked By`
-and, between issues, a native `blocked_by` edge. A follow-up that waits on a prerequisite never
+same as Board — `Triage` `ready-for-human`, `Status` `Todo`; a prerequisite that is another issue
+is a native `blocked_by` edge, and one outside the project goes in `Blocked By`. A follow-up that waits on a prerequisite never
 blocks unrelated engineering work.
 
 ## Follow-up wiki
