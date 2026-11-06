@@ -2,8 +2,9 @@ import { useState } from "react";
 import { describe, it, expect } from "vitest";
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { server, API } from "../test/testServer";
+import { aborted, observeSentRequests } from "../test/sentRequests";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { QueryClient } from "@tanstack/react-query";
 import { useItemSearch } from "./search";
@@ -165,19 +166,16 @@ describe("projection", () => {
 
 describe("query cancellation", () => {
   it("aborts a superseded search without errors or retries and keeps the current result", async () => {
+    const observed = observeSentRequests();
     const signals = new Map<string, AbortSignal>();
     const sent: string[] = [];
     server.use(
       http.get(`${API}/api/items/search`, async ({ request }) => {
         const term = new URL(request.url).searchParams.get("q")!;
         sent.push(term);
-        signals.set(term, request.signal);
+        signals.set(term, observed.signal(request));
         if (term === "old") {
-          await new Promise<void>((resolve) =>
-            request.signal.addEventListener("abort", () => resolve(), {
-              once: true,
-            }),
-          );
+          await aborted(observed.signal(request));
         }
         return HttpResponse.json([hit(1, term)]);
       }),
@@ -215,6 +213,7 @@ describe("query cancellation", () => {
   });
 
   it("keeps a shared search alive while another observer still needs it", async () => {
+    const observed = observeSentRequests();
     let signal: AbortSignal | undefined;
     let requests = 0;
     let release!: () => void;
@@ -224,7 +223,7 @@ describe("query cancellation", () => {
     server.use(
       http.get(`${API}/api/items/search`, async ({ request }) => {
         requests++;
-        signal = request.signal;
+        signal = observed.signal(request);
         await pending;
         return HttpResponse.json([hit(1, "shared")]);
       }),

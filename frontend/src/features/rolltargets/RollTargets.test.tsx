@@ -2,7 +2,7 @@ import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { API, server } from "../../test/testServer";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { RollTargets } from "./RollTargets";

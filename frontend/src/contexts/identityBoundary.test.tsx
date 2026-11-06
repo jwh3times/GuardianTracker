@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { QueryClient, useQueryClient, useQuery } from "@tanstack/react-query";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { AppProviders, AuthedProviders } from "./AppProviders";
 import { useAuth } from "./AuthContext";
 import { usePreferences } from "../data/preferences";
