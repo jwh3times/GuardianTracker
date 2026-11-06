@@ -1,11 +1,19 @@
 import { onTestFinished, vi } from "vitest";
 
 type FetchArgs = Parameters<typeof fetch>;
+type SentOption = "method" | "signal" | "credentials";
 
-function sentMethod([input, init]: FetchArgs): string {
-  return (
-    init?.method ?? (input instanceof Request ? input.method : "GET")
-  ).toUpperCase();
+/**
+ * One option of a `fetch` call, resolved the way fetch resolves it: `init`
+ * wins whenever it sets the option, even to `null` (which clears an input
+ * Request's signal); otherwise an input Request supplies its own.
+ */
+function sentOption<K extends SentOption>(
+  [input, init]: FetchArgs,
+  key: K,
+): RequestInit[K] | Request[K] | undefined {
+  if (init?.[key] !== undefined) return init[key];
+  return input instanceof Request ? input[key] : undefined;
 }
 
 function sentUrl([input]: FetchArgs): string {
@@ -28,7 +36,6 @@ export function observeSentRequests() {
   onTestFinished(() => spy.mockRestore());
 
   const matched = new WeakMap<Request, FetchArgs>();
-  let claimed = 0;
   const claimedCalls = new Set<number>();
 
   const callFor = (request: Request): FetchArgs => {
@@ -37,16 +44,16 @@ export function observeSentRequests() {
     const index = spy.mock.calls.findIndex(
       (call, i) =>
         !claimedCalls.has(i) &&
-        sentMethod(call) === request.method.toUpperCase() &&
+        (sentOption(call, "method") ?? "GET").toUpperCase() ===
+          request.method.toUpperCase() &&
         sentUrl(call) === request.url,
     );
     if (index === -1) {
       throw new Error(
-        `No unmatched fetch call for ${request.method} ${request.url} (${claimed} already matched)`,
+        `No unmatched fetch call for ${request.method} ${request.url} (${claimedCalls.size} already matched)`,
       );
     }
     claimedCalls.add(index);
-    claimed++;
     const call = spy.mock.calls[index];
     matched.set(request, call);
     return call;
@@ -55,9 +62,7 @@ export function observeSentRequests() {
   return {
     /** The AbortSignal the app passed to `fetch` for this handled request. */
     signal(request: Request): AbortSignal {
-      const [input, init] = callFor(request);
-      const signal =
-        init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      const signal = sentOption(callFor(request), "signal");
       if (!signal) {
         throw new Error(
           `The app passed no signal for ${request.method} ${request.url}`,
@@ -67,17 +72,13 @@ export function observeSentRequests() {
     },
     /** The `credentials` mode the app passed to `fetch` for this request. */
     credentials(request: Request): RequestCredentials | undefined {
-      const [input, init] = callFor(request);
-      return (
-        init?.credentials ??
-        (input instanceof Request ? input.credentials : undefined)
-      );
+      return sentOption(callFor(request), "credentials");
     },
   };
 }
 
 /** Resolves once `signal` aborts, including when it already has. */
-export function aborted(signal: AbortSignal): Promise<void> {
+export function whenAborted(signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) resolve();
     else signal.addEventListener("abort", () => resolve(), { once: true });

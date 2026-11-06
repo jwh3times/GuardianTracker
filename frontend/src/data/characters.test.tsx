@@ -5,7 +5,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw/http";
 import { server, API, sampleUser } from "../test/testServer";
-import { aborted, observeSentRequests } from "../test/sentRequests";
+import { observeSentRequests, whenAborted } from "../test/sentRequests";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCharacters } from "../contexts/CharacterContext";
 import {
@@ -590,9 +590,10 @@ describe("query cancellation", () => {
             const id = String(params.characterId);
             const key = `${id}/${resource}`;
             sent.push(key);
-            signals.set(key, observed.signal(request));
+            const appSignal = observed.signal(request);
+            signals.set(key, appSignal);
             if (id !== "char-c") {
-              await aborted(observed.signal(request));
+              await whenAborted(appSignal);
             }
             return HttpResponse.json({
               characterId: id,
@@ -666,7 +667,7 @@ describe("query cancellation", () => {
       http.get(`${API}/api/characters/:type/:id`, async ({ request }) => {
         requests++;
         signal = observed.signal(request);
-        await aborted(observed.signal(request));
+        await whenAborted(signal);
         return HttpResponse.json([apiCharacter("char-a")]);
       }),
     );

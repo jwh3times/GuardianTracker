@@ -4,7 +4,7 @@ import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw/http";
 import { server, API } from "../test/testServer";
-import { aborted, observeSentRequests } from "../test/sentRequests";
+import { observeSentRequests, whenAborted } from "../test/sentRequests";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { QueryClient } from "@tanstack/react-query";
 import { useItemSearch } from "./search";
@@ -173,9 +173,10 @@ describe("query cancellation", () => {
       http.get(`${API}/api/items/search`, async ({ request }) => {
         const term = new URL(request.url).searchParams.get("q")!;
         sent.push(term);
-        signals.set(term, observed.signal(request));
+        const appSignal = observed.signal(request);
+        signals.set(term, appSignal);
         if (term === "old") {
-          await aborted(observed.signal(request));
+          await whenAborted(appSignal);
         }
         return HttpResponse.json([hit(1, term)]);
       }),

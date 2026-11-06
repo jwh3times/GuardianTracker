@@ -4,7 +4,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw/http";
 import { server, API, sampleCollections, sampleUser } from "../test/testServer";
-import { aborted, observeSentRequests } from "../test/sentRequests";
+import { observeSentRequests, whenAborted } from "../test/sentRequests";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { useCollections, useCollectionsSummary } from "./collections";
 import { useMembershipRefresh } from "./membershipRefresh";
@@ -237,10 +237,11 @@ describe("query cancellation", () => {
     const signals: AbortSignal[] = [];
     server.use(
       http.get(`${API}/api/collections/:type/:id`, async ({ request }) => {
-        signals.push(observed.signal(request));
+        const appSignal = observed.signal(request);
+        signals.push(appSignal);
         const n = signals.length;
         if (n === 2) {
-          await aborted(observed.signal(request));
+          await whenAborted(appSignal);
         }
         return HttpResponse.json({
           ...collectionsPayload(),
@@ -295,7 +296,7 @@ describe("query cancellation", () => {
       server.use(
         http.get(`${API}/api/collections/:type/:id`, async ({ request }) => {
           signal = observed.signal(request);
-          await aborted(observed.signal(request));
+          await whenAborted(signal);
           return HttpResponse.json(collectionsPayload());
         }),
       );

@@ -15,7 +15,10 @@ import { server } from "./testServer";
 // and reach the real network as well as the handler. Nothing listens on the
 // test API port, so the app sees `fetch failed` (ECONNREFUSED) instead of the
 // mocked response. `pipelining: 0` turns keep-alive off (undici Client docs),
-// and setGlobalDispatcher also reaches Node's built-in fetch. Production fetch
+// and setGlobalDispatcher also reaches Node's built-in fetch while the npm
+// undici and the one bundled in Node (`process.versions.undici`) share a
+// major version; if the two failures named in #862 return as flakes after a
+// Node upgrade, check that first. Production fetch
 // runs in the browser, so tests lose no coverage the app relies on. Delete
 // this, and the direct `undici` devDependency, once an @mswjs/interceptors
 // release fixes #862 and the suite stays green without it.
