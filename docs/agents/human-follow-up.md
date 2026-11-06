@@ -3,7 +3,7 @@
 Required human actions left by completed agent work follow the procedure in the installed skills'
 `human-follow-up` settings definition (for example
 `.agents/skills/end-session/settings/human-follow-up.md`). They are an explicit exception to
-public-by-default issues and unclaimed drafts (ADR 0022, ADR 0024): every required action gets a
+public-by-default issues (ADR 0022): every required action gets a
 private companion issue, a board entry and a published private-wiki procedure, even unclaimed. This
 standing instruction authorizes creating and updating those issues, board items and wiki pages
 without asking again; it does not authorize performing the human's approval, credential operation

@@ -33,37 +33,23 @@ private companion. See [ADR 0022](../adr/0022-github-owns-task-status.md).
 
 - **List items**: `gh project item-list 4 --owner jwh3times --format json`
 - **Read fields**: `gh project field-list 4 --owner jwh3times --format json --jq '.fields[] | "\(.name) | \(.id)"'`
-- **Add a draft**: `gh project item-create` and `item-edit` accept only `--body`,
-  never `--body-file` (verified against `gh` 2.100.0), so a multi-line draft body
-  has to survive the shell as one argument. Use the GraphQL mutation with the body
-  read from a file, which keeps real newlines and performs no interpolation:
-
-  ```sh
-  gh api graphql \
-    -f query='mutation($project:ID!,$title:String!,$body:String!){addProjectV2DraftIssue(input:{projectId:$project,title:$title,body:$body}){projectItem{id}}}' \
-    -f project='<project-node-id>' \
-    -f title='...' \
-    -F body=@<path>
-  ```
-
-  `-F key=@<path>` reads the value from a file; `-f` would take the literal
-  `@<path>` string. The same `-F body=@<path>` form works for
-  `updateProjectV2DraftIssue` when editing a draft body.
-
-- **Add an existing issue**: `gh project item-add 4 --owner jwh3times --url <issue-url>`
+- **Add an issue**: `gh project item-add 4 --owner jwh3times --url <issue-url>`. Every new issue
+  goes on the board, then gets `Status`, `Priority` and `Triage` set.
 - **Set a field**: `gh project item-edit --id <item-id> --project-id <project-id> --field-id <field-id> --text "..."` (or `--number`, or `--single-select-option-id`)
 
 Fields: `Chain` (single-select), `Order` (number), `Blocked By` (text), `Gate`
-(text), `ADR` (text), `Status` (single-select), `Triage` (single-select).
+(text), `ADR` (text), `Status` (single-select), `Triage` (single-select),
+`Priority` (single-select).
 
-**Drafts versus issues.** An issue is created when work is committed to —
-`/to-spec`, `/to-tickets`, or `/wayfinder` publishes it, or a draft is claimed
-([ADR 0024](../adr/0024-committing-to-work-creates-the-issue.md)). Uncommitted
-work is a draft item. Add each published issue to the project, and convert or
-replace the draft it came from, if any, so each piece of work has one item. A
-draft has no repository or number, so **native dependencies cannot attach to
-it** — carry the order in the `Blocked By` field and wire real `blocked_by`
-edges after converting the draft to an issue.
+**Every board item is an issue.** The board holds no draft items
+([ADR 0026](../adr/0026-every-board-item-is-an-issue.md)). New work is filed as an
+issue and added to the board, whether or not anyone has committed to it.
+Readiness is the triage label. `/to-spec`, `/to-tickets` and `/wayfinder` still
+make work `ready-for-agent`
+([ADR 0024](../adr/0024-committing-to-work-creates-the-issue.md)). An issue waiting
+on something outside itself also carries `blocked`. A blocker that is another
+issue is a native `blocked_by` edge. Anything outside the project goes in
+`Blocked By`.
 
 **Stale blockers.** Nothing clears `Blocked By` text when its blocker closes, and
 an open item still naming a finished blocker drops silently out of the computed
@@ -86,7 +72,7 @@ When completed agent work leaves any required human action, follow
 [Human follow-ups](human-follow-up.md) before reporting completion. These are
 private-companion issues on the shared project with `ready-for-human` labels and
 linked private-wiki procedures, even if not yet claimed. This exception takes
-precedence over the default repository and draft rules above.
+precedence over the default repository rule above.
 
 ## Pull requests as a triage surface
 
@@ -131,13 +117,13 @@ jwh3times 4
 ## Board fields
 
 - `Status`: `Todo` / `In Progress` / `Done`. There is no blocked option: blocking is carried by
-  `Blocked By` and native `blocked_by` edges, and assignment marks work in flight (ADR 0024).
+  the `blocked` label, native `blocked_by` edges and `Blocked By`, and assignment marks work in
+  flight (ADR 0024).
 - `Blocked By` (text): the blocker, or a cleared value starting with `Ready`, `Unblocked` or
   `Shipped` (`Ready — <blocker> completed <date> (#<n>)`). Nothing clears it when a blocker closes:
-  after a merge, run `npm run board:blockers` and clear every item it lists. A draft's ordering
-  lives only here; wire native `blocked_by` edges once it is an issue. On an issue, a blocker that
-  is another issue is only a native edge, and this field holds what blocks it from outside the
-  project.
+  after a merge, run `npm run board:blockers` and clear every item it lists. A blocker that is
+  another issue is only a native edge; this field holds what blocks an issue from outside the
+  project, and is empty when only native edges block it.
 - `Gate` (text): what must be true before work can start, `none` when nothing.
 - `Chain`: `B — Collections & Wish list`, `C — Acquisition recommendations`,
   `E — Frontend ownership`, `Ops`, `Product`, `Maintenance`; `Order` (number): position within the
@@ -145,11 +131,8 @@ jwh3times 4
 - `ADR` (text): the controlling ADR number (`0020`), when there is one.
 - `Triage`: mirrors the triage label — `ready-for-agent`, `ready-for-human`, `needs-info`,
   `needs-triage`, `wontfix`.
-
-## New work
-
-draft item — work nobody has committed to stays a board draft; running `/to-spec`, `/to-tickets`
-or `/wayfinder`, or claiming the draft, creates its issue (ADR 0024).
+- `Priority`: `P1 — Next`, `P2 — Soon`, `P3 — Later`, `P4 — Parked`. Set on every open item,
+  blocked or not; the board's manual order follows it (ADR 0026).
 
 ## Security findings
 

@@ -4,6 +4,10 @@
 - Date: 2026-10-26
 - Supersedes in part: [ADR 0022](./0022-github-owns-task-status.md); see
   [Supersession](#supersession)
+- Superseded in part by
+  [ADR 0026](./0026-every-board-item-is-an-issue.md): work nobody has committed
+  to is an issue too, not a draft item. Committing to work still makes it ready.
+  Every other decision here remains in force.
 
 ## Context
 
