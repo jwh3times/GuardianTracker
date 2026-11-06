@@ -13,6 +13,11 @@ for consistency with `wishlist_items`, `bungie_tokens`, and
 `user_preferences`. The membership pair remains the identity the HTTP and
 service layers operate on — only the storage key differs from the sketch.
 
+Implementation note (2026-11-06): the Visit boundary below records activity on
+every page load and login, but the implementation records it only when the
+digest endpoint is called, and the Dashboard is its only caller. Recording
+activity on every authenticated page is tracked in [#470](https://github.com/jwh3times/GuardianTracker/issues/470).
+
 `digest_state` also carries one additional column beyond the ADR's four,
 `current_visit_result`: the complete outcome (status, the acquired item
 hashes, and the previous visit's boundary) computed at the current visit's

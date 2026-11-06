@@ -27,6 +27,12 @@ No unreleased changes.
   through `P4 — Parked`) orders every open item, blocked or not. The ready
   frontier is the open `ready-for-agent` issues without `blocked`, with no open
   native blocker and no assignee, in priority order.
+- Issue forms now apply `needs-triage` alongside `bug` or `enhancement`, so a
+  new report starts in triage.
+- ROADMAP.md links each backlog item to its tracking issue and lists the
+  `god-roll` flag tier as an open roll-targets decision. ADR 0023 and the known
+  limitations note that the digest visit clock advances only on Dashboard
+  views, not every page load as the ADR specifies; the fix is tracked in #470.
 
 ## [1.18.64] - 2026-11-05
 
