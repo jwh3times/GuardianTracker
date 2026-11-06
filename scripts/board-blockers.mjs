@@ -7,8 +7,9 @@
  *   npm run board:blockers
  *   npm run board:blockers -- --input board.json
  *
- * `Blocked By` is free text. A draft has no number, so it cannot carry a native
- * dependency, and nothing clears the text when its blocker closes. An open item
+ * `Blocked By` is free text that holds what blocks an item from outside the
+ * project (a blocker that is another issue is a native `blocked_by` edge, ADR
+ * 0026), and nothing clears the text when its blocker closes. An open item
  * whose blocker already finished then drops silently out of the computed ready
  * frontier — which happened twice in one day (issue #314).
  *

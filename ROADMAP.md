@@ -30,6 +30,7 @@ reports, a REST surface, the Roll targets page (`/rolls`, behind the
 progress for still-chasing targets, and import provenance all exist
 **Gate:** Further scope requires an owner decision
 **Likely size:** To be decided for any follow-on work
+**Tracking:** [#471](https://github.com/jwh3times/GuardianTracker/issues/471)
 
 Show owned weapon rolls for the selected Destiny membership and compare them to
 target rolls.
@@ -119,12 +120,15 @@ Still to settle:
   targets) is out of scope for the drawer section that shipped in #371 and
   remains its own decision.
 - Manual perk authoring (saving a target without a DIM import) is deferred.
+- The `god-roll` feature flag remains alpha-only; whether roll targets move to a
+  wider tier is undecided.
 
 ### Notifications and Digests
 
 **Status:** Not implemented
 **Gate:** Public deployment decision, then product and provider decision
 **Likely size:** Large
+**Tracking:** [#464](https://github.com/jwh3times/GuardianTracker/issues/464)
 
 Guardian Tracker currently runs only as a local application, so this waits on
 [Production Deployment Path](#production-deployment-path).
@@ -145,6 +149,7 @@ Decisions to settle:
 **Status:** Not implemented
 **Gate:** Public deployment decision, then security and privacy review
 **Likely size:** Medium to large
+**Tracking:** [#465](https://github.com/jwh3times/GuardianTracker/issues/465)
 
 A public share page needs a public host, so this waits on
 [Production Deployment Path](#production-deployment-path).
@@ -167,6 +172,7 @@ Expected shape:
 maintainer decision
 **Gate:** Maintainer decision to publish
 **Likely size:** Large
+**Tracking:** [#468](https://github.com/jwh3times/GuardianTracker/issues/468)
 
 Notifications and Digests, Shareable Collection Progress, and Metrics all wait on
 this decision.
@@ -181,6 +187,7 @@ belong in `private/` until then.
 **Status:** Not implemented
 **Gate:** Production deployment path, then observability decision
 **Likely size:** Medium
+**Tracking:** [#466](https://github.com/jwh3times/GuardianTracker/issues/466)
 
 Structured request/access logging with request IDs and sanitized identifiers has
 shipped (see [docs/architecture.md](./docs/architecture.md#request-logging)).

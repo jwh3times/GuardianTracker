@@ -469,7 +469,7 @@ Public docs:
   (issue tracker, triage labels, domain docs, development flow, and the shared
   skills' settings files); see `## Agent skills` below
 - `docs/agents/dev-flow.md` - what this repository adds to the shared development
-  flow: board drafts and exemption details
+  flow: board items and exemption details
 - `docs/maintainers/workspace-recovery.md` - value-free private-workspace and
   machine-local configuration recovery runbook for authorized maintainers
 
@@ -505,18 +505,21 @@ Task status lives on GitHub, not in this repository's files. See
 - **Board:** the private user-level Project `Guardian Tracker`
   (<https://github.com/users/jwh3times/projects/4>), linked to both the public
   repository and the private companion. Fields: `Chain`, `Order`, `Blocked By`,
-  `Gate`, `ADR`, `Status`, `Triage`.
+  `Gate`, `ADR`, `Status`, `Triage`, `Priority`.
 - **Issues go in the public repository by default.** File in the private
   companion only when the body would need a credential, a real
   provider/cost/account identifier, or exploitable security detail.
-- **An issue is created when work is committed to** ([ADR 0024](./docs/adr/0024-committing-to-work-creates-the-issue.md)):
-  running `/to-spec`, `/to-tickets`, or `/wayfinder`, or claiming a draft.
-  Uncommitted work is a project draft item. When committed work started as a
-  draft, convert or replace that draft so each piece of work has one item, and
-  wire native `blocked_by` edges — drafts have no number, so their ordering is
-  carried by the `Blocked By` field.
-- **The ready frontier is computed, not asserted:** open items with no open
-  blocker and no assignee.
+- **Every board item is an issue** ([ADR 0026](./docs/adr/0026-every-board-item-is-an-issue.md)):
+  new work is filed as an issue and added to the board, with no draft items.
+  Readiness is the triage label; running `/to-spec`, `/to-tickets`, or
+  `/wayfinder` is still what makes work `ready-for-agent`
+  ([ADR 0024](./docs/adr/0024-committing-to-work-creates-the-issue.md)). An issue
+  waiting on something outside itself also carries `blocked`; a blocker that is
+  another issue is a native `blocked_by` edge. Every open item has a `Priority`
+  (`P1 — Next` to `P4 — Parked`).
+- **The ready frontier is computed, not asserted:** open `ready-for-agent`
+  issues without `blocked`, with no open native blocker and no assignee, in
+  `Priority` order.
 - Record point-in-time findings as comments on the issue they informed. Do not
   create standing status documents; that is the drift ADR 0022 removes.
 
@@ -525,7 +528,7 @@ Task status lives on GitHub, not in this repository's files. See
 Before reporting completed agent work, create or update a private-companion
 follow-up issue for every required human action, add it to the shared project,
 label it `ready-for-human`, and publish linked step-by-step instructions in the
-private wiki. This overrides public-by-default and unclaimed-draft rules for
+private wiki. This overrides the public-by-default rule for
 these follow-ups. Whenever completed work leaves a human action, read
 [the human-follow-up settings](./docs/agents/human-follow-up.md) (destination, label,
 board, wiki) and the `## Procedure` they point to, which ships with the shared skills
@@ -669,7 +672,8 @@ Single-context layout: root `CONTEXT.md` + existing `docs/adr/`. See `docs/agent
   new visit on its next Dashboard render, so the digest can appear without the
   player having left. Its contents stay correct; only the "since your last
   visit" framing is loose. Driving the clock from app-level activity would fix
-  it and needs a heartbeat that does not exist yet.
+  it and needs a heartbeat that does not exist yet; this departs from ADR 0023's
+  visit boundary and is tracked in #470.
 - Collections data remains membership-wide. The character switcher scopes
   authenticated weekly vendor inventory, today actions, availability ranking,
   Xûr location, the Guardian equipment view, one bounded page of recent
