@@ -14,6 +14,28 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.65] - 2026-11-06
+
+### Changed
+
+- Board guidance: every open board item is now an issue; the board holds no
+  draft items (ADR 0026, superseding ADR 0024's draft rule in part). Readiness
+  stays the triage label, and committing to work through `/to-spec`,
+  `/to-tickets` or `/wayfinder` is still what makes it `ready-for-agent`.
+- A new `blocked` label sits beside the triage label on any issue that waits on
+  something outside itself, and a new board `Priority` field (`P1 — Next`
+  through `P4 — Parked`) orders every open item, blocked or not. The ready
+  frontier is the open `ready-for-agent` issues without `blocked`, with no open
+  native blocker and no assignee, in priority order.
+
+## [1.18.64] - 2026-11-05
+
+### Changed
+
+- Bumped `@tanstack/react-query` from 5.105.0 to 5.105.1,
+  `@tanstack/react-virtual` from 3.14.24 to 3.14.25, and `@vitejs/plugin-react`
+  from 6.1.2 to 6.2.1 in `frontend/` (Dependabot).
+
 ## [1.18.63] - 2026-11-04
 
 ### Changed
@@ -2181,7 +2203,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.63...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.65...HEAD
+[1.18.65]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.64...v1.18.65
+[1.18.64]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.63...v1.18.64
 [1.18.63]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.62...v1.18.63
 [1.18.62]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.61...v1.18.62
 [1.18.61]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.60...v1.18.61

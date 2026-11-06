@@ -2,6 +2,9 @@
 
 - Status: Accepted
 - Date: 2026-10-27
+- Amended in part by
+  [ADR 0026](./0026-every-board-item-is-an-issue.md): `end-session`'s `New work`
+  setting is no longer `draft item` here; it falls back to its default, `issue`.
 
 ## Context
 
