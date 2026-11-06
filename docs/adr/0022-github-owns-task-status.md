@@ -8,6 +8,10 @@
   [ADR 0024](./0024-committing-to-work-creates-the-issue.md): unclaimed work
   that `/to-spec`, `/to-tickets`, or `/wayfinder` has committed to is an issue,
   not a draft item. Every other decision here remains in force.
+- Superseded in part by
+  [ADR 0026](./0026-every-board-item-is-an-issue.md): the board holds no draft
+  items, so unclaimed work is an issue and the `Blocked By` field no longer
+  carries draft ordering.
 
 ## Context
 

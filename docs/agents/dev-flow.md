@@ -8,12 +8,12 @@ The flow itself is `.agents/skills/ship/settings/dev-flow.md`, and
 - `docs/`
 - `.github/ISSUE_TEMPLATE/`
 
-## Board drafts
+## Board items
 
-A project-board draft item is not an issue. Running `/to-spec` or `/to-tickets`
-on it, or claiming it, makes it one
-([ADR 0024](../adr/0024-committing-to-work-creates-the-issue.md)); it is ready
-once its body meets the gate.
+Every board item is an issue
+([ADR 0026](../adr/0026-every-board-item-is-an-issue.md)), but an issue is not
+automatically ready. It passes the gate once it is labelled `ready-for-agent`, its
+body is a spec, ticket or triage brief, and it is not labelled `blocked`.
 
 ## Exemption details
 
