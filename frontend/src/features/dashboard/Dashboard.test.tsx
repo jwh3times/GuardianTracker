@@ -2,7 +2,7 @@ import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { act, screen, waitFor } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { API, sampleWeekly, server } from "../../test/testServer";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { Dashboard } from "./Dashboard";

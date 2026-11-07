@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { API, sampleUser, server } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { queryClient } from "./api";

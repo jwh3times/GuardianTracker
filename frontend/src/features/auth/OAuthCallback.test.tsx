@@ -4,8 +4,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { API, sampleUser, server } from "../../test/testServer";
+import { observeSentRequests } from "../../test/sentRequests";
 import { AuthProvider } from "../../contexts/AuthContext";
 import { OAuthCallback } from "./OAuthCallback";
 
@@ -30,10 +31,11 @@ describe("OAuthCallback", () => {
   it("submits the auth code exactly once under StrictMode", async () => {
     let callbackPosts = 0;
     let callbackCredentials: RequestCredentials | undefined;
+    const observed = observeSentRequests();
     server.use(
       http.post(`${API}/api/auth/bungie/callback`, ({ request }) => {
         callbackPosts++;
-        callbackCredentials = request.credentials;
+        callbackCredentials = observed.credentials(request);
         return HttpResponse.json({
           token: "new-token",
           user: sampleUser,

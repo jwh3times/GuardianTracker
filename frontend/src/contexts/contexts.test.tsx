@@ -2,7 +2,7 @@ import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { http, HttpResponse } from "msw";
+import { http, HttpResponse } from "msw/http";
 import { API, sampleUser, server } from "../test/testServer";
 import { browserSessionClient } from "../lib/browserSessionBrowser";
 import { AuthProvider, useAuth } from "./AuthContext";
