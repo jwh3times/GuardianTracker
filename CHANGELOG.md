@@ -14,6 +14,34 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.67] - 2026-11-06
+
+### Changed
+
+- Frontend unit tests move from MSW 2 to MSW 3 (`msw` 3.0.4). Handlers import
+  from `msw/http` and `msw/utils/delay`, every test runs inside its own server
+  boundary, and an unhandled request still fails the test. Because an MSW 3
+  handler in Node sees a request rebuilt from the socket, tests that check
+  cancellation or credentials now read what the app passed to `fetch` through
+  the `observeSentRequests` test helper. Mutation checks confirmed each
+  rewritten test still fails when the abort or credentials code it guards
+  breaks.
+- The Vitest setup turns HTTP keep-alive off through undici's global
+  dispatcher, and `undici` is now a direct frontend devDependency. This works
+  around an MSW interceptor bug (mswjs/interceptors#862) that let a request
+  on a reused socket reach the real network and fail order-dependent tests.
+  Removing it once upstream fixes the bug is tracked in #473. The app itself
+  is unchanged.
+
+## [1.18.66] - 2026-11-06
+
+### Changed
+
+- Bumped `@tanstack/react-query` from 5.105.1 to 5.105.3,
+  `@tailwindcss/postcss` and `tailwindcss` from 4.3.3 to 4.3.4, and `vitest`
+  and `@vitest/coverage-v8` from 5.0.5 to 5.1.0 in `frontend/` (Dependabot,
+  #463).
+
 ## [1.18.65] - 2026-11-06
 
 ### Changed
@@ -2209,7 +2237,9 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.65...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.67...HEAD
+[1.18.67]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.66...v1.18.67
+[1.18.66]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.65...v1.18.66
 [1.18.65]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.64...v1.18.65
 [1.18.64]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.63...v1.18.64
 [1.18.63]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.62...v1.18.63
