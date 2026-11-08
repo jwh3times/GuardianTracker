@@ -14,6 +14,6 @@
     "test:policy": "node --test scripts/sync-agents.test.mjs scripts/lint-agent-neutrality.test.mjs scripts/sync-image-pins.test.mjs scripts/workflow-pins.test.mjs scripts/node-version-policy.test.mjs scripts/postgres-pin-policy.test.mjs scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/check-docs.test.mjs scripts/check-skills.test.mjs scripts/jest-dom-shim-policy.test.mjs scripts/changelog-footer-policy.test.mjs scripts/go-toolchain-policy.test.mjs scripts/board-blockers.test.mjs scripts/minikube-startup.test.mjs",
     "sync:image-pins": "node scripts/sync-image-pins.mjs",
     "test:go-toolchain-policy": "node --test scripts/go-toolchain-policy.test.mjs",
-    "test:workspace-portability": "node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs"
+    "test:workspace-portability": "node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/minikube-startup.test.mjs"
   }
 }

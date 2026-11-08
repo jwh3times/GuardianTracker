@@ -4,6 +4,26 @@
 Write-Host "=== Guardian Tracker Startup Script ===" -ForegroundColor Green
 Write-Host "Starting full deployment process..." -ForegroundColor Yellow
 
+# Returns the name and container runtime of the profile `minikube start` would
+# use (the active one, else "minikube"), or $null when there is none or the
+# list cannot be read.
+function Get-MinikubeProfileRuntime {
+    $profileJson = minikube profile list -o json 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $profileJson) { return $null }
+    try {
+        $profileList = ($profileJson | Out-String) | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+    $knownProfiles = @(@($profileList.valid) + @($profileList.invalid) | Where-Object { $_ })
+    $activeProfile = @($knownProfiles | Where-Object { $_.Active }) | Select-Object -First 1
+    if (-not $activeProfile) {
+        $activeProfile = @($knownProfiles | Where-Object { $_.Name -eq "minikube" }) | Select-Object -First 1
+    }
+    if (-not ($activeProfile -and $activeProfile.Config -and $activeProfile.Config.KubernetesConfig)) { return $null }
+    return @{ Name = $activeProfile.Name; Runtime = $activeProfile.Config.KubernetesConfig.ContainerRuntime }
+}
+
 # Step 1: Start Minikube
 Write-Host "`n1. Starting Minikube..." -ForegroundColor Cyan
 try {
@@ -11,27 +31,11 @@ try {
     # below cannot change it. Refuse one on another runtime instead of building
     # into the wrong daemon. If the list cannot be read, the docker-env check in
     # step 2 still stops the run before any build.
-    $profileJson = minikube profile list -o json 2>$null
-    if ($LASTEXITCODE -eq 0 -and $profileJson) {
-        try {
-            $profileList = ($profileJson | Out-String) | ConvertFrom-Json
-        } catch {
-            $profileList = $null
-        }
-        $knownProfiles = @(@($profileList.valid) + @($profileList.invalid) | Where-Object { $_ })
-        $currentProfile = @($knownProfiles | Where-Object { $_.Active }) | Select-Object -First 1
-        if (-not $currentProfile) {
-            $currentProfile = @($knownProfiles | Where-Object { $_.Name -eq "minikube" }) | Select-Object -First 1
-        }
-        $runtime = $null
-        if ($currentProfile -and $currentProfile.Config -and $currentProfile.Config.KubernetesConfig) {
-            $runtime = $currentProfile.Config.KubernetesConfig.ContainerRuntime
-        }
-        if ($runtime -and $runtime -ne "docker") {
-            Write-Host "   ERROR: Minikube profile '$($currentProfile.Name)' uses the $runtime runtime, but this script needs the Docker runtime" -ForegroundColor Red
-            Write-Host "   Recreate it with 'minikube delete' (this deletes the local cluster), then rerun this script." -ForegroundColor Red
-            exit 1
-        }
+    $existingProfile = Get-MinikubeProfileRuntime
+    if ($existingProfile -and $existingProfile.Runtime -and $existingProfile.Runtime -ne "docker") {
+        Write-Host "   ERROR: Minikube profile '$($existingProfile.Name)' uses the $($existingProfile.Runtime) runtime, but this script needs the Docker runtime" -ForegroundColor Red
+        Write-Host "   Recreate it with 'minikube delete' (this deletes the local cluster), then rerun this script." -ForegroundColor Red
+        exit 1
     }
 
     $minikubeStatus = minikube status 2>$null

@@ -341,9 +341,9 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    Bot-authored PRs are exempt; `/ship` backfills their entries.
 
 The workflow also runs **Test Workspace Portability (Windows)** as a non-required
-validation job. It executes the portability suite on `windows-latest` under both
-Windows PowerShell 5.1 and PowerShell 7; the portability job is not a protected
-branch check.
+validation job. It executes the portability suite and the Minikube startup test on
+`windows-latest` under both Windows PowerShell 5.1 and PowerShell 7; the
+portability job is not a protected branch check.
 
 `.github/workflows/browser.yml` adds **Browser E2E + Axe**, a required check
 promoted after exceeding ten consecutive clean runs, and the advisory **Browser
