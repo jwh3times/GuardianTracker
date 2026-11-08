@@ -28,8 +28,14 @@ cd k8s
 .\shutdown.ps1    # tears everything down
 ```
 
-`startup.ps1` calls `minikube docker-env --shell powershell | Invoke-Expression`
-before building, rebuilds with `--pull --no-cache`, and explicitly restarts both
+`startup.ps1` starts a missing or stopped cluster with
+`minikube start --container-runtime=docker`, because Minikube v1.39 defaults new
+clusters to containerd, where `minikube docker-env` fails on Windows. It refuses
+an existing profile on another runtime (read from `minikube profile list -o json`,
+`Config.KubernetesConfig.ContainerRuntime`) and tells the user to `minikube delete`
+it; never delete a profile without the user's approval. It runs
+`minikube docker-env --shell powershell` and stops if that fails, then applies the
+output with `Invoke-Expression`. It rebuilds with `--pull --no-cache`, and explicitly restarts both
 deployments when applying their manifests did not change the pod template. Newly
 created deployments and pod-template changes already consume the rebuilt images
 and are not restarted again. Always build in Minikube's Docker context or the
@@ -104,17 +110,23 @@ kubectl rollout restart deployment/api-service
 
 ## Port forwarding
 
-The frontend is accessed via kubectl port-forward to `localhost:5273`:
+The browser reaches the frontend on `localhost:5273` and calls the API directly
+on `localhost:8081`. The api-service Service is ClusterIP, so both need a forward:
 
 ```powershell
 Start-Job -ScriptBlock { kubectl port-forward service/frontend 5273:80 }
+Start-Job -ScriptBlock { kubectl port-forward service/api-service 8081:8081 }
 ```
 
-`startup.ps1` starts this automatically. Access the app at **http://localhost:5273**.
+`startup.ps1` starts both automatically and `shutdown.ps1` stops them. The jobs
+live only in the PowerShell session that started them. Access the app at
+**http://localhost:5273**.
 
 ## Building images
 
-Images must be built inside Minikube's Docker daemon:
+Images must be built inside Minikube's Docker daemon, which needs a cluster on
+the Docker runtime. If `minikube docker-env` prints an error, stop: the pipe below
+does not fail, and the builds would land on the host's daemon.
 
 ```powershell
 & minikube docker-env --shell powershell | Invoke-Expression

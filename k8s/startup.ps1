@@ -7,12 +7,42 @@ Write-Host "Starting full deployment process..." -ForegroundColor Yellow
 # Step 1: Start Minikube
 Write-Host "`n1. Starting Minikube..." -ForegroundColor Cyan
 try {
+    # An existing profile keeps the runtime it was created with; the start flag
+    # below cannot change it. Refuse one on another runtime instead of building
+    # into the wrong daemon. If the list cannot be read, the docker-env check in
+    # step 2 still stops the run before any build.
+    $profileJson = minikube profile list -o json 2>$null
+    if ($LASTEXITCODE -eq 0 -and $profileJson) {
+        try {
+            $profileList = ($profileJson | Out-String) | ConvertFrom-Json
+        } catch {
+            $profileList = $null
+        }
+        $knownProfiles = @(@($profileList.valid) + @($profileList.invalid) | Where-Object { $_ })
+        $currentProfile = @($knownProfiles | Where-Object { $_.Active }) | Select-Object -First 1
+        if (-not $currentProfile) {
+            $currentProfile = @($knownProfiles | Where-Object { $_.Name -eq "minikube" }) | Select-Object -First 1
+        }
+        $runtime = $null
+        if ($currentProfile -and $currentProfile.Config -and $currentProfile.Config.KubernetesConfig) {
+            $runtime = $currentProfile.Config.KubernetesConfig.ContainerRuntime
+        }
+        if ($runtime -and $runtime -ne "docker") {
+            Write-Host "   ERROR: Minikube profile '$($currentProfile.Name)' uses the $runtime runtime, but this script needs the Docker runtime" -ForegroundColor Red
+            Write-Host "   Recreate it with 'minikube delete' (this deletes the local cluster), then rerun this script." -ForegroundColor Red
+            exit 1
+        }
+    }
+
     $minikubeStatus = minikube status 2>$null
     if ($LASTEXITCODE -eq 0 -and $minikubeStatus -match "Running") {
         Write-Host "   Minikube is already running" -ForegroundColor Green
     } else {
         Write-Host "   Starting Minikube cluster..." -ForegroundColor Yellow
-        minikube start
+        # Images are built into Minikube's Docker daemon (imagePullPolicy:
+        # Never), which needs the Docker runtime. Minikube v1.39 defaults new
+        # clusters to containerd.
+        minikube start --container-runtime=docker
         if ($LASTEXITCODE -ne 0) {
             Write-Host "   ERROR: Failed to start Minikube" -ForegroundColor Red
             exit 1
@@ -29,7 +59,15 @@ Write-Host "`n2. Building Docker images..." -ForegroundColor Cyan
 
 # Set Docker environment to use Minikube's Docker daemon
 Write-Host "   Setting Docker environment to Minikube..." -ForegroundColor Yellow
-& minikube docker-env --shell powershell | Invoke-Expression
+# Run the output only after docker-env succeeds. Otherwise the builds below fall
+# through to the host's Docker daemon, and the pods can never find the images.
+$dockerEnv = & minikube docker-env --shell powershell
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   ERROR: 'minikube docker-env' failed, so images cannot be built into Minikube" -ForegroundColor Red
+    Write-Host "   The cluster must use the Docker runtime; see k8s/README.md troubleshooting." -ForegroundColor Red
+    exit 1
+}
+$dockerEnv | Out-String | Invoke-Expression
 
 $services = @(
     @{Name="api-service"; Path="../backend/api-service"; Tag="guardian-tracker/api-service:latest"},

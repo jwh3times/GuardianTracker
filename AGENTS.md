@@ -305,7 +305,9 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    and enforces the repository's workflow-action, Go security-tool, Node-version,
    PostgreSQL-image, workspace-portability, safe main-branch synchronization, local documentation-link, jest-dom-shim, and
    changelog-footer policies, and tests the parsing behind `npm run board:blockers`
-   (which itself reads the private board locally, not in CI). The Node policy keeps
+   (which itself reads the private board locally, not in CI). It also runs
+   `k8s/startup.ps1`'s cluster start-up against fake `minikube`, `docker` and
+   `kubectl` executables, since no CI job runs Minikube. The Node policy keeps
    `.nvmrc`, both workflows, all three frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as
