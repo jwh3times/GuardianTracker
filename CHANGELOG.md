@@ -14,6 +14,34 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.68] - 2026-11-08
+
+### Fixed
+
+- The Minikube startup script (`k8s/startup.ps1`) works again from a clean
+  state. Minikube v1.39 creates new clusters with the containerd runtime, where
+  `minikube docker-env` fails on Windows. The script ignored that failure and
+  built both images into the host's Docker daemon, so the pods could never
+  start. It now:
+  - starts the cluster with `--container-runtime=docker`;
+  - stops with instructions when an existing profile uses another runtime,
+    and never deletes a profile itself;
+  - stops before any build when `minikube docker-env` fails;
+  - retries a failed image build once, 15 seconds later, when it has just
+    started the cluster. For about 10 seconds after a cluster starts, build
+    steps cannot resolve hostnames, so the first package fetch failed every
+    time.
+- `k8s/README.md` now shows the runtime flag and both port-forwards, frontend
+  on 5273 and API on 8081, and gains a troubleshooting entry for the wrong
+  runtime.
+
+### Changed
+
+- New fake-CLI tests run the startup script's cluster start-up against fake
+  `minikube`, `docker` and `kubectl`, since no CI job runs Minikube. They run
+  in `npm run test:policy` and in the Windows portability job under both
+  Windows PowerShell 5.1 and PowerShell 7.
+
 ## [1.18.67] - 2026-11-06
 
 ### Changed
@@ -2237,7 +2265,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.67...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.68...HEAD
+[1.18.68]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.67...v1.18.68
 [1.18.67]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.66...v1.18.67
 [1.18.66]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.65...v1.18.66
 [1.18.65]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.64...v1.18.65

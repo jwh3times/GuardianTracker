@@ -296,8 +296,12 @@ cd k8s
 ./startup.ps1
 ```
 
-The startup script rebuilds both application images with `--pull --no-cache` in
-Minikube's Docker daemon. If applying a Deployment did not change its pod
+The startup script starts Minikube with the Docker runtime when no cluster is
+running, and stops if an existing profile was created with another runtime
+(Minikube v1.39 creates new clusters with containerd by default); see
+[k8s/README.md → Troubleshooting](./k8s/README.md#troubleshooting). It rebuilds
+both application images with `--pull --no-cache` in Minikube's Docker daemon. If
+applying a Deployment did not change its pod
 template, the script restarts it so a reused local tag cannot leave old pods
 running. Newly created deployments and pod-template changes already consume the
 rebuilt images and are not restarted a second time.
@@ -358,8 +362,10 @@ Windows workspace portability (from the repository root):
 npm run test:workspace-portability
 ```
 
-This exercises the bootstrap, secret-restoration, and status helpers with local
-fixtures. CI runs the same suite on Windows PowerShell 5.1 and PowerShell 7.
+This exercises the bootstrap, secret-restoration, and status helpers, and
+`k8s/startup.ps1`'s Minikube start-up against fake `minikube`, `docker`, and
+`kubectl` executables, with local fixtures. CI runs the same suite on Windows
+PowerShell 5.1 and PowerShell 7.
 
 Repository policy tests and agent-config checks (repository root), the same
 commands the `Format Check` CI job runs:

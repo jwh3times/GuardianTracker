@@ -104,7 +104,11 @@ volume and `restart: "no"`; Playwright owns the other browser-test processes.
 
 ## Building for Minikube
 
-Images must be built inside Minikube's Docker daemon:
+Images must be built inside Minikube's Docker daemon, which needs a cluster on
+the Docker runtime (`minikube start --container-runtime=docker`; Minikube v1.39
+defaults new clusters to containerd). If `minikube docker-env` prints an error,
+stop: the pipe below does not fail, and the builds would land on the host's
+daemon. See `kubernetes-infrastructure.md` for runtime checks.
 
 ```powershell
 # Point Docker CLI at Minikube's daemon (required before every build session)
