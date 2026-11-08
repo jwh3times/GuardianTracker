@@ -47,7 +47,10 @@ Windows Command Prompt. Startup:
 1. starts Minikube with the Docker runtime when needed, and stops if the
    existing profile uses another runtime (see [Troubleshooting](#troubleshooting));
 2. selects Minikube's Docker daemon, stopping if `minikube docker-env` fails,
-   and builds both application images with `--pull --no-cache`;
+   and builds both application images with `--pull --no-cache`. When this run
+   started the cluster, a failed build is retried once after 15 seconds, because
+   build containers cannot resolve names for the first few seconds of a new
+   cluster;
 3. applies the config map, ignored local secret, deployments, services, PVC,
    and frontend disruption budget;
 4. restarts only an existing deployment whose applied pod template did not

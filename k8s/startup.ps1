@@ -1,6 +1,14 @@
 # Guardian Tracker - Full Startup Script
 # This script starts Minikube, builds Docker images, deploys all services, and sets up port forwarding
 
+param(
+    # How long to wait before retrying an image build that failed right after
+    # this run started the cluster. The tests set it to 0.
+    [int]$BuildRetryDelaySeconds = 15
+)
+
+$startedCluster = $false
+
 Write-Host "=== Guardian Tracker Startup Script ===" -ForegroundColor Green
 Write-Host "Starting full deployment process..." -ForegroundColor Yellow
 
@@ -51,6 +59,7 @@ try {
             Write-Host "   ERROR: Failed to start Minikube" -ForegroundColor Red
             exit 1
         }
+        $startedCluster = $true
         Write-Host "   Minikube started successfully" -ForegroundColor Green
     }
 } catch {
@@ -83,6 +92,14 @@ foreach ($service in $services) {
     Push-Location $service.Path
     try {
         docker build --pull --no-cache -t $service.Tag .
+        # For a few seconds after a cluster starts, build containers cannot
+        # resolve names, so a package fetch in the first build can fail. Retry
+        # once, only when this run started the cluster.
+        if ($LASTEXITCODE -ne 0 -and $startedCluster) {
+            Write-Host "   Build failed right after Minikube started. Retrying in $BuildRetryDelaySeconds seconds..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $BuildRetryDelaySeconds
+            docker build --pull --no-cache -t $service.Tag .
+        }
         if ($LASTEXITCODE -ne 0) {
             Write-Host "   ERROR: Failed to build $($service.Name)" -ForegroundColor Red
             Pop-Location

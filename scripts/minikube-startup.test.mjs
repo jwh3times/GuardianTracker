@@ -25,13 +25,21 @@ const powershell =
   (process.platform === "win32" ? "powershell.exe" : "pwsh");
 
 // One implementation serves all three tools. Minikube answers from the
-// scenario file; docker and kubectl fail so the script stops at its first build.
+// scenario file. docker build fails for its first scenario.buildFailures calls
+// (all of them by default), and kubectl always fails, so the script stops
+// before it deploys anything.
 const fakeCli = `
 import { appendFileSync, readFileSync } from "node:fs";
 const [tool, ...args] = process.argv.slice(2);
 appendFileSync(process.env.FAKE_CLI_LOG, [tool, ...args].join(" ") + "\\n");
 const scenario = JSON.parse(readFileSync(process.env.FAKE_CLI_SCENARIO, "utf8"));
 const command = args.join(" ");
+if (tool === "docker" && command.startsWith("build")) {
+  const buildsSoFar = readFileSync(process.env.FAKE_CLI_LOG, "utf8")
+    .split("\\n")
+    .filter((line) => line.startsWith("docker build")).length;
+  process.exit(buildsSoFar <= (scenario.buildFailures ?? 99) ? 1 : 0);
+}
 if (tool !== "minikube") process.exit(1);
 if (command.startsWith("profile list")) {
   process.stdout.write(JSON.stringify({ invalid: [], valid: scenario.profiles }));
@@ -113,6 +121,8 @@ function runStartup(scenario) {
         "Bypass",
         "-File",
         startupScript,
+        "-BuildRetryDelaySeconds",
+        "0",
       ],
       { cwd: k8sDirectory, encoding: "utf8", env, timeout: 60_000 },
     );
@@ -144,7 +154,29 @@ test("a fresh cluster is created with the Docker runtime", () => {
     run.calls.includes("minikube start --container-runtime=docker"),
     `expected a Docker-runtime start, got:\n${run.calls.join("\n")}\n${run.output}`,
   );
-  assert.equal(builds(run.calls).length, 1, run.output);
+  assert.ok(builds(run.calls).length > 0, run.output);
+});
+
+// A newly started cluster cannot resolve names from build containers for a few
+// seconds, so the first build after a start can fail on its package fetch.
+test("a build that fails right after starting the cluster is retried once", () => {
+  const run = runStartup({ profiles: [], dockerEnv: "ok", buildFailures: 1 });
+  const apiBuilds = builds(run.calls).filter((call) =>
+    call.includes("guardian-tracker/api-service"),
+  );
+  const frontendBuilds = builds(run.calls).filter((call) =>
+    call.includes("guardian-tracker/frontend"),
+  );
+  assert.equal(apiBuilds.length, 2, run.output);
+  assert.equal(frontendBuilds.length, 1, run.output);
+  assert.match(run.output, /Retrying/);
+});
+
+test("a build that keeps failing after a start stops after one retry", () => {
+  const run = runStartup({ profiles: [], dockerEnv: "ok" });
+  assert.notEqual(run.status, 0, run.output);
+  assert.equal(builds(run.calls).length, 2, run.output);
+  assert.match(run.output, /Failed to build api-service/);
 });
 
 test("a failed docker-env stops startup before any image build", () => {

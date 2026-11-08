@@ -32,7 +32,11 @@ an existing profile on another runtime (read from `minikube profile list -o json
 `Config.KubernetesConfig.ContainerRuntime`) and tells the user to `minikube delete`
 it; never delete a profile without the user's approval. It runs
 `minikube docker-env --shell powershell` and stops if that fails, then applies the
-output with `Invoke-Expression`. It rebuilds with `--pull --no-cache`, and explicitly restarts both
+output with `Invoke-Expression`. It rebuilds with `--pull --no-cache`; when it
+started the cluster itself, it retries a failed build once after
+`-BuildRetryDelaySeconds` (15), because for about 10 seconds after a new cluster
+starts, build containers cannot resolve names (image pulls still work), and
+`apk add` fails. It explicitly restarts both
 deployments when applying their manifests did not change the pod template. Newly
 created deployments and pod-template changes already consume the rebuilt images
 and are not restarted again. Always build in Minikube's Docker context or the
