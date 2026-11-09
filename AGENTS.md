@@ -170,7 +170,12 @@ Dev-validation only — runs `GO_ENV: development` with no Postgres (in-memory t
 The startup script rebuilds both application images in Minikube with
 `--pull --no-cache`; because the Deployments use local images with
 `imagePullPolicy: Never`, it restarts only an existing Deployment whose applied
-pod template did not already trigger a rollout.
+pod template did not already trigger a rollout. Those builds go into Minikube's
+Docker daemon, so the script creates new clusters with
+`--container-runtime=docker` and stops before building when the existing profile
+uses another runtime (Minikube defaults new clusters to containerd) or
+`minikube docker-env` fails; see
+[k8s/README.md troubleshooting](./k8s/README.md#troubleshooting).
 
 ### Option C: Individual services
 

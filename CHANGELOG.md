@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.69] - 2026-11-09
+
+### Changed
+
+- `AGENTS.md` now says, in its Minikube setup section, that `k8s/startup.ps1`
+  needs a Docker-runtime profile: it creates new clusters with
+  `--container-runtime=docker` and stops before building when an existing
+  profile uses another runtime or `minikube docker-env` fails. Agents that read
+  only `AGENTS.md` previously had no explanation for the startup script
+  refusing a cluster made by a plain `minikube start`.
+
 ## [1.18.68] - 2026-11-08
 
 ### Fixed
@@ -2265,7 +2276,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.68...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.69...HEAD
+[1.18.69]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.68...v1.18.69
 [1.18.68]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.67...v1.18.68
 [1.18.67]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.66...v1.18.67
 [1.18.66]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.65...v1.18.66
