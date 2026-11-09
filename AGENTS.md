@@ -167,17 +167,15 @@ cd k8s
 ```
 
 Dev-validation only — runs `GO_ENV: development` with no Postgres (in-memory token store, no wishlist/preferences persistence).
-The startup script needs a Minikube profile on the Docker runtime, because it
-builds the images into Minikube's Docker daemon: it creates a new cluster with
-`--container-runtime=docker`, and stops before building if the existing profile
-uses another runtime or `minikube docker-env` fails. Minikube v1.39 creates
-clusters with containerd unless told otherwise, so a cluster from a plain
-`minikube start` is refused; see
-[k8s/README.md troubleshooting](./k8s/README.md#troubleshooting).
-It rebuilds both application images in Minikube with
+The startup script rebuilds both application images in Minikube with
 `--pull --no-cache`; because the Deployments use local images with
 `imagePullPolicy: Never`, it restarts only an existing Deployment whose applied
-pod template did not already trigger a rollout.
+pod template did not already trigger a rollout. Those builds go into Minikube's
+Docker daemon, so the script creates new clusters with
+`--container-runtime=docker` and stops before building when the existing profile
+uses another runtime (Minikube defaults new clusters to containerd) or
+`minikube docker-env` fails; see
+[k8s/README.md troubleshooting](./k8s/README.md#troubleshooting).
 
 ### Option C: Individual services
 
