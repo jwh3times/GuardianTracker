@@ -1,22 +1,65 @@
 # Guardian Tracker - Full Startup Script
 # This script starts Minikube, builds Docker images, deploys all services, and sets up port forwarding
 
+param(
+    # How long to wait before retrying an image build that failed right after
+    # this run started the cluster. The tests set it to 0.
+    [int]$BuildRetryDelaySeconds = 15
+)
+
+$startedCluster = $false
+
 Write-Host "=== Guardian Tracker Startup Script ===" -ForegroundColor Green
 Write-Host "Starting full deployment process..." -ForegroundColor Yellow
+
+# Returns the name and container runtime of the profile `minikube start` would
+# use (the active one, else "minikube"), or $null when there is none or the
+# list cannot be read.
+function Get-MinikubeProfileRuntime {
+    $profileJson = minikube profile list -o json 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $profileJson) { return $null }
+    try {
+        $profileList = ($profileJson | Out-String) | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+    $knownProfiles = @(@($profileList.valid) + @($profileList.invalid) | Where-Object { $_ })
+    $activeProfile = @($knownProfiles | Where-Object { $_.Active }) | Select-Object -First 1
+    if (-not $activeProfile) {
+        $activeProfile = @($knownProfiles | Where-Object { $_.Name -eq "minikube" }) | Select-Object -First 1
+    }
+    if (-not ($activeProfile -and $activeProfile.Config -and $activeProfile.Config.KubernetesConfig)) { return $null }
+    return @{ Name = $activeProfile.Name; Runtime = $activeProfile.Config.KubernetesConfig.ContainerRuntime }
+}
 
 # Step 1: Start Minikube
 Write-Host "`n1. Starting Minikube..." -ForegroundColor Cyan
 try {
+    # An existing profile keeps the runtime it was created with; the start flag
+    # below cannot change it. Refuse one on another runtime instead of building
+    # into the wrong daemon. If the list cannot be read, the docker-env check in
+    # step 2 still stops the run before any build.
+    $existingProfile = Get-MinikubeProfileRuntime
+    if ($existingProfile -and $existingProfile.Runtime -and $existingProfile.Runtime -ne "docker") {
+        Write-Host "   ERROR: Minikube profile '$($existingProfile.Name)' uses the $($existingProfile.Runtime) runtime, but this script needs the Docker runtime" -ForegroundColor Red
+        Write-Host "   Recreate it with 'minikube delete' (this deletes the local cluster), then rerun this script." -ForegroundColor Red
+        exit 1
+    }
+
     $minikubeStatus = minikube status 2>$null
     if ($LASTEXITCODE -eq 0 -and $minikubeStatus -match "Running") {
         Write-Host "   Minikube is already running" -ForegroundColor Green
     } else {
         Write-Host "   Starting Minikube cluster..." -ForegroundColor Yellow
-        minikube start
+        # Images are built into Minikube's Docker daemon (imagePullPolicy:
+        # Never), which needs the Docker runtime. Minikube v1.39 defaults new
+        # clusters to containerd.
+        minikube start --container-runtime=docker
         if ($LASTEXITCODE -ne 0) {
             Write-Host "   ERROR: Failed to start Minikube" -ForegroundColor Red
             exit 1
         }
+        $startedCluster = $true
         Write-Host "   Minikube started successfully" -ForegroundColor Green
     }
 } catch {
@@ -29,7 +72,15 @@ Write-Host "`n2. Building Docker images..." -ForegroundColor Cyan
 
 # Set Docker environment to use Minikube's Docker daemon
 Write-Host "   Setting Docker environment to Minikube..." -ForegroundColor Yellow
-& minikube docker-env --shell powershell | Invoke-Expression
+# Run the output only after docker-env succeeds. Otherwise the builds below fall
+# through to the host's Docker daemon, and the pods can never find the images.
+$dockerEnv = & minikube docker-env --shell powershell
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "   ERROR: 'minikube docker-env' failed, so images cannot be built into Minikube" -ForegroundColor Red
+    Write-Host "   The cluster must use the Docker runtime; see k8s/README.md troubleshooting." -ForegroundColor Red
+    exit 1
+}
+$dockerEnv | Out-String | Invoke-Expression
 
 $services = @(
     @{Name="api-service"; Path="../backend/api-service"; Tag="guardian-tracker/api-service:latest"},
@@ -41,6 +92,14 @@ foreach ($service in $services) {
     Push-Location $service.Path
     try {
         docker build --pull --no-cache -t $service.Tag .
+        # For a few seconds after a cluster starts, build containers cannot
+        # resolve names, so a package fetch in the first build can fail. Retry
+        # once, only when this run started the cluster.
+        if ($LASTEXITCODE -ne 0 -and $startedCluster) {
+            Write-Host "   Build failed right after Minikube started. Retrying in $BuildRetryDelaySeconds seconds..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $BuildRetryDelaySeconds
+            docker build --pull --no-cache -t $service.Tag .
+        }
         if ($LASTEXITCODE -ne 0) {
             Write-Host "   ERROR: Failed to build $($service.Name)" -ForegroundColor Red
             Pop-Location

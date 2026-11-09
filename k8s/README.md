@@ -44,9 +44,13 @@ From this directory:
 The `.bat` wrappers run the same scripts for users who prefer Explorer or
 Windows Command Prompt. Startup:
 
-1. starts Minikube when needed;
-2. selects Minikube's Docker daemon and builds both application images with
-   `--pull --no-cache`;
+1. starts Minikube with the Docker runtime when needed, and stops if the
+   existing profile uses another runtime (see [Troubleshooting](#troubleshooting));
+2. selects Minikube's Docker daemon, stopping if `minikube docker-env` fails,
+   and builds both application images with `--pull --no-cache`. When this run
+   started the cluster, a failed build is retried once after 15 seconds, because
+   build containers cannot resolve names for the first few seconds of a new
+   cluster;
 3. applies the config map, ignored local secret, deployments, services, PVC,
    and frontend disruption budget;
 4. restarts only an existing deployment whose applied pod template did not
@@ -87,7 +91,7 @@ The scripts are the canonical workflow. These commands are useful when isolating
 a failed step:
 
 ```powershell
-minikube start
+minikube start --container-runtime=docker
 & minikube docker-env --shell powershell | Invoke-Expression
 
 # Run these builds from the repository root.
@@ -101,8 +105,15 @@ kubectl apply -f k8s/frontend.yaml
 
 kubectl rollout status deployment/api-service --timeout=300s
 kubectl rollout status deployment/frontend --timeout=300s
+
+# Each forward blocks; run them in separate terminals.
 kubectl port-forward service/frontend 5273:80
+kubectl port-forward service/api-service 8081:8081
 ```
+
+If `minikube docker-env` prints an error, stop there. Piping its output into
+`Invoke-Expression` does not stop the shell, which stays on the host's Docker
+daemon, so the builds land where the pods cannot see them.
 
 Both deployments use `imagePullPolicy: Never` because their images exist only
 inside Minikube's Docker daemon. After rebuilding a reused tag, restart an
@@ -113,10 +124,19 @@ pod template.
 
 - Missing-secret errors: confirm `api-service-secret.yaml` exists in this
   directory and contains all three keys from the committed example.
-- Image pull or `ImagePullBackOff`: rerun `minikube docker-env` in the current
-  shell, rebuild, and confirm the deployment uses `imagePullPolicy: Never`.
-- Port-forward failure: check whether 5273 is already in use, then run
-  `kubectl port-forward service/frontend 5273:80` manually.
+- Wrong runtime: the images are built into Minikube's Docker daemon, so the
+  cluster must use the Docker runtime. Minikube v1.39 creates new clusters with
+  containerd unless told otherwise, and an existing profile keeps the runtime it
+  was created with. `minikube profile list` shows it in the `RUNTIME` column. To
+  change it, run `minikube delete`, which deletes the local cluster and its
+  images, then rerun `startup.ps1`.
+- `minikube docker-env` failure, or `ErrImageNeverPull`, `ErrImagePull` or
+  `ImagePullBackOff`: check the runtime as above. Otherwise rerun
+  `minikube docker-env` in the current shell, rebuild, and confirm the deployment
+  uses `imagePullPolicy: Never`.
+- Port-forward failure: check whether 5273 or 8081 is already in use, then run
+  `kubectl port-forward service/frontend 5273:80` and
+  `kubectl port-forward service/api-service 8081:8081` manually.
 - OAuth failure: confirm the tunnel origin and callback match both the config map
   and Bungie application exactly, then restart the API deployment.
 - Pod failure: use `kubectl get pods`, `kubectl describe pod <name>`, and

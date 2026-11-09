@@ -117,13 +117,13 @@ jobs:
         shell: powershell
         run: |
           $env:PORTABILITY_POWERSHELL = "powershell.exe"
-          node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs
+          node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/minikube-startup.test.mjs
 
       - name: Test PowerShell 7
         shell: pwsh
         run: |
           $env:PORTABILITY_POWERSHELL = "pwsh"
-          node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs
+          node --test scripts/workspace-portability.test.mjs scripts/sync-main.test.mjs scripts/bootstrap-private.test.mjs scripts/minikube-startup.test.mjs
 
   test-frontend:
     name: Test Frontend
