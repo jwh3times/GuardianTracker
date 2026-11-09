@@ -14,6 +14,64 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.75] - 2026-11-09
+
+### Changed
+
+- Frontend dependencies move to `@tanstack/react-query` 5.106.1,
+  `@tanstack/react-virtual` 3.14.26, `@playwright/test` 1.65.0, `oxlint`
+  1.91.0, `oxlint-tsgolint` 7.0.2006 and `vite` 8.3.6 (Dependabot, finished by
+  hand).
+- The Playwright browser-test image is re-pinned to `v1.65.0-noble` to match
+  the new `@playwright/test`. Dependabot's npm update leaves that Docker pin
+  behind, so the visual suite could not launch its browser.
+- The Dashboard and Guardian visual baselines are regenerated. Playwright
+  1.65's Chromium draws the small monospace labels a few pixels narrower,
+  about 1% of each page; layout and headings are unchanged, and the other
+  eight baselines still match.
+- The changelog now records the releases v1.18.70 to v1.18.74, which merged
+  without entries.
+
+## [1.18.74] - 2026-11-09
+
+### Changed
+
+- The frontend `node` 26.13.0 images are re-pinned to current digests: the
+  Alpine image in `frontend/Dockerfile` and `frontend/Dockerfile.dev`
+  (Dependabot), and the Debian slim image in `frontend/Dockerfile.playwright`,
+  which Dependabot does not manage (by hand, with `npm run sync:image-pins`).
+
+## [1.18.73] - 2026-11-09
+
+### Changed
+
+- Bumped `jsdom`, the Vitest test environment, from 30.1.3 to 31.0.0 in
+  `frontend/` (Dependabot). Its breaking changes are a new canvas backend,
+  which the frontend does not use, and a new CSS engine; the unit tests pass
+  unchanged. The lockfile drops the transitive packages of the old CSS
+  implementation.
+
+## [1.18.72] - 2026-11-09
+
+### Changed
+
+- Bumped `github.com/mattn/go-sqlite3` from 1.14.52 to 1.14.53 in
+  `backend/api-service/` (Dependabot).
+
+## [1.18.71] - 2026-11-09
+
+### Changed
+
+- The `golang` builder image in `backend/api-service/Dockerfile` is re-pinned
+  to a current digest of the same tag (Dependabot).
+
+## [1.18.70] - 2026-11-09
+
+### Changed
+
+- The `postgres:18.6-alpine3.24` image used by the three Compose PostgreSQL
+  services is re-pinned to a current digest of the same tag (Dependabot).
+
 ## [1.18.69] - 2026-11-09
 
 ### Changed
@@ -2276,7 +2334,13 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.69...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.75...HEAD
+[1.18.75]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.74...v1.18.75
+[1.18.74]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.73...v1.18.74
+[1.18.73]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.72...v1.18.73
+[1.18.72]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.71...v1.18.72
+[1.18.71]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.70...v1.18.71
+[1.18.70]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.69...v1.18.70
 [1.18.69]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.68...v1.18.69
 [1.18.68]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.67...v1.18.68
 [1.18.67]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.66...v1.18.67
