@@ -166,8 +166,14 @@ changing a pin; this guide owns only the coupling rules:
 - Keep the Go builder compatible with the `go` directive and `toolchain` in
   `backend/api-service/go.mod`.
 - Keep `.nvmrc`, all frontend Dockerfiles, package engine metadata, Node ambient
-  types, and their OCI digests aligned. Run
-  `node --test scripts/node-version-policy.test.mjs`.
+  types, and their OCI digests aligned.
+  `node --test scripts/node-version-policy.test.mjs` aligns versions and tags
+  only: it accepts any well-formed `@sha256:` digest, because it is the offline gate. Digests are
+  checked by `npm run sync:image-pins -- --check` (network, no Docker daemon).
+  Run it on every Dependabot `node` bump, including a green one: Dependabot's
+  `docker` ecosystem re-pins only `Dockerfile` and `Dockerfile.dev`, so a
+  digest-only bump passes every check while `Dockerfile.playwright`'s
+  `NODE_IMAGE` keeps the old digest.
 - Keep the Playwright Dockerfile image aligned with the installed
   `@playwright/test` version; the Node policy test checks both.
   Run `npm run sync:image-pins` from the repo root to fix drift in either pin:

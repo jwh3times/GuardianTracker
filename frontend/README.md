@@ -230,6 +230,12 @@ Docker daemon, and it is deliberately **not** a CI step: a required check must
 not depend on a registry being reachable. The offline policy test stays the
 gate. `npm run sync:image-pins -- --check` reports drift without writing.
 
+The policy test compares versions and tags, not digests, so a digest-only `node`
+bump (same tag, republished image) passes it. Dependabot re-pins only
+`Dockerfile` and `Dockerfile.dev`, which leaves this Dockerfile's `NODE_IMAGE`
+on the old digest with every check green. Run the `--check` form on every
+Dependabot `node` bump.
+
 A bump does not by itself invalidate the baselines — a new Chromium often
 renders identically. Regenerate only when the visual run reports actual pixel
 differences. Build the two Go test commands for Linux, then run the snapshot
