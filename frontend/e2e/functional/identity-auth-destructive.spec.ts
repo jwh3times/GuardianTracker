@@ -108,6 +108,17 @@ test("both tabs discard private data and late rollback after identity replacemen
       await route.fulfill({ json: [] });
       return;
     }
+    // The app shell reads the digest on every authenticated page (#470).
+    if (replacement && pathname.startsWith("/api/digest/")) {
+      await route.fulfill({
+        json: {
+          status: "first-visit",
+          visitStartedAt: "2026-07-18T18:00:00Z",
+          acquired: [],
+        },
+      });
+      return;
+    }
     await route.continue();
   });
   await page.goto("/wishlist");
