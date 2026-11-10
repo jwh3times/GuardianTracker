@@ -255,6 +255,8 @@ workflows. Dependabot and repository policy tests keep coupled declarations
 aligned; documentation intentionally does not cache their versions. Maintainers
 changing a pin should follow the authored Docker agent guide and run the
 repository policy suite (`npm run test:policy`) before rebuilding with `--pull --no-cache`.
+The policy suite compares versions and tags only; for the frontend `node` and
+Playwright pins, `npm run sync:image-pins -- --check` also checks digests.
 
 A tag plus digest selects the exact image contents adopted in review. Daily
 Dependabot checks still propose newer releases, so these pins support frequent

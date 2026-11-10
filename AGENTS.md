@@ -429,7 +429,10 @@ Playwright image, and the `node` pins in all three frontend Dockerfiles that
 deliberately not a CI step — a required check must not depend on a registry
 being reachable, so the offline `scripts/node-version-policy.test.mjs` remains
 the gate and now names this command when it fails. `-- --check` reports drift
-without writing.
+without writing. The policy test compares versions and tags, never digests, so a
+digest-only `node` bump passes every check while leaving
+`frontend/Dockerfile.playwright` stale; run `-- --check` on every Dependabot
+`node` bump, green or not.
 
 ### Staticcheck needs the pinned toolchain
 
