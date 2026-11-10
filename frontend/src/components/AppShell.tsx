@@ -7,6 +7,7 @@ import { ItemTile } from "./primitives";
 import { useAuth } from "../contexts/AuthContext";
 import { useCharacters } from "../contexts/CharacterContext";
 import { useFlags } from "../contexts/FlagsContext";
+import { useDigestActivity } from "../data/digest";
 import { MIN_SEARCH_LENGTH, useItemSearch } from "../data/search";
 import { useOutsideClick } from "../lib/useOutsideClick";
 import { emblemStyle } from "../lib/emblem";
@@ -243,6 +244,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { flagState, accessible, isAdmin } = useFlags();
   const [mobileNav, setMobileNav] = useState(false);
   const closeMobileNav = () => setMobileNav(false);
+
+  // Every authenticated page records visit activity (ADR 0023, #470).
+  useDigestActivity(location.pathname);
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 

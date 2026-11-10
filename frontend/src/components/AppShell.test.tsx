@@ -132,6 +132,43 @@ describe("AppShell interactions", () => {
     );
   }
 
+  it("records visit activity on a page other than the Dashboard", async () => {
+    // #470: the digest read advances ADR 0023's visit clock, so the shell —
+    // not the Dashboard panel alone — must issue it on every authenticated page.
+    const sent: string[] = [];
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, ({ params }) => {
+        sent.push(`${String(params.type)}/${String(params.id)}`);
+        return HttpResponse.json({
+          status: "ready",
+          visitStartedAt: "2026-11-09T18:00:00Z",
+          acquired: [],
+        });
+      }),
+    );
+
+    renderWithProviders(
+      <Routes>
+        <Route
+          path="/rolls"
+          element={
+            <AppShell>
+              <div>rolls-stub</div>
+            </AppShell>
+          }
+        />
+      </Routes>,
+      { route: "/rolls" },
+    );
+
+    expect(screen.getByText("rolls-stub")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(sent).toEqual([
+        `${sampleUser.membershipType}/${sampleUser.membershipId}`,
+      ]),
+    );
+  });
+
   it("renders the shell content and nav", () => {
     renderShell();
     expect(screen.getByText("shell-child")).toBeInTheDocument();

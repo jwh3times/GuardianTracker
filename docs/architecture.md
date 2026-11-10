@@ -413,7 +413,10 @@ repeated request within one visit — even after a process restart —
 reconstructs the same result instead of recomputing it.
 `GET /api/digest/:membershipType/:membershipId`
 advances the visit clock as a side effect; it reads Collections' existing
-cached analysis and forces no refresh. See
+cached analysis and forces no refresh. The authenticated app shell issues that
+read on every page — on load, on route change, and on window focus, at most
+once per five-minute freshness window — so activity anywhere in the app, not
+only on the Dashboard that displays the digest, keeps a visit open. See
 [ADR 0023](./adr/0023-since-last-visit-digest-snapshot.md).
 
 ## Request Logging
