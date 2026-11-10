@@ -14,6 +14,20 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.78] - 2026-11-10
+
+### Changed
+
+- The roadmap now records the owner's decisions on roll targets' follow-on
+  scope (#471):
+  - The mockup's "Best farm: {source}" line is dropped. The item drawer
+    already lists every acquisition source.
+  - Saving a roll target without a DIM import stays deferred.
+  - The `god-roll` feature flag stays alpha-only until public deployment is
+    decided (#468).
+
+  No behavior changes.
+
 ## [1.18.77] - 2026-11-09
 
 ### Fixed
@@ -2360,7 +2374,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.77...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.78...HEAD
+[1.18.78]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.77...v1.18.78
 [1.18.77]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.76...v1.18.77
 [1.18.76]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.75...v1.18.76
 [1.18.75]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.74...v1.18.75
