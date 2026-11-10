@@ -13,10 +13,17 @@ for consistency with `wishlist_items`, `bungie_tokens`, and
 `user_preferences`. The membership pair remains the identity the HTTP and
 service layers operate on — only the storage key differs from the sketch.
 
-Implementation note (2026-11-06): the Visit boundary below records activity on
-every page load and login, but the implementation records it only when the
-digest endpoint is called, and the Dashboard is its only caller. Recording
-activity on every authenticated page is tracked in [#470](https://github.com/jwh3times/GuardianTracker/issues/470).
+Implementation note (2026-11-09, [#470](https://github.com/jwh3times/GuardianTracker/issues/470)):
+activity is recorded by the digest read itself, which the authenticated app
+shell issues on every page — on load, on each route change, and when the window
+regains focus, each at most once per five-minute freshness window — not by
+the Dashboard alone. Login lands on an authenticated page, so it is covered by
+the same read. Within a visit the read only advances `last_activity_at` and
+re-serves the frozen result; after a gap it starts the new visit on whichever
+page loads first. No touch-only path exists: one that advanced
+`last_activity_at` without the gap check would erase a real gap and make the
+next read re-serve the previous visit's frozen digest. The five-minute window
+must stay well below the two-hour visit gap.
 
 `digest_state` also carries one additional column beyond the ADR's four,
 `current_visit_result`: the complete outcome (status, the acquired item

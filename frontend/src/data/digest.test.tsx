@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { useLocation, useNavigate } from "react-router";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw/http";
 import { server, API, sampleUser } from "../test/testServer";
 import { renderWithProviders } from "../test/renderWithProviders";
-import { useDigest } from "./digest";
+import { useDigest, useDigestActivity } from "./digest";
 import { useMembershipRefresh } from "./membershipRefresh";
 
 /**
@@ -224,5 +225,142 @@ describe("invalidation", () => {
     await waitFor(() =>
       expect(screen.getByTestId("digest")).toHaveTextContent("ready"),
     );
+  });
+});
+
+/**
+ * Visit activity (#470, ADR 0023's Visit boundary): the authenticated shell
+ * mounts `useDigestActivity` so every authenticated page — not only the
+ * Dashboard — issues the digest read that advances the backend visit clock.
+ */
+describe("visit activity", () => {
+  function ActivityProbe() {
+    const { pathname } = useLocation();
+    useDigestActivity(pathname);
+    const navigate = useNavigate();
+    return (
+      <div>
+        <div data-testid="path">{pathname}</div>
+        <button onClick={() => void navigate("/rolls")}>to rolls</button>
+        <button onClick={() => void navigate("/this-week")}>to week</button>
+      </div>
+    );
+  }
+
+  function countDigestReads() {
+    const reads = { count: 0 };
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, () => {
+        reads.count += 1;
+        return HttpResponse.json(digest());
+      }),
+    );
+    return reads;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reads the digest for the signed-in membership with no Dashboard mounted", async () => {
+    const sent: string[] = [];
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, ({ params }) => {
+        sent.push(`${String(params.type)}/${String(params.id)}`);
+        return HttpResponse.json(digest());
+      }),
+    );
+
+    renderWithProviders(<ActivityProbe />, { route: "/collections" });
+
+    await waitFor(() =>
+      expect(sent).toEqual([
+        `${sampleUser.membershipType}/${sampleUser.membershipId}`,
+      ]),
+    );
+  });
+
+  it("re-reads on a route change once the last read has gone stale", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T18:00:00Z"));
+    const reads = countDigestReads();
+
+    renderWithProviders(<ActivityProbe />, { route: "/collections" });
+    await waitFor(() => expect(reads.count).toBe(1));
+
+    vi.setSystemTime(new Date("2026-11-09T18:06:00Z"));
+    await userEvent.click(screen.getByText("to rolls"));
+    expect(screen.getByTestId("path")).toHaveTextContent("/rolls");
+
+    await waitFor(() => expect(reads.count).toBe(2));
+  });
+
+  it("does not re-read on a route change while the last read is fresh", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T18:00:00Z"));
+    const reads = countDigestReads();
+
+    renderWithProviders(<ActivityProbe />, { route: "/collections" });
+    await waitFor(() => expect(reads.count).toBe(1));
+
+    vi.setSystemTime(new Date("2026-11-09T18:04:00Z"));
+    await userEvent.click(screen.getByText("to rolls"));
+    await userEvent.click(screen.getByText("to week"));
+    expect(screen.getByTestId("path")).toHaveTextContent("/this-week");
+
+    // Give a wrongly issued read time to land before asserting it did not.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(reads.count).toBe(1);
+  });
+
+  it("shares its read with the Dashboard's digest: one request for both", async () => {
+    const reads = countDigestReads();
+
+    renderWithProviders(
+      <>
+        <ActivityProbe />
+        <DigestProbe />
+      </>,
+      { route: "/dashboard" },
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("digest")).toHaveTextContent("ready"),
+    );
+    expect(reads.count).toBe(1);
+  });
+
+  it("stays silent when the read fails", async () => {
+    let failed = false;
+    server.use(
+      http.get(`${API}/api/digest/:type/:id`, () => {
+        failed = true;
+        return HttpResponse.json(
+          { error: "Internal server error", code: "INTERNAL_ERROR" },
+          { status: 500 },
+        );
+      }),
+    );
+
+    renderWithProviders(<ActivityProbe />, { route: "/collections" });
+
+    await waitFor(() => expect(failed).toBe(true));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByTestId("path")).toHaveTextContent("/collections");
+  });
+
+  it("re-reads when the window regains focus once the last read has gone stale", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-09T18:00:00Z"));
+    const reads = countDigestReads();
+
+    renderWithProviders(<ActivityProbe />, { route: "/collections" });
+    await waitFor(() => expect(reads.count).toBe(1));
+
+    vi.setSystemTime(new Date("2026-11-09T18:06:00Z"));
+    // React Query's focus manager listens for the page becoming visible.
+    window.dispatchEvent(new Event("visibilitychange"));
+
+    await waitFor(() => expect(reads.count).toBe(2));
   });
 });

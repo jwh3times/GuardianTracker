@@ -1,5 +1,9 @@
-import { useCallback } from "react";
-import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo } from "react";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { useAuth } from "../contexts/AuthContext";
 import { apiFetch } from "../lib/api";
 import type { APIAcquiredItem, APIDigest } from "../types/api";
@@ -74,21 +78,44 @@ function toDigest(api: APIDigest): Digest {
 }
 
 /**
+ * How long a digest read stays fresh. It throttles visit-activity reads: no
+ * new read is issued while the last one is younger than this. It must stay
+ * well below the backend's two-hour visit gap (ADR 0023), or a player who keeps
+ * navigating could still be seen as away.
+ */
+const DIGEST_FRESH_MS = 5 * 60 * 1000;
+
+/**
+ * The one query definition every reader of this resource shares, so the
+ * Dashboard's display and the shell's visit-activity read are the same cache
+ * entry and never cost a second request.
+ */
+function useDigestQueryOptions() {
+  const { user } = useAuth();
+  const membershipType = user?.membershipType;
+  const membershipId = user?.membershipId;
+  return useMemo(
+    () => ({
+      queryKey: digestKey(membershipType, membershipId),
+      queryFn: () =>
+        apiFetch<APIDigest>(`/api/digest/${membershipType}/${membershipId}`),
+      enabled: membershipType != null && !!membershipId,
+      staleTime: DIGEST_FRESH_MS,
+    }),
+    [membershipType, membershipId],
+  );
+}
+
+/**
  * The since-last-visit digest for the signed-in membership.
  *
  * Takes no membership argument: it reads the current one from the session, so
  * a page cannot read another membership's digest.
  */
 export function useDigest() {
-  const { user } = useAuth();
-  const membershipType = user?.membershipType;
-  const membershipId = user?.membershipId;
-
+  const options = useDigestQueryOptions();
   const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: digestKey(membershipType, membershipId),
-    queryFn: () =>
-      apiFetch<APIDigest>(`/api/digest/${membershipType}/${membershipId}`),
-    enabled: membershipType != null && !!membershipId,
+    ...options,
     select: toDigest,
   });
 
@@ -103,4 +130,37 @@ export function useDigest() {
     error,
     retry,
   };
+}
+
+/**
+ * Records visit activity for the signed-in membership (ADR 0023's Visit
+ * boundary, #470). Mounted once by the authenticated app shell so every
+ * authenticated page — not only the Dashboard — issues the digest read: on
+ * mount, whenever `page` changes, and when the window regains focus, each
+ * only once the last read has gone stale.
+ *
+ * `page` is the current route path; this module stays router-free, so the
+ * shell passes it in.
+ *
+ * The read itself is the activity signal: within a visit the backend only
+ * advances `last_activity_at` and re-serves the frozen result; after a gap
+ * longer than the visit gap it starts the new visit on whichever page loads
+ * first. Never replace this with an unconditional touch that skips the
+ * backend's gap check — that would erase a real gap and make the next
+ * Dashboard read re-serve the previous visit's frozen digest.
+ *
+ * Returns nothing: the shell never displays the digest, so a failed read is
+ * deliberately silent. Only the Dashboard panel shows digest outcomes.
+ */
+export function useDigestActivity(page: string): void {
+  const options = useDigestQueryOptions();
+  const client = useQueryClient();
+  // The observer covers the first read and focus; the effect covers
+  // navigation. prefetchQuery skips a fresh entry, joins an in-flight read
+  // instead of starting a second one, and never throws.
+  useQuery(options);
+  useEffect(() => {
+    if (!options.enabled) return;
+    void client.prefetchQuery(options);
+  }, [client, options, page]);
 }

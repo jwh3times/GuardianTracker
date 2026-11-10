@@ -296,7 +296,12 @@ frontend/src/
                                    from `useAuth()` — and returns
                                    `{ digest, isLoading, isError, error, retry }`. Exports
                                    `invalidateDigest(client)`, which joins `membershipRefresh.ts`'s
-                                   fan-out. Read by `Dashboard.tsx`.
+                                   fan-out, and `useDigestActivity(page)`, which `AppShell` mounts with
+                                   the current path so every authenticated page issues the same
+                                   query — the read that advances the visit clock (#470) — on load,
+                                   route change, and focus, throttled by a five-minute `staleTime`;
+                                   it returns nothing, so a failed read is silent. Read by
+                                   `Dashboard.tsx`.
     rolltargets.ts                ← Roll targets (slice 5b, behind the `god-roll` flag), landed after
                                    ADR 0020's own eleven-resource list but following its pattern exactly.
                                    Two private query keys sharing one root — `["rollTargets", "list"]`
@@ -453,7 +458,9 @@ frontend/src/
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (reads data/search.ts's
                                    useItemSearch, navigates to /collections?item=<hash>); character
-                                   switcher (reads CharacterContext); flag-gated nav + admin nav link
+                                   switcher (reads CharacterContext); flag-gated nav + admin nav link;
+                                   records digest visit activity on every page (data/digest.ts's
+                                   useDigestActivity, #470)
     Brand.tsx                  ← Logo mark
     ErrorBoundary.tsx          ← App-wide error boundary
     QueryErrorPanel.tsx        ← Shared failed-fetch panel: errorState() copy + icon, the Bungie privacy
