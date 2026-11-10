@@ -14,6 +14,18 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.77] - 2026-11-09
+
+### Fixed
+
+- The Docker agent guide no longer says the Node version policy test keeps image
+  digests aligned. The test compares Node versions and image tags only and
+  accepts any well-formed digest, so a digest-only `node` bump from Dependabot
+  passed every check while `frontend/Dockerfile.playwright` kept the old
+  digest. The guide, `SETUP.md`, `frontend/README.md` and `AGENTS.md` now name
+  `npm run sync:image-pins -- --check` as the digest check to run on every
+  Dependabot `node` bump, green or not.
+
 ## [1.18.76] - 2026-11-09
 
 ### Fixed
@@ -2348,7 +2360,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.76...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.77...HEAD
+[1.18.77]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.76...v1.18.77
 [1.18.76]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.75...v1.18.76
 [1.18.75]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.74...v1.18.75
 [1.18.74]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.73...v1.18.74
