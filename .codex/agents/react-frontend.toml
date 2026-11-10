@@ -458,7 +458,9 @@ frontend/src/
   components/                  ← Shared design-system components (flat — no kit/ or ui/ subfolders)
     AppShell.tsx               ← Sidebar + top bar + mobile nav; global search (reads data/search.ts's
                                    useItemSearch, navigates to /collections?item=<hash>); character
-                                   switcher (reads CharacterContext); flag-gated nav + admin nav link
+                                   switcher (reads CharacterContext); flag-gated nav + admin nav link;
+                                   records digest visit activity on every page (data/digest.ts's
+                                   useDigestActivity, #470)
     Brand.tsx                  ← Logo mark
     ErrorBoundary.tsx          ← App-wide error boundary
     QueryErrorPanel.tsx        ← Shared failed-fetch panel: errorState() copy + icon, the Bungie privacy

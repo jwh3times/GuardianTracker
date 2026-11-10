@@ -14,6 +14,20 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.76] - 2026-11-09
+
+### Fixed
+
+- Browsing any signed-in page now keeps a visit open for the since-last-visit
+  digest. Before, only the Dashboard recorded activity, so a player who stayed
+  on Collections, Roll targets or This Week for more than two hours got a new
+  "since your last visit" digest on their next Dashboard view without having
+  left. The app now records activity when a page loads, on each route change
+  and when the window regains focus, at most once every five minutes. A real
+  gap of more than two hours still starts a new visit, now on whichever page
+  the player opens first, as ADR 0023 specifies. This removes the matching
+  Known Limitations entry.
+
 ## [1.18.75] - 2026-11-09
 
 ### Changed
@@ -2334,7 +2348,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.75...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.76...HEAD
+[1.18.76]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.75...v1.18.76
 [1.18.75]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.74...v1.18.75
 [1.18.74]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.73...v1.18.74
 [1.18.73]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.72...v1.18.73
