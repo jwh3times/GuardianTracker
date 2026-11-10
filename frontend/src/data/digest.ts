@@ -113,8 +113,9 @@ function useDigestQueryOptions() {
  * a page cannot read another membership's digest.
  */
 export function useDigest() {
+  const options = useDigestQueryOptions();
   const { data, isLoading, isError, error, refetch } = useQuery({
-    ...useDigestQueryOptions(),
+    ...options,
     select: toDigest,
   });
 
