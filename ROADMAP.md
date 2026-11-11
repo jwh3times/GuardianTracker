@@ -28,8 +28,10 @@ matching saved targets against the owned weapons a fresh Bungie profile read
 reports, a REST surface, the Roll targets page (`/rolls`, behind the
 `god-roll` flag), a per-weapon item-drawer section, and closest-owned-copy
 progress for still-chasing targets, and import provenance all exist
-**Gate:** Further scope requires an owner decision
-**Likely size:** To be decided for any follow-on work
+**Gate:** Follow-on scope decided 2026-11-10; no further work is planned. Manual
+perk authoring reopens through a new spec; a wider flag tier waits on
+[#468](https://github.com/jwh3times/GuardianTracker/issues/468)
+**Likely size:** Medium for manual perk authoring, if reopened (frontend only)
 **Tracking:** [#471](https://github.com/jwh3times/GuardianTracker/issues/471)
 
 Show owned weapon rolls for the selected Destiny membership and compare them to
@@ -114,14 +116,19 @@ Decided:
   drawer — and always links to `/rolls` for management. Below alpha tier it
   shows a locked upsell instead of a farming promise.
 
-Still to settle:
+Follow-on scope, decided 2026-11-10
+([#471](https://github.com/jwh3times/GuardianTracker/issues/471)):
 
-- The mockup's "Best farm: {source}" line (joining acquisition data to
-  targets) is out of scope for the drawer section that shipped in #371 and
-  remains its own decision.
-- Manual perk authoring (saving a target without a DIM import) is deferred.
-- The `god-roll` feature flag remains alpha-only; whether roll targets move to a
-  wider tier is undecided.
+- The mockup's "Best farm: {source}" line is dropped. The drawer already lists
+  every acquisition source for the weapon, and naming a single best one would
+  mean ranking sources. That ranking belongs to Recommendations, and farm-only
+  semantics for multiple collectibles are unresolved.
+- Manual perk authoring (saving a target without a DIM import) stays deferred;
+  targets are import-only. `POST /api/rolltargets` already saves and validates
+  a single target, so the remaining work is a frontend perk picker.
+- The `god-roll` feature flag stays alpha-only while the app is local-only.
+  A wider tier is decided together with public deployment
+  ([#468](https://github.com/jwh3times/GuardianTracker/issues/468)).
 
 ### Notifications and Digests
 
@@ -175,7 +182,8 @@ maintainer decision
 **Tracking:** [#468](https://github.com/jwh3times/GuardianTracker/issues/468)
 
 Notifications and Digests, Shareable Collection Progress, and Metrics all wait on
-this decision.
+this decision, and so does widening the `god-roll` feature flag beyond the alpha
+tier (see [God-Roll and Owned-Roll Insights](#god-roll-and-owned-roll-insights)).
 
 CI currently validates tests and Docker builds. Publishing images, provisioning
 cloud resources, and deploying production infrastructure should be implemented
