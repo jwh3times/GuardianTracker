@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.80] - 2026-11-10
+
+### Changed
+
+- The installed-skills check (`scripts/check-skills.mjs`) reads the version 2
+  `skills-lock.json` that `skills` CLI 1.8.0 writes, whose hashes no longer
+  depend on line endings, so the shared skills install with the current CLI
+  instead of a pinned 1.7.4 (#491). The lock is now version 2; no skill's
+  content changed. No behavior changes.
+
 ## [1.18.79] - 2026-11-10
 
 ### Changed
@@ -2383,7 +2393,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.79...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.80...HEAD
+[1.18.80]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.79...v1.18.80
 [1.18.79]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.78...v1.18.79
 [1.18.78]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.77...v1.18.78
 [1.18.77]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.76...v1.18.77
