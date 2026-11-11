@@ -182,7 +182,8 @@ maintainer decision
 **Tracking:** [#468](https://github.com/jwh3times/GuardianTracker/issues/468)
 
 Notifications and Digests, Shareable Collection Progress, and Metrics all wait on
-this decision.
+this decision, and so does widening the `god-roll` feature flag beyond the alpha
+tier (see [God-Roll and Owned-Roll Insights](#god-roll-and-owned-roll-insights)).
 
 CI currently validates tests and Docker builds. Publishing images, provisioning
 cloud resources, and deploying production infrastructure should be implemented
