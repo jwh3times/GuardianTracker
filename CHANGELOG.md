@@ -14,6 +14,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.83] - 2026-11-12
+
+### Added
+
+- Contributors and agents share one set of MCP servers, committed for Claude
+  Code (`.mcp.json`) and Codex (`.codex/config.toml`): Context7 for current
+  library and framework documentation, and a pinned Playwright MCP server that
+  drives the running app in bundled Chromium with an isolated profile.
+  `AGENTS.md` has a new MCP servers section. It covers enabling the servers in
+  each tool, the one-time browser install Playwright MCP needs, and bumping its
+  pin by hand, since Dependabot reads neither file. The server's
+  `.playwright-mcp/` output folder is ignored. No application behavior changes.
+
 ## [1.18.82] - 2026-11-12
 
 ### Security
@@ -2412,7 +2425,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.82...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.83...HEAD
+[1.18.83]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.82...v1.18.83
 [1.18.82]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.81...v1.18.82
 [1.18.81]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.80...v1.18.81
 [1.18.80]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.79...v1.18.80

@@ -26,6 +26,7 @@ the fetch. Where only Windows PowerShell 5.1 exists, run it with `powershell` in
 - `frontend/playwright-report/`, `frontend/test-results/`, `frontend/playwright/.auth/`
 - `frontend/dist/`
 - `backend/api-service/.e2e/` — the manifest and search index the E2E API writes
+- `.playwright-mcp/` — snapshots, screenshots and logs the shared Playwright MCP server writes
 - `backend/api-service/coverage` (extensionless profile), `coverage/`, `*.coverprofile`, `*.out`,
   `*.test`, `*.exe`, `*.tsbuildinfo` — ignored matches only
 
