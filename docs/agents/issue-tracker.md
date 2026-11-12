@@ -138,3 +138,8 @@ jwh3times 4
 
 The default. An accepted residual risk is recorded in the companion's `security-limitations.md`
 (ADR 0022).
+
+## Priority order
+
+- `Priority`: `P1 — Next` / `P2 — Soon` / `P3 — Later` / `P4 — Parked`.
+- `board order`: the board's manual order, top first, which follows `Priority` (ADR 0026).
