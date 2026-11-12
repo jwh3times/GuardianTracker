@@ -5,7 +5,8 @@
 - `AGENTS.md` — the canonical, self-contained, tool-neutral operating guide: architecture and key
   directories, acquisition-source invariants, auth and token flow, the inline ports and
   environment table, CI/CD, branch protection, test commands, documentation rules, work tracking,
-  agent routing, known limitations. It is the only home of repo operating context. **When:**
+  agent routing, agent skills, the shared MCP servers, known limitations. It is the only home of
+  repo operating context. **When:**
   - an endpoint or auth/security behavior changes (`backend/api-service/api/router.go`,
     `backend/api-service/auth/`): Auth & token flow, "Auth and security behavior to preserve";
   - env, ports or Compose change (`backend/api-service/config/config.go`, `docker-compose.yml`,
@@ -17,6 +18,8 @@
     `frontend/src/data/`): Key directories;
   - an agent or skill is added, removed or replaced (`.claude/agents/`, `.agents/skills/`,
     `skills-lock.json`): Agent Routing and Agent skills;
+  - a shared MCP server or its pin changes (`.mcp.json`, `.codex/config.toml`, which must declare
+    the same servers): `## MCP servers`;
   - a known limitation is resolved — only once the code confirms it.
 - `CLAUDE.md` — a thin `@AGENTS.md` importer plus Claude Code-only mechanics. **When:** only the
   subagent roster, skills or hooks mechanics change; never operating context.
