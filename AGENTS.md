@@ -674,6 +674,41 @@ Default canonical vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `
 
 Single-context layout: root `CONTEXT.md` + existing `docs/adr/`. See `docs/agents/domain.md`.
 
+## MCP servers
+
+The shared set is committed twice, once per tool: `.mcp.json` (Claude Code) and
+`.codex/config.toml` (Codex). Keep the two files declaring the same servers with the same
+arguments.
+
+| Server       | Reach for it when                                                                                                                        |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `context7`   | A task depends on a library, framework, or CLI's current API — Gin, React Query, Vite, Playwright, oxlint. Bungie facts are not in it.   |
+| `playwright` | A change needs eyes on the running app: drive `localhost:5273`, read console and network, screenshot. The e2e suite stays the test gate. |
+
+Enabling them is a one-time step per person:
+
+- **Claude Code** asks you to approve each project server on the first session in this
+  checkout. If you already have the claude.ai Context7 connector, declining the project
+  `context7` avoids duplicate tools.
+- **Codex** reads `.codex/config.toml` only once the checkout is a trusted project.
+- **Playwright's browser** is installed separately:
+  `npx @playwright/mcp@<pinned version> install-browser chrome-for-testing`. Every
+  `@playwright/mcp` release builds on an alpha `playwright-core`, so its browser revision
+  never matches the one `frontend/`'s `@playwright/test` installs, and the server runs
+  `--browser chromium` rather than an installed Chrome that contributors may not have.
+  Bumping the pin needs the same command again.
+
+Nothing updates the pin: Dependabot does not read either file. Bump both files together,
+then re-run the browser install. The server runs `--isolated`, so no browser profile or
+sign-in persists between sessions; it writes snapshots into `.playwright-mcp/`, which is
+ignored.
+
+GitHub work goes through `gh`, which the flow skills already require; a GitHub MCP server
+is deliberately not in the set. Personal servers in your user-level config are fine
+alongside the shared ones, provided git and GitHub operations still go through `git` and
+`gh`. Secrets never pass through an MCP server: credential restoration uses the scripts
+in [Environment Setup](#environment-setup).
+
 ## Known Limitations
 
 - Collections data remains membership-wide. The character switcher scopes
