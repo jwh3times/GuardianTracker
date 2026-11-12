@@ -14,6 +14,31 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.86] - 2026-11-12
+
+### Added
+
+- `/what-next`, a shared skill from `jwh3times/skills`, reports what to work on
+  next. It reads the open issues, open PRs and the board, and ranks the work by
+  the board's `Priority` and then its manual order, per the new
+  `Priority order` setting in `docs/agents/issue-tracker.md`. It names one
+  item and the command that takes it, and changes nothing on GitHub. The
+  development flow's routing points at it when nothing is chosen yet.
+
+## [1.18.85] - 2026-11-12
+
+### Changed
+
+- Bumped `@vitejs/plugin-react` from 6.2.1 to 6.3.0 in `frontend/`
+  (Dependabot, #496).
+
+## [1.18.84] - 2026-11-12
+
+### Changed
+
+- Bumped the `alpine` base image of `backend/api-service/Dockerfile` from
+  3.24.3 to 3.24.4 (Dependabot, #495).
+
 ## [1.18.83] - 2026-11-12
 
 ### Added
@@ -2425,7 +2450,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.83...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.86...HEAD
+[1.18.86]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.85...v1.18.86
+[1.18.85]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.84...v1.18.85
+[1.18.84]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.83...v1.18.84
 [1.18.83]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.82...v1.18.83
 [1.18.82]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.81...v1.18.82
 [1.18.81]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.80...v1.18.81
