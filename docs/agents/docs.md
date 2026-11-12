@@ -79,8 +79,8 @@
   build-context policy; `kubernetes-infrastructure.md`: only after a confirmed manifest or script
   change, never from local cluster state.
 - `.agents/skills/*/**` — skills, mirrored to `.claude/skills/`. The `mattpocock/skills` set in
-  `skills-lock.json`, and `end-session`, `handoff`, `lets-go`, `ship` and `docs-updater` from
-  `jwh3times/skills` (ADR 0025): `frozen` here, fixed upstream. **When:** a skill is added,
+  `skills-lock.json`, and `end-session`, `handoff`, `lets-go`, `ship`, `docs-updater` and
+  `what-next` from `jwh3times/skills` (ADR 0025): `frozen` here, fixed upstream. **When:** a skill is added,
   removed or replaced: AGENTS.md's Agent skills section and `CLAUDE.md`'s skills paragraph.
 - `.github/PULL_REQUEST_TEMPLATE.md` — the PR body's sections. **When:** the development flow's
   linking rule changes.
