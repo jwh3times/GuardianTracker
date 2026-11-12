@@ -14,7 +14,7 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
-## [1.18.82] - 2026-11-12
+## [1.18.83] - 2026-11-12
 
 ### Added
 
@@ -26,6 +26,17 @@ No unreleased changes.
   each tool, the one-time browser install Playwright MCP needs, and bumping its
   pin by hand, since Dependabot reads neither file. The server's
   `.playwright-mcp/` output folder is ignored. No application behavior changes.
+
+## [1.18.82] - 2026-11-12
+
+### Security
+
+- The Go toolchain pin moved from 1.26.10 to 1.26.11 everywhere it is declared:
+  `go.mod`, both workflows' `GO_VERSION`, and the documented Staticcheck
+  command. It clears GO-2026-6859, a `net/http` race in which an HTTP/1 server
+  whose handler reads a `MaxBytesReader`-limited body while writing response
+  headers can crash. `govulncheck` traced it through the API's handlers and
+  Bungie client.
 
 ## [1.18.81] - 2026-11-10
 
@@ -2414,7 +2425,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.82...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.83...HEAD
+[1.18.83]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.82...v1.18.83
 [1.18.82]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.81...v1.18.82
 [1.18.81]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.80...v1.18.81
 [1.18.80]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.79...v1.18.80
