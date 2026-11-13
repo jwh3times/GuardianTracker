@@ -1,6 +1,11 @@
 import React from "react";
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  screen,
+  fireEvent,
+  waitFor,
+  waitForElementToBeRemoved,
+} from "@testing-library/react";
 import { http, HttpResponse } from "msw/http";
 import { delay } from "msw/utils/delay";
 import { API, sampleWishlist, server } from "../../test/testServer";
@@ -313,11 +318,18 @@ describe("WishList bulk actions", () => {
   });
 
   it("rolls back a failed bulk delete", async () => {
+    // Hold the failure until the optimistic removal has rendered: a fast
+    // response can land the removal and the rollback in one render, leaving
+    // the item on screen throughout and nothing rolled back to observe.
+    let failBulkDelete!: () => void;
+    const bulkDeleteHeld = new Promise<void>((resolve) => {
+      failBulkDelete = resolve;
+    });
     server.use(
-      http.post(
-        `${API}/api/wishlist/bulk`,
-        () => new HttpResponse(null, { status: 500 }),
-      ),
+      http.post(`${API}/api/wishlist/bulk`, async () => {
+        await bulkDeleteHeld;
+        return new HttpResponse(null, { status: 500 });
+      }),
     );
     renderPage(<WishList />, "/wishlist");
     await screen.findByText("Gjallarhorn");
@@ -329,8 +341,35 @@ describe("WishList bulk actions", () => {
     fireEvent.click(check);
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
-    // onError rolls the optimistic removal back → Gjallarhorn returns.
-    expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
+    await waitForElementToBeRemoved(() => screen.queryByText("Gjallarhorn"));
+
+    // Hold the refetch onSettled starts, too: it returns Gjallarhorn from the
+    // server, which would restore the item even with no rollback at all.
+    let refetched = false;
+    let serveRefetch!: () => void;
+    const refetchHeld = new Promise<void>((resolve) => {
+      serveRefetch = resolve;
+    });
+    server.use(
+      http.get(`${API}/api/wishlist`, async () => {
+        await refetchHeld;
+        refetched = true;
+        return HttpResponse.json(sampleWishlist);
+      }),
+    );
+    failBulkDelete();
+
+    // onError restores the snapshot → Gjallarhorn returns before the refetch.
+    await screen.findByText("Bulk action failed");
+    try {
+      await waitFor(() =>
+        expect(screen.getByText("Gjallarhorn")).toBeInTheDocument(),
+      );
+      expect(refetched).toBe(false);
+    } finally {
+      serveRefetch();
+    }
+    await waitFor(() => expect(refetched).toBe(true));
   });
 
   it("keeps selection on a failed bulk action", async () => {
@@ -350,15 +389,18 @@ describe("WishList bulk actions", () => {
     fireEvent.click(check);
     fireEvent.click(screen.getByRole("button", { name: /^delete$/i }));
 
-    // onError rolls the optimistic removal back → Gjallarhorn returns.
-    expect(await screen.findByText("Gjallarhorn")).toBeInTheDocument();
+    // Wait for the failure itself: until it lands, select mode and the
+    // checked row are only the state from before the request.
+    await screen.findByText("Bulk action failed");
     // Select mode was NOT exited on failure — the "Done" toggle (select mode
     // is on) and the row checkbox are both still present, so the user can
-    // retry the same selection.
+    // retry the same selection. The row returns with the rollback.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("checkbox", { name: /select gjallarhorn/i }),
+      ).toBeChecked(),
+    );
     expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("checkbox", { name: /select gjallarhorn/i }),
-    ).toBeChecked();
   });
 
   it("disables Set priority until an item is selected", async () => {

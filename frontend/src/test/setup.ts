@@ -1,5 +1,4 @@
 import "@testing-library/jest-dom";
-import { Agent, setGlobalDispatcher } from "undici";
 import {
   afterAll,
   afterEach,
@@ -9,20 +8,6 @@ import {
   vi,
 } from "vitest";
 import { server } from "./testServer";
-
-// Workaround for mswjs/interceptors#862: after one request is aborted or left
-// pending, a later request to the same origin can reuse the kept-alive socket
-// and reach the real network as well as the handler. Nothing listens on the
-// test API port, so the app sees `fetch failed` (ECONNREFUSED) instead of the
-// mocked response. `pipelining: 0` turns keep-alive off (undici Client docs),
-// and setGlobalDispatcher also reaches Node's built-in fetch while the npm
-// undici and the one bundled in Node (`process.versions.undici`) share a
-// major version; if the two failures named in #862 return as flakes after a
-// Node upgrade, check that first. Production fetch
-// runs in the browser, so tests lose no coverage the app relies on. Delete
-// this, and the direct `undici` devDependency, once an @mswjs/interceptors
-// release fixes #862 and the suite stays green without it.
-setGlobalDispatcher(new Agent({ pipelining: 0 }));
 
 // Node 22+ defines an experimental global `localStorage` that is undefined
 // unless --localstorage-file is passed, shadowing jsdom's implementation.

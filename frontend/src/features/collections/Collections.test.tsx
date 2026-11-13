@@ -245,11 +245,10 @@ describe("Collections", () => {
     expect(
       await screen.findByRole("dialog", { name: "Imperial Decree" }),
     ).toBeInTheDocument();
-    expect(
-      await screen.findByText("Possible perks / rolls"),
-    ).toBeInTheDocument();
+    // The section title also shows while the perks load: wait for a perk.
+    expect(await screen.findByText("Full Bore")).toBeInTheDocument();
+    expect(screen.getByText("Possible perks / rolls")).toBeInTheDocument();
     expect(screen.getByText("Barrel")).toBeInTheDocument();
-    expect(screen.getByText("Full Bore")).toBeInTheDocument();
     expect(screen.getByText("Trait 1")).toBeInTheDocument();
     expect(screen.getByText("Frenzy")).toBeInTheDocument();
   });
