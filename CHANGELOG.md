@@ -14,6 +14,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.87] - 2026-11-12
+
+### Changed
+
+- `/what-next` puts an active handoff first: when `handoff_map.json` names one
+  for this repository, the report leads with it and recommends `/lets-go`, and
+  one whose document has not reached this machine is shown as pending. It still
+  changes nothing, and a machine without the handoffs config skips the check.
+
 ## [1.18.86] - 2026-11-12
 
 ### Added
@@ -2450,7 +2459,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.86...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.87...HEAD
+[1.18.87]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.86...v1.18.87
 [1.18.86]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.85...v1.18.86
 [1.18.85]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.84...v1.18.85
 [1.18.84]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.83...v1.18.84
