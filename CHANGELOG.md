@@ -14,6 +14,29 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.88] - 2026-11-13
+
+### Removed
+
+- The Vitest setup no longer turns HTTP keep-alive off through undici's global
+  dispatcher, and `undici` is no longer a direct frontend devDependency.
+  `@mswjs/interceptors` 0.45.12 fixes the socket-reuse bug
+  (mswjs/interceptors#862) that it worked around. `msw` moves to 3.0.5. The
+  app itself is unchanged.
+
+### Fixed
+
+- Three frontend tests that the workaround had kept green by changing timer
+  order now wait for the outcome they check. "rolls back a failed bulk delete"
+  had never seen the optimistic removal render, so it passed without testing
+  the rollback. It now holds the failing request until the removal shows, and
+  holds the follow-up refetch until the item is back, so a broken rollback
+  fails it. "keeps selection on a failed bulk action" waits for the failure
+  toast. The Collections deep-link test waits for a perk instead of the
+  section title, which also shows while perks load. Mutation checks confirmed
+  each WishList test fails when the code it guards breaks, and a delayed perks
+  response reproduced the Collections failure before the fix.
+
 ## [1.18.87] - 2026-11-12
 
 ### Changed
@@ -2459,7 +2482,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.87...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.88...HEAD
+[1.18.88]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.87...v1.18.88
 [1.18.87]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.86...v1.18.87
 [1.18.86]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.85...v1.18.86
 [1.18.85]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.84...v1.18.85
