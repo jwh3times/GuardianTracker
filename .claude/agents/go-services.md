@@ -74,6 +74,10 @@ backend/api-service/
                                            (`GET /api/rolltargets/matches`) reads
                                            membership_type from the JWT claim alongside membership_id and
                                            returns `{wanted[], unwanted[], unmatchedTargets[]}`. Each
+                                           wanted/unwanted match carries the matched target's scope
+                                           `anyWeapon` (a weapon-bound target's hash is the match's
+                                           `itemHash`), so clients label it without rejoining the
+                                           separately loaded target list. Each
                                            unmatched target may carry additive `bestCopy` evidence
                                            (`itemHash`, `instanceId`, the copy's full `perks`, service-owned
                                            `matchedColumns`/`targetColumns` score, and the target-only

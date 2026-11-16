@@ -14,6 +14,59 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.94] - 2026-11-16
+
+### Fixed
+
+- A roll-target match for an any-weapon target no longer shows up as if it were
+  tied to one weapon. In the item drawer, its badge lost the "Any weapon:"
+  prefix for as long as the saved-target list was loading or had failed. On the
+  Roll targets page, its card took the matched copy's weapon name instead of
+  "Any weapon with …" in the moment after a target was deleted or an import
+  refetched. Each match in `GET /api/rolltargets/matches` now carries
+  `anyWeapon`, so both views label it from the match itself rather than
+  guessing when the separately loaded list lacks the target (#505).
+
+## [1.18.93] - 2026-11-16
+
+### Changed
+
+- Bumped Node from 26.13.0 to 26.13.1 in `.nvmrc` and the three frontend
+  Dockerfiles, and re-pinned the Playwright browser image digest to match
+  (Dependabot, #503).
+
+## [1.18.92] - 2026-11-16
+
+### Changed
+
+- Refreshed the digest of the `postgres:18.6-alpine3.24` image used by the
+  three Docker Compose PostgreSQL services; the tag is unchanged (Dependabot,
+  #501).
+
+## [1.18.91] - 2026-11-16
+
+### Changed
+
+- Bumped `github.com/jackc/pgx/v5` from 5.12.0 to 5.13.0 in
+  `backend/api-service/` (Dependabot, #502).
+
+## [1.18.90] - 2026-11-16
+
+### Changed
+
+- Bumped `@testing-library/user-event` from 14.6.9 to 14.6.10, `jsdom` from
+  31.0.0 to 31.0.1, `oxlint-tsgolint` from 7.0.2006 to 7.0.2007, `prettier`
+  from 3.9.10 to 3.10.1, and `vite` from 8.3.7 to 8.3.8 in `frontend/`
+  (Dependabot, #504).
+
+## [1.18.89] - 2026-11-13
+
+### Changed
+
+- Bumped `@testing-library/user-event` from 14.6.8 to 14.6.9, `oxlint` from
+  1.92.0 to 1.93.0, and `vite` from 8.3.6 to 8.3.7 in `frontend/`, with
+  transitive lockfile updates (Dependabot, #500).
+
 ## [1.18.88] - 2026-11-13
 
 ### Removed
@@ -2482,7 +2535,13 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.88...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.94...HEAD
+[1.18.94]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.93...v1.18.94
+[1.18.93]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.92...v1.18.93
+[1.18.92]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.91...v1.18.92
+[1.18.91]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.90...v1.18.91
+[1.18.90]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.89...v1.18.90
+[1.18.89]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.88...v1.18.89
 [1.18.88]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.87...v1.18.88
 [1.18.87]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.86...v1.18.87
 [1.18.86]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.85...v1.18.86
