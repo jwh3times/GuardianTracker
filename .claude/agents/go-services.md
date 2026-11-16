@@ -144,7 +144,8 @@ backend/api-service/
                                            publishAnalysis takes them Manifest-outside, membership-inside
   services/collections/flights.go      ← Per-membership analysis flight coalescing: concurrent loads for
                                            one membership and generation share one detached, deadline-
-                                           bounded build (sharedAnalysis/runAnalysis)
+                                           bounded build. sharedAnalysis owns the flight key, the load,
+                                           and publication; the lifetime is a sharedread.Group
   services/collections/service.go      ← Service: the outer of ADR 0018's two construction stages,
                                            built after Weekly in main.go. Owns GetSummary (cheap counted
                                            tree, no items/availability), GetFull (adds every catalogued
@@ -234,6 +235,15 @@ backend/api-service/
   services/membershipstate/load.go     ← Load: cache.Load semantics plus the membership fence. A value
                                            loaded under a retired generation is returned to its caller but
                                            not cached. Nil cache = load every time; nil publication = error.
+  services/sharedread/group.go         ← Generic shared-read lifetime, Group[K, V]: Do(ctx, key, load) joins
+                                           or starts key's detached flight; owns waiters, the Timeout
+                                           deadline, independent caller cancellation (the last waiter
+                                           cancels), replacement safety, and the ifActive guard a load
+                                           routes every publication through. Holds no cache, publishes
+                                           nothing, never takes an owner lock — owners call ifActive inside
+                                           their own generation publication. Waiters/Flights/Running are
+                                           read-only observability accessors. Collections' analysis and
+                                           Records' component-900 profile read use it.
   services/efficiency/                 ← Manifest-derived source-bucket index, publication-fenced async
                                            builds, explicit cold/ready ranked facts, and milestone missing
                                            counts; score and build coordination remain internal
@@ -413,7 +423,8 @@ backend/api-service/
                                            (OnVersionChanged kicks BuildIndex); async rebuild on update,
                                            aborted mid-scan if a swap starts
   services/records/profile_flights.go  ← getProfileRecords: fenced profile-records cache read plus
-                                           per-membership flight coalescing (shareProfile/loadProfile)
+                                           per-membership flight coalescing (shareProfile, over a
+                                           sharedread.Group)
   services/records/service.go          ← Catalysts, crafting patterns, seals/triumphs; ManifestRepo
                                            interface; InvalidateCache; OnVersionChanged (ManifestObserver)
                                            advances its owner-local publication and evicts its three
