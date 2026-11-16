@@ -17,6 +17,7 @@ import (
 	"guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/manifeststate"
 	"guardian-tracker/api-service/services/membershipstate"
+	"guardian-tracker/api-service/services/sharedread"
 )
 
 // CatalogReader is the entire Items surface Collections consumes: the
@@ -68,9 +69,7 @@ type MembershipAnalysis struct {
 	treeMu     sync.RWMutex
 	treeStruct *TreeStructure // user-independent; rebuilt after a manifest swap
 
-	flightsMu   sync.Mutex
-	flights     map[analysisFlightKey]*analysisFlight
-	loadTimeout time.Duration
+	flights sharedread.Group[analysisFlightKey, *analysis]
 }
 
 func NewMembershipAnalysis(
@@ -88,10 +87,10 @@ func NewMembershipAnalysis(
 		nodes:           nodes,
 		cache:           c,
 		cacheTTL:        cacheTTL,
-		loadTimeout:     analysisLoadTimeout,
 	}
 	// Both callbacks run inside their publication's critical section, so each
 	// only drops state and never calls back into a publication.
+	m.flights.Timeout = analysisLoadTimeout
 	m.publication = manifeststate.New(m.dropTree)
 	m.refresh = membershipstate.New(func(membershipType int, membershipID string) {
 		m.cache.Delete(analysisCacheKey(membershipType, membershipID))

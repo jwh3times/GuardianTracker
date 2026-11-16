@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"guardian-tracker/api-service/cache"
@@ -16,6 +15,7 @@ import (
 	manifestrepo "guardian-tracker/api-service/services/manifest"
 	"guardian-tracker/api-service/services/manifeststate"
 	"guardian-tracker/api-service/services/membershipstate"
+	"guardian-tracker/api-service/services/sharedread"
 )
 
 // Record state bit flags from the Bungie API.
@@ -141,15 +141,17 @@ type Service struct {
 	// for fresh data (ADR 0018).
 	refresh *membershipstate.Publication
 
-	profileMu      sync.Mutex
-	profileFlights map[profileFlightKey]*profileFlight
-	profileTimeout time.Duration
+	// profileFlights coalesces overlapping component-900 misses. There is no
+	// Manifest generation in its key: component 900 is raw profile data, so a
+	// Manifest swap must neither split this work nor retire its result.
+	profileFlights sharedread.Group[profileFlightKey, *cachedRecords]
 }
 
 // NewService creates a new records Service.
 // manifest may be nil — all methods return empty slices gracefully when it is.
 func NewService(b *bungie.Client, m ManifestRepo, c cache.Cache, ttl time.Duration) *Service {
-	s := &Service{bungie: b, manifest: m, cache: c, ttl: ttl, profileTimeout: profileLoadTimeout}
+	s := &Service{bungie: b, manifest: m, cache: c, ttl: ttl}
+	s.profileFlights.Timeout = profileLoadTimeout
 	s.publication = manifeststate.New(s.invalidateManifestProjections)
 	// The callback runs inside the publication's critical section, so it only
 	// deletes the entry and never calls back into the publication.

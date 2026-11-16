@@ -103,38 +103,39 @@ func receive[T any](t *testing.T, ch <-chan T) T {
 		return zero
 	}
 }
-func waitFlight(t *testing.T, m *MembershipAnalysis, count int) *analysisFlight {
+
+// waitFlight waits until exactly one flight holds count waiters.
+func waitFlight(t *testing.T, m *MembershipAnalysis, count int) {
+	t.Helper()
+	eventually(t, "waiters to join the expected flight", func() bool {
+		return m.flights.Flights() == 1 && m.flights.Waiters() == count
+	})
+}
+
+// waitRunning waits until exactly n loads are still executing, so an
+// abandoned load has fully settled once only its replacement remains.
+func waitRunning(t *testing.T, m *MembershipAnalysis, n int) {
+	t.Helper()
+	eventually(t, "loads to settle", func() bool { return m.flights.Running() == n })
+}
+
+func eventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
 	deadline := time.After(3 * time.Second)
-	for {
-		m.flightsMu.Lock()
-		var got *analysisFlight
-		if len(m.flights) == 1 {
-			for _, f := range m.flights {
-				if f.waiters == count {
-					got = f
-				}
-			}
-		}
-		m.flightsMu.Unlock()
-		if got != nil {
-			return got
-		}
+	for !cond() {
 		select {
 		case <-deadline:
-			t.Fatal("waiters did not join the expected flight")
-			return nil
+			t.Fatalf("timed out waiting for %s", what)
 		default:
 			runtime.Gosched()
 		}
 	}
 }
+
 func assertNoFlights(t *testing.T, m *MembershipAnalysis) {
 	t.Helper()
-	m.flightsMu.Lock()
-	defer m.flightsMu.Unlock()
-	if len(m.flights) != 0 {
-		t.Fatalf("%d completed/abandoned flights remain", len(m.flights))
+	if n := m.flights.Flights(); n != 0 {
+		t.Fatalf("%d completed/abandoned flights remain", n)
 	}
 }
 
@@ -338,8 +339,10 @@ func TestAnalysisFlight_FailureIsSharedButNotCached(t *testing.T) {
 }
 
 // The node reader deliberately ignores context. An abandoned worker cannot
-// publish a tree or analysis even if its dependency completes successfully later.
-func TestAnalysisFlight_AbandonmentFencesLateWorkAndAllowsReplacement(t *testing.T) {
+// publish a tree or analysis even if its dependency completes successfully
+// later: Collections routes both publications through the flight guard.
+// Replacement safety itself is the sharedread.Group contract.
+func TestAnalysisFlight_AbandonedLoadNeverPublishes(t *testing.T) {
 	for _, deadline := range []bool{false, true} {
 		t.Run(fmt.Sprintf("deadline=%v", deadline), func(t *testing.T) {
 			entered := make(chan chan struct{}, 4)
@@ -369,14 +372,14 @@ func TestAnalysisFlight_AbandonmentFencesLateWorkAndAllowsReplacement(t *testing
 			stale := cachedAnalysis(t, m, 3, "member-1")
 			swapped(t, m, "v2")
 			if deadline {
-				m.loadTimeout = 100 * time.Millisecond
+				m.flights.Timeout = 100 * time.Millisecond
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			first := startAnalysis(ctx, m, 3, "member-1", "token")
 			oldRelease := receive(t, entered)
 			second := startAnalysis(ctx, m, 3, "member-1", "token")
-			oldFlight := waitFlight(t, m, 2)
+			waitFlight(t, m, 2)
 			want := context.Canceled
 			if deadline {
 				want = context.DeadlineExceeded
@@ -389,15 +392,12 @@ func TestAnalysisFlight_AbandonmentFencesLateWorkAndAllowsReplacement(t *testing
 				}
 			}
 			assertNoFlights(t, m)
-			m.loadTimeout = analysisLoadTimeout
+			m.flights.Timeout = analysisLoadTimeout
 			replacement := startAnalysis(t.Context(), m, 3, "member-1", "token")
 			newRelease := receive(t, entered)
-			newFlight := waitFlight(t, m, 1)
-			if oldFlight == newFlight {
-				t.Fatal("replacement joined abandoned work")
-			}
+			waitFlight(t, m, 1)
 			close(oldRelease)
-			receive(t, oldFlight.done)
+			waitRunning(t, m, 1)
 			if got, _ := m.cache.Get(analysisCacheKey(3, "member-1")); got != stale {
 				t.Fatal("late abandoned analysis was cached")
 			}
@@ -406,9 +406,6 @@ func TestAnalysisFlight_AbandonmentFencesLateWorkAndAllowsReplacement(t *testing
 			m.treeMu.RUnlock()
 			if tree != nil {
 				t.Fatal("late abandoned tree was published")
-			}
-			if waitFlight(t, m, 1) != newFlight {
-				t.Fatal("old completion removed the replacement")
 			}
 			close(newRelease)
 			if got := receive(t, replacement); got.err != nil || got.a == stale {

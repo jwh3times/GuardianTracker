@@ -180,40 +180,42 @@ func profileReceive[T any](t *testing.T, ch <-chan T) T {
 		return zero
 	}
 }
-func waitProfile(t *testing.T, s *Service, n int) *profileFlight {
+
+// waitProfile waits until exactly one flight holds n waiters.
+func waitProfile(t *testing.T, s *Service, n int) {
+	t.Helper()
+	profileEventually(t, "expected waiters to join", func() bool {
+		return s.profileFlights.Flights() == 1 && s.profileFlights.Waiters() == n
+	})
+}
+
+// waitProfileRunning waits until exactly n loads are still executing, so an
+// abandoned load has fully settled once only its replacement remains.
+func waitProfileRunning(t *testing.T, s *Service, n int) {
+	t.Helper()
+	profileEventually(t, "loads to settle", func() bool { return s.profileFlights.Running() == n })
+}
+
+func profileEventually(t *testing.T, what string, cond func() bool) {
 	t.Helper()
 	deadline := time.After(3 * time.Second)
-	for {
-		s.profileMu.Lock()
-		var found *profileFlight
-		if len(s.profileFlights) == 1 {
-			for _, f := range s.profileFlights {
-				if f.waiters == n {
-					found = f
-				}
-			}
-		}
-		s.profileMu.Unlock()
-		if found != nil {
-			return found
-		}
+	for !cond() {
 		select {
 		case <-deadline:
-			t.Fatal("expected waiters did not join")
-			return nil
+			t.Fatalf("timed out waiting for %s", what)
 		default:
 			runtime.Gosched()
 		}
 	}
 }
+
 func noProfileFlights(t *testing.T, s *Service) {
 	t.Helper()
-	s.profileMu.Lock()
-	defer s.profileMu.Unlock()
-	if len(s.profileFlights) != 0 {
+	if s.profileFlights.Flights() != 0 {
 		t.Fatal("finished/abandoned profile flight retained")
 	}
 }
+
 func requireProfile(t *testing.T, got profileResult, state int) {
 	t.Helper()
 	if got.err != nil {
@@ -224,27 +226,27 @@ func requireProfile(t *testing.T, got profileResult, state int) {
 	}
 }
 
-func TestProfileFlight_CallerCancellationAndContextValues(t *testing.T) {
+// Context values and the detached deadline are the sharedread.Group contract;
+// this owner only has to give the group its bound.
+func TestProfileFlight_DetachedLoadsAreBounded(t *testing.T) {
+	s, _, _ := memoryProfileFixture(t)
+	if got := s.profileFlights.Timeout; got != 3*time.Minute {
+		t.Fatalf("detached profile loads bounded by %v, want 3m", got)
+	}
+}
+
+func TestProfileFlight_CallerCancellationIsIndependent(t *testing.T) {
 	for _, cancelLeader := range []bool{true, false} {
 		t.Run(fmt.Sprintf("leader=%v", cancelLeader), func(t *testing.T) {
-			type key struct{}
 			s, requests, hits := memoryProfileFixture(t)
-			base, baseCancel := context.WithTimeout(context.WithValue(t.Context(), key{}, "request-value"), time.Minute)
-			defer baseCancel()
-			leaderCtx, cancelFirst := context.WithCancel(base)
+			leaderCtx, cancelFirst := context.WithCancel(t.Context())
 			defer cancelFirst()
 			followerCtx, cancelSecond := context.WithCancel(t.Context())
 			defer cancelSecond()
 			first := startProfile(leaderCtx, s, 3, "member", "token")
 			p := profileReceive(t, requests)
 			second := startProfile(followerCtx, s, 3, "member", "token")
-			f := waitProfile(t, s, 2)
-			if f.ctx.Value(key{}) != "request-value" {
-				t.Fatal("shared context lost values")
-			}
-			if deadline, ok := f.ctx.Deadline(); !ok || time.Until(deadline) < 2*time.Minute || time.Until(deadline) > profileLoadTimeout {
-				t.Fatal("shared work inherited leader deadline or has no bound")
-			}
+			waitProfile(t, s, 2)
 			canceled, remaining := first, second
 			if cancelLeader {
 				cancelFirst()
@@ -255,8 +257,10 @@ func TestProfileFlight_CallerCancellationAndContextValues(t *testing.T) {
 			if got := profileReceive(t, canceled); !errors.Is(got.err, context.Canceled) {
 				t.Fatalf("error=%v", got.err)
 			}
-			if f.ctx.Err() != nil {
-				t.Fatal("one waiter canceled shared work")
+			select {
+			case <-p.canceled:
+				t.Fatal("one waiter canceled the shared HTTP read")
+			default:
 			}
 			p.reply <- recordBody(1)
 			requireProfile(t, profileReceive(t, remaining), 1)
@@ -493,21 +497,25 @@ func (c *profilePausedCache) Get(key string) (any, bool) {
 	}
 	return c.Cache.Get(key)
 }
-func TestProfileFlight_AbandonedRecheckCannotRemoveReplacement(t *testing.T) {
+
+// An abandoned flight paused in its cache re-check neither repopulates the
+// cache nor starts an HTTP read once released. Replacement safety itself is
+// the sharedread.Group contract.
+func TestProfileFlight_AbandonedRecheckNeverPublishesOrFetches(t *testing.T) {
 	for _, timeout := range []bool{false, true} {
 		t.Run(fmt.Sprintf("deadline=%v", timeout), func(t *testing.T) {
 			s, requests, hits := memoryProfileFixture(t)
 			paused := &profilePausedCache{Cache: s.cache, entered: make(chan chan struct{}, 2)}
 			s.cache = paused
 			if timeout {
-				s.profileTimeout = 100 * time.Millisecond
+				s.profileFlights.Timeout = 100 * time.Millisecond
 			}
 			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			first := startProfile(ctx, s, 3, "member", "token")
 			oldRelease := profileReceive(t, paused.entered)
 			second := startProfile(ctx, s, 3, "member", "token")
-			oldFlight := waitProfile(t, s, 2)
+			waitProfile(t, s, 2)
 			want := context.Canceled
 			if timeout {
 				want = context.DeadlineExceeded
@@ -520,18 +528,12 @@ func TestProfileFlight_AbandonedRecheckCannotRemoveReplacement(t *testing.T) {
 				}
 			}
 			noProfileFlights(t, s)
-			s.profileTimeout = profileLoadTimeout
+			s.profileFlights.Timeout = profileLoadTimeout
 			replacement := startProfile(t.Context(), s, 3, "member", "token")
 			newRelease := profileReceive(t, paused.entered)
-			newFlight := waitProfile(t, s, 1)
-			if oldFlight == newFlight {
-				t.Fatal("replacement joined abandoned flight")
-			}
+			waitProfile(t, s, 1)
 			close(oldRelease)
-			profileReceive(t, oldFlight.done)
-			if waitProfile(t, s, 1) != newFlight {
-				t.Fatal("late completion removed replacement")
-			}
+			waitProfileRunning(t, s, 1)
 			if _, ok := paused.Cache.Get(recordsCacheKey(3, "member")); ok {
 				t.Fatal("abandoned work repopulated cache")
 			}
@@ -542,5 +544,42 @@ func TestProfileFlight_AbandonedRecheckCannotRemoveReplacement(t *testing.T) {
 				t.Fatalf("abandoned cache read initiated HTTP; requests=%d", hits.Load())
 			}
 		})
+	}
+}
+
+// heldDeleteCache parks a refresh's invalidation, holding the membership
+// publication (one lock for every membership) open.
+type heldDeleteCache struct {
+	cache.Cache
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (c *heldDeleteCache) Delete(key string) {
+	close(c.entered)
+	<-c.release
+	c.Cache.Delete(key)
+}
+
+// A fetch that succeeded but reaches publication only after its last waiter
+// left must not cache. Another membership's refresh holds the publication, so
+// the abandonment is decided by the flight guard, not by a generation change.
+func TestProfileFlight_SuccessfulFetchAbandonedBeforePublicationIsNotCached(t *testing.T) {
+	s, requests, _ := memoryProfileFixture(t)
+	held := &heldDeleteCache{Cache: s.cache, entered: make(chan struct{}), release: make(chan struct{})}
+	s.cache = held
+	s.profileFlights.Timeout = 250 * time.Millisecond
+	got := startProfile(t.Context(), s, 3, "member", "token")
+	p := profileReceive(t, requests)
+	go s.refresh.Advance(3, "other-member")
+	profileReceive(t, held.entered)
+	p.reply <- recordBody(1)
+	if r := profileReceive(t, got); !errors.Is(r.err, context.DeadlineExceeded) {
+		t.Fatalf("waiter error=%v; want the flight deadline", r.err)
+	}
+	close(held.release)
+	waitProfileRunning(t, s, 0)
+	if _, ok := held.Cache.Get(recordsCacheKey(3, "member")); ok {
+		t.Fatal("abandoned fetch was cached")
 	}
 }

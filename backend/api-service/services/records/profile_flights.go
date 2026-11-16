@@ -24,19 +24,6 @@ type profileFlightKey struct {
 	credential     [sha256.Size]byte
 }
 
-// profileMu protects mutable flight state and serializes abandonment with cache
-// publication. There is no Manifest generation: component 900 is raw profile
-// data, so a Manifest swap must neither split this work nor retire its result.
-type profileFlight struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	done     chan struct{}
-	waiters  int
-	finished bool
-	result   *cachedRecords
-	err      error
-}
-
 // getProfileRecords shares overlapping misses while preserving the original
 // cache TTL and the actual Bungie fetch time for every derived Records view.
 func (s *Service) getProfileRecords(ctx context.Context, membershipType int, membershipID, bungieToken string) (*bungie.RecordsProfileResponse, time.Time, error) {
@@ -73,88 +60,32 @@ func (s *Service) cachedProfile(ctx context.Context, key string) (*cachedRecords
 	return nil, false
 }
 
+// shareProfile joins or starts the shared component-900 load for key. The
+// flight group owns waiters, the detached deadline and cancellation; this
+// owner keeps the key, the cache re-check, the fetch, and publication.
 func (s *Service) shareProfile(ctx context.Context, key profileFlightKey, token string) (*cachedRecords, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	s.profileMu.Lock()
-	f := s.profileFlights[key]
-	if f == nil || f.ctx.Err() != nil {
-		shared, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.profileTimeout)
-		f = &profileFlight{ctx: shared, cancel: cancel, done: make(chan struct{})}
-		if s.profileFlights == nil {
-			s.profileFlights = make(map[profileFlightKey]*profileFlight)
+	return s.profileFlights.Do(ctx, key, func(ctx context.Context, ifActive func(func())) (*cachedRecords, error) {
+		cacheKey := recordsCacheKey(key.membershipType, key.membershipID)
+		// A previous flight may have populated the entry after the caller's miss.
+		// Reusing it must not extend TTL or restamp the original fetch time.
+		if r, cached := s.cachedProfile(ctx, cacheKey); cached {
+			return r, nil
 		}
-		s.profileFlights[key] = f
-		go s.loadProfile(key, f, token)
-	}
-	f.waiters++
-	s.profileMu.Unlock()
-
-	select {
-	case <-ctx.Done():
-	case <-f.ctx.Done():
-	case <-f.done:
-	}
-
-	s.profileMu.Lock()
-	defer s.profileMu.Unlock()
-	err := ctx.Err()
-	if f.finished {
+		resp, err := s.bungie.GetRecords(ctx, key.membershipType, key.membershipID, token)
 		if err != nil {
 			return nil, err
 		}
-		return f.result, f.err
-	}
-	if err == nil {
-		err = f.ctx.Err()
-	}
-	f.waiters--
-	if f.waiters == 0 {
-		if s.profileFlights[key] == f {
-			delete(s.profileFlights, key)
+		r := &cachedRecords{resp: resp, fetchedAt: time.Now().UTC()}
+		if s.cache != nil {
+			// Lock order: membership publication -> flight group -> cache.
+			// Joining or leaving never calls a publication while holding the
+			// group's mutex. The actual write stays under both guards, so
+			// refresh and abandonment cannot race a detached worker back into
+			// the reusable cache.
+			key.refresh.Publish(func() {
+				ifActive(func() { s.cache.Set(cacheKey, r, s.ttl) })
+			})
 		}
-		f.cancel()
-	}
-	return nil, err
-}
-
-func (s *Service) loadProfile(key profileFlightKey, f *profileFlight, token string) {
-	cacheKey := recordsCacheKey(key.membershipType, key.membershipID)
-	// A previous flight may have populated the entry after the caller's miss.
-	// Reusing it must not extend TTL or restamp the original fetch time.
-	r, cached := s.cachedProfile(f.ctx, cacheKey)
-	var err error
-	if !cached {
-		var resp *bungie.RecordsProfileResponse
-		resp, err = s.bungie.GetRecords(f.ctx, key.membershipType, key.membershipID, token)
-		if err == nil {
-			r = &cachedRecords{resp: resp, fetchedAt: time.Now().UTC()}
-		}
-	}
-	if err == nil && !cached && s.cache != nil {
-		// Lock order: membership publication -> profileMu -> cache. Joining or
-		// leaving never calls a publication while holding profileMu. The actual
-		// write stays under both guards, so refresh and abandonment cannot race
-		// a detached worker back into the reusable cache.
-		key.refresh.Publish(func() {
-			s.profileMu.Lock()
-			defer s.profileMu.Unlock()
-			if s.profileFlights[key] == f && f.waiters > 0 && f.ctx.Err() == nil {
-				s.cache.Set(cacheKey, r, s.ttl)
-			}
-		})
-	}
-
-	s.profileMu.Lock()
-	if f.ctx.Err() != nil {
-		r, err = nil, f.ctx.Err()
-	}
-	f.result, f.err, f.finished = r, err, true
-	if s.profileFlights[key] == f {
-		delete(s.profileFlights, key)
-	}
-	close(f.done)
-	f.cancel()
-	s.profileMu.Unlock()
+		return r, nil
+	})
 }
