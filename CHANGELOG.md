@@ -14,6 +14,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.95] - 2026-11-16
+
+### Changed
+
+- Collections and Records now share one implementation of request coalescing.
+  Concurrent cache misses for the same membership still join a single Bungie
+  read, with the same three-minute bound, independent per-caller cancellation,
+  and no caching of work every caller abandoned. The protocol now lives once in
+  `services/sharedread` instead of twice, so a lifetime fix is made and tested
+  in one place. No API or user-visible behavior changes (#506).
+
 ## [1.18.94] - 2026-11-16
 
 ### Fixed
@@ -2535,7 +2546,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.94...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.95...HEAD
+[1.18.95]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.94...v1.18.95
 [1.18.94]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.93...v1.18.94
 [1.18.93]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.92...v1.18.93
 [1.18.92]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.91...v1.18.92

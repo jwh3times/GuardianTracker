@@ -265,6 +265,15 @@ publication. Publication requires the current membership generation and an
 active load. Finished or abandoned loads leave the registry; cache TTL and the
 original fetch timestamp are preserved.
 
+Both owners delegate that shared-read lifetime to one generic in-process module,
+`services/sharedread`. Its `Group` owns the waiters, the detached deadline,
+cancellation, replacement safety, and the "still active" guard it hands each
+load. Each owner keeps its flight key, what it loads, its cache policy, and its
+generation fences, and calls the guard from inside its own publication. The
+group never takes an owner's lock, so the Manifest -> membership lock order is
+unchanged. It holds no cache and publishes nothing itself (ADRs 0013, 0014,
+0018).
+
 ## Collection and Acquisition Model
 
 An inventory item can be linked from several manifest collectibles. Collection
