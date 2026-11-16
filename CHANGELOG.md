@@ -14,6 +14,16 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.96] - 2026-11-16
+
+### Fixed
+
+- The agent issue-tracker guide's "Read an issue" command
+  (`docs/agents/issue-tracker.md`) no longer fails: `gh` rejects `--comments`
+  together with `--json`, so the guide now reads comments through the
+  `comments` JSON field, and its "fetch the relevant ticket" section no longer
+  gives a second, different command.
+
 ## [1.18.95] - 2026-11-16
 
 ### Changed
@@ -2546,7 +2556,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.95...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.96...HEAD
+[1.18.96]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.95...v1.18.96
 [1.18.95]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.94...v1.18.95
 [1.18.94]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.93...v1.18.94
 [1.18.93]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.92...v1.18.93
