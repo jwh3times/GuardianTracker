@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/primitives";
@@ -64,11 +64,6 @@ export function RollTargetSection({
 
   const [unwantedOpen, setUnwantedOpen] = useState(false);
 
-  const targetsById = useMemo(
-    () => new Map<string, RollTarget>(targets.map((t) => [t.id, t])),
-    [targets],
-  );
-
   if (!enabled) return null;
 
   if (locked) {
@@ -124,7 +119,6 @@ export function RollTargetSection({
         <RollTargetSectionReady
           item={item}
           matches={matches}
-          targetsById={targetsById}
           unwantedOpen={unwantedOpen}
           onToggleUnwanted={() => setUnwantedOpen((v) => !v)}
         />
@@ -207,21 +201,19 @@ function RollTargetSectionFailure({
 function RollTargetSectionReady({
   item,
   matches,
-  targetsById,
   unwantedOpen,
   onToggleUnwanted,
 }: {
   item: GTItem;
   matches: NonNullable<ReturnType<typeof useRollTargetMatches>["matches"]>;
-  targetsById: Map<string, RollTarget>;
   unwantedOpen: boolean;
   onToggleUnwanted: () => void;
 }) {
   const chasing = weaponBoundTargetsFor(matches.unmatchedTargets, item.id);
   const wanted = matchesForItem(matches.wanted, item.id);
   const unwanted = matchesForItem(matches.unwanted, item.id);
-  const wantedGroups = groupMatchesByCopy(wanted, targetsById);
-  const unwantedGroups = groupMatchesByCopy(unwanted, targetsById);
+  const wantedGroups = groupMatchesByCopy(wanted);
+  const unwantedGroups = groupMatchesByCopy(unwanted);
 
   if (
     chasing.length === 0 &&

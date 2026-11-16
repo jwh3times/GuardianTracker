@@ -22,6 +22,7 @@ function rt(overrides: Partial<RollTarget> = {}): RollTarget {
 function match(overrides: Partial<RollTargetMatch> = {}): RollTargetMatch {
   return {
     targetId: "1",
+    anyWeapon: false,
     itemHash: "500",
     instanceId: "inst-1",
     perks: ["Arrowhead Brake", "Explosive Payload"],
@@ -78,23 +79,11 @@ describe("groupMatchesByCopy", () => {
       match({ instanceId: "inst-a", targetId: "1" }),
       match({ instanceId: "inst-b", targetId: "1" }),
     ];
-    const groups = groupMatchesByCopy(matches, new Map([["1", rt()]]));
+    const groups = groupMatchesByCopy(matches);
     expect(groups.map((g) => g.label)).toEqual(["Copy 1", "Copy 2"]);
   });
 
   it("collects every target one copy satisfies under a single group, badge per target", () => {
-    const targetsById = new Map([
-      ["1", rt({ id: "1", perks: ["Arrowhead Brake"] })],
-      [
-        "2",
-        rt({
-          id: "2",
-          itemHash: null,
-          anyWeapon: true,
-          perks: ["Explosive Payload"],
-        }),
-      ],
-    ]);
     const matches = [
       match({
         instanceId: "inst-a",
@@ -104,10 +93,11 @@ describe("groupMatchesByCopy", () => {
       match({
         instanceId: "inst-a",
         targetId: "2",
+        anyWeapon: true,
         targetPerks: ["Explosive Payload"],
       }),
     ];
-    const groups = groupMatchesByCopy(matches, targetsById);
+    const groups = groupMatchesByCopy(matches);
     expect(groups).toHaveLength(1);
     expect(groups[0].satisfiedTargets).toEqual([
       { targetId: "1", label: "Arrowhead Brake" },
@@ -119,13 +109,14 @@ describe("groupMatchesByCopy", () => {
     );
   });
 
-  it("falls back to the match's own targetPerks when the target id is missing from the list cache", () => {
-    const groups = groupMatchesByCopy(
-      [match({ targetId: "missing", targetPerks: ["Rampage"] })],
-      new Map(),
-    );
+  it("labels each badge from the match alone, any-weapon scope included", () => {
+    const groups = groupMatchesByCopy([
+      match({ targetId: "1", targetPerks: ["Rampage"] }),
+      match({ targetId: "2", anyWeapon: true, targetPerks: ["Firefly"] }),
+    ]);
     expect(groups[0].satisfiedTargets).toEqual([
-      { targetId: "missing", label: "Rampage" },
+      { targetId: "1", label: "Rampage" },
+      { targetId: "2", label: "Any weapon: Firefly" },
     ]);
   });
 });

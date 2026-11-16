@@ -702,6 +702,38 @@ func TestGetRollTargetMatches_SeparatesWantedUnwantedAndUnmatched(t *testing.T) 
 	}
 }
 
+// A match carries its target's scope, so a client never has to rejoin the
+// saved-target list to tell an any-weapon target from a weapon-bound one (#505).
+func TestGetRollTargetMatches_CarriesTheMatchedTargetsScope(t *testing.T) {
+	hash := uint32(1000)
+	roll := ownedrolls.OwnedRoll{ItemHash: 1000, InstanceID: "abc", Perks: []string{"Firefly", "Outlaw"}}
+	stub := &stubRollTargets{matches: rolltargets.MatchReport{
+		Wanted: []rolltargets.Match{
+			{Target: rolltargets.StoredTarget{ID: 1, ItemHash: nil, Wanted: true, Perks: []string{"Firefly"}}, Roll: roll},
+			{Target: rolltargets.StoredTarget{ID: 2, ItemHash: &hash, Wanted: true, Perks: []string{"Outlaw"}}, Roll: roll},
+		},
+	}}
+	w := send(newRollTargetRouter(NewRollTargetsHandler(stub)), http.MethodGet, "/api/rolltargets/matches", "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", w.Code, w.Body.String())
+	}
+	var raw struct {
+		Wanted []map[string]any `json:"wanted"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(raw.Wanted) != 2 {
+		t.Fatalf("wanted = %+v, want two matches", raw.Wanted)
+	}
+	if got, ok := raw.Wanted[0]["anyWeapon"]; !ok || got != true {
+		t.Errorf("any-weapon match anyWeapon = %v (present %v), want true", got, ok)
+	}
+	if got, ok := raw.Wanted[1]["anyWeapon"]; !ok || got != false {
+		t.Errorf("weapon-bound match anyWeapon = %v (present %v), want false", got, ok)
+	}
+}
+
 // Matching reads inventory per membership pair, so the platform has to travel
 // with the id.
 func TestGetRollTargetMatches_PassesTheMembershipPair(t *testing.T) {

@@ -166,9 +166,10 @@ export function groupMatchesByTarget(
   });
 }
 
-/** Defensive fallback for a match whose target id is not (yet) in the target
- * list cache — e.g. a race right after a refresh. Keeps the group rendering
- * something reasonable rather than throwing. */
+/** The target for a match whose id is not in the loaded target list — an
+ * optimistic delete drops it before the match report refetches, and an import
+ * can refetch the two in either order. Built only from what the match itself
+ * carries, scope included, so the card still says what the target is. */
 function fallbackTarget(
   targetId: string,
   sample: RollTargetMatch,
@@ -176,8 +177,8 @@ function fallbackTarget(
 ): RollTarget {
   return {
     id: targetId,
-    itemHash: sample.itemHash,
-    anyWeapon: false,
+    itemHash: sample.anyWeapon ? null : sample.itemHash,
+    anyWeapon: sample.anyWeapon,
     wanted,
     perks: sample.targetPerks,
     notes: sample.notes ?? "",

@@ -358,6 +358,10 @@ export interface RollTargetImportReport {
 /** One owned weapon satisfying (or matching, if unwanted) one saved roll target. */
 export interface RollTargetMatch {
   targetId: string;
+  /** The matched target's scope, carried on the match itself so a label never
+   * depends on the separately loaded target list. A weapon-bound target's
+   * weapon is `itemHash`. */
+  anyWeapon: boolean;
   /** The design-system item id of the owned copy that matched. */
   itemHash: string;
   instanceId: string;
