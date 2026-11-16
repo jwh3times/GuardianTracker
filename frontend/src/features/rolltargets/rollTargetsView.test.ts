@@ -132,6 +132,7 @@ describe("groupMatchesByTarget", () => {
   function match(overrides: Partial<RollTargetMatch> = {}): RollTargetMatch {
     return {
       targetId: "1",
+      anyWeapon: false,
       itemHash: "100",
       instanceId: "inst-1",
       perks: ["Arrowhead Brake", "Explosive Payload"],
@@ -148,7 +149,10 @@ describe("groupMatchesByTarget", () => {
       perks: ["Arrowhead Brake"],
     });
     const targetsById = new Map([["1", target]]);
-    const matches = [match({ instanceId: "a" }), match({ instanceId: "b" })];
+    const matches = [
+      match({ instanceId: "a", anyWeapon: true }),
+      match({ instanceId: "b", anyWeapon: true }),
+    ];
     const groups = groupMatchesByTarget(matches, targetsById, lookup(), true);
     expect(groups).toHaveLength(1);
     expect(groups[0].heading).toBe("Any weapon with Arrowhead Brake");
@@ -162,7 +166,7 @@ describe("groupMatchesByTarget", () => {
     expect(groups[0].heading).toBe("Fatebringer");
   });
 
-  it("falls back to a reasonable target when the id is missing from the list cache", () => {
+  it("builds a weapon-bound target from the match when the id is missing from the list cache", () => {
     const groups = groupMatchesByTarget(
       [match({ targetId: "9" })],
       new Map(),
@@ -171,7 +175,20 @@ describe("groupMatchesByTarget", () => {
     );
     expect(groups[0].target.id).toBe("9");
     expect(groups[0].target.wanted).toBe(false);
+    expect(groups[0].target.anyWeapon).toBe(false);
     expect(groups[0].heading).toBe("Fatebringer");
+  });
+
+  it("keeps an any-weapon target's scope when the id is missing from the list cache", () => {
+    const groups = groupMatchesByTarget(
+      [match({ targetId: "9", anyWeapon: true, targetPerks: ["Firefly"] })],
+      new Map(),
+      lookup(),
+      true,
+    );
+    expect(groups[0].target.anyWeapon).toBe(true);
+    expect(groups[0].target.itemHash).toBeNull();
+    expect(groups[0].heading).toBe("Any weapon with Firefly");
   });
 });
 

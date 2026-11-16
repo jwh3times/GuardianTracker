@@ -354,8 +354,14 @@ func unresolvedPerkResponseOf(u *rolltargets.UnresolvedPerk) *unresolvedPerkResp
 }
 
 // matchResponse is one owned weapon satisfying one saved roll.
+//
+// AnyWeapon is the matched target's scope. ItemHash is the owned copy's hash,
+// which equals a weapon-bound target's own hash, so the two together say
+// everything the target's scope does: clients need not rejoin the saved-target
+// list, which loads and fails independently, to label the match.
 type matchResponse struct {
 	TargetID   string   `json:"targetId"`
+	AnyWeapon  bool     `json:"anyWeapon"`
 	ItemHash   uint32   `json:"itemHash"`
 	InstanceID string   `json:"instanceId"`
 	Perks      []string `json:"perks"`
@@ -424,6 +430,7 @@ func matchResponses(matches []rolltargets.Match) []matchResponse {
 	for _, m := range matches {
 		out = append(out, matchResponse{
 			TargetID:   strconv.FormatInt(int64(m.Target.ID), 10),
+			AnyWeapon:  m.Target.AnyWeapon(),
 			ItemHash:   m.Roll.ItemHash,
 			InstanceID: m.Roll.InstanceID,
 			Perks:      m.Roll.Perks,

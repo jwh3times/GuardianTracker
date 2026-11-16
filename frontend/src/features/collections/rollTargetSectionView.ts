@@ -66,25 +66,19 @@ export interface CopyMatchGroup {
   satisfiedTargets: SatisfiedTarget[];
 }
 
-function targetLabel(
-  target: RollTarget | undefined,
-  fallback: string[],
-): string {
-  if (target?.anyWeapon) {
-    return `Any weapon: ${target.perks.join(" + ")}`;
-  }
-  return (target?.perks ?? fallback).join(" + ");
+/** The badge label, from the match alone: it carries the target's scope and
+ * perks, so the label never waits on, or misreads, the target list. */
+function targetLabel(match: RollTargetMatch): string {
+  const perks = match.targetPerks.join(" + ");
+  return match.anyWeapon ? `Any weapon: ${perks}` : perks;
 }
 
 /**
- * Group this weapon's matches by owned copy (`instanceId`), not by target.
- * `targetsById` resolves each match's target for its badge label and
- * any-weapon phrasing; a match whose target id is not in the map (a race
- * right after a refresh) falls back to the match's own `targetPerks`.
+ * Group this weapon's matches by owned copy (`instanceId`), not by target,
+ * badging each copy with every target it satisfies.
  */
 export function groupMatchesByCopy(
   matches: RollTargetMatch[],
-  targetsById: Map<string, RollTarget>,
 ): CopyMatchGroup[] {
   const byInstance = new Map<string, RollTargetMatch[]>();
   const order: string[] = [];
@@ -101,7 +95,7 @@ export function groupMatchesByCopy(
     const targetPerks = Array.from(new Set(ms.flatMap((m) => m.targetPerks)));
     const satisfiedTargets = ms.map((m) => ({
       targetId: m.targetId,
-      label: targetLabel(targetsById.get(m.targetId), m.targetPerks),
+      label: targetLabel(m),
     }));
     return {
       instanceId,

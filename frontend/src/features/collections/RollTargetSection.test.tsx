@@ -197,6 +197,7 @@ describe("copies you own that match", () => {
             wanted: [
               {
                 targetId: "1",
+                anyWeapon: false,
                 itemHash: 500,
                 instanceId: "inst-a",
                 perks: ["Arrowhead Brake", "Explosive Payload"],
@@ -204,6 +205,7 @@ describe("copies you own that match", () => {
               },
               {
                 targetId: "2",
+                anyWeapon: true,
                 itemHash: 500,
                 instanceId: "inst-a",
                 perks: ["Arrowhead Brake", "Explosive Payload"],
@@ -227,6 +229,41 @@ describe("copies you own that match", () => {
     expect(
       within(copy1).getByText("Explosive Payload", { selector: ".gt-chip" }),
     ).toHaveAttribute("data-highlight", "true");
+    expect(
+      within(copy1).getByText("Any weapon: Explosive Payload"),
+    ).toBeInTheDocument();
+  });
+
+  it("badges an any-weapon match as any-weapon even when the saved-target list fails", async () => {
+    setFlag({});
+    server.use(
+      http.get(`${API}/api/rolltargets`, () =>
+        HttpResponse.json({ error: "boom" }, { status: 500 }),
+      ),
+      http.get(`${API}/api/rolltargets/matches`, () =>
+        HttpResponse.json(
+          emptyMatches({
+            wanted: [
+              {
+                targetId: "2",
+                itemHash: 500,
+                instanceId: "inst-a",
+                anyWeapon: true,
+                perks: ["Arrowhead Brake", "Explosive Payload"],
+                targetPerks: ["Explosive Payload"],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderSection();
+
+    await waitFor(() => expect(screen.getByText("Copy 1")).toBeInTheDocument());
+    const copy1 = screen
+      .getByText("Copy 1")
+      .closest(".gt-rt-copy") as HTMLElement;
     expect(
       within(copy1).getByText("Any weapon: Explosive Payload"),
     ).toBeInTheDocument();

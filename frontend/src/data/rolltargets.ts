@@ -129,6 +129,7 @@ function toMatch(
 ): RollTargetMatch {
   return {
     targetId: m.targetId,
+    anyWeapon: m.anyWeapon,
     itemHash: String(m.itemHash),
     instanceId: m.instanceId,
     perks: m.perks ?? [],

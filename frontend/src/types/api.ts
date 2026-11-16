@@ -465,6 +465,9 @@ export interface APIImportReport {
 /** One owned weapon satisfying (or matching, if unwanted) one saved roll target. */
 export interface APIRollTargetMatch {
   targetId: string;
+  /** The matched target's scope: true for an any-weapon target. A
+   * weapon-bound target's hash is `itemHash`, the copy it matched. */
+  anyWeapon: boolean;
   itemHash: number;
   instanceId: string;
   /** The owned copy's full resolved perks. */

@@ -434,6 +434,38 @@ describe("You have it", () => {
     const notHighlighted = within(copy1).getByText("Explosive Payload");
     expect(notHighlighted).toHaveAttribute("data-highlight", "false");
   });
+
+  it("keeps an any-weapon match's scope when the saved-target list does not hold its target yet", async () => {
+    // The list and the match report are separate queries. An optimistic
+    // delete drops a target from the list before the report refetches, and an
+    // import can refetch them in either order.
+    useCollectionsFixture({ "100": { name: "Fatebringer", collected: true } });
+    server.use(
+      http.get(`${API}/api/rolltargets`, () =>
+        HttpResponse.json([target("2", { perks: ["Rampage"] })]),
+      ),
+      http.get(`${API}/api/rolltargets/matches`, () =>
+        HttpResponse.json(
+          emptyMatches({
+            wanted: [
+              {
+                targetId: "1",
+                itemHash: 100,
+                instanceId: "inst-a",
+                anyWeapon: true,
+                perks: ["Firefly", "Explosive Payload"],
+                targetPerks: ["Firefly"],
+              },
+            ],
+          }),
+        ),
+      ),
+    );
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Copy 1")).toBeInTheDocument());
+    expect(screen.getByText("Any weapon with Firefly")).toBeInTheDocument();
+  });
 });
 
 describe("match failure", () => {
