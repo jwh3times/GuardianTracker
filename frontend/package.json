@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
-    "@playwright/test": "1.65.0",
+    "@playwright/test": "1.65.1",
     "@tailwindcss/postcss": "^4.3.5",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
@@ -54,7 +54,7 @@
     "msw": "^3.0.5",
     "oxlint": "1.93.0",
     "oxlint-tsgolint": "7.0.2007",
-    "postcss": "^8.5.32",
+    "postcss": "^8.5.33",
     "prettier": "^3.10.1",
     "tailwindcss": "^4.3.1",
     "typescript": "^7.0.2",
