@@ -22,5 +22,7 @@ blocks unrelated engineering work.
 The private companion's wiki: `discover: git -C private remote get-url origin`, with `.wiki.git`
 in place of `.git` (default branch `master`). Index page `Human-todo`, linked from `Home`: each
 procedure is a dedicated page or a stable numbered section of `Human-todo`, linked from its
-`## Currently open` list and back to its issue. Push without asking: the standing authorization
-above covers it.
+`## Currently open` list and back to its issue. `Human-todo` shows only outstanding work: when an
+action closes, move its procedure to `Human-todo-archive` with its heading unchanged, so anchors
+survive, and repoint the issue's link to the archive page. Push without asking: the standing
+authorization above covers it.

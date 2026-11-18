@@ -72,6 +72,10 @@
   `scripts/restore-private-secrets.ps1`, `scripts/workspace-status.ps1`, `scripts/sync-main.mjs`).
 - `docs/agents/*.md` — conventions and settings the skills read; `dev-flow.md` holds what this
   repository adds to the shared flow. **When:** a convention, route or setting changes.
+- `docs/agents/merging.md`, `docs/agents/verification.md`, `docs/agents/local-runs.md` — from open
+  PR to finished merge, including Dependabot's red-on-arrival bumps; proving a card's premise, a
+  test or a gate; the development machine's traps. **When:** a lesson is learned that no script or
+  policy test enforces, or a command, check or pin they quote changes.
 - `.claude/agents/*.md` — area notes for the subagents, mirrored to `.codex/agents/`. **When:**
   `go-services.md`: endpoints, JWT, OAuth, manifest flow; `react-frontend.md`: structure, query
   patterns, pages; `postgres-specialist.md`: schema and migrations; `penetration-tester.md`: the

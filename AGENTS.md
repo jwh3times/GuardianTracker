@@ -479,7 +479,12 @@ Public docs:
   (issue tracker, triage labels, domain docs, development flow, and the shared
   skills' settings files); see `## Agent skills` below
 - `docs/agents/dev-flow.md` - what this repository adds to the shared development
-  flow: board items and exemption details
+  flow: board items, what to do before implementing, and exemption details
+- `docs/agents/merging.md` - once a PR is open: whether CI's answer is for your
+  commit, reds that aren't the code, merging, and Dependabot's red-on-arrival bumps
+- `docs/agents/verification.md` - before trusting a card's premise, a test or a gate
+- `docs/agents/local-runs.md` - before handing a tree to a reviewer, or running the
+  stack and browser tests on a development machine
 - `docs/maintainers/workspace-recovery.md` - value-free private-workspace and
   machine-local configuration recovery runbook for authorized maintainers
 

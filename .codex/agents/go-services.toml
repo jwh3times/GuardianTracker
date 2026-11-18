@@ -894,6 +894,32 @@ made a milestone's missing-count badge silently not appear.
 - Migrations run in a transaction — a failed multi-statement migration cannot leave a half-applied schema.
 - A get-or-compute-and-cache call site against `cache.Cache` goes through `cache.Load`/`cache.LoadIf` (`cache/load.go`), not a hand-written get + type-assert + conditional `Set`. Use `LoadIf` with `cache.NonEmptyMap`/`cache.NonEmptySlice` (or a custom predicate) when an empty result must not be cached. Skip it only when the TTL depends on the loaded value or the cache-hit path itself transforms and re-stores (`weekly.getPublicWeekly`, `collections.getAnalysis`).
 
+### Typed nil when a parameter becomes an interface
+
+Replacing a concrete `*T` dependency with a narrow consumer-side interface adds a hazard the pointer
+didn't have: a nil `*T` assigned to an interface is a non-nil interface holding a nil receiver.
+`if dep != nil` keeps passing and the call panics inside the method; compilation and `go vet` are
+silent. It fired on the first test run of a slice, from a test fixture that had passed a nil
+pointer through safely for years.
+
+- When a parameter changes from `*T` to an interface, grep every construction site: a literal `nil`
+  is safe, a variable of the concrete pointer type is the hazard. Test fixtures and optional paths
+  are where it bites; `main.go` builds real values.
+- Check the concrete value before it becomes an interface, at the assigning call site, not inside
+  the consumer. Better, substitute a never-nil implementation, as `db.Stores` does with the
+  degraded stores in `db/degraded.go`.
+- Say so in the interface's doc comment, and mutation-check the substitution itself.
+
+### Bungie data facts verified by capture
+
+- Enhanced perks are carried by the plug definition, not the instance's `ItemState`: across 624 owned
+  weapons the Enhanced flag (32) was set on one, while enhanced plug definitions numbered in the
+  hundreds. The Crafted flag (8) holds up.
+- Of the two case-differing "weapon perks" socket categories in the Manifest, only `4241085061`
+  appeared on owned weapons. Matching both is the safe read.
+- About a quarter of perk sockets expose no selectable options; never render those as a chooser.
+- What the public weekly endpoints can't provide is ADR 0007.
+
 ## Structured logging
 
 - Use the request-scoped `*slog.Logger` attached to `context.Context`; every request has a server-owned UUID returned as `X-Request-ID`.
