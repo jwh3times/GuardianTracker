@@ -14,6 +14,24 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.98] - 2026-11-18
+
+### Security
+
+- The committed Claude Code permission allowlist (`.claude/settings.json`) no
+  longer lets an agent run arbitrary code without asking. Wildcard rules for
+  `npm run`, `npm test`, `npm install`, `go run`, `go test`, `go build`,
+  `go vet`, `docker compose` and `docker-compose` are replaced by the exact
+  check, test, build and stack commands `AGENTS.md` and CI document: the repo
+  policy and agent-config checks, the frontend type-check, lint, format check,
+  build, unit and browser tests, `npm ci`, the pinned Staticcheck run,
+  whole-module Go test, vet and build, and the documented Compose start, stop
+  and status forms. Commands that write files, delete volumes, or run inside a
+  container now prompt. Read-only rules are added for `git fetch`,
+  `git merge-base`, `gh project item-list` and `field-list`,
+  `npx prettier --check`, `docker compose ps` and `logs`, and the Context7
+  documentation tools. No application behavior changes.
+
 ## [1.18.97] - 2026-11-18
 
 ### Changed
@@ -2573,7 +2591,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.97...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.98...HEAD
+[1.18.98]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.97...v1.18.98
 [1.18.97]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.96...v1.18.97
 [1.18.96]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.95...v1.18.96
 [1.18.95]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.94...v1.18.95
