@@ -61,6 +61,30 @@ slice label no item carries, and exits non-zero when it finds any. Clear each to
 `Unblocked`, or `Shipped` is treated as cleared. It reads the private board
 through your `gh` session, so it runs locally; CI tests only its parsing.
 
+**`gh project` answers quietly wrong.** Every id form addresses something, so a wrong one edits the
+wrong object, and even a right one may not land:
+
+- `item-edit --id` takes the content id (`DI_…`) for `--title`/`--body` and the project item id
+  (`PVTI_…`) for `--field-id` edits; `item-list` returns both, as `.content.id` and `.id`. A wrong
+  value in `--project-id` also exits 0 and changes nothing.
+- An `item-edit` can exit 0 without applying. Re-read ids from a fresh `item-list` right before each
+  edit, and read every write back.
+- `item-list` doesn't camel-case field names: `Blocked By` is the key `"blocked By"` and `ADR` is
+  `"aDR"`. A guessed `.blockedBy` reads `undefined` for every row and makes the whole board look
+  ready. Dump one item with `JSON.stringify(item, null, 2)` and copy the key names.
+- `item-list` can lag a just-added item; verify by querying the item id you hold.
+- Issues and PRs share one number sequence, and `gh issue edit` happily edits a PR. Read a new
+  issue's number from the command that created it, never by guessing the next one.
+- A bulk audit (a full `item-list` plus about 60 edits) can exhaust the GraphQL budget; it resets
+  within a minute. Batch edits and read back once at the end.
+- `Order` is relative position, not a slice number: slice labels live in item titles.
+
+**When the frontier is empty, check the external blockers.** An item blocked on an upstream fix
+keeps `blocked` until someone looks, and one upstream fix had shipped a day before it was noticed.
+Read each external `Blocked By` upstream (the issue, the package's latest release) before reporting
+that nothing is ready. A `ROADMAP.md` line with no board item is a stale-doc suspect, not a
+candidate: read the closeout of the umbrella issue it came from.
+
 **Which repository.** File public by default. Use the private companion
 repository only when the body would need a
 credential, a real provider/cost/account identifier, or exploitable security
