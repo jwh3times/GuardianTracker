@@ -909,7 +909,8 @@ pointer through safely for years.
   is safe, a variable of the concrete pointer type is the hazard. Test fixtures and optional paths
   are where it bites; `main.go` builds real values.
 - Check the concrete value before it becomes an interface, at the assigning call site, not inside
-  the consumer. Better, substitute a never-nil implementation, as `db/degraded.go`'s `Stores` does.
+  the consumer. Better, substitute a never-nil implementation, as `db.Stores` does with the
+  degraded stores in `db/degraded.go`.
 - Say so in the interface's doc comment, and mutation-check the substitution itself.
 
 ### Bungie data facts verified by capture

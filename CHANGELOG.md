@@ -14,6 +14,23 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.97] - 2026-11-18
+
+### Changed
+
+- The agent operating guides now carry the lessons that previously lived only
+  in one agent's private memory, so every agent and machine reads the same
+  rules. Three new guides in `docs/agents/` cover what happens after a PR opens
+  (`merging.md`: whether CI's answer is for your commit, reds that aren't the
+  code, merging, and Dependabot's red-on-arrival bumps), how to prove a card's
+  premise, a test or a gate (`verification.md`), and the development machine's
+  traps (`local-runs.md`). `dev-flow.md` gains what to do before implementing,
+  `issue-tracker.md` the ways `gh project` answers quietly wrong and the check
+  for cleared external blockers, `human-follow-up.md` the wiki archive rule, and
+  the `go-services` agent notes the typed-nil hazard of an interface parameter
+  and Bungie data facts verified by capture. `AGENTS.md` and the docs map index
+  the new guides. No application behavior changes.
+
 ## [1.18.96] - 2026-11-16
 
 ### Fixed
@@ -2556,7 +2573,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.96...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.97...HEAD
+[1.18.97]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.96...v1.18.97
 [1.18.96]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.95...v1.18.96
 [1.18.95]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.94...v1.18.95
 [1.18.94]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.93...v1.18.94

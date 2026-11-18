@@ -22,8 +22,9 @@ patch from its account of what it changed.
   in the code. Check the owner (`Get-NetTCPConnection -LocalPort 8081`), stop it, or for one run set
   `PORT=18081` and `E2E_API_URL=http://127.0.0.1:18081`.
 - **The Compose network is named after the checkout directory**: `guardiantracker_default` in the
-  main checkout, `<worktree>_default` in a worktree. Substitute it in the visual-baseline
-  `docker run --network …` (`docker network ls`).
+  main checkout, `<worktree>_default` in a worktree. The visual-baseline procedure in
+  `frontend/README.md` reads it from the running `e2e-postgres` container; any other
+  `docker run --network …` must do the same rather than assume it (`docker network ls`).
 - **A worktree has no root `.env`**, so every `docker compose` command there needs `GO_ENV=development`
   exported just to interpolate the file.
 
