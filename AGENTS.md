@@ -325,9 +325,9 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    redundant augmentation keeps working and would redden no other check. The changelog-footer
    policy keeps `CHANGELOG.md`'s reference-link definitions in step with its version
    headings — every released section defined, no orphans, each comparing from the section
-   below it, and `[Unreleased]` comparing from the newest release. `Changelog Version`
-   only inspects the top heading, so without this the footer fell one version behind per
-   release. The job also runs
+   below it, and `[Unreleased]` comparing from the newest release. `version.yml` keeps
+   the footer current when it stamps a release, and this test catches a hand edit that
+   breaks it. The job also runs
    `npm run sync:agents:check`, which fails if
    `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
    (generated from `.agents/skills/`) is out of sync with its source. Fix:
@@ -341,9 +341,11 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
 3. **test-go-services** — `go vet`, Staticcheck 2026.1, declared `govulncheck` tool v1.6.0 via `go tool govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
 4. **build-docker-images** — `npm run test:docker-context` verifies both application `.dockerignore` policies with synthetic fixtures and a real Docker scratch `COPY` probe. `npm run test:nginx-headers` verifies security-header inheritance and cache behavior over HTTP using the pinned nginx runtime and synthetic assets. The job then validates application image builds (no push configured). Neither probe reads local environment files.
-5. **changelog-version** — verifies `CHANGELOG.md`'s top version equals the tag the
-   merge will mint (`scripts/next-version.mjs`, the same oracle `version.yml` uses).
-   Bot-authored PRs are exempt; `/ship` backfills their entries.
+5. **changelog-version** (check name `Changelog Version`, kept because the ruleset
+   requires it) — verifies the branch's `changelog.d/` fragments parse and that it
+   edits no released `CHANGELOG.md` section, no `## [Unreleased]` entry and no
+   fragment already on `main` (`scripts/check-changelog.mjs`). A PR with no fragment,
+   such as Dependabot's, passes; `version.yml` writes its section from the PR title.
 
 The workflow also runs **Test Workspace Portability (Windows)** as a non-required
 validation job. It executes the portability suite and the Minikube startup test on
@@ -361,11 +363,11 @@ Dependabot ecosystem advances both the SHA and comment.
 
 CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
 
-**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v1.18.26`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. Tag-based because `main` is protected with no bypass actors — a workflow can't push a bump commit.
+**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v1.18.26`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. `Scheme: stamp-on-tag` (ADR 0027): branches never edit `CHANGELOG.md`; each writes its entries to `changelog.d/<branch-slug>.md`, and after the merge `scripts/stamp-changelog.mjs` turns that merge's fragments (or, with none, its PR title) into its dated section, deletes them, and pushes one `chore(release): v<x.y.z> [skip ci]` commit plus the tag on the merge commit, then creates the GitHub Release from the section. The push uses a token from the release GitHub App, the main ruleset's one bypass actor (`GITHUB_TOKEN` cannot bypass a ruleset), and `[skip ci]` keeps it from starting CI/CD or Browser Quality.
 
 ### Branch protection (`main`)
 
-Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`, `Browser E2E + Axe`), code-scanning gate (errors+warnings / medium+), no bypass actors. `Browser Visual Regression` remains optional.
+Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`, `Browser E2E + Axe`), code-scanning gate (errors+warnings / medium+), and one bypass actor: the release GitHub App, "Always allow", so `version.yml` can push the stamp commit. `Browser Visual Regression` remains optional.
 
 To change the gate, update the repository ruleset through GitHub UI or the GitHub API. Required check names must match CI job `name:` exactly.
 
@@ -652,8 +654,9 @@ node scripts/sync-agents.mjs
 ```
 
 `scripts/sync-agents.mjs`, `lint-agent-neutrality.mjs`, `check-docs.mjs`, `check-skills.mjs`, and
-`sync-main.mjs`, `next-version.mjs` and `check-changelog.mjs` where this repository carries them, are
-canonical in `jwh3times/skills` with their tests: fix them there, then copy them here.
+`sync-main.mjs`, `next-version.mjs`, `check-changelog.mjs` and `stamp-changelog.mjs` where this
+repository carries them, are canonical in `jwh3times/skills` with their tests: fix them there, then
+copy them here.
 `sync-agents.mjs` also writes the marked blocks in this file: change them in `jwh3times/skills`, not
 here.
 

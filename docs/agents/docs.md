@@ -44,7 +44,9 @@
 - `docs/adr/README.md` — the ADR index and status vocabulary. **When:** an ADR is added.
 - `ROADMAP.md` — public work not yet shipped, with gates and likely size. **When:** a branch
   implements a roadmap item (remove or revise it), or a gate changes.
-- `CHANGELOG.md` — Keep a Changelog, one dated section per merge, compare-link footer.
+- `CHANGELOG.md` — Keep a Changelog, one dated section per merge, compare-link footer, stamped by
+  `version.yml` after each merge. `frozen`: a branch edits only the policy text at the top.
+- `changelog.d/*.md` — the branch's changelog fragment, one per branch (`changelog.d/README.md`).
   `ship-owned`.
 - `VERSION` — the version file `ship` bumps. `ship-owned`.
 - `docs/changelog/*.md` — release notes archived from `CHANGELOG.md`. `frozen`.

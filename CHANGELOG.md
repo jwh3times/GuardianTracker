@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Guardian Tracker uses the SemVer target version in `VERSION`; every merge to
 `main` is stamped with an annotated version tag and GitHub Release such as
 `v1.2.7`. One merge to `main` produces exactly one version, so each released
-section below corresponds to a single merged pull request.
+section below corresponds to a single merged pull request. Branches never edit
+this file: each writes its entries to `changelog.d/`, and
+`.github/workflows/version.yml` stamps them into the section for the version its
+merge mints.
 
 Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [0.x](docs/changelog/0.x.md).
 

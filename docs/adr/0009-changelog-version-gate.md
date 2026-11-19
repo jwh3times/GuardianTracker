@@ -2,6 +2,11 @@
 
 **Status:** Accepted
 **Date:** 2026-07-13
+**Superseded in part by:** [ADR 0027](./0027-stamp-changelog-on-tag.md) — a
+branch writes a `changelog.d/` fragment and names no version; the version
+workflow stamps the section after the merge, so `Changelog Version` checks the
+fragments and has no bot exemption. `scripts/next-version.mjs` stays the one
+implementation of the build-number rule.
 
 ## Context
 

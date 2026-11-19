@@ -63,10 +63,10 @@ Services` on `main` and every open PR at once. Grep the failing log for `GO-20`:
 - **The ruleset requires up-to-date branches, and auto-merge is off.** A `BEHIND` PR needs
   `gh pr update-branch <n>` and a fresh green run, so merge several PRs one at a time: update,
   wait for the required checks, merge, then update the next.
-- **Two open PRs predict the same version.** After one merges, wait for `version.yml` to mint its
-  tag (about a minute), `git fetch --tags`, fast-forward local `main` (`git fetch` alone leaves it
-  behind), then recompute with `node scripts/next-version.mjs` and renumber the other branch's
-  section. Both sections sit under `[Unreleased]`, so `CHANGELOG.md` conflicts every time.
+- **No branch names a version**, so open PRs merge in any order: each carries only its own
+  `changelog.d/` fragment, and catching up with `main` never touches `CHANGELOG.md`. A conflict in
+  `CHANGELOG.md` means the branch edited it, which `Changelog Version` rejects; move the entries
+  into the branch's fragment.
 - **Check the branch's base before opening a PR.** `git diff --stat origin/main..HEAD` shows a
   wrong base as unrelated files; `git rebase --onto origin/main <old-base>` fixes it.
 
@@ -81,10 +81,13 @@ branch; a later `git worktree remove` failing with "is not a working tree" is ha
 
 - Wait for the version tag, then run `npm run board:blockers` and clear what it lists
   ([issue tracker](issue-tracker.md#project-board)).
-- **A Dependabot merge leaves a released version with no changelog section and no footer link.**
-  No check fails afterwards. Compare `git tag --sort=-v:refname | head` with `CHANGELOG.md`'s top
-  version; `/ship` on the next branch backfills them (`Skipped tags: backfill`). A backfill branch
-  needs its own section on top, because its merge mints the next version.
+- **`version.yml` releases the merge** (Actions → Version, about a minute): one
+  `chore(release): v<x.y.z> [skip ci]` commit by the release App on `main` with the section, the
+  tag on the merge commit, and a GitHub Release whose body is the section. A merge with no fragment,
+  such as Dependabot's, gets a one-bullet section from its PR title. Fast-forward local `main`
+  afterwards, since the stamp commit lands on top of the merge. A run that ends with "main moved
+  during this run" is benign: the next run releases both merges. Any other failure leaves the merge
+  untagged until a later run succeeds, and the next run releases it.
 
 ## Dependency pull requests
 
@@ -99,10 +102,10 @@ git push origin fixup:<dependabot-branch>
 ```
 
 - **Never `@dependabot rebase` afterwards**: Dependabot force-pushes the branch it owns and drops
-  your commit. Use `gh pr update-branch <n>`. The `Changelog Version` bot exemption keys on the PR
-  author, so it survives a human commit.
-- **`/ship` works on a bot branch too**: it writes the section for the version the merge will mint
-  and backfills any missing release. Fetch with `git fetch origin pull/<n>/head`, then rename the
+  your commit. Use `gh pr update-branch <n>`. A bot PR needs no fragment: `Changelog Version`
+  passes it and `version.yml` writes its section from the PR title.
+- **`/ship` works on a bot branch too**, when the fix deserves a better entry than the PR title: it
+  writes the branch's fragment. Fetch with `git fetch origin pull/<n>/head`, then rename the
   local branch to the bot branch's name and set its upstream.
 - **A fix that belongs on `main` regardless** (a govulncheck advisory reddening every PR) goes on
   its own branch off `main`, not onto a bot branch.

@@ -1,100 +1,106 @@
 name: Version
 
-# Stamps every merge to main with a three-part SemVer release.
+# Releases every merge to main with a three-part SemVer tag (`Scheme: stamp-on-tag`, ADR 0027).
 #
-# On each push to main this reads the target version from the root VERSION file,
-# treats the third component as the project build number, pushes an annotated tag
-# `v<major>.<minor>.<build>` (e.g. v1.2.0) pointing at the merge commit, and
-# creates a GitHub Release from that tag.
+# On each push to main this runs `scripts/stamp-changelog.mjs`, which walks main's first-parent
+# history back to the newest `v<major>.<minor>.<build>` tag and, for each untagged merge, oldest
+# first:
+#   - builds its dated CHANGELOG.md section from the `changelog.d/` fragments that merge added, or
+#     from its PR title when it added none (a Dependabot PR, a docs-only change);
+#   - computes its version the way `scripts/next-version.mjs` does, from the root VERSION file at
+#     that merge and the tags so far (the third component is the build number, and a new
+#     major/minor line starts at build 0);
+#   - tags the merge commit itself, so a tag is exactly the code that merge built.
+# It makes one stamp commit, `chore(release): v<x.y.z>[, ...] [skip ci]`, that adds the sections
+# and their footer links and deletes the used fragments. This job pushes that commit and the tags
+# in one atomic push, then creates a GitHub Release per tag from its section.
 #
-# Why a tag instead of committing a bump back to main:
-#   - it works identically on protected branches (no bypass actor or bump-commit needed);
-#   - it never re-triggers CI or needs [skip ci] loops;
-#   - build numbers can restart at 0 whenever the major/minor version is bumped.
+# The push uses a token from the release GitHub App, which the main ruleset lists as a bypass actor:
+# `GITHUB_TOKEN` cannot bypass a ruleset. The App's client ID is the RELEASE_APP_CLIENT_ID variable
+# and its private key the RELEASE_APP_PRIVATE_KEY secret. `[skip ci]` keeps the App's push from
+# starting the CI/CD Pipeline, Browser Quality, or this workflow again.
 #
-# If VERSION is bumped to a new major/minor line such as 2.0.0 and there are no
-# v2.0.* tags yet, the first release stays v2.0.0. It only increments to v2.0.1
-# after a v2.0.0 tag exists.
-#
-# To see which build a checkout corresponds to: git describe --tags
+# To see which release a checkout corresponds to: git describe --tags
 
 on:
   push:
     branches: [main]
 
 permissions:
-  contents: write # required to push the version tag
+  contents: write # gh release create with GITHUB_TOKEN
 
-# Serialize runs so two closely-spaced merges can't compute the same build number.
+# Runs take turns and never cancel: a run waiting here starts from main's new tip and stamps every
+# merge the run before it did not.
 concurrency:
   group: version-main
   cancel-in-progress: false
 
 jobs:
-  tag-build:
-    name: Tag and release version
+  release:
+    name: Stamp changelog and tag
     runs-on: ubuntu-latest
     steps:
+      - name: Create release App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # full history + tags, needed to compute the next build number
+          ref: main # main's tip, not the pushed commit: a later merge may already be on it
+          fetch-depth: 0 # full history and tags, needed to find the untagged merges
+          token: ${{ steps.app-token.outputs.token }}
 
-      - name: Compute next version and push tag
-        id: version
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Stamp the changelog and push the tags
+        id: stamp
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
-          target=$(tr -d '[:space:]' < VERSION)
-          IFS=. read -r major minor _ <<< "$target"
+          bot="${APP_SLUG}[bot]"
+          bot_id=$(gh api "/users/${bot}" --jq .id)
+          git config user.name "$bot"
+          git config user.email "${bot_id}+${bot}@users.noreply.github.com"
 
-          prefix="v${major}.${minor}"
-          escaped_prefix="v${major}\.${minor}"
-          existing_for_commit=$(git tag --list "${prefix}.*" --points-at "$GITHUB_SHA" | grep -E "^${escaped_prefix}\.[0-9]+$" | sort -V | tail -1 || true)
-
-          if [ -n "$existing_for_commit" ]; then
-            # Re-run on an already-tagged commit: reuse rather than mint a second build.
-            tag="$existing_for_commit"
-            version="${tag#v}"
-            build="${version##*.}"
-            echo "Commit already has ${tag}; reusing it instead of creating another build."
-          else
-            # The build-number rule lives in scripts/next-version.mjs so that CI's
-            # Changelog Version guard and the /ship skill compute the identical value.
-            version=$(node scripts/next-version.mjs)
-            tag="v${version}"
-            build="${version##*.}"
-
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$tag" -m "Version ${version}"
-            git push origin "refs/tags/${tag}"
+          node scripts/stamp-changelog.mjs --notes-dir "$RUNNER_TEMP/notes" > "$RUNNER_TEMP/tags.txt"
+          if [ ! -s "$RUNNER_TEMP/tags.txt" ]; then
+            echo "Every merge on main is tagged; nothing to release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
+          tags=$(cut -d' ' -f1 "$RUNNER_TEMP/tags.txt")
 
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "build=${build}" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Version tag: \`${tag}\`"
-            echo ""
-            echo "- Version line: \`${major}.${minor}\`"
-            echo "- Build number: \`${build}\`"
-            echo "- Commit: \`${GITHUB_SHA}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          refs=()
+          for tag in $tags; do refs+=("refs/tags/${tag}"); done
+          if ! git push --atomic origin HEAD:main "${refs[@]}" 2> "$RUNNER_TEMP/push.log"; then
+            cat "$RUNNER_TEMP/push.log" >&2
+            # Only main moving is benign: the run waiting behind this one stamps both merges.
+            if grep -Eq 'HEAD -> main \((fetch first|non-fast-forward)\)' "$RUNNER_TEMP/push.log"; then
+              echo "::notice::main moved during this run; the next run releases these merges."
+              exit 0
+            fi
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/push.log" >&2
+          echo "released=true" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
+      - name: Create GitHub Releases
+        if: steps.stamp.outputs.released == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.version.outputs.tag }}
-          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists; leaving it unchanged."
-          else
-            gh release create "$TAG" \
-              --target "$GITHUB_SHA" \
-              --title "$TAG" \
-              --generate-notes
-          fi
-
-          {
-            echo "- GitHub Release: \`${TAG}\`"
-            echo "- SemVer: \`${VERSION}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "### Released" >> "$GITHUB_STEP_SUMMARY"
+          while read -r tag sha; do
+            gh release create "$tag" \
+              --verify-tag \
+              --title "$tag" \
+              --notes-file "$RUNNER_TEMP/notes/${tag}.md"
+            echo "- \`${tag}\` on \`${sha}\`" >> "$GITHUB_STEP_SUMMARY"
+          done < "$RUNNER_TEMP/tags.txt"

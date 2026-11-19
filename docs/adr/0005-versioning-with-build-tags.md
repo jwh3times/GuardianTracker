@@ -2,6 +2,10 @@
 
 **Status:** Accepted
 **Date:** 2026-07-08
+**Superseded in part by:** [ADR 0027](./0027-stamp-changelog-on-tag.md) — the
+version workflow now pushes a `[skip ci]` changelog stamp commit to `main` through
+a release GitHub App that bypasses the ruleset. The version format and build
+numbering stand.
 
 ## Context
 

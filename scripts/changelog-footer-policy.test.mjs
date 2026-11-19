@@ -21,10 +21,10 @@ const definitions = new Map(
   ]),
 );
 
-// `Changelog Version` checks the top heading against scripts/next-version.mjs and
-// never looks down here, so without this test the footer drifts one version per
-// release: a heading with no definition renders as plain text instead of a link,
-// and `[Unreleased]` keeps comparing from a stale tag.
+// scripts/stamp-changelog.mjs keeps the footer current when version.yml stamps a
+// release, and this test catches a hand edit that breaks it: a heading with no
+// definition renders as plain text instead of a link, and `[Unreleased]` keeps
+// comparing from a stale tag.
 test("every released version has a matching reference-link definition", () => {
   assert.ok(versions.length > 0, "CHANGELOG.md must list released versions");
 
@@ -76,6 +76,6 @@ test("the Unreleased link compares from the newest release", () => {
   assert.equal(
     unreleased[1],
     `${COMPARE}/v${versions[0]}...HEAD`,
-    `[Unreleased] must compare from v${versions[0]}, the newest released section. /ship rewrites this line every release.`,
+    `[Unreleased] must compare from v${versions[0]}, the newest released section. version.yml rewrites this line every release.`,
   );
 });

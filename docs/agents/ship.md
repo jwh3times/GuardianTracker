@@ -22,8 +22,10 @@ the frontend checks need `frontend/node_modules` (`npm ci` in `frontend/`).
 - repo root: `npm run test:policy` (**Format Check**'s policy tests, about 20 seconds)
 - repo root: `node scripts/check-docs.mjs` (**Format Check**)
 - repo root: `node scripts/check-skills.mjs` (**Format Check**)
-- repo root, only when `scripts/next-version.mjs` or `scripts/check-changelog.mjs` changed:
-  `node --test scripts/next-version.test.mjs scripts/check-changelog.test.mjs` (**Changelog Version**)
+- repo root, only when `scripts/next-version.mjs`, `scripts/check-changelog.mjs` or
+  `scripts/stamp-changelog.mjs` changed:
+  `node --test scripts/next-version.test.mjs scripts/check-changelog.test.mjs scripts/stamp-changelog.test.mjs`
+  (**Changelog Version**)
 - repo root, only when a `Dockerfile*`, `.dockerignore` or `frontend/nginx.conf` changed, with
   Docker running: `npm run test:docker-context` and `npm run test:nginx-headers`
   (**Build Docker Images**)
