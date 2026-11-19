@@ -36,4 +36,4 @@ body is a spec, ticket or triage brief, and it is not labelled `blocked`.
 - **Dependency bumps** also cover the `npm run sync:image-pins` commit a Node or
   `@playwright/test` bump needs, and a toolchain or module pin moved to clear a
   `govulncheck` advisory.
-- **Release prep** also covers `VERSION` and changelog backfills.
+- **Release prep** also covers a `VERSION` bump.

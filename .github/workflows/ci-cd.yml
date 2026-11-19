@@ -285,35 +285,23 @@ jobs:
     name: Changelog Version
     runs-on: ubuntu-latest
 
-    # Guards that CHANGELOG.md's top version equals the tag this merge will mint.
-    # Without this, a PR can be written against a version number that another PR
-    # takes first, and the changelog silently disagrees with the tags.
+    # The name predates stamp-on-tag (ADR 0027) and stays: the main ruleset requires this check
+    # by name, so renaming it would block every PR until the ruleset changed.
     #
-    # PR-only: on a push to main the merge is already tagged, so "next version"
-    # is necessarily one ahead of the changelog and the check would always fail.
+    # PRs only: a branch's entries are its changelog.d/ fragment, which version.yml stamps after
+    # the merge. The guard checks the fragments parse and that the branch edits no released
+    # section, no `## [Unreleased]` entry and no fragment already on main. A Dependabot PR touches
+    # none of them and passes; version.yml gives its merge a section from its PR title.
     if: github.event_name == 'pull_request'
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # tags are required to compute the next version
+          fetch-depth: 0 # origin/main and the tags, the base the branch's changelog changes are compared with
 
-      - name: Test the next-version oracle and the changelog check
-        run: node --test scripts/next-version.test.mjs scripts/check-changelog.test.mjs
+      - name: Test the version, changelog check and stamp scripts
+        run: node --test scripts/next-version.test.mjs scripts/check-changelog.test.mjs scripts/stamp-changelog.test.mjs
 
-      - name: Verify CHANGELOG's top version matches the tag this merge will mint
-        env:
-          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
-        run: |
-          # Bot PRs (dependabot) never touch CHANGELOG.md. Requiring an entry would
-          # block them permanently, so they are exempt — /ship backfills the entry for
-          # their version on its next run. Exempting here is safe only because of that
-          # backfill; without it the changelog silently loses a version, which is
-          # exactly how v0.3.16, v0.3.17 and v0.3.21 went undocumented.
-          if [ "$PR_AUTHOR_TYPE" = "Bot" ]; then
-            echo "Bot-authored PR; /ship backfills its changelog entry after merge. Skipping."
-            exit 0
-          fi
-
-          node scripts/check-changelog.mjs
+      - name: Verify the changelog fragments and that no released section changed
+        run: node scripts/check-changelog.mjs

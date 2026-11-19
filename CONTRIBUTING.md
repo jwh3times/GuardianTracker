@@ -115,6 +115,13 @@ the current major/minor line. When bumping major or minor, build `0` is valid: i
 `VERSION` is `1.0.0` and no `v1.0.*` tag exists yet, the release remains
 `v1.0.0` instead of being forced to `v1.0.1`.
 
+A branch never edits `CHANGELOG.md` and never names the version its merge will
+mint. It writes its entries to its own `changelog.d/<branch-slug>.md` fragment
+(see [`changelog.d/README.md`](./changelog.d/README.md)); `/ship` does this for
+you. After the merge, `.github/workflows/version.yml` stamps the fragment into the
+merge's dated section, tags the merge commit and creates the release (ADR 0027). A
+PR with no fragment gets a one-line section from its title.
+
 ## Formatting
 
 Formatting is enforced in CI (`format-check`). Run the formatters before pushing:
@@ -157,7 +164,7 @@ Every PR must pass these GitHub Actions jobs before it can merge:
 | **Test Go Services**    | `go vet`, Staticcheck 2026.1, declared `govulncheck` v1.6.0 via `go tool`, `go test -race` with the coverage gate; DB integration tests against Postgres                                                                                                                         |
 | **Build Docker Images** | builds both production Docker images (build validation; no push)                                                                                                                                                                                                                 |
 | **Browser E2E + Axe**   | Playwright functional and axe accessibility suite against the hermetic stack (`.github/workflows/browser.yml`)                                                                                                                                                                   |
-| **Changelog Version**   | PR-only; fails if `CHANGELOG.md`'s top version doesn't match the tag the merge will mint (`scripts/next-version.mjs`); exempt for bot-authored PRs                                                                                                                               |
+| **Changelog Version**   | PR-only; fails if a `changelog.d/` fragment doesn't parse, or the branch edits a released `CHANGELOG.md` section, an `## [Unreleased]` entry or a fragment already on `main` (`scripts/check-changelog.mjs`)                                                                     |
 
 Third-party actions in `.github/workflows/` must use a reviewed 40-character
 commit SHA followed by a `# vX.Y.Z` release comment. The format job tests this

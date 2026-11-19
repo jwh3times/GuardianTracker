@@ -15,7 +15,8 @@ runbooks, and environment-specific operations notes belong under `private/`.
 - Verify Bungie API and manifest assumptions against real data before coding.
 - Keep authorization checks server-side.
 - Add or update tests with every behavior change.
-- Update `CHANGELOG.md` when an item ships.
+- Record a shipped item in the branch's `changelog.d/` fragment, which is
+  stamped into `CHANGELOG.md` after the merge.
 - Add an ADR when a change creates or supersedes a durable architecture or
   operating decision.
 
