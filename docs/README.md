@@ -20,6 +20,7 @@ Each kind of information has one living owner:
 | [docs/adr/](./adr/README.md)                                                  | Accepted decisions future work must preserve or supersede                         |
 | [ROADMAP.md](../ROADMAP.md)                                                   | Public work that has not shipped                                                  |
 | [CHANGELOG.md](../CHANGELOG.md)                                               | Current shipped changes, with older releases in [`docs/changelog/`](./changelog/) |
+| [changelog.d/](../changelog.d/README.md)                                      | Each open branch's changelog fragment, stamped into `CHANGELOG.md` after merging  |
 | [SECURITY.md](../SECURITY.md)                                                 | Security model, reporting process, and production checklist                       |
 | [SUPPORT.md](../SUPPORT.md)                                                   | Public support and issue-reporting guidance                                       |
 | [frontend/README.md](../frontend/README.md)                                   | Frontend structure, scripts, and browser-test procedure                           |
@@ -61,7 +62,9 @@ and the [Work Tracking](../AGENTS.md#work-tracking) section of `AGENTS.md`.
 - Keep `README.md` brief. It is an entry point, not a second setup guide.
 - Keep `docs/product.md` durable. Current behavior belongs in architecture or
   feature docs; future work belongs in the roadmap.
-- Remove completed work from `ROADMAP.md` and record it in `CHANGELOG.md`.
+- Remove completed work from `ROADMAP.md` and record it in the branch's
+  `changelog.d/` fragment; the version workflow stamps it into `CHANGELOG.md`
+  after the merge.
 - Preserve accepted ADRs as history. Supersede a decision with a new ADR rather
   than silently rewriting it.
 - Keep deep implementation plans and private operational detail out of
