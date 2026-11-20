@@ -17,6 +17,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.100] - 2026-11-19
+
+### Changed
+
+- The merging guide notes that GitHub's default-setup CodeQL scan still runs on the
+  `chore(release): v<x.y.z> [skip ci]` stamp commit, because `[skip ci]` does not suppress it, so
+  that run is expected rather than a sign the skip failed.
+
 ## [1.18.99] - 2026-11-19
 
 ### Changed
@@ -2615,7 +2623,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.99...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.100...HEAD
+[1.18.100]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.99...v1.18.100
 [1.18.99]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.98...v1.18.99
 [1.18.98]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.97...v1.18.98
 [1.18.97]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.96...v1.18.97
