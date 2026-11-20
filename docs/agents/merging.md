@@ -85,9 +85,10 @@ branch; a later `git worktree remove` failing with "is not a working tree" is ha
   `chore(release): v<x.y.z> [skip ci]` commit by the release App on `main` with the section, the
   tag on the merge commit, and a GitHub Release whose body is the section. A merge with no fragment,
   such as Dependabot's, gets a one-bullet section from its PR title. Fast-forward local `main`
-  afterwards, since the stamp commit lands on top of the merge. A run that ends with "main moved
-  during this run" is benign: the next run releases both merges. Any other failure leaves the merge
-  untagged until a later run succeeds, and the next run releases it.
+  afterwards, since the stamp commit lands on top of the merge. A CodeQL "Push on main" run on the
+  stamp commit is expected: `[skip ci]` does not suppress default-setup code scanning. A run that
+  ends with "main moved during this run" is benign: the next run releases both merges. Any other
+  failure leaves the merge untagged until a later run succeeds, and the next run releases it.
 
 ## Dependency pull requests
 
