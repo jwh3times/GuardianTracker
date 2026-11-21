@@ -17,6 +17,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.101] - 2026-11-20
+
+### Changed
+
+- chore: bump golang from 1.27.3-alpine to 1.27.4-alpine in /backend/api-service in the docker-minor-and-patch group across 1 directory (#518)
+
 ## [1.18.100] - 2026-11-19
 
 ### Changed
@@ -2623,7 +2629,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.100...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.101...HEAD
+[1.18.101]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.100...v1.18.101
 [1.18.100]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.99...v1.18.100
 [1.18.99]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.98...v1.18.99
 [1.18.98]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.97...v1.18.98
