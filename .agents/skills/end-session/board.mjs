@@ -442,14 +442,15 @@ function commandGet(api, options) {
 
 function commandWrite(api, options) {
   const project = readProject(api, options.board);
-  let { itemId, contentId } = resolveItem(api, project, options);
+  const resolved = resolveItem(api, project, options);
+  let itemId = resolved.itemId;
   let added = false;
   if (!itemId) {
     if (options.command !== "file") {
       const ref = options.item;
       throw new BoardError(`${ref.owner}/${ref.name}#${ref.number} is not on the board; file adds it`);
     }
-    itemId = api(ADD_MUTATION, { project: project.id, content: contentId }).addProjectV2ItemById.item.id;
+    itemId = api(ADD_MUTATION, { project: project.id, content: resolved.contentId }).addProjectV2ItemById.item.id;
     added = true;
   }
   const result = options.sets.length ? applyFields(api, project, itemId, options.sets) : { changed: [], unchanged: [] };
