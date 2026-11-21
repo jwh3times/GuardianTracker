@@ -17,6 +17,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.102] - 2026-11-21
+
+### Changed
+
+- chore: bump actions/setup-go from 7.0.0 to 7.1.0 in the actions-minor-and-patch group (#523)
+
 ## [1.18.101] - 2026-11-20
 
 ### Changed
@@ -2629,7 +2635,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.101...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.102...HEAD
+[1.18.102]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.101...v1.18.102
 [1.18.101]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.100...v1.18.101
 [1.18.100]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.99...v1.18.100
 [1.18.99]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.98...v1.18.99
