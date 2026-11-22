@@ -78,6 +78,10 @@
   PR to finished merge, including Dependabot's red-on-arrival bumps; proving a card's premise, a
   test or a gate; the development machine's traps. **When:** a lesson is learned that no script or
   policy test enforces, or a command, check or pin they quote changes.
+- `docs/agents/dependabot.md` — what a Dependabot review needs here: the bumps reviewed in full,
+  CI's install, where each dependency is used, and the known fix for each bump that arrives red.
+  **When:** `.github/dependabot.yml`, a pin a policy test ties together,
+  `scripts/sync-image-pins.mjs` or a Dependabot fix changes.
 - `.claude/agents/*.md` — area notes for the subagents, mirrored to `.codex/agents/`. **When:**
   `go-services.md`: endpoints, JWT, OAuth, manifest flow; `react-frontend.md`: structure, query
   patterns, pages; `postgres-specialist.md`: schema and migrations; `penetration-tester.md`: the
