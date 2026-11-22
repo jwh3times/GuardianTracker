@@ -17,6 +17,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.109] - 2026-11-22
+
+### Added
+
+- `docs/agents/dependabot.md` gives the shared `dependabot` review skill this
+  repository's facts: the bumps reviewed in full even below a major (a `postgres`
+  tag change, `@playwright/test`, the frontend `node` image, `@testing-library/jest-dom`),
+  how CI installs each manifest, where each dependency is used, the stack facts a
+  verdict must not get wrong, and the known fix for each bump that arrives red
+  (`npm run sync:image-pins` for Playwright and Node, the CI service-container
+  realignment for PostgreSQL). The docs map lists it. No application behavior
+  changes.
+
 ## [1.18.108] - 2026-11-22
 
 ### Changed
@@ -2671,7 +2684,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.108...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.109...HEAD
+[1.18.109]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.108...v1.18.109
 [1.18.108]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.107...v1.18.108
 [1.18.107]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.106...v1.18.107
 [1.18.106]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.105...v1.18.106
