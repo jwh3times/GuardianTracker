@@ -17,6 +17,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.110] - 2026-11-22
+
+### Changed
+
+- The docs map in `docs/agents/docs.md` no longer keeps its own list of the skills installed from
+  `jwh3times/skills`, which had gone stale (it missed `land` and `dependabot`); it points to the
+  `shared-skills` block in `AGENTS.md` instead. No application behavior changes.
+
 ## [1.18.109] - 2026-11-22
 
 ### Added
@@ -2684,7 +2692,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.109...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.110...HEAD
+[1.18.110]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.109...v1.18.110
 [1.18.109]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.108...v1.18.109
 [1.18.108]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.107...v1.18.108
 [1.18.107]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.106...v1.18.107
