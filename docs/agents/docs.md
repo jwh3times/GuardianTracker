@@ -82,6 +82,9 @@
   `scripts/restore-private-secrets.ps1`, `scripts/workspace-status.ps1`, `scripts/sync-main.mjs`).
 - `docs/agents/*.md` — conventions and settings the skills read; `dev-flow.md` holds what this
   repository adds to the shared flow. **When:** a convention, route or setting changes.
+- `docs/agents/guard.md` — the commands and paths `scripts/guard.mjs` stops here, on top of its
+  shared rules. **When:** a **Never run** command, a dev-stack command or a never-remove path in
+  `workspace.md` changes.
 - `docs/agents/merging.md`, `docs/agents/verification.md`, `docs/agents/local-runs.md` — from open
   PR to finished merge, including Dependabot's red-on-arrival bumps; proving a card's premise, a
   test or a gate; the development machine's traps. **When:** a lesson is learned that no script or
