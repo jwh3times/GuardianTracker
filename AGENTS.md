@@ -320,7 +320,8 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as
    the three Compose PostgreSQL services — Dependabot's `docker-compose` ecosystem does not see
    workflow service images — and fails on any retired `postgres:<version>` reference left behind
-   in a tracked file. The jest-dom policy keeps `frontend/src/test/jest-dom.d.ts` and its
+   in a tracked file outside the release history (`CHANGELOG.md`, `changelog.d/`,
+   `docs/changelog/`). The jest-dom policy keeps `frontend/src/test/jest-dom.d.ts` and its
    scoped `typescript/no-empty-object-type` exemption alive exactly while
    `@testing-library/jest-dom` still augments the Vitest 4 assertion shape, and fails once
    upstream ships Vitest 5 support so the shim is deleted rather than left to rot — a
