@@ -2,7 +2,7 @@
 name: kubernetes-infrastructure
 description: Use for Minikube cluster management, kubectl operations, Kubernetes manifest changes, secret and configmap management, port forwarding, and deployment troubleshooting for Guardian Tracker services.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
+model: inherit
 ---
 
 You are managing the Guardian Tracker Kubernetes infrastructure running on Minikube. Know the cluster topology, secrets model, and deployment workflow exactly.
