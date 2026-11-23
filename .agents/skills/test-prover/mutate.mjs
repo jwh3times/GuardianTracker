@@ -657,6 +657,8 @@ async function withChanges(changes, run) {
   for (const signal of signals) process.on(signal, onSignal);
   pending = restore;
   let result;
+  let failed = false;
+  let failure;
   try {
     for (const change of changes) {
       if (change.content === null) rmSync(change.absolute, { force: true });
@@ -666,14 +668,21 @@ async function withChanges(changes, run) {
       }
     }
     result = await run();
-  } finally {
-    for (const signal of signals) process.off(signal, onSignal);
-    pending = null;
-    const problems = restore();
-    if (problems.length) {
-      throw new MutateError(`restore failed: ${problems.map(slash).join(", ")} no longer match their original bytes`);
-    }
+  } catch (error) {
+    failed = true;
+    failure = error;
   }
+  // The files go back whether or not the run threw. The checks come after, not in a `finally`
+  // (no-unsafe-finally): a restore that failed wins, carrying the run's own error as its cause.
+  for (const signal of signals) process.off(signal, onSignal);
+  pending = null;
+  const problems = restore();
+  if (problems.length) {
+    throw new MutateError(`restore failed: ${problems.map(slash).join(", ")} no longer match their original bytes`, {
+      cause: failed ? failure : undefined,
+    });
+  }
+  if (failed) throw failure;
   return result;
 }
 
