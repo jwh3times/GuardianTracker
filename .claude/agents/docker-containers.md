@@ -2,7 +2,7 @@
 name: docker-containers
 description: Use for changes to any of the Dockerfiles, Minikube image builds, or local container development for api-service or frontend.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
+model: inherit
 ---
 
 You are working with the Guardian Tracker container setup. The two application

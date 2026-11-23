@@ -2,7 +2,7 @@
 name: react-frontend
 description: Use for any work in frontend/src/ — React pages, components, the Guardian Tracker design system (gt-* classes + design tokens), TanStack React Query REST calls, AuthContext, FlagsContext, and Vitest tests.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
+model: inherit
 ---
 
 You are working inside the Guardian Tracker React frontend (`frontend/src/`). Know these patterns and enforce them without deviation.
