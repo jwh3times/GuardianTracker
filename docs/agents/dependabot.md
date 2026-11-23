@@ -24,8 +24,9 @@ Regression) and `version.yml` (the release after a merge).
 - **`postgres` in `docker-compose.yml`, any tag change** (Dependabot calls 18.6 to 18.7 a minor).
   The `docker-compose` ecosystem does not see the `Test Go Services` service container in
   `ci-cd.yml`, so `scripts/postgres-pin-policy.test.mjs` fails `Format Check` until it is
-  realigned. The same test fails on any retired PostgreSQL tag left in a tracked text file. A
-  digest-only bump on the same tag passes.
+  realigned. The same test fails on any retired PostgreSQL tag left in a tracked text file outside
+  the release history (`CHANGELOG.md`, `changelog.d/`, `docs/changelog/`). A digest-only bump on
+  the same tag passes.
 - **`@playwright/test`, any bump.** The Playwright image pin in `frontend/Dockerfile.playwright`
   is in the docker ecosystem, so the npm PR cannot move it: `Format Check` and
   `Browser Visual Regression` go red.
@@ -106,9 +107,8 @@ Regression) and `version.yml` (the release after a merge).
   `ci-cd.yml` to the same `major.minor` (the Debian tag, with its digest), update the tag in
   `.claude/agents/postgres-specialist.md`, run `npm run sync:agents`, then
   `node --test scripts/postgres-pin-policy.test.mjs`. `sync:image-pins` does not own this pin.
-  The retired-tag sweep also scans `CHANGELOG.md`, whose released sections quote the current tag
-  and which `Changelog Version` does not let a branch edit; the verdict on #515 found those hits,
-  and no fix for them has been recorded yet.
+  The retired-tag sweep skips the release history, whose released sections quote the tag each
+  release ran and which `Changelog Version` does not let a branch edit (#515 was red on those).
 - **PostgreSQL major** (postgres X to N): moving the tag does not migrate data. Locally:
   `docker compose down -v` drops the Postgres volume, then `docker compose up --build` rebuilds the
   schema (`database/init/01-init.sql` on first init, then `db.Migrate` at api-service startup).

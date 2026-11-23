@@ -503,7 +503,7 @@ package engine range, and Node ambient types for alignment. The three Compose
 PostgreSQL services and the `Test Go Services` service container share one
 `major.minor` server version across their Alpine and Debian variants; a
 repository policy test enforces the alignment and rejects a retired
-`postgres:<version>` reference left in a tracked file.
+`postgres:<version>` reference left in a tracked file outside the release history.
 
 The browser workflow makes functional/axe a required check after exceeding ten
 consecutive clean runs. Visual comparison remains advisory and runs in the

@@ -17,6 +17,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.112] - 2026-11-22
+
+### Fixed
+
+- A PostgreSQL tag bump can go green again: the PostgreSQL pin policy
+  (`scripts/postgres-pin-policy.test.mjs`) no longer reports the tags quoted in the release history
+  (`CHANGELOG.md`, `changelog.d/`, `docs/changelog/`) as retired references. Released sections
+  record the image each release ran and no branch may edit them, so every tag bump failed
+  `Format Check` with no way to fix it (#515). The sweep still covers every other tracked text
+  file. No application behavior changes.
+
 ## [1.18.111] - 2026-11-22
 
 ### Changed
@@ -2701,7 +2712,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.111...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.112...HEAD
+[1.18.112]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.111...v1.18.112
 [1.18.111]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.110...v1.18.111
 [1.18.110]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.109...v1.18.110
 [1.18.109]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.108...v1.18.109
