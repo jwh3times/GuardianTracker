@@ -17,6 +17,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.111] - 2026-11-22
+
+### Changed
+
+- `THIRD_PARTY_NOTICES.md` no longer lists the skills installed from `jwh3times/skills` by hand,
+  a list that had gone stale (it missed `land` and `dependabot`); it points to the
+  `shared-skills` block in `AGENTS.md` instead. The attribution and license notices are unchanged.
+  No application behavior changes.
+
 ## [1.18.110] - 2026-11-22
 
 ### Changed
@@ -2692,7 +2701,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.110...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.111...HEAD
+[1.18.111]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.110...v1.18.111
 [1.18.110]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.109...v1.18.110
 [1.18.109]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.108...v1.18.109
 [1.18.108]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.107...v1.18.108
