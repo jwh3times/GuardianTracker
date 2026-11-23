@@ -17,6 +17,14 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.118] - 2026-11-23
+
+### Changed
+
+- Every Claude Code agent definition in `.claude/agents/` now sets `model: inherit`, so a subagent
+  runs on the model of the session that launched it instead of a pinned Sonnet or Opus. The Codex
+  mirrors are unchanged, because the generator drops `model:`. No application behavior changes.
+
 ## [1.18.117] - 2026-11-23
 
 ### Added
@@ -2759,7 +2767,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.117...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.118...HEAD
+[1.18.118]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.117...v1.18.118
 [1.18.117]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.116...v1.18.117
 [1.18.116]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.115...v1.18.116
 [1.18.115]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.114...v1.18.115
