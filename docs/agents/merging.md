@@ -1,7 +1,7 @@
 # Merging
 
 Everything from an open pull request to a finished merge. `/ship` stops when the PR opens; the
-maintainer says when to merge. What CI runs and what the ruleset requires are in `AGENTS.md`
+maintainer says when to merge. What CI runs and what the ruleset requires are in [ci.md](ci.md)
 ("CI/CD", "Branch protection"); this file holds what to do, and the ways CI status has given a
 confident wrong answer.
 

@@ -12,6 +12,10 @@
   [ADR 0026](./0026-every-board-item-is-an-issue.md): the board holds no draft
   items, so unclaimed work is an issue and the `Blocked By` field no longer
   carries draft ordering.
+- Superseded in part by
+  [ADR 0028](./0028-agents-md-fits-codex-budget.md): agents read files linked
+  from `AGENTS.md`, and the "Rules for every slice" live in
+  `docs/agents/dev-flow.md`.
 
 ## Context
 

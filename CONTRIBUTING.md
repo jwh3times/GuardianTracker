@@ -173,7 +173,7 @@ comment together when a newer allowed release is available.
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it
 is enforced through a code-scanning merge rule rather than as a required status
-check. See [AGENTS.md → CI/CD](./AGENTS.md#cicd) for the full explanation, including
+check. See [CI/CD in docs/agents/ci.md](./docs/agents/ci.md) for the full explanation, including
 how Dependabot PRs are handled.
 
 `Browser E2E + Axe` runs in the separate browser workflow and is a required

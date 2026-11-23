@@ -510,6 +510,26 @@ consecutive clean runs. Visual comparison remains advisory and runs in the
 Playwright Noble image whose tag CI derives from the frontend lockfile, so the
 container's browsers always match the installed `@playwright/test`.
 
+## Known Limitations
+
+- Collections data remains membership-wide. The character switcher scopes
+  authenticated weekly vendor inventory, today actions, availability ranking,
+  Xûr location, the Guardian equipment view, one bounded page of recent
+  completed activities, and a best-effort current-activity snapshot to the
+  selected character. Recent history has no pagination or aggregate analytics;
+  current activity is not cached server-side and reports "unknown" when
+  Bungie's reported activity hash is absent from the Manifest.
+- Per-Guardian progression summaries are deliberately not shown. Verified
+  character-scope progressions (component 202) offered no named entry with a
+  current earning path or a value that tells the player what to do next.
+  Reopen only with a fresh owner capture that establishes one; never substitute
+  membership-wide Collections or account-scope progression.
+- Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready). A build that fails is retried by the next search request (throttled to one attempt per 30s) instead of waiting for the next hourly manifest swap.
+- Xûr location is best-effort: the authenticated character-vendor component's
+  location index resolves through the manifest to "The Tower"; failures omit the field.
+- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones
+  omit it because verified current reward definitions contain no collectible-linked items.
+
 ## Related Decisions
 
 See [docs/adr](./adr/README.md) for accepted architecture and operating decisions.

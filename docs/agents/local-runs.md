@@ -2,7 +2,7 @@
 
 Running the stack, the suites and reviews on a development machine without a false result. The
 commands are in `AGENTS.md` ("Testing and Validation") and `frontend/README.md`; this file holds
-their traps, most of them on the maintainer's Windows machine.
+their traps, most of them on the maintainer's Windows machine, and the reasons behind their pins.
 
 ## Before handing a tree to a reviewer
 
@@ -61,6 +61,49 @@ a pack go in `frontend/design/`, which both `.prettierignore` files exclude.
   and a request it doesn't stub reaches the real API, gets a 401 and logs both tabs out, failing far
   from the cause. When a change adds a request that fires on every authenticated page, add its stub
   to that handler in the same PR and run the spec locally.
+
+## Refreshing frontend image pins
+
+When the `mcr.microsoft.com/playwright` image tag (which must match the installed
+`@playwright/test`) no longer matches the lockfile — every `@playwright/test` bump,
+because npm and docker are separate Dependabot ecosystems — run
+`npm run sync:image-pins` from the repo root instead of hand-resolving a digest.
+It rewrites every frontend image pin whose tag a version file owns: the
+Playwright image, and the `node` pins in all three frontend Dockerfiles that
+`.nvmrc` drives. It needs network access, needs no Docker daemon, and is
+deliberately not a CI step — a required check must not depend on a registry
+being reachable, so the offline `scripts/node-version-policy.test.mjs` remains
+the gate and now names this command when it fails. `-- --check` reports drift
+without writing. The policy test compares versions and tags, never digests, so a
+digest-only `node` bump passes every check while leaving
+`frontend/Dockerfile.playwright` stale; run `-- --check` on every Dependabot
+`node` bump, green or not.
+
+## Staticcheck needs the pinned toolchain
+
+`GOTOOLCHAIN=go1.26.11` on the Staticcheck line is required, not decoration.
+Staticcheck 2026.1 is compiled by whatever Go is active, and on a newer
+toolchain it cannot decode the standard library's export data, so it fails while
+loading and analyzes nothing at all. Every error names a stdlib package rather
+than project code, and the empty output that follows is indistinguishable from a
+clean run — which is exactly how an unpinned run gets mistaken for "no
+findings". `go.mod`'s `toolchain` directive is a floor, not a pin, and does not
+prevent it.
+
+The pinned value must equal `GO_VERSION` in both workflows;
+`npm run test:go-toolchain-policy` fails the build if they drift apart, so
+moving the Go pin means moving it everywhere at once.
+
+## Full Go coverage locally (matches CI)
+
+A plain `go test ./...` under-reports coverage (~52% vs CI's ~63%) because two test groups
+self-skip: sqlite-backed manifest/search tests need **cgo**, and the `db` package integration tests
+need a reachable Postgres via **`TEST_DATABASE_URL`** (distinct from `DATABASE_URL` — unit tests
+must still exercise the degraded no-DB paths). `./test-local.ps1` (from `backend/api-service/`)
+closes both gaps: it starts the throwaway `test-postgres` Compose service on port **5533** (so it
+won't collide with the main Postgres on 5532), exports `CGO_ENABLED=1` + `TEST_DATABASE_URL`, and
+runs `go test -race -coverprofile`. Flags: `-Html` opens the HTML coverage report; `-Down` removes
+the test container afterwards. Migrations are embedded and applied automatically by the harness.
 
 ## Minikube acceptance from an agent shell
 
