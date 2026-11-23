@@ -17,6 +17,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.117] - 2026-11-23
+
+### Added
+
+- `docs/agents/guard.md` holds this repository's own rules for the shared guard hook
+  (`scripts/guard.mjs`), on top of the rules it applies everywhere. It denies removing or pruning
+  Docker volumes, a profiled `docker compose --profile test|e2e down` (which takes the main stack
+  down too) and `npx skills update`. It asks before `docker compose down -v`, stopping the main
+  stack, `k8s/shutdown.ps1` and `minikube delete`, and protects `private/`, the plaintext env and
+  secret targets, keys and certificates, the machine-local 1Password reference and bootstrap
+  folders, local Compose and editor settings, and `node_modules/`. The docs map lists the new file.
+  No application behavior changes.
+
 ## [1.18.116] - 2026-11-23
 
 ### Changed
@@ -2746,7 +2759,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.116...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.117...HEAD
+[1.18.117]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.116...v1.18.117
 [1.18.116]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.115...v1.18.116
 [1.18.115]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.114...v1.18.115
 [1.18.114]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.113...v1.18.114
