@@ -119,9 +119,40 @@ function* textFiles(directory) {
   }
 }
 
+/**
+ * The changelog, its archived sections and its unreleased fragments: they record
+ * what each release ran, so the retired-tag sweep leaves them alone.
+ */
+export function isReleaseHistory(file) {
+  return (
+    file === "CHANGELOG.md" ||
+    file.startsWith("changelog.d/") ||
+    file.startsWith("docs/changelog/")
+  );
+}
+
+test("release history is exempt from the retired-tag sweep, and nothing else", () => {
+  for (const file of [
+    "CHANGELOG.md",
+    "changelog.d/build-postgres-18-7.md",
+    "docs/changelog/0.x.md",
+  ]) {
+    assert.equal(isReleaseHistory(file), true, file);
+  }
+  for (const file of [
+    "docs/architecture.md",
+    "docs/changelog.md",
+    "SETUP.md",
+    ".claude/agents/postgres-specialist.md",
+    "frontend/CHANGELOG.md",
+  ]) {
+    assert.equal(isReleaseHistory(file), false, file);
+  }
+});
+
 // A version bump also touches coupling guidance when a tag has been copied into
 // prose. This sweep prevents a documented reference from quietly describing a
-// retired server.
+// retired server. Release history is exempt (`isReleaseHistory`).
 test("no tracked file references a retired PostgreSQL image", () => {
   const allowed = new Set([
     composeRef,
@@ -132,6 +163,11 @@ test("no tracked file references a retired PostgreSQL image", () => {
   const failures = [];
 
   for (const path of textFiles(root)) {
+    const file = relative(root, path).split(sep).join("/");
+    // Release history records the image each release ran, and no branch may edit
+    // a released section (`Changelog Version`), so a retired tag there is
+    // history, not stale guidance. Without this, every PostgreSQL tag bump fails.
+    if (isReleaseHistory(file)) continue;
     const contents = readFileSync(path, "utf8");
     // Requires the `<major>.<minor>` tag shape so `postgres:5432` host:port
     // pairs inside connection strings are not mistaken for image references.
@@ -139,9 +175,7 @@ test("no tracked file references a retired PostgreSQL image", () => {
       /postgres:\d+\.\d+[^\s`'"]*/g,
     )) {
       if (allowed.has(reference)) continue;
-      failures.push(
-        `${relative(root, path).split(sep).join("/")}: ${reference}`,
-      );
+      failures.push(`${file}: ${reference}`);
     }
   }
 
