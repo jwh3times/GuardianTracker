@@ -17,6 +17,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.113] - 2026-11-22
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#535)
+
 ## [1.18.112] - 2026-11-22
 
 ### Fixed
@@ -2712,7 +2718,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.112...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.113...HEAD
+[1.18.113]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.112...v1.18.113
 [1.18.112]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.111...v1.18.112
 [1.18.111]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.110...v1.18.111
 [1.18.110]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.109...v1.18.110
