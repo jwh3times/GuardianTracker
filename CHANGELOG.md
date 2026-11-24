@@ -17,6 +17,19 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.129] - 2026-11-24
+
+### Fixed
+
+- The agent notes on PostgreSQL major upgrades (`docs/agents/dependabot.md`, and the reason text
+  of the `docker compose down -v` rule in `docs/agents/guard.md`) again say that a new major
+  refuses to start on the volume. v1.18.128 wrongly said it starts beside the old cluster. The
+  18+ image's entrypoint exits when it finds an older major's `PG_VERSION` under
+  `/var/lib/postgresql/*/docker`, which happened on the move to PostgreSQL 19. The upgrade step is
+  now to stop `postgres`, move the old cluster to `<X>/docker.pre-<N>` inside the volume (intact
+  and reversible), start the stack, and re-enter the local data worth keeping. No application
+  behavior changes.
+
 ## [1.18.128] - 2026-11-24
 
 ### Fixed
@@ -2833,7 +2846,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.128...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.129...HEAD
+[1.18.129]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.128...v1.18.129
 [1.18.128]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.127...v1.18.128
 [1.18.127]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.126...v1.18.127
 [1.18.126]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.125...v1.18.126
