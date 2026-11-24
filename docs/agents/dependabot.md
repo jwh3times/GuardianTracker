@@ -118,8 +118,8 @@ Regression) and `version.yml` (the release after a merge).
   cluster (`database/init/01-init.sql`, then `db.Migrate` at api-service startup); the user logs in
   and re-enters the local data worth keeping. To read or `pg_dump` the old cluster, run the old
   major's pinned image on the volume with no ports published. Once the new major is confirmed, the
-  old `<X>/` subdirectory can be removed to reclaim its space; that is the user's step, since the
-  guard denies agents `docker volume rm`. File it as a human follow-up. The throwaway test database
+  old `<X>/` subdirectory can be removed to reclaim its space; that is the user's step, since it
+  deletes the old major's data for good. File it as a human follow-up. The throwaway test database
   follows with `./test-local.ps1 -Fresh` from `backend/api-service/`; `test-postgres` and
   `e2e-postgres` have no data volume. Verify: the app boots, migrations apply, and login and a
   collections fetch work. Plus the `postgres` tag bump steps above. Worked on #537 (18 to 19).
