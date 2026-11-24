@@ -17,6 +17,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.125] - 2026-11-24
+
+### Changed
+
+- chore: bump `actions/create-github-app-token` from `3.3.0` to `3.4.0` in the actions-minor-and-patch group (#536)
+
 ## [1.18.124] - 2026-11-24
 
 ### Changed
@@ -2803,7 +2809,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.124...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.125...HEAD
+[1.18.125]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.124...v1.18.125
 [1.18.124]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.123...v1.18.124
 [1.18.123]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.122...v1.18.123
 [1.18.122]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.121...v1.18.122
