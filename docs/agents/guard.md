@@ -20,8 +20,8 @@ everywhere. Each heading is a setting defined in `.agents/skills/open-pr/setting
 
 - `^(docker compose|docker-compose)\b.*\sdown\b.*\s(-[a-zA-Z]*v[a-zA-Z]*|--volumes)\b` — `docker compose down -v`
   wipes `postgres-data` and `manifest-data` (a ~290MB Bungie re-download). A PostgreSQL major
-  bump does not need it: the new major starts beside the old cluster (`docs/agents/dependabot.md`).
-  Run it only on the user's word.
+  bump does not need it: move the old cluster aside instead (`docs/agents/dependabot.md`). Run it
+  only on the user's word.
 - `^(docker compose|docker-compose)\b.*\s(stop|down|kill)\b(?!(\s+(frontend|api-service))+$)` — the
   main stack (`postgres`, `pgadmin`, `api-service`, `frontend`) stays running unless the user asks.
   Stopping only `frontend api-service` before a browser run passes.
