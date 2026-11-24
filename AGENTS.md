@@ -302,7 +302,7 @@ Task status lives on GitHub, not in this repository's files. See
 - **Board:** the private user-level Project `Guardian Tracker`
   (<https://github.com/users/jwh3times/projects/4>), linked to both the public
   repository and the private companion. Fields: `Chain`, `Order`, `Blocked By`,
-  `Gate`, `ADR`, `Status`, `Triage`, `Priority`.
+  `Gate`, `ADR`, `Status`, `Triage`, `Priority`, `Due`.
 - **Issues go in the public repository by default.** File in the private
   companion only when the body would need a credential, a real
   provider/cost/account identifier, or exploitable security detail.
