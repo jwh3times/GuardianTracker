@@ -25,7 +25,7 @@ Each kind of information has one living owner:
 | [SUPPORT.md](../SUPPORT.md)                                                   | Public support and issue-reporting guidance                                       |
 | [frontend/README.md](../frontend/README.md)                                   | Frontend structure, scripts, and browser-test procedure                           |
 | [k8s/README.md](../k8s/README.md)                                             | Minikube validation procedure                                                     |
-| [AGENTS.md](../AGENTS.md)                                                     | Canonical, self-contained operating guide for coding agents                       |
+| [AGENTS.md](../AGENTS.md)                                                     | Canonical operating guide for coding agents                                       |
 | [CLAUDE.md](../CLAUDE.md)                                                     | Thin AGENTS.md importer plus Claude Code-only mechanics                           |
 | [docs/agents/](./agents/)                                                     | Agent conventions, skill settings, and merging, verification and local-run guides |
 
@@ -69,7 +69,8 @@ and the [Work Tracking](../AGENTS.md#work-tracking) section of `AGENTS.md`.
   than silently rewriting it.
 - Keep deep implementation plans and private operational detail out of
   committed `docs/`.
-- `AGENTS.md` deliberately repeats the operating context agents need in one
-  self-contained file. Do not move that context into `CLAUDE.md`.
+- `AGENTS.md` holds the operating context every agent session needs and points
+  to `docs/agents/` for the rest; Codex reads only its first 32 KiB. Do not move
+  that context into `CLAUDE.md`.
 - Edit `.claude/agents/` and `.agents/skills/`, then run the repository sync;
   never hand-edit their generated mirrors.

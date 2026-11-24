@@ -63,8 +63,7 @@ test and confirm it goes red. "It stopped failing" is not evidence.
 ## A gate that ran nothing looks clean
 
 - **Plant a finding to prove a gate ran.** Staticcheck on the wrong toolchain fails while loading
-  and prints nothing that names project code (`AGENTS.md`, "Staticcheck needs the pinned
-  toolchain"). Append an unused function, confirm it is reported, then restore the exact bytes.
+  and prints nothing that names project code ([local runs](local-runs.md#staticcheck-needs-the-pinned-toolchain)). Append an unused function, confirm it is reported, then restore the exact bytes.
 - **Check a skip is real.** The SQLite-backed manifest tests do run on a machine with a C toolchain
   and `CGO_ENABLED=1`; run one with `-v` and look for `PASS` against `SKIP` rather than trusting
   either claim.

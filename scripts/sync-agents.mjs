@@ -10,7 +10,9 @@
 // so a fresh clone works in both harnesses; CI runs this with `--check` and fails on drift.
 //
 // It also writes the shared blocks in AGENTS.md: the text between each pair of `shared:<name>`
-// markers comes from the block file `ship` installs, so every repository says the same thing.
+// markers comes from the block file `open-pr` installs, so every repository says the same thing.
+// Where `scripts/guard.mjs` exists, it registers it as a PreToolUse and a PostToolUse hook in
+// `.claude/settings.json`, keeping every other key and hook, and checks `docs/agents/guard.md`.
 //
 //   node scripts/sync-agents.mjs          # rewrite the generated trees
 //   node scripts/sync-agents.mjs --check  # verify only; exit 1 if anything is stale
@@ -29,7 +31,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const defaultRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -39,10 +41,13 @@ const agentSourceDir = ".claude/agents";
 const agentTargetDir = ".codex/agents";
 const skillSourceDir = ".agents/skills";
 const skillTargetDir = ".claude/skills";
-const blockSource = ".agents/skills/ship/settings/agents-md.md";
+const blockSource = ".agents/skills/open-pr/settings/agents-md.md";
 const blockTarget = "AGENTS.md";
 const blockSetting = "docs/agents/workspace.md";
 const blockSettingHeading = "## AGENTS.md blocks";
+const settingsTarget = ".claude/settings.json";
+const guardScript = "scripts/guard.mjs";
+const guardSettings = "docs/agents/guard.md";
 
 // Claude Code tools that can change files. An agent whose `tools:` list names none of them is
 // read-only, and Codex is told so; an agent with no `tools:` line inherits every tool.
@@ -314,6 +319,177 @@ function buildAgentsFile(root) {
   return renderSharedBlocks(readFileSync(targetPath, "utf8"), source, taken);
 }
 
+// --- Claude Code settings ------------------------------------------------------------------------
+
+// Exec form: no shell, so no quoting, and Claude Code substitutes the placeholder in each argument.
+// `onFailure` stays unset, so a guard that cannot start blocks nothing.
+function guardHook(extra = []) {
+  return {
+    type: "command",
+    command: "node",
+    args: [`\${CLAUDE_PROJECT_DIR}/${guardScript}`, ...extra],
+    timeout: 10,
+  };
+}
+
+export const managedHooks = {
+  PreToolUse: {
+    matcher: "Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit",
+    hooks: [guardHook()],
+  },
+  PostToolUse: { matcher: "Write|Edit|MultiEdit", hooks: [guardHook(["--post"])] },
+};
+
+const isObject = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+// A hook is managed here when its command or arguments name the guard script.
+function namesGuard(hook) {
+  const parts = [hook?.command, ...(Array.isArray(hook?.args) ? hook.args : [])];
+  return parts.some(
+    (part) =>
+      typeof part === "string" &&
+      part.replaceAll("\\", "/").includes(guardScript),
+  );
+}
+
+// JSON in the shape Prettier and Biome print it, so a consumer's formatter check passes on a file
+// this script wrote: an object one key per line (both keep an expanded object expanded), an array
+// of primitives on one line when that whole line, comma included, fits `width`, otherwise one
+// element per line, an array holding an object or array expanded, `{}` and `[]` inline, a 2-space
+// indent and a final newline.
+export function formatJson(value, width = 80) {
+  const pad = (n) => " ".repeat(n);
+  const isPrimitive = (item) => item === null || typeof item !== "object";
+  // `lead` is the text before the value on its line, `tail` what follows it there (a comma).
+  const print = (item, indent, lead, tail) => {
+    if (isPrimitive(item)) return JSON.stringify(item);
+    if (Array.isArray(item)) {
+      if (item.length === 0) return "[]";
+      if (item.every(isPrimitive)) {
+        const inline = `[${item.map((element) => JSON.stringify(element)).join(", ")}]`;
+        if (lead + inline.length + tail <= width) return inline;
+      }
+      const lines = item.map((element, i) => {
+        const last = i === item.length - 1;
+        return `${pad(indent + 2)}${print(element, indent + 2, indent + 2, last ? 0 : 1)}`;
+      });
+      return `[\n${lines.join(",\n")}\n${pad(indent)}]`;
+    }
+    const entries = Object.entries(item);
+    if (entries.length === 0) return "{}";
+    const lines = entries.map(([key, element], i) => {
+      const head = `${pad(indent + 2)}${JSON.stringify(key)}: `;
+      return head + print(element, indent + 2, head.length, i === entries.length - 1 ? 0 : 1);
+    });
+    return `{\n${lines.join(",\n")}\n${pad(indent)}}`;
+  };
+  return `${print(value, 0, 0, 0)}\n`;
+}
+
+// The print width the repository's formatter uses for JSON: Prettier's `printWidth` (from
+// `.prettierrc`, JSON or YAML, `.prettierrc.json` or `package.json`), else Biome's
+// `json.formatter.lineWidth` or `formatter.lineWidth`, else Prettier's and Biome's default of 80.
+export function formatWidth(root = defaultRoot) {
+  const readText = (rel) => {
+    const file = path.join(root, rel);
+    return existsSync(file) ? readFileSync(file, "utf8") : null;
+  };
+  const parse = (text) => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+  const positive = (value) => (Number.isInteger(value) && value > 0 ? value : null);
+  for (const rel of [".prettierrc", ".prettierrc.json", ".prettierrc.yaml", ".prettierrc.yml"]) {
+    const text = readText(rel);
+    if (text === null) continue;
+    const width = positive(parse(text)?.printWidth) ?? positive(Number(/^[ \t]*"?printWidth"?[ \t]*:[ \t]*(\d+)/m.exec(text)?.[1]));
+    if (width) return width;
+  }
+  const packageText = readText("package.json");
+  const fromPackage = packageText === null ? null : positive(parse(packageText)?.prettier?.printWidth);
+  if (fromPackage) return fromPackage;
+  for (const rel of ["biome.json", "biome.jsonc"]) {
+    const text = readText(rel);
+    if (text === null) continue;
+    // A `.jsonc` may hold comments, which JSON.parse refuses; full-line comments are dropped first.
+    const config = parse(text) ?? parse(text.replace(/^[ \t]*\/\/.*$/gm, ""));
+    const width = positive(config?.json?.formatter?.lineWidth) ?? positive(config?.formatter?.lineWidth);
+    if (width) return width;
+  }
+  return 80;
+}
+
+// `.claude/settings.json` with the managed entries in place: a stale one is replaced where it
+// stands, duplicates collapse into it, a missing one is appended, and the file is written as the
+// repository's formatter prints it (`formatJson`). When nothing changes, the text comes back as it
+// was, so a file formatted its own way is never rewritten.
+export function mergeClaudeSettings(raw, file = settingsTarget, { width = 80 } = {}) {
+  const text = raw === null ? null : normalizeNewlines(raw);
+  let settings;
+  try {
+    settings = text === null ? {} : JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${file}: invalid JSON (${error.message})`, { cause: error });
+  }
+  if (!isObject(settings)) throw new Error(`${file}: expected a JSON object`);
+  const before = JSON.stringify(settings);
+  settings.hooks ??= {};
+  if (!isObject(settings.hooks)) {
+    throw new Error(`${file}: 'hooks' must be an object`);
+  }
+  for (const [event, managed] of Object.entries(managedHooks)) {
+    const entries = settings.hooks[event] ?? [];
+    if (!Array.isArray(entries)) {
+      throw new Error(`${file}: 'hooks.${event}' must be an array`);
+    }
+    const merged = [];
+    let placed = false;
+    for (const entry of entries) {
+      const hooks = Array.isArray(entry?.hooks) ? entry.hooks : [];
+      if (!hooks.some(namesGuard)) {
+        merged.push(entry);
+        continue;
+      }
+      if (!placed) merged.push(managed);
+      placed = true;
+      const others = hooks.filter((hook) => !namesGuard(hook));
+      if (others.length > 0) merged.push({ ...entry, hooks: others });
+    }
+    if (!placed) merged.push(managed);
+    settings.hooks[event] = merged;
+  }
+  if (text !== null && JSON.stringify(settings) === before) return text;
+  return formatJson(settings, width);
+}
+
+function buildClaudeSettings(root) {
+  if (!existsSync(path.join(root, guardScript))) return null;
+  const target = path.join(root, settingsTarget);
+  return mergeClaudeSettings(
+    existsSync(target) ? readFileSync(target, "utf8") : null,
+    settingsTarget,
+    { width: formatWidth(root) },
+  );
+}
+
+// Problems in `docs/agents/guard.md`, read by the repository's own guard's parser.
+export async function checkGuardSettings(root = defaultRoot) {
+  const script = path.join(root, guardScript);
+  const settings = path.join(root, guardSettings);
+  if (!existsSync(script) || !existsSync(settings)) return [];
+  const { parseGuardSettings } = await import(pathToFileURL(script).href);
+  try {
+    parseGuardSettings(readFileSync(settings, "utf8"), guardSettings);
+    return [];
+  } catch (error) {
+    return [error.message];
+  }
+}
+
 // --- Tree walking --------------------------------------------------------------------------------
 
 // Lists regular files under `dir` as POSIX paths relative to `root`. Symlinks are never followed:
@@ -397,6 +573,9 @@ export function buildMirrors(root = defaultRoot) {
 
   const agentsFile = buildAgentsFile(root);
   if (agentsFile !== null) mirrors.set(blockTarget, agentsFile);
+
+  const claudeSettings = buildClaudeSettings(root);
+  if (claudeSettings !== null) mirrors.set(settingsTarget, claudeSettings);
 
   return mirrors;
 }
@@ -500,7 +679,7 @@ function readStdin() {
   }
 }
 
-function main(argv) {
+async function main(argv) {
   const check = argv.includes("--check");
 
   if (argv.includes("--hook")) {
@@ -516,23 +695,27 @@ function main(argv) {
   }
 
   const { stale, count } = syncMirrors(defaultRoot, { check });
+  const guardProblems = await checkGuardSettings(defaultRoot);
+  for (const problem of guardProblems) console.error(`sync-agents: ${problem}`);
+  const guardStatus = guardProblems.length === 0 ? 0 : 1;
 
   if (!check) {
     console.log(
-      `Synced ${count} generated file(s) (.codex/agents, .claude/skills, ${blockTarget} blocks).`,
+      `Synced ${count} generated file(s) (.codex/agents, .claude/skills, ${blockTarget} blocks, ${settingsTarget} hooks).`,
     );
-    return 0;
+    return guardStatus;
   }
   if (stale.length === 0) {
     console.log(`All ${count} generated file(s) match their authored sources.`);
-    return 0;
+    return guardStatus;
   }
 
   console.error("Generated agent files are out of date:");
   for (const file of stale) console.error(`  ${file}`);
   console.error(
     `\n.codex/agents is generated from .claude/agents; .claude/skills from .agents/skills;\n` +
-      `the marked blocks in ${blockTarget} from ${blockSource}.\n` +
+      `the marked blocks in ${blockTarget} from ${blockSource};\n` +
+      `the guard hooks in ${settingsTarget} from ${guardScript}.\n` +
       `Run '${regenerateCommand}' and commit the result.`,
   );
   if (process.env.GITHUB_ACTIONS === "true") {
@@ -548,7 +731,7 @@ function main(argv) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === scriptPath) {
   try {
-    process.exitCode = main(process.argv.slice(2));
+    process.exitCode = await main(process.argv.slice(2));
   } catch (error) {
     console.error(`sync-agents: ${error.message}`);
     process.exitCode = 1;
