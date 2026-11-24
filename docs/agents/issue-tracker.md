@@ -156,6 +156,8 @@ jwh3times 4
   `needs-triage`, `wontfix`.
 - `Priority`: `P1 — Next`, `P2 — Soon`, `P3 — Later`, `P4 — Parked`. Set on every open item,
   blocked or not; the board's manual order follows it (ADR 0026).
+- `Due` (date): set only when the action has a real deadline (an expiry, a renewal, an offer's end,
+  a date someone else set), never an aspirational one; empty otherwise.
 
 ## Security findings
 
