@@ -1,8 +1,10 @@
 # AGENTS.md
 
 This is the canonical operating guide for AI coding agents working in Guardian Tracker.
-It is tool-neutral and self-contained: agents that read `AGENTS.md` natively (Codex and
-others) get the complete picture from this file alone.
+It is tool-neutral: agents that read `AGENTS.md` natively (Codex and others) get what every
+session needs from this file, and each section names the `docs/agents/` file to read before a
+given kind of work. Codex reads only the first 32 KiB of this file, so reference detail lives
+in those files, not here.
 
 `CLAUDE.md` imports this file via `@AGENTS.md` and adds only Claude Code-specific
 mechanics. **Repo operating context belongs here, not there.**
@@ -33,7 +35,7 @@ Primary stack:
 <!-- shared:development-flow -->
 
 The flow skills are this repository's binding process for changing code. Read
-`.agents/skills/ship/settings/dev-flow.md` (the routing, exemptions and issue linking) and
+`.agents/skills/open-pr/settings/dev-flow.md` (the routing, exemptions and issue linking) and
 `docs/agents/dev-flow.md` (what this repository adds) before the first edit of a change, and whenever
 no ready issue exists. `/ask-matt` maps the flow itself.
 
@@ -51,16 +53,23 @@ no ready issue exists. `/ask-matt` maps the flow itself.
   prep, and an explicit user waiver recorded in the PR body as `Flow waived by the user: <reason>`.
 - **Linking.** Branches are `<type>/<issue#>-<slug>`; the PR body opens with `Closes #N` or
   `Part of #N`.
-- **The flow ends at `/ship`.** `/implement` stops at a commit; `/ship` refreshes the docs, writes the
-  changelog and the PR body, and opens the PR. When the user says to merge it, `/land` merges it
+- **The flow ends at `/open-pr`.** `/implement` stops at a commit; `/open-pr` refreshes the docs,
+  writes the changelog and the PR body, and opens the PR (Claude Code's built-in `/ship` is a
+  different command, outside this flow). When the user says to merge it, `/land` merges it
   and confirms its release. `/dependabot` reviews the open Dependabot PRs and hands the ones the
   user names to `/land`; nothing merges a Dependabot PR on its own. `/ask-matt` also routes to
   `/pr`, `/retro` and `/implement-spec`, which are not installed here.
+- **Tests are proven, reds are read.** Before `/implement` commits a change that adds or changes
+  tests, and in `/code-review`, run `/test-prover`: in a scratch worktree it reverts the fix and
+  breaks its guards, and every new test must go red. `/open-pr` runs it too. `/land` and
+  `/dependabot` read a red check with `/ci-triage`, which never re-runs anything.
+  `/records-audit` checks the board, the trackers, the follow-up wiki and the changelog against
+  each other; run it weekly, and `/what-next` says when it is due.
 - **`/handoff` is the shared skill.** It parks the session for another machine or harness, closes it
   out with `/end-session`, and `/lets-go` resumes it. It does not write the portable file `/ask-matt`
   describes, so a `/prototype` detour stays in the session or uses a branch.
 - **A wizard is not the record.** A step only a human can take follows the `## Procedure` in
-  `.agents/skills/ship/settings/human-follow-up.md`, whose instructions stand without the script.
+  `.agents/skills/open-pr/settings/human-follow-up.md`, whose instructions stand without the script.
 - **Research goes where it is safe to keep.** `/research` findings that would expose private material
   go to the private companion, where there is one, never to an ignored folder with no repository
   behind it. Details of an unpublished vulnerability are a draft advisory, never a research file.
@@ -131,6 +140,10 @@ and feature flags gate endpoints; `ADMIN_MEMBERSHIP_IDS` pins admins at login.
 Security details and the credential-rotation runbook live in
 [SECURITY.md](./SECURITY.md).
 
+Before changing auth, sessions, cookies, origins, roles, membership-scoped routes or request
+logging, read [docs/agents/security-and-logging.md](./docs/agents/security-and-logging.md): the
+behavior it lists must be preserved.
+
 ## Running Services
 
 - **Docker Compose** (Option A) — one command for the full stack; best default for local dev and integration testing.
@@ -138,9 +151,8 @@ Security details and the credential-rotation runbook live in
 - **Individual services** (Option C) — fast hot reload during active single-service development.
 
 `SETUP.md` is the human-facing setup guide and remains the fuller reference. The
-agent-facing subset — ports, environment table, test commands — is duplicated
-inline below on purpose, because tool-neutral agents cannot follow links out of
-this file.
+agent-facing subset — ports and test commands — is duplicated inline below on
+purpose; the environment table is in `docs/agents/environment.md`.
 
 ### Option A: Docker Compose (full stack)
 
@@ -169,15 +181,9 @@ cd k8s
 ```
 
 Dev-validation only — runs `GO_ENV: development` with no Postgres (in-memory token store, no wishlist/preferences persistence).
-The startup script rebuilds both application images in Minikube with
-`--pull --no-cache`; because the Deployments use local images with
-`imagePullPolicy: Never`, it restarts only an existing Deployment whose applied
-pod template did not already trigger a rollout. Those builds go into Minikube's
-Docker daemon, so the script creates new clusters with
-`--container-runtime=docker` and stops before building when the existing profile
-uses another runtime (Minikube defaults new clusters to containerd) or
-`minikube docker-env` fails; see
-[k8s/README.md troubleshooting](./k8s/README.md#troubleshooting).
+Before changing or debugging `k8s/startup.ps1`, read [k8s/README.md](./k8s/README.md#start-and-stop)
+(what it builds and restarts, and when it stops) and its
+[troubleshooting](./k8s/README.md#troubleshooting).
 
 ### Option C: Individual services
 
@@ -203,176 +209,20 @@ Or copy manually: root `.env`, `backend/api-service/.env`,
 `frontend/.env.local`, and `k8s/api-service-secret.yaml` from their committed
 example files.
 
-Public-only development requires no private workspace. Authorized maintainers
-can optionally restore the ignored `private/` directory as an independent Git
-repository with `./scripts/bootstrap-private-workspace.ps1 -PrivateFromPrompt`,
-or through 1Password with `-PrivateFromOnePassword` after creating the ignored
-machine-local `.private-workspace/repository.env.ref` file containing only
-`GUARDIAN_PRIVATE_REPOSITORY_URL=op://<vault>/<item>/<field>`. Do not put the
-private repository location or real 1Password identifiers in public docs.
-`npm run bootstrap:private` (from the repo root) is the Node equivalent for new
-git worktrees; it reuses the main checkout's reference file. The Node helper
-requires untracked, committed-ignore-protected private/reference paths, stages
-new clones before publication, and suppresses raw Git/1Password diagnostics.
-For its process-argument limits and failure behavior, read
-[Node bootstrap safety](./docs/maintainers/workspace-recovery.md#node-bootstrap-safety-and-diagnostics)
-when restoring private workspaces or changing this helper.
-
-From the repo root, `npm run sync:main` preflights the public checkout and the
-optional independent `private/` repository for uncommitted changes, fetches and
-prunes `origin`, switches each checkout to `main`, and fast-forwards it from
-`origin/main`. A failed preflight prevents either repository from being changed;
-diverged history fails without a merge commit or history rewrite. A missing
-`private/` repository is skipped. Use `npm run sync:main -- --skip-private` to
-update only the public checkout.
-
-The complete value-free recovery, verification, worktree, and backup handoff is
-in `docs/maintainers/workspace-recovery.md`. The restored private repository's
-`README.md` is the sole index for its internal file layout.
-
-When private restoration templates are available, run
-`./scripts/restore-private-secrets.ps1` before `./setup.ps1`; both helpers refuse
-to overwrite existing environment files, so `setup.ps1` must not create example
-copies first. The restore helper supports `-Target root,api,frontend,k8s` and
-writes only targets protected by committed ignore rules. Run
-`./scripts/workspace-status.ps1` for value-free public/private status and target
-protection checks. It redacts the private branch by default; ahead/behind values
-use local tracking refs without fetching. `-IncludePrivateBranch` opts into
-showing the private branch name.
-
 **Never commit real secrets. Use `.env` locally and keep generated/private files out of git.**
+Do not put the private repository location or real 1Password identifiers in public docs.
 
-Frontend tooling uses the exact Node.js 26 patch in the root `.nvmrc`.
-`frontend/package.json` accepts the Node 26 line only; CI and all three frontend
-Dockerfiles use the exact `.nvmrc` patch. Node 26 remains Current until its
-scheduled LTS transition on October 28, 2026; this project intentionally accepts
-that short-term churn because Node is frontend development/build tooling and the
-deployed frontend runtime is nginx.
-
-### Required runtime values
-
-| Variable                                | Purpose                                                                                                                                            |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GO_ENV`                                | Required; exactly `development` or `production`                                                                                                    |
-| `LOG_LEVEL`                             | `debug`, `info`, `warn`, or `error`; defaults to `info`                                                                                            |
-| `LOG_FORMAT`                            | `text` or `json`; defaults to text in development and JSON in production                                                                           |
-| `BUNGIE_API_KEY`                        | From <https://www.bungie.net/en/Application>                                                                                                       |
-| `BUNGIE_CLIENT_ID`                      | Public Bungie OAuth client identifier; no client secret is used                                                                                    |
-| `AUTH_REDIRECT_URI`                     | OAuth callback URL                                                                                                                                 |
-| `JWT_SECRET`                            | 32+ char random string (`openssl rand -base64 32`)                                                                                                 |
-| `DATABASE_URL`                          | Postgres connection string (local development uses `sslmode=disable`; production guidance: [PostgreSQL TLS](./SETUP.md#production-postgresql-tls)) |
-| `TOKEN_ENCRYPTION_KEY`                  | 32-byte base64 key for Bungie authorization encryption (`openssl rand -base64 32`)                                                                 |
-| `TOKEN_ENCRYPTION_KEY_VERSION`          | Positive version written for the current key (start at `1`)                                                                                        |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS`         | (optional) previous key for rotation during key migration                                                                                          |
-| `TOKEN_ENCRYPTION_KEY_PREVIOUS_VERSION` | Exact positive version for the previous key                                                                                                        |
-| `CORS_ALLOWED_ORIGINS`                  | Exact browser origins allowed to call the API                                                                                                      |
-| `ADMIN_MEMBERSHIP_IDS`                  | (optional) comma-separated Bungie membership IDs pinned to admin role at login                                                                     |
-
-### Auth and security behavior to preserve
-
-- Access and refresh JWT verification accepts only HS256 and requires the `guardian-tracker` issuer and an unexpired `exp` claim. Session-less development tokens remain supported.
-- Credentialed `GET /api/auth/bungie` creates a 10-minute host-only HttpOnly `SameSite=Lax`, `Path=/` transaction cookie (`__Host-guardian_oauth_transaction` with `Secure` in production; `guardian_oauth_transaction` in development). HMAC-signed v2 state binds its SHA-256 nonce digest; callback/reconnect verify both before code exchange, without legacy fallback. The latest start replaces prior pending browser flows. Valid transaction processing expires the cookie; invalid input preserves it.
-- The access-only Bungie authorization is encrypted at rest with AES-256-GCM and exact current/previous key versions; expiry requires an authenticated reconnect of the same Bungie membership.
-- The shared browser session client atomically persists access JWT/user state in the versioned `guardian_browser_session` localStorage envelope and owns authenticated transport. Web Locks coordinate authorization start, callback, authenticated reconnect, refresh, and logout across tabs; all except local logout require them. `AuthProvider` only subscribes to the public user/authenticated snapshot. The rotating refresh JWT is only in the host-only HttpOnly `guardian_refresh_token` cookie.
-- Application composition observes membership type/ID boundaries, cancels and clears the old QueryClient, replaces it, remounts identity-bound providers, and runs registered boundary resets (currently the preferences client, ADR 0021, which is not itself a provider). Same-membership refresh retains caches and mounted state and runs no boundary resets. Authenticated mutations use `useIdentityMutation` to fence work from a departed identity.
-- Refresh token revocation is backed by PostgreSQL.
-- Callback, authenticated Bungie reconnect, and refresh require an exact allowlisted `Origin`; the cookie design assumes the frontend and API are same-site.
-- Single-device logout preserves Bungie authorization; logout-all evicts it.
-- Membership-scoped routes (collections, collections refresh, characters,
-  character equipment, character activity history, character current activity,
-  catalysts, crafting, seals, digest) authorize the caller's whole Destiny membership
-  pair — platform type and ID, not ID alone — and abort the request on
-  mismatch before any Bungie call or cache access.
-- Admin access is controlled by explicit membership ID configuration. Self-service role updates lock the current database row, reject admins, and commit `role.optin` audit events atomically without session/token-version changes. Successful bootstrap admin upserts evict the local authorization cache; cross-replica cache propagation retains its 60-second window.
-
-See `SECURITY.md` for public security posture and reporting guidance.
-
-### Application logging
-
-The API uses `log/slog` and assigns every request a server-generated UUID exposed
-as `X-Request-ID`. Access records use Gin route templates and include method,
-status, duration, and response bytes. They never include raw URLs/query strings,
-bodies, authorization headers, User-Agent values, or routine client IPs.
-Membership, session, user, and character identifiers are deterministic 24-hex
-pseudonyms in application logs; exact values remain only in the PostgreSQL audit
-trail. Successful app requests log at info, 4xx at warn, 5xx at error, and
-successful health probes at debug. A request abandoned by its client (the
-request context canceled and the failure is that cancellation) is recorded as
-499 at info with no error-level handler log.
+Before restoring the private workspace or secrets, running `npm run sync:main`, adding or
+reading a runtime environment variable, or moving the Node pin, read
+[docs/agents/environment.md](./docs/agents/environment.md).
 
 ## CI/CD
 
-GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs. Both this
-workflow and `.github/workflows/browser.yml` provision Node from the root
-`.nvmrc`:
-
-1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
-   It also runs `npm run test:policy` (the `node --test` list of every policy test in the root
-   `package.json`), which exercises the generator's and the tool-neutrality lint's own logic
-   and enforces the repository's workflow-action, Go security-tool, Node-version,
-   PostgreSQL-image, workspace-portability, safe main-branch synchronization, local documentation-link, jest-dom-shim, and
-   changelog-footer policies, and tests the parsing behind `npm run board:blockers`
-   (which itself reads the private board locally, not in CI). It also runs
-   `k8s/startup.ps1`'s cluster start-up against fake `minikube`, `docker` and
-   `kubectl` executables, since no CI job runs Minikube. The Node policy keeps
-   `.nvmrc`, both workflows, all three frontend Dockerfiles, package engine metadata, and Node ambient
-   types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
-   PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as
-   the three Compose PostgreSQL services — Dependabot's `docker-compose` ecosystem does not see
-   workflow service images — and fails on any retired `postgres:<version>` reference left behind
-   in a tracked file outside the release history (`CHANGELOG.md`, `changelog.d/`,
-   `docs/changelog/`). The jest-dom policy keeps `frontend/src/test/jest-dom.d.ts` and its
-   scoped `typescript/no-empty-object-type` exemption alive exactly while
-   `@testing-library/jest-dom` still augments the Vitest 4 assertion shape, and fails once
-   upstream ships Vitest 5 support so the shim is deleted rather than left to rot — a
-   redundant augmentation keeps working and would redden no other check. The changelog-footer
-   policy keeps `CHANGELOG.md`'s reference-link definitions in step with its version
-   headings — every released section defined, no orphans, each comparing from the section
-   below it, and `[Unreleased]` comparing from the newest release. `version.yml` keeps
-   the footer current when it stamps a release, and this test catches a hand edit that
-   breaks it. The job also runs
-   `npm run sync:agents:check`, which fails if
-   `.codex/agents/` (generated from `.claude/agents/`) or `.claude/skills/`
-   (generated from `.agents/skills/`) is out of sync with its source. Fix:
-   `npm run sync:agents`. Run `./frontend/node_modules/.bin/prettier --write "**/*.md"`
-   first if you edited a skill's markdown — regenerating before formatting mirrors
-   unformatted content and drifts again on the next format pass. After the sync check it runs
-   `npm run lint:agents` (`scripts/lint-agent-neutrality.mjs`), which rejects agent and skill
-   sources that read wrongly from their mirrored copies: a bare `$0`–`$9` in a `SKILL.md`
-   (Claude Code substitutes the invocation's arguments), a relative link that breaks under the
-   mirror's directory, or a blind `claude`→`Codex` substitution artifact.
-2. **test-frontend** — type-check, lint, Vitest coverage (≥70% lines, ≥65% branches), build
-3. **test-go-services** — `go vet`, Staticcheck 2026.1, declared `govulncheck` tool v1.6.0 via `go tool govulncheck`, `go test -race` + Postgres container; statement coverage ≥60%
-4. **build-docker-images** — `npm run test:docker-context` verifies both application `.dockerignore` policies with synthetic fixtures and a real Docker scratch `COPY` probe. `npm run test:nginx-headers` verifies security-header inheritance and cache behavior over HTTP using the pinned nginx runtime and synthetic assets. The job then validates application image builds (no push configured). Neither probe reads local environment files.
-5. **changelog-version** (check name `Changelog Version`, kept because the ruleset
-   requires it) — verifies the branch's `changelog.d/` fragments parse and that it
-   edits no released `CHANGELOG.md` section, no `## [Unreleased]` entry and no
-   fragment already on `main` (`scripts/check-changelog.mjs`). A PR with no fragment,
-   such as Dependabot's, passes; `version.yml` writes its section from the PR title.
-
-The workflow also runs **Test Workspace Portability (Windows)** as a non-required
-validation job. It executes the portability suite and the Minikube startup test on
-`windows-latest` under both Windows PowerShell 5.1 and PowerShell 7; the
-portability job is not a protected branch check.
-
-`.github/workflows/browser.yml` adds **Browser E2E + Axe**, a required check
-promoted after exceeding ten consecutive clean runs, and the advisory **Browser
-Visual Regression** job. Both report failures normally (no `continue-on-error`)
-and retain reports/evidence for 14 days; visual stays optional.
-
-Every third-party workflow `uses:` entry is pinned to a reviewed 40-character
-release commit with a readable `# vX.Y.Z` comment. The `github-actions`
-Dependabot ecosystem advances both the SHA and comment.
-
-CodeQL runs on PRs via default setup; gated through the code-scanning merge rule (not as a required status check — requiring CodeQL `Analyze` contexts blocks Dependabot PRs which never produce them).
-
-**Versioning** (`.github/workflows/version.yml`): every merge (push) to `main` tags the merge commit with a three-part version from the root `VERSION` file (`v<major>.<minor>.<build>`, e.g. `v1.18.26`). The third component is the auto-incrementing build number. When the major/minor version is bumped, build `0` is allowed. `Scheme: stamp-on-tag` (ADR 0027): branches never edit `CHANGELOG.md`; each writes its entries to `changelog.d/<branch-slug>.md`, and after the merge `scripts/stamp-changelog.mjs` turns that merge's fragments (or, with none, its PR title) into its dated section, deletes them, and pushes one `chore(release): v<x.y.z> [skip ci]` commit plus the tag on the merge commit, then creates the GitHub Release from the section. The push uses a token from the release GitHub App, the main ruleset's one bypass actor (`GITHUB_TOKEN` cannot bypass a ruleset), and `[skip ci]` keeps it from starting CI/CD or Browser Quality.
-
-### Branch protection (`main`)
-
-Repository rules (Settings -> Rules): PR required, 0 approvals (self-merge once green), required status checks (`Format Check`, `Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`, `Browser E2E + Axe`), code-scanning gate (errors+warnings / medium+), and one bypass actor: the release GitHub App, "Always allow", so `version.yml` can push the stamp commit. `Browser Visual Regression` remains optional.
-
-To change the gate, update the repository ruleset through GitHub UI or the GitHub API. Required check names must match CI job `name:` exactly.
+GitHub Actions runs five required jobs in `.github/workflows/ci-cd.yml` (`Format Check`,
+`Test Frontend`, `Test Go Services`, `Build Docker Images`, `Changelog Version`) and the required
+`Browser E2E + Axe` in `.github/workflows/browser.yml`; `version.yml` tags every merge to `main`.
+Before changing a workflow, a policy test, the ruleset or versioning, or when a required check
+fails and you need to know what it runs, read [docs/agents/ci.md](./docs/agents/ci.md).
 
 ## Testing and Validation
 
@@ -395,7 +245,7 @@ npm run lint:agents
 
 # Go (from backend/api-service/)
 go test ./...
-GOTOOLCHAIN=go1.26.11 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...   # pin required; see below
+GOTOOLCHAIN=go1.26.11 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...   # pin required; see docs/agents/local-runs.md
 go tool govulncheck ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 
@@ -425,97 +275,25 @@ baselines are Linux renderings and must be regenerated inside the
 Windows. Both procedures, including baseline regeneration, are in
 [frontend/README.md](./frontend/README.md#browser-tests).
 
-When that tag no longer matches the lockfile — every `@playwright/test` bump,
-because npm and docker are separate Dependabot ecosystems — run
-`npm run sync:image-pins` from the repo root instead of hand-resolving a digest.
-It rewrites every frontend image pin whose tag a version file owns: the
-Playwright image, and the `node` pins in all three frontend Dockerfiles that
-`.nvmrc` drives. It needs network access, needs no Docker daemon, and is
-deliberately not a CI step — a required check must not depend on a registry
-being reachable, so the offline `scripts/node-version-policy.test.mjs` remains
-the gate and now names this command when it fails. `-- --check` reports drift
-without writing. The policy test compares versions and tags, never digests, so a
-digest-only `node` bump passes every check while leaving
-`frontend/Dockerfile.playwright` stale; run `-- --check` on every Dependabot
-`node` bump, green or not.
-
-### Staticcheck needs the pinned toolchain
-
-`GOTOOLCHAIN=go1.26.11` on the Staticcheck line is required, not decoration.
-Staticcheck 2026.1 is compiled by whatever Go is active, and on a newer
-toolchain it cannot decode the standard library's export data, so it fails while
-loading and analyzes nothing at all. Every error names a stdlib package rather
-than project code, and the empty output that follows is indistinguishable from a
-clean run — which is exactly how an unpinned run gets mistaken for "no
-findings". `go.mod`'s `toolchain` directive is a floor, not a pin, and does not
-prevent it.
-
-The pinned value must equal `GO_VERSION` in both workflows;
-`npm run test:go-toolchain-policy` fails the build if they drift apart, so
-moving the Go pin means moving it everywhere at once.
-
-### Full Go coverage locally (matches CI)
-
-A plain `go test ./...` under-reports coverage (~52% vs CI's ~63%) because two test groups
-self-skip: sqlite-backed manifest/search tests need **cgo**, and the `db` package integration tests
-need a reachable Postgres via **`TEST_DATABASE_URL`** (distinct from `DATABASE_URL` — unit tests
-must still exercise the degraded no-DB paths). `./test-local.ps1` (from `backend/api-service/`)
-closes both gaps: it starts the throwaway `test-postgres` Compose service on port **5533** (so it
-won't collide with the main Postgres on 5532), exports `CGO_ENABLED=1` + `TEST_DATABASE_URL`, and
-runs `go test -race -coverprofile`. Flags: `-Html` opens the HTML coverage report; `-Down` removes
-the test container afterwards. Migrations are embedded and applied automatically by the harness.
+Before running Staticcheck or measuring Go coverage locally, or when a Node or
+`@playwright/test` bump moves an image pin, read
+[docs/agents/local-runs.md](./docs/agents/local-runs.md): it explains the Staticcheck
+`GOTOOLCHAIN` pin, why a plain `go test ./...` under-reports coverage, and
+`npm run sync:image-pins`.
 
 ## Documentation Rules
 
-Public docs:
+Before adding, moving, renaming or deleting a doc, or deciding whether something belongs in a
+public doc or in `private/`, read the Documentation rules and the Doc map in
+[docs/agents/docs.md](./docs/agents/docs.md).
 
-- `README.md` - project overview, quickstart, and doc index
-- `SETUP.md` - local setup and troubleshooting
-- `CONTEXT.md` - project glossary: the domain vocabulary and the seam names, one
-  owner per term. Read it before naming a concept in code, a test, or an issue.
-- `docs/architecture.md` - current implemented architecture
-- `ROADMAP.md` - public future-looking roadmap
-- `SECURITY.md` - public security posture and reporting
-- `CHANGELOG.md` - notable shipped changes
-- `docs/adr/` - public architecture decisions
-- `AGENTS.md` - canonical, tool-neutral agent operating guide (this file)
-- `CLAUDE.md` - thin `@AGENTS.md` importer plus Claude Code-specific mechanics
-- `docs/agents/` - per-repo conventions and settings the installed skills read
-  (issue tracker, triage labels, domain docs, development flow, and the shared
-  skills' settings files); see `## Agent skills` below
-- `docs/agents/dev-flow.md` - what this repository adds to the shared development
-  flow: board items, what to do before implementing, and exemption details
-- `docs/agents/merging.md` - once a PR is open: whether CI's answer is for your
-  commit, reds that aren't the code, merging, and Dependabot's red-on-arrival bumps
-- `docs/agents/verification.md` - before trusting a card's premise, a test or a gate
-- `docs/agents/local-runs.md` - before handing a tree to a reviewer, or running the
-  stack and browser tests on a development machine
-- `docs/maintainers/workspace-recovery.md` - value-free private-workspace and
-  machine-local configuration recovery runbook for authorized maintainers
-
-Private docs:
-
-- `private/README.md` - sole index for operations, residual
-  security risks, reference evidence, and retired work. Private paths may be
-  reorganized without duplicating that internal layout in this public guide.
-
-Rules:
-
-- Keep public docs factual and safe for a public repository.
 - Keep private audits, exploratory notes, and sensitive operational details in
   `private/`. Execution sequencing and slice order are **not** private documents —
   they live on the board (see [Work Tracking](#work-tracking) and
   [ADR 0022](./docs/adr/0022-github-owns-task-status.md)). Do not recreate a
   private status file.
-- Archive shipped private planning content instead of leaving duplicate active plans.
-- When deleting or consolidating private docs, scrub references to the removed file.
-
-Public committed docs describe implemented behavior, local setup, durable decisions, security
-model, shipped changes, and gated future work. `private/` is gitignored and, for authorized
-maintainers, can be an independent private documentation repository. It holds
-deployment runbooks, private security reviews, raw Bungie/API research, and
-environment-specific operations notes. Public contributors do not need it. Do not move private
-operational detail into public docs or expose its remote location through the public repository.
+- Do not move private operational detail into public docs or expose its remote location through
+  the public repository.
 
 ## Work Tracking
 
@@ -525,7 +303,7 @@ Task status lives on GitHub, not in this repository's files. See
 - **Board:** the private user-level Project `Guardian Tracker`
   (<https://github.com/users/jwh3times/projects/4>), linked to both the public
   repository and the private companion. Fields: `Chain`, `Order`, `Blocked By`,
-  `Gate`, `ADR`, `Status`, `Triage`, `Priority`.
+  `Gate`, `ADR`, `Status`, `Triage`, `Priority`, `Due`.
 - **Issues go in the public repository by default.** File in the private
   companion only when the body would need a credential, a real
   provider/cost/account identifier, or exploitable security detail.
@@ -558,27 +336,9 @@ the agent can perform remain agent work.
 
 ### Rules for every architecture-deepening slice
 
-The remaining slices sequenced by ADRs 0014–0021 are behavior-preserving
-ownership migrations. For each one:
-
-- Land the replacement, the deletion of the old path, tests, and affected
-  documentation in **one green PR**. Avoid dual owners and cleanup-only
-  follow-ups.
-- Follow the controlling ADR's migration and acceptance steps. When its final
-  slice ships, update the ADR and the index status to "implemented in `vX.Y.Z`".
-- Preserve ADR 0003's verify-first rule for Manifest assumptions and ADR 0008's
-  HttpOnly same-site refresh-cookie design.
-- Preserve the participant/observer split, Item acquisition-facts ownership,
-  typed Collections outcomes, explicit Wish list tombstones, and Preferences'
-  atomic membership-keyed synchronization contract.
-- Do not decide farm-only multi-collectible semantics, collapse source-string and
-  milestone-name vocabularies, or assume deterministic Efficiency buckets
-  without separate real-Manifest evidence.
-- Keep roadmap features out of these migrations.
-
-A slice is ready only when its dependencies are complete, its replacement and
-deletion boundaries are explicit, its load-bearing external facts have current
-evidence, and its tests exercise the new seam rather than duplicating its data.
+Before working one of the remaining behavior-preserving ownership migrations that ADRs
+0014–0021 sequence, read
+[its rules in docs/agents/dev-flow.md](./docs/agents/dev-flow.md#rules-for-every-architecture-deepening-slice).
 
 ## Agent Routing
 
@@ -597,7 +357,7 @@ they are useful either way.
 | Code review — correctness, security, pattern violations                                                              | `code-reviewer`             | `.claude/agents/code-reviewer.md`             |
 
 Documentation sync is not a subagent: it is the `docs-updater` skill (see
-[Agent skills](#agent-skills)), which `/ship` and `/end-session` run in a subagent.
+[Agent skills](#agent-skills)), which `/open-pr` and `/end-session` run in a subagent.
 
 `.claude/agents/` and `.agents/skills/` are the **source of truth** — the former is
 the Claude Code convention; the latter is where skill installers write (and where a
@@ -631,8 +391,9 @@ file-writing tool (`Write`, `Edit`, `MultiEdit`, `NotebookEdit`) gets
 
 <!-- shared:shared-skills -->
 
-`end-session`, `handoff`, `lets-go`, `ship`, `land`, `dependabot`, `docs-updater` and `what-next`
-install from `jwh3times/skills`, and are never edited here: reinstalling overwrites a local edit.
+`end-session`, `handoff`, `lets-go`, `open-pr`, `land`, `dependabot`, `docs-updater`, `what-next`,
+`test-prover`, `ci-triage` and `records-audit` install from `jwh3times/skills`, and are never
+edited here: reinstalling overwrites a local edit.
 A fix goes upstream, and what they need to know about this repository goes in the settings files
 under `docs/agents/`, which each skill proposes on first run.
 
@@ -646,7 +407,7 @@ Re-running the install is the update; never run `npx skills update`, which leave
 linked to its source instead of copied:
 
 ```bash
-npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s ship -s land -s dependabot -s docs-updater -s what-next -a codex --copy -y
+npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s open-pr -s land -s dependabot -s docs-updater -s what-next -s test-prover -s ci-triage -s records-audit -a codex --copy -y
 npx skills add mattpocock/skills#d1478fcb140db0b93c0c8df17bcfd311844749d0 \
   -s ask-matt -s code-review -s codebase-design -s diagnosing-bugs -s domain-modeling -s grill-me \
   -s grill-with-docs -s grilling -s implement -s improve-codebase-architecture -s prototype \
@@ -656,12 +417,13 @@ npx skills add mattpocock/skills#d1478fcb140db0b93c0c8df17bcfd311844749d0 \
 node scripts/sync-agents.mjs
 ```
 
-`scripts/sync-agents.mjs`, `lint-agent-neutrality.mjs`, `check-docs.mjs`, `check-skills.mjs`, and
-`sync-main.mjs`, `next-version.mjs`, `check-changelog.mjs` and `stamp-changelog.mjs` where this
-repository carries them, are canonical in `jwh3times/skills` with their tests: fix them there, then
-copy them here.
+`scripts/sync-agents.mjs`, `lint-agent-neutrality.mjs`, `check-docs.mjs`, `check-skills.mjs`,
+`guard.mjs`, and `sync-main.mjs`, `next-version.mjs`, `check-changelog.mjs` and
+`stamp-changelog.mjs` where this repository carries them, are canonical in `jwh3times/skills` with
+their tests: fix them there, then copy them here.
 `sync-agents.mjs` also writes the marked blocks in this file: change them in `jwh3times/skills`, not
-here.
+here. It registers `guard.mjs` in `.claude/settings.json`, which stops the commands and edits these
+rules forbid; this repository's own additions go in `docs/agents/guard.md`.
 
 <!-- /shared:shared-skills -->
 
@@ -687,55 +449,18 @@ Single-context layout: root `CONTEXT.md` + existing `docs/adr/`. See `docs/agent
 
 ## MCP servers
 
-The shared set is committed twice, once per tool: `.mcp.json` (Claude Code) and
-`.codex/config.toml` (Codex). Keep the two files declaring the same servers with the same
-arguments.
-
-| Server       | Reach for it when                                                                                                                        |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `context7`   | A task depends on a library, framework, or CLI's current API — Gin, React Query, Vite, Playwright, oxlint. Bungie facts are not in it.   |
-| `playwright` | A change needs eyes on the running app: drive `localhost:5273`, read console and network, screenshot. The e2e suite stays the test gate. |
-
-Enabling them is a one-time step per person:
-
-- **Claude Code** asks you to approve each project server on the first session in this
-  checkout. If you already have the claude.ai Context7 connector, declining the project
-  `context7` avoids duplicate tools.
-- **Codex** reads `.codex/config.toml` only once the checkout is a trusted project.
-- **Playwright's browser** is installed separately:
-  `npx @playwright/mcp@<pinned version> install-browser chrome-for-testing`. Every
-  `@playwright/mcp` release builds on an alpha `playwright-core`, so its browser revision
-  never matches the one `frontend/`'s `@playwright/test` installs, and the server runs
-  `--browser chromium` rather than an installed Chrome that contributors may not have.
-  Bumping the pin needs the same command again.
-
-Nothing updates the pin: Dependabot does not read either file. Bump both files together,
-then re-run the browser install. The server runs `--isolated`, so no browser profile or
-sign-in persists between sessions; it writes snapshots into `.playwright-mcp/`, which is
-ignored.
+The shared set is `context7` and `playwright`, declared in `.mcp.json` and `.codex/config.toml`.
+Before using one for the first time, or changing either file or the Playwright pin, read
+[docs/agents/mcp.md](./docs/agents/mcp.md).
 
 GitHub work goes through `gh`, which the flow skills already require; a GitHub MCP server
 is deliberately not in the set. Personal servers in your user-level config are fine
 alongside the shared ones, provided git and GitHub operations still go through `git` and
 `gh`. Secrets never pass through an MCP server: credential restoration uses the scripts
-in [Environment Setup](#environment-setup).
+in [docs/agents/environment.md](./docs/agents/environment.md).
 
 ## Known Limitations
 
-- Collections data remains membership-wide. The character switcher scopes
-  authenticated weekly vendor inventory, today actions, availability ranking,
-  Xûr location, the Guardian equipment view, one bounded page of recent
-  completed activities, and a best-effort current-activity snapshot to the
-  selected character. Recent history has no pagination or aggregate analytics;
-  current activity is not cached server-side and reports "unknown" when
-  Bungie's reported activity hash is absent from the Manifest.
-- Per-Guardian progression summaries are deliberately not shown. Verified
-  character-scope progressions (component 202) offered no named entry with a
-  current earning path or a value that tells the player what to do next.
-  Reopen only with a fresh owner capture that establishes one; never substitute
-  membership-wide Collections or account-scope progression.
-- Search index snapshots persist beside the manifest by version; a missing or new-version snapshot rebuilds automatically (~30s after the manifest is ready). A build that fails is retried by the next search request (throttled to one attempt per 30s) instead of waiting for the next hourly manifest swap.
-- Xûr location is best-effort: the authenticated character-vendor component's
-  location index resolves through the manifest to "The Tower"; failures omit the field.
-- Raid and dungeon milestones carry a real missing count; non-raid/dungeon milestones
-  omit it because verified current reward definitions contain no collectible-linked items.
+Before working on character scoping, per-Guardian progression, the search index, Xûr location
+or milestone missing counts, or treating a gap there as a bug, read Known Limitations in
+[docs/architecture.md](./docs/architecture.md#known-limitations).

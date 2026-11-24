@@ -10,6 +10,14 @@
       "computedHash": "7ff2383b40fe9d8f3e753d267d964fb2b44d120a948fd2a57c3b26ddfc318370",
       "installMode": "copy"
     },
+    "ci-triage": {
+      "source": "jwh3times/skills",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
+      "sourceType": "github",
+      "skillPath": "skills/ci-triage/SKILL.md",
+      "computedHash": "ad1a0b2fbb51091acf5a4dba6970e0dd80acb7277c6aeada91521e0417957294",
+      "installMode": "copy"
+    },
     "code-review": {
       "source": "mattpocock/skills",
       "ref": "d1478fcb140db0b93c0c8df17bcfd311844749d0",
@@ -30,10 +38,10 @@
     },
     "dependabot": {
       "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
       "sourceType": "github",
       "skillPath": "skills/dependabot/SKILL.md",
-      "computedHash": "e8247943edd9c81d8f04aa965758daea1a14075dc563c84257bc3848d4b9add3",
+      "computedHash": "cc2365b7c6c4304295ffff19646033f591c78729d1a5c0dfca2a9ee484363089",
       "installMode": "copy"
     },
     "diagnosing-bugs": {
@@ -47,10 +55,10 @@
     },
     "docs-updater": {
       "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
       "sourceType": "github",
       "skillPath": "skills/docs-updater/SKILL.md",
-      "computedHash": "c39e125c3182f686c54f34be46361bf7d7ec54cc680557297fc8744ea685178d",
+      "computedHash": "fa3c9099af568e2fc2ba663477180b9a1cce80d4217dd9f25a4f887068175a9f",
       "installMode": "copy"
     },
     "domain-modeling": {
@@ -64,10 +72,10 @@
     },
     "end-session": {
       "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
       "sourceType": "github",
       "skillPath": "skills/end-session/SKILL.md",
-      "computedHash": "369078d180f3fe1d9d265f6196662e3febe1ca94bf0ddfaae476a12f3827f8fb",
+      "computedHash": "4055d3643f31f3f86fd3e4162cc3595d70ec50801b761e5d5dbc4b8457693bbc",
       "installMode": "copy"
     },
     "grill-me": {
@@ -99,10 +107,10 @@
     },
     "handoff": {
       "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
       "sourceType": "github",
       "skillPath": "skills/handoff/SKILL.md",
-      "computedHash": "9918f1f0885e39e27e047535f1bb661d42c27910978c1281ef71290b525b2028",
+      "computedHash": "719f56f754ca21761ddd3a0ddd414616bdc0d88b55abc61dd9ce0f0a607cf525",
       "installMode": "copy"
     },
     "implement": {
@@ -125,18 +133,26 @@
     },
     "land": {
       "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
       "sourceType": "github",
       "skillPath": "skills/land/SKILL.md",
-      "computedHash": "e9cf8ab4b82d59d4d4d26a241618ba2911a1c8759084b7a74805686e9a5529ba",
+      "computedHash": "94c1290f28a18e985a26a0b6bc5df1866c3689cb5a9385595277c825370ca192",
       "installMode": "copy"
     },
     "lets-go": {
       "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
       "sourceType": "github",
       "skillPath": "skills/lets-go/SKILL.md",
-      "computedHash": "5b0f2ead2e7be42c66cba87f075a925c1c538f0a8cae6876b8aab5e3fb66aa05",
+      "computedHash": "72274b9985f8d415b922f2d71f1fed736c76f01c2cfae26f62ef4a1126fcfea4",
+      "installMode": "copy"
+    },
+    "open-pr": {
+      "source": "jwh3times/skills",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
+      "sourceType": "github",
+      "skillPath": "skills/open-pr/SKILL.md",
+      "computedHash": "9871caa44a5cec5616673f73f0191e5f136a1e883dbe7f60409af36e6deb5c5f",
       "installMode": "copy"
     },
     "prototype": {
@@ -146,6 +162,14 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/prototype/SKILL.md",
       "computedHash": "1e3ba2202a5b77b8aa50bc4447432331d6e42590e53ec0935689662cfed199ca",
+      "installMode": "copy"
+    },
+    "records-audit": {
+      "source": "jwh3times/skills",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
+      "sourceType": "github",
+      "skillPath": "skills/records-audit/SKILL.md",
+      "computedHash": "1969f525971c99f71a8b0461eca47ed0a71039811a8596f4eb50025d9f18dc8d",
       "installMode": "copy"
     },
     "research": {
@@ -166,14 +190,6 @@
       "computedHash": "9659e7025d4cf1c0a0b40ddff32ed4b8debb87a4b20d7a52ff89c506a638df69",
       "installMode": "copy"
     },
-    "ship": {
-      "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
-      "sourceType": "github",
-      "skillPath": "skills/ship/SKILL.md",
-      "computedHash": "d5e26abe67f32449011c94087e1ba8ea4411a986ed77d2d45f98101a952d8cec",
-      "installMode": "copy"
-    },
     "tdd": {
       "source": "mattpocock/skills",
       "ref": "d1478fcb140db0b93c0c8df17bcfd311844749d0",
@@ -190,6 +206,14 @@
       "sourceType": "github",
       "skillPath": "skills/productivity/teach/SKILL.md",
       "computedHash": "31bb3eed09dd2787e290e933def99fbf7d65044a29119c224af47c01404ab228",
+      "installMode": "copy"
+    },
+    "test-prover": {
+      "source": "jwh3times/skills",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
+      "sourceType": "github",
+      "skillPath": "skills/test-prover/SKILL.md",
+      "computedHash": "49e63327ca347be9fc8a9ba47053f9bf23c2d6ad23f7915a0208e1e93bfddefa",
       "installMode": "copy"
     },
     "to-questionnaire": {
@@ -248,10 +272,10 @@
     },
     "what-next": {
       "source": "jwh3times/skills",
-      "commit": "32ad29147d89f7ba7935752c84113255fd70184f",
+      "commit": "6ee32d8e3fa8b097fe09bb2c1d9508f55f83d955",
       "sourceType": "github",
       "skillPath": "skills/what-next/SKILL.md",
-      "computedHash": "07590e0437e2b7ca263e87524c71989241f4d36263845cada10f6ed27457fbbe",
+      "computedHash": "55b26a34503809272c7ad65924bf01a67f9501fa8a189a307cc81a264ec15d33",
       "installMode": "copy"
     },
     "wizard": {

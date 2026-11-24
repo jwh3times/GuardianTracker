@@ -17,6 +17,103 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.126] - 2026-11-24
+
+### Changed
+
+- chore: bump the `npm-minor-and-patch` group across 1 directory with 10 updates (#538)
+
+## [1.18.125] - 2026-11-24
+
+### Changed
+
+- chore: bump `actions/create-github-app-token` from `3.3.0` to `3.4.0` in the actions-minor-and-patch group (#536)
+
+## [1.18.124] - 2026-11-24
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#553)
+
+## [1.18.123] - 2026-11-23
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#552)
+
+## [1.18.122] - 2026-11-23
+
+### Changed
+
+- docs(agents): add the test-proof settings and the Due board field (#551)
+
+## [1.18.121] - 2026-11-23
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#550)
+
+## [1.18.120] - 2026-11-23
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#549)
+
+## [1.18.119] - 2026-11-23
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#548)
+
+## [1.18.118] - 2026-11-23
+
+### Changed
+
+- Every Claude Code agent definition in `.claude/agents/` now sets `model: inherit`, so a subagent
+  runs on the model of the session that launched it instead of a pinned Sonnet or Opus. The Codex
+  mirrors are unchanged, because the generator drops `model:`. No application behavior changes.
+
+## [1.18.117] - 2026-11-23
+
+### Added
+
+- `docs/agents/guard.md` holds this repository's own rules for the shared guard hook
+  (`scripts/guard.mjs`), on top of the rules it applies everywhere. It denies removing or pruning
+  Docker volumes, a profiled `docker compose --profile test|e2e down` (which takes the main stack
+  down too) and `npx skills update`. It asks before `docker compose down -v`, stopping the main
+  stack, `k8s/shutdown.ps1` and `minikube delete`, and protects `private/`, the plaintext env and
+  secret targets, keys and certificates, the machine-local 1Password reference and bootstrap
+  folders, local Compose and editor settings, and `node_modules/`. The docs map lists the new file.
+  No application behavior changes.
+
+## [1.18.116] - 2026-11-23
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#541)
+
+## [1.18.115] - 2026-11-23
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#540)
+
+## [1.18.114] - 2026-11-23
+
+### Changed
+
+- `AGENTS.md` fits Codex's 32 KiB instruction budget again (52,347 bytes down to 27,808), so a
+  Codex session reads the whole file instead of silently losing its last third. Reference detail
+  moved to the doc that owns its topic: CI/CD, branch protection and the policy
+  tests to `docs/agents/ci.md`; the private workspace, `main` sync, Node pin and runtime values
+  table to `docs/agents/environment.md`; the shared MCP servers to `docs/agents/mcp.md`; the auth
+  behavior to preserve and application logging to `docs/agents/security-and-logging.md`; the
+  "Rules for every architecture-deepening slice" to `docs/agents/dev-flow.md`; the Staticcheck and
+  Go coverage notes to `docs/agents/local-runs.md`; the documentation rules to
+  `docs/agents/docs.md`; and the known limitations to `docs/architecture.md`. `AGENTS.md` keeps a
+  pointer naming when to read each one, and the Doc map records the 30,000-byte limit.
+  ADR 0028 records the decision and supersedes ADR 0022 in part. No application behavior changes.
+
 ## [1.18.113] - 2026-11-22
 
 ### Changed
@@ -2718,7 +2815,20 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.113...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.126...HEAD
+[1.18.126]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.125...v1.18.126
+[1.18.125]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.124...v1.18.125
+[1.18.124]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.123...v1.18.124
+[1.18.123]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.122...v1.18.123
+[1.18.122]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.121...v1.18.122
+[1.18.121]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.120...v1.18.121
+[1.18.120]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.119...v1.18.120
+[1.18.119]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.118...v1.18.119
+[1.18.118]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.117...v1.18.118
+[1.18.117]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.116...v1.18.117
+[1.18.116]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.115...v1.18.116
+[1.18.115]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.114...v1.18.115
+[1.18.114]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.113...v1.18.114
 [1.18.113]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.112...v1.18.113
 [1.18.112]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.111...v1.18.112
 [1.18.111]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.110...v1.18.111

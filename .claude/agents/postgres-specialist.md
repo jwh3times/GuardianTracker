@@ -2,7 +2,7 @@
 name: postgres-specialist
 description: Use for Guardian Tracker database work — the SQLite Bungie manifest database used by api-service, the PostgreSQL schema for user data, DB migration runner, and Bungie token store implementation.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
+model: inherit
 ---
 
 You are working with Guardian Tracker's data layer. There are two databases in this project with very different roles.

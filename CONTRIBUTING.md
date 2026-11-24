@@ -117,7 +117,7 @@ the current major/minor line. When bumping major or minor, build `0` is valid: i
 
 A branch never edits `CHANGELOG.md` and never names the version its merge will
 mint. It writes its entries to its own `changelog.d/<branch-slug>.md` fragment
-(see [`changelog.d/README.md`](./changelog.d/README.md)); `/ship` does this for
+(see [`changelog.d/README.md`](./changelog.d/README.md)); `/open-pr` does this for
 you. After the merge, `.github/workflows/version.yml` stamps the fragment into the
 merge's dated section, tags the merge commit and creates the release (ADR 0027). A
 PR with no fragment gets a one-line section from its title.
@@ -173,7 +173,7 @@ comment together when a newer allowed release is available.
 
 CodeQL also scans the repo on every PR via GitHub's default setup; for human PRs it
 is enforced through a code-scanning merge rule rather than as a required status
-check. See [AGENTS.md → CI/CD](./AGENTS.md#cicd) for the full explanation, including
+check. See [CI/CD in docs/agents/ci.md](./docs/agents/ci.md) for the full explanation, including
 how Dependabot PRs are handled.
 
 `Browser E2E + Axe` runs in the separate browser workflow and is a required

@@ -1,6 +1,6 @@
 # Development flow
 
-The flow itself is `.agents/skills/ship/settings/dev-flow.md`, and
+The flow itself is `.agents/skills/open-pr/settings/dev-flow.md`, and
 `AGENTS.md` summarizes it. This file holds what this repository adds.
 
 ## Docs and agent config
@@ -30,6 +30,30 @@ body is a spec, ticket or triage brief, and it is not labelled `blocked`.
 - **A change that supersedes a documented decision corrects the doc in the same change.** Grep for
   the claim, not the filename: one retired rule survived as five paraphrases in five files. When
   retiring a doc, scrub live references in `.agents/skills/` too, which can recreate it.
+
+## Rules for every architecture-deepening slice
+
+The remaining slices sequenced by ADRs 0014–0021 are behavior-preserving
+ownership migrations. For each one:
+
+- Land the replacement, the deletion of the old path, tests, and affected
+  documentation in **one green PR**. Avoid dual owners and cleanup-only
+  follow-ups.
+- Follow the controlling ADR's migration and acceptance steps. When its final
+  slice ships, update the ADR and the index status to "implemented in `vX.Y.Z`".
+- Preserve ADR 0003's verify-first rule for Manifest assumptions and ADR 0008's
+  HttpOnly same-site refresh-cookie design.
+- Preserve the participant/observer split, Item acquisition-facts ownership,
+  typed Collections outcomes, explicit Wish list tombstones, and Preferences'
+  atomic membership-keyed synchronization contract.
+- Do not decide farm-only multi-collectible semantics, collapse source-string and
+  milestone-name vocabularies, or assume deterministic Efficiency buckets
+  without separate real-Manifest evidence.
+- Keep roadmap features out of these migrations.
+
+A slice is ready only when its dependencies are complete, its replacement and
+deletion boundaries are explicit, its load-bearing external facts have current
+evidence, and its tests exercise the new seam rather than duplicating its data.
 
 ## Exemption details
 
