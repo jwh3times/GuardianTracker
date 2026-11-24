@@ -2,7 +2,7 @@
 name: go-services
 description: Use for any work in backend/api-service — Gin handlers, JWT auth, Bungie OAuth flow, CSRF state, DB-backed encrypted token store, manifest download, collections analysis, records, weekly, recommendations, search, roles, feature flags, admin, and Go tests.
 tools: Read, Write, Edit, Bash, Glob, Grep
-model: sonnet
+model: inherit
 ---
 
 You are working inside the Guardian Tracker Go backend. There is **one** service: `backend/api-service` (Go + Gin). The old multi-service architecture (`auth-service`, `bungie-service`, `graphql-service`) no longer exists.

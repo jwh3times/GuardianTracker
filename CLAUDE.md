@@ -17,8 +17,8 @@ sync contract in AGENTS.md.
 
 ### Skills
 
-Docs freshness is handled at push time by the `/ship` skill
-(`.claude/skills/ship/SKILL.md`), not by a per-turn hook. `/ship` runs the
+Docs freshness is handled at push time by the `/open-pr` skill
+(`.claude/skills/open-pr/SKILL.md`), not by a per-turn hook. `/open-pr` runs the
 `docs-updater` skill in a subagent against the branch diff, classifies the release as
 major, minor, or build-only, updates `VERSION` for major and minor releases, writes the
 branch's `changelog.d/` fragment (`version.yml` stamps it into `CHANGELOG.md` after the merge), files the branch's human

@@ -71,7 +71,7 @@ test("the jest-dom matcher shim is present exactly while jest-dom needs it", () 
   assert.fail(
     `@testing-library/jest-dom no longer ships the Vitest 4 assertion shape this shim compensates for (upstream issue #738).\n` +
       `1. Delete ${SHIM.join("/")} and the "${LINT_OVERRIDE_GLOB}" override for typescript/no-empty-object-type in frontend/.oxlintrc.json.\n` +
-      `2. Delete this file (scripts/jest-dom-shim-policy.test.mjs) and its entries in .github/workflows/ci-cd.yml and AGENTS.md. Removing only the shim is not enough — the check above then passes and execution reaches this assert.fail again, so Format Check stays red until this policy is gone.\n` +
+      `2. Delete this file (scripts/jest-dom-shim-policy.test.mjs) and its entries in .github/workflows/ci-cd.yml and docs/agents/ci.md. Removing only the shim is not enough — the check above then passes and execution reaches this assert.fail again, so Format Check stays red until this policy is gone.\n` +
       `3. Confirm "npm run type-check" and "npm run lint" stay green in frontend/.\n` +
       `If the matchers still fail to type without the shim, upstream's new shape is incompatible in some other way: update ${VITEST_4_SHAPE} above to match what they now ship, and record why, rather than reinstating a partial shim.`,
   );

@@ -2,25 +2,32 @@
 
 ## Doc map
 
-- `AGENTS.md` — the canonical, self-contained, tool-neutral operating guide: architecture and key
-  directories, acquisition-source invariants, auth and token flow, the inline ports and
-  environment table, CI/CD, branch protection, test commands, documentation rules, work tracking,
-  agent routing, agent skills, the shared MCP servers, known limitations. It is the only home of
-  repo operating context. **When:**
-  - an endpoint or auth/security behavior changes (`backend/api-service/api/router.go`,
-    `backend/api-service/auth/`): Auth & token flow, "Auth and security behavior to preserve";
-  - env, ports or Compose change (`backend/api-service/config/config.go`, `docker-compose.yml`,
-    `k8s/`): `## Running Services` and `## Environment Setup` — the only copy tool-neutral agents
-    read;
-  - CI or the ruleset changes (`.github/workflows/`): `## CI/CD` — job names, the policy tests,
-    coverage gates, action and Go pins, required checks, versioning;
+- `AGENTS.md` — the canonical, tool-neutral operating guide, holding what every session needs:
+  overview, ground rules, the development flow, architecture and key directories,
+  acquisition-source invariants, auth and token flow, ports and the essential commands, work
+  tracking, agent routing, agent skills and the must-never rules. Reference detail lives in the
+  `docs/agents/` files it points to, each pointer saying when to read it. Codex reads only the
+  first 32 KiB of `AGENTS.md`, so keep it under 30,000 bytes (`wc -c AGENTS.md`): new reference
+  detail goes to a `docs/agents/` file and a one-line pointer, not into `AGENTS.md`. Never move it
+  into a nested `AGENTS.md`, which Codex reads into the same budget. **When:**
+  - auth or token behavior changes (`backend/api-service/auth/`): Auth & token flow;
+  - ports or Compose change (`docker-compose.yml`, `k8s/`): `## Running Services`;
   - a service, data-access module or key directory is added (`backend/api-service/services/`,
     `frontend/src/data/`): Key directories;
   - an agent or skill is added, removed or replaced (`.claude/agents/`, `.agents/skills/`,
-    `skills-lock.json`): Agent Routing and Agent skills;
-  - a shared MCP server or its pin changes (`.mcp.json`, `.codex/config.toml`, which must declare
-    the same servers): `## MCP servers`;
-  - a known limitation is resolved — only once the code confirms it.
+    `skills-lock.json`): Agent Routing and Agent skills.
+- `docs/agents/environment.md` — the private workspace and `main` sync helpers, the Node pin, and
+  the runtime values table. **When:** an env var (`backend/api-service/config/config.go`), the
+  `.nvmrc` pin, or a bootstrap, restore, status or sync helper changes.
+- `docs/agents/security-and-logging.md` — the auth and security behavior to preserve, and what
+  application logs record. **When:** an endpoint or auth/security behavior changes
+  (`backend/api-service/api/router.go`, `backend/api-service/auth/`), or request logging changes.
+- `docs/agents/ci.md` — CI/CD job names, the policy tests, coverage gates, action and Go pins,
+  required checks, branch protection, versioning. **When:** CI or the ruleset changes
+  (`.github/workflows/`), or a policy test is added to `test:policy`.
+- `docs/agents/mcp.md` — the shared MCP servers, enabling them, and their pin. **When:** a shared
+  MCP server or its pin changes (`.mcp.json`, `.codex/config.toml`, which must declare the same
+  servers).
 - `CLAUDE.md` — a thin `@AGENTS.md` importer plus Claude Code-only mechanics. **When:** only the
   subagent roster, skills or hooks mechanics change; never operating context.
 - `README.md` — overview, feature summary, quick start, doc index. **When:** a top-level feature
@@ -34,8 +41,9 @@
 - `docs/product.md` — durable product goals, users and principles; never status. **When:** a
   durable product decision changes.
 - `docs/architecture.md` — implemented runtime shape, data flow, route groups, data model,
-  security posture. **When:** a route group's surface (`api/router.go`), the data model
-  (`backend/api-service/db/migrations/`), or the runtime/infrastructure shape changes.
+  security posture, known limitations. **When:** a route group's surface (`api/router.go`), the
+  data model (`backend/api-service/db/migrations/`), or the runtime/infrastructure shape changes;
+  Known Limitations only once the code confirms a limitation is resolved.
 - `CONTEXT.md` — the domain glossary, written through `domain-modeling`. `frozen`: report a term the
   code contradicts instead of editing it.
 - `docs/adr/*.md` — accepted decisions. `frozen`: report a contradiction between an accepted ADR
@@ -48,7 +56,7 @@
   `version.yml` after each merge. `frozen`: a branch edits only the policy text at the top.
 - `changelog.d/*.md` — the branch's changelog fragment, one per branch (`changelog.d/README.md`).
   `ship-owned`.
-- `VERSION` — the version file `ship` bumps. `ship-owned`.
+- `VERSION` — the version file `open-pr` bumps. `ship-owned`.
 - `docs/changelog/*.md` — release notes archived from `CHANGELOG.md`. `frozen`.
 - `SECURITY.md` — reporting process, controls, security model, production checklist, credential
   rotation. **When:** auth, role, flag, admin, audit, cookie/origin or other security behavior
@@ -74,6 +82,9 @@
   `scripts/restore-private-secrets.ps1`, `scripts/workspace-status.ps1`, `scripts/sync-main.mjs`).
 - `docs/agents/*.md` — conventions and settings the skills read; `dev-flow.md` holds what this
   repository adds to the shared flow. **When:** a convention, route or setting changes.
+- `docs/agents/guard.md` — the commands and paths `scripts/guard.mjs` stops here, on top of its
+  shared rules. **When:** a **Never run** command, a dev-stack command or a never-remove path in
+  `workspace.md` changes.
 - `docs/agents/merging.md`, `docs/agents/verification.md`, `docs/agents/local-runs.md` — from open
   PR to finished merge, including Dependabot's red-on-arrival bumps; proving a card's premise, a
   test or a gate; the development machine's traps. **When:** a lesson is learned that no script or
@@ -111,6 +122,53 @@ reviews, exploit-level analysis and unpublished vulnerability details; oversized
 Bungie API research; audit evidence and retired planning content; credential-handling runbooks
 and rotation records; credential values; any backlog, next action or status document (GitHub owns
 task status, ADR 0022).
+
+## Documentation rules
+
+Public docs:
+
+- `README.md` - project overview, quickstart, and doc index
+- `SETUP.md` - local setup and troubleshooting
+- `CONTEXT.md` - project glossary: the domain vocabulary and the seam names, one
+  owner per term. Read it before naming a concept in code, a test, or an issue.
+- `docs/architecture.md` - current implemented architecture
+- `ROADMAP.md` - public future-looking roadmap
+- `SECURITY.md` - public security posture and reporting
+- `CHANGELOG.md` - notable shipped changes
+- `docs/adr/` - public architecture decisions
+- `AGENTS.md` - canonical, tool-neutral agent operating guide
+- `CLAUDE.md` - thin `@AGENTS.md` importer plus Claude Code-specific mechanics
+- `docs/agents/` - per-repo conventions and settings the installed skills read
+  (issue tracker, triage labels, domain docs, development flow, and the shared
+  skills' settings files); see `AGENTS.md`'s `## Agent skills`
+- `docs/agents/dev-flow.md` - what this repository adds to the shared development
+  flow: board items, what to do before implementing, the rules for every
+  architecture-deepening slice, and exemption details
+- `docs/agents/merging.md` - once a PR is open: whether CI's answer is for your
+  commit, reds that aren't the code, merging, and Dependabot's red-on-arrival bumps
+- `docs/agents/verification.md` - before trusting a card's premise, a test or a gate
+- `docs/agents/local-runs.md` - before handing a tree to a reviewer, or running the
+  stack and browser tests on a development machine
+- `docs/maintainers/workspace-recovery.md` - value-free private-workspace and
+  machine-local configuration recovery runbook for authorized maintainers
+
+Private docs:
+
+- `private/README.md` - sole index for operations, residual
+  security risks, reference evidence, and retired work. Private paths may be
+  reorganized without duplicating that internal layout in this public guide.
+
+Rules:
+
+- Keep public docs factual and safe for a public repository.
+- Archive shipped private planning content instead of leaving duplicate active plans.
+- When deleting or consolidating private docs, scrub references to the removed file.
+
+Public committed docs describe implemented behavior, local setup, durable decisions, security
+model, shipped changes, and gated future work. `private/` is gitignored and, for authorized
+maintainers, can be an independent private documentation repository. It holds
+deployment runbooks, private security reviews, raw Bungie/API research, and
+environment-specific operations notes. Public contributors do not need it.
 
 ## Drift probes
 

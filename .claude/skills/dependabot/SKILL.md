@@ -19,7 +19,8 @@ version is a reason to investigate, never by itself a reason to warn.
 Run shell snippets in bash (Git Bash on Windows). `.agents/skills/dependabot/dependabot.mjs` reads
 the PRs, their checks, commits and comments over GitHub's REST API, and prints one JSON object; it
 never writes. `.agents/skills/dependabot/resolution.md` says how to read each ecosystem's install;
-read it before step 4. Merges go through `land`, installed beside this skill.
+read it before step 4. Merges go through `land`, and red checks are read by `ci-triage`, both
+installed beside this skill.
 
 This skill never merges, approves, closes, labels or edits a pull request, and never posts an
 `@dependabot` command; when one is needed, it gives the user the exact comment to post.
@@ -57,9 +58,11 @@ out, and report, a PR that is a `draft`, carries a label containing `hold`, `do-
 
 ## 2. Triage
 
-- **Already reviewed:** a PR with a `verdict` is not reviewed again unless the user asks. A
-  `low-risk` verdict counts only while `versionsNamed` is true; one that no longer names the PR's
-  versions (Dependabot retargeted it) is reported as stale, and is no basis for landing.
+- **Already reviewed:** a PR whose `verdict` is `current` is not reviewed again unless the user
+  asks. A `low-risk` verdict stops being current when it no longer names the PR's versions
+  (Dependabot retargeted it) or when the PR's checks have failed since; report it as stale, never
+  as a basis for landing, and review the PR again: the new verdict, the latest marked comment,
+  replaces it.
 - **ROUTINE:** `kind` is `minor`, `patch`, `digest` or `removed`, and no update matches the `Review
   triggers`. It needs no release-note research, but step 3 still applies.
 - **CANDIDATE:** `kind` is `major`, `unknown`, `downgrade` or `suffix`, or an update matches the
@@ -75,14 +78,17 @@ Evidence outranks reasoning: read `checks` before any analysis.
 
 - **`pending`:** wait for it, `list --pr <n> --wait 300`, for up to about ten minutes; in a session,
   go on with the others and come back. Still pending: no verdict this run.
-- **`failed`:** read each check in `checks.failed`: `gh run view <runId> --log-failed`; while the
-  run is still going, the job's log (`gh api repos/<owner>/<repo>/actions/jobs/<jobId>/logs`); and
-  when neither can be read, its annotations
-  (`gh api repos/<owner>/<repo>/check-runs/<checkRunId>/annotations`). Find the first real error.
-  A red check is dispositive: the verdict on a red PR is NEEDS EFFORT, quoting that error, however
-  clean the analysis looks. If the analysis says safe and CI says red, the analysis is wrong: find
-  out why. A red whose log cannot be read at all still gets NEEDS EFFORT, naming and linking the
-  check.
+- **`failed`:** read why with the `ci-triage` skill, in a subagent where the harness has one (it
+  forks on its own where the harness reads its `context: fork`), told the `Public repository`, the
+  PR's number and the names in `checks.failed`; otherwise follow
+  `.agents/skills/ci-triage/SKILL.md` yourself. It reads over REST, so it works in the scheduled
+  run too, and it never re-runs or posts anything. It returns, for each red, the failing step, the
+  first real error, its class (known red, runner/infra, likely flake, real failure, unknown) and
+  whether `main` shares it. A red check is dispositive: the verdict on a red PR is NEEDS EFFORT,
+  quoting that error and its class, however clean the analysis looks; for a known red its next
+  step is the `Guide`'s remedy, for the user to apply. If the analysis says safe and CI says red,
+  the analysis is wrong: find out why. A red whose log cannot be read at all still gets NEEDS
+  EFFORT, naming and linking the check.
 - **Red on `main` too:** before blaming the bump, look at the same check on `main`'s newest commit
   and on the other open Dependabot PRs. When they fail with the same error, it is `main`'s red, not
   this PR's: report it once for the repository and give no verdict on that check.
@@ -145,7 +151,8 @@ Write each verdict to its own file, named for the repository and the PR. It star
 
 ## 7. Post the verdicts
 
-In a scheduled run, and in a session once the user says to. Post only on a PR with no `verdict`:
+In a scheduled run, and in a session once the user says to. Post only on a PR with no `verdict`,
+or one whose verdict is not `current`:
 
 ```bash
 gh api --method POST "repos/<owner>/<repo>/issues/<n>/comments" -F body=@"$verdict_file" --jq .html_url
@@ -163,7 +170,7 @@ to regenerate), offer the fix with the command and what it changes. On the user'
 2. Show the diff. A change beyond the mechanical one (code edited to fit the new version) is the
    user's to review before it is pushed.
 3. Commit it in this repository's commit style, push to the PR's branch
-   (`git push origin "HEAD:$head_ref"`), and remove the worktree. Where the `Guide` routes source
+   (`MSYS_NO_PATHCONV=1 git push origin "HEAD:$head_ref"`), and remove the worktree. Where the `Guide` routes source
    control through another tool, use its forms of these commands.
 
 From then on Dependabot no longer rebases that PR (`maintainedByDependabot` false): catch it up by
@@ -173,7 +180,7 @@ updating the branch, never `@dependabot rebase`, which would drop the fix. Wait 
 ## 9. Land (in a session, on the user's word)
 
 A PR is ready to offer when its checks passed on its current head and it is ROUTINE, or carries a
-`low-risk` verdict with `versionsNamed`. List the ready ones, oldest first. The user's words name
+`current` `low-risk` verdict. List the ready ones, oldest first. The user's words name
 the PRs to land; "land the ready ones" names that list as shown. Hand them to `land` one at a time,
 in that order, each through all of its steps. After each merge, run step 1 again: Dependabot
 rebases the others, or closes one and opens a replacement, which is a new PR the user has not
