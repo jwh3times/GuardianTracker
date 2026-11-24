@@ -357,7 +357,7 @@ they are useful either way.
 | Code review — correctness, security, pattern violations                                                              | `code-reviewer`             | `.claude/agents/code-reviewer.md`             |
 
 Documentation sync is not a subagent: it is the `docs-updater` skill (see
-[Agent skills](#agent-skills)), which `/ship` and `/end-session` run in a subagent.
+[Agent skills](#agent-skills)), which `/open-pr` and `/end-session` run in a subagent.
 
 `.claude/agents/` and `.agents/skills/` are the **source of truth** — the former is
 the Claude Code convention; the latter is where skill installers write (and where a

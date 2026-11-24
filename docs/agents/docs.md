@@ -56,7 +56,7 @@
   `version.yml` after each merge. `frozen`: a branch edits only the policy text at the top.
 - `changelog.d/*.md` — the branch's changelog fragment, one per branch (`changelog.d/README.md`).
   `ship-owned`.
-- `VERSION` — the version file `ship` bumps. `ship-owned`.
+- `VERSION` — the version file `open-pr` bumps. `ship-owned`.
 - `docs/changelog/*.md` — release notes archived from `CHANGELOG.md`. `frozen`.
 - `SECURITY.md` — reporting process, controls, security model, production checklist, credential
   rotation. **When:** auth, role, flag, admin, audit, cookie/origin or other security behavior

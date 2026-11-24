@@ -1,7 +1,7 @@
 # Guard
 
 The commands and paths `scripts/guard.mjs` stops in this repository, on top of the rules it applies
-everywhere. Each heading is a setting defined in `.agents/skills/ship/settings/guard.md`.
+everywhere. Each heading is a setting defined in `.agents/skills/open-pr/settings/guard.md`.
 
 ## Deny commands
 
