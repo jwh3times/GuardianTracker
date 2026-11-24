@@ -73,12 +73,15 @@ Regression) and `version.yml` (the release after a merge).
   the import paths in code and the `require` in `go.mod` move together. A Go framework or
   infrastructure module major is always NEEDS EFFORT, with the steps grounded in the files that
   import it.
-- A PostgreSQL major is an INHERENT-BREAK case: data does not carry across a major. The 18+
-  images keep each major's cluster in its own subdirectory (`PGDATA=/var/lib/postgresql/<major>/docker`
-  in the image config), and the `postgres` service mounts the volume's root at
-  `/var/lib/postgresql`. So a new major starts on an empty cluster beside the old one rather than
-  refusing to start, and the old cluster stays intact in the volume. It is always NEEDS EFFORT and
-  needs no external confirmation, with the steps grounded in this repository.
+- A PostgreSQL major is an INHERENT-BREAK case: the new major refuses to start on a volume holding
+  an older major's cluster. The 18+ images keep each major's cluster in its own subdirectory
+  (`PGDATA=/var/lib/postgresql/<major>/docker`), and the `postgres` service mounts the volume's
+  root at `/var/lib/postgresql`. Before it initializes an empty `PGDATA`, the image's
+  `docker-entrypoint.sh` looks for `PG_VERSION` under `/var/lib/postgresql/*/docker`, and when it
+  finds one it exits with "there appears to be PostgreSQL data in: /var/lib/postgresql/18/docker",
+  so Compose reports `postgres` unhealthy. That happened on 2026-11-24 after #537 (18 to 19). It
+  is always NEEDS EFFORT and needs no external confirmation, with the steps grounded in this
+  repository.
 - The `golang` builder image in `backend/api-service/Dockerfile` is not tied to `GO_VERSION` by
   any policy test, and on 2026-11-22 it ran a newer Go release than `GO_VERSION`. The tests run on
   `GO_VERSION`; only `Build Docker Images` compiles with the builder image.
@@ -112,17 +115,22 @@ Regression) and `version.yml` (the release after a merge).
   `node --test scripts/postgres-pin-policy.test.mjs`. `sync:image-pins` does not own this pin.
   The retired-tag sweep skips the release history, whose released sections quote the tag each
   release ran and which `Changelog Version` does not let a branch edit (#515 was red on those).
-- **PostgreSQL major** (postgres X to N): moving the tag does not migrate data, and nothing needs
-  wiping. Never `docker compose down -v`: it would also destroy the old major's cluster and
-  `manifest-data`. After the merge, `docker compose up --build` initializes the new major's empty
-  cluster (`database/init/01-init.sql`, then `db.Migrate` at api-service startup); the user logs in
-  and re-enters the local data worth keeping. To read or `pg_dump` the old cluster, run the old
-  major's pinned image on the volume with no ports published. Once the new major is confirmed, the
-  old `<X>/` subdirectory can be removed to reclaim its space; that is the user's step, since it
-  deletes the old major's data for good. File it as a human follow-up. The throwaway test database
-  follows with `./test-local.ps1 -Fresh` from `backend/api-service/`; `test-postgres` and
-  `e2e-postgres` have no data volume. Verify: the app boots, migrations apply, and login and a
-  collections fetch work. Plus the `postgres` tag bump steps above. Worked on #537 (18 to 19).
+- **PostgreSQL major** (postgres X to N): moving the tag does not migrate data. After the merge,
+  stop the crash-looping service (`docker compose stop postgres`). Then move the old cluster
+  aside, where the entrypoint's `*/docker` check no longer finds it, keeping it intact and
+  reversible:
+  `docker run --rm -v guardiantracker_postgres-data:/v alpine:3.22 mv /v/<X>/docker /v/<X>/docker.pre-<N>`
+  (Git Bash needs `MSYS_NO_PATHCONV=1`). After that, `docker compose up -d` initializes the new
+  major's empty cluster (`database/init/01-init.sql`, then `db.Migrate` at api-service startup),
+  and the user logs in and re-enters the local data worth keeping. Keeping all the data instead
+  means a `pg_dump` from the old major's pinned image, run on the moved cluster with `PGDATA` set
+  to it and no ports published, restored before api-service starts. Avoid
+  `docker compose down -v`: it works, but it also destroys `manifest-data` and leaves no copy.
+  Removing `<X>/` once the new major is confirmed deletes the old data for good, so it is the
+  user's step, filed as a human follow-up. The throwaway test database follows with
+  `./test-local.ps1 -Fresh` from `backend/api-service/`; `test-postgres` and `e2e-postgres` have
+  no data volume. Verify: the app boots, migrations apply, and login and a collections fetch work.
+  Plus the `postgres` tag bump steps above. Worked on #537 (18 to 19).
 - **Go module or `golang` image major** (only once step 5 confirmed it): a Go major changes the
   import path to a new `/vN`, so code imports and `go.mod` move together, never drop-in. Update the
   import paths, then from `backend/api-service/` run `go mod tidy`, `go build ./...` and
