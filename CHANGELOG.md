@@ -17,6 +17,18 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.128] - 2026-11-24
+
+### Fixed
+
+- The agent notes on PostgreSQL major upgrades (`docs/agents/dependabot.md`, and the reason text of
+  the `docker compose down -v` rule in `docs/agents/guard.md`) no longer say that a new major
+  refuses to start on the old data directory or that the volume must be wiped. The 18+ images keep
+  each major's cluster in its own subdirectory of the `postgres-data` volume, so a new major starts
+  on an empty cluster beside the old one, which stays intact. The upgrade step is now to log in and
+  re-enter the local data worth keeping, never `docker compose down -v`. No application behavior
+  changes.
+
 ## [1.18.127] - 2026-11-24
 
 ### Changed
@@ -2821,7 +2833,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.127...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.128...HEAD
+[1.18.128]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.127...v1.18.128
 [1.18.127]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.126...v1.18.127
 [1.18.126]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.125...v1.18.126
 [1.18.125]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.124...v1.18.125
