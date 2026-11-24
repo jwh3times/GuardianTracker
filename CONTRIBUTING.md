@@ -117,7 +117,7 @@ the current major/minor line. When bumping major or minor, build `0` is valid: i
 
 A branch never edits `CHANGELOG.md` and never names the version its merge will
 mint. It writes its entries to its own `changelog.d/<branch-slug>.md` fragment
-(see [`changelog.d/README.md`](./changelog.d/README.md)); `/ship` does this for
+(see [`changelog.d/README.md`](./changelog.d/README.md)); `/open-pr` does this for
 you. After the merge, `.github/workflows/version.yml` stamps the fragment into the
 merge's dated section, tags the merge commit and creates the release (ADR 0027). A
 PR with no fragment gets a one-line section from its title.

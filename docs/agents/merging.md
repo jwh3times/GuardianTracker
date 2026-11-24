@@ -1,6 +1,6 @@
 # Merging
 
-Everything from an open pull request to a finished merge. `/ship` stops when the PR opens; the
+Everything from an open pull request to a finished merge. `/open-pr` stops when the PR opens; the
 maintainer says when to merge. What CI runs and what the ruleset requires are in [ci.md](ci.md)
 ("CI/CD", "Branch protection"); this file holds what to do, and the ways CI status has given a
 confident wrong answer.
@@ -105,7 +105,7 @@ git push origin fixup:<dependabot-branch>
 - **Never `@dependabot rebase` afterwards**: Dependabot force-pushes the branch it owns and drops
   your commit. Use `gh pr update-branch <n>`. A bot PR needs no fragment: `Changelog Version`
   passes it and `version.yml` writes its section from the PR title.
-- **`/ship` works on a bot branch too**, when the fix deserves a better entry than the PR title: it
+- **`/open-pr` works on a bot branch too**, when the fix deserves a better entry than the PR title: it
   writes the branch's fragment. Fetch with `git fetch origin pull/<n>/head`, then rename the
   local branch to the bot branch's name and set its upstream.
 - **A fix that belongs on `main` regardless** (a govulncheck advisory reddening every PR) goes on

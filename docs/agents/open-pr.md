@@ -1,4 +1,4 @@
-# Ship
+# Open PR
 
 ## Fast checks
 
