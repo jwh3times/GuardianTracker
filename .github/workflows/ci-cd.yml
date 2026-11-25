@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.26.11"
+  GO_VERSION: "1.27.4"
 
 jobs:
   format-check:
@@ -210,7 +210,7 @@ jobs:
         run: |
           go mod tidy
           go vet ./...
-          go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+          go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...
           go tool govulncheck ./...
           go test -race -coverprofile=coverage.out ./...
 

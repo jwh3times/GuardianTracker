@@ -486,7 +486,7 @@ See [SECURITY.md](../SECURITY.md) for the security guide and checklist.
 - Browser: Playwright against the real API/Vite plus a test-only fake Bungie
   service and runtime-generated SQLite manifest; functional, WCAG 2.2 axe, and
   deterministic visual projects share one worker and isolated Postgres state.
-- Backend: Go unit and integration tests, `go vet`, Staticcheck 2026.1, the
+- Backend: Go unit and integration tests, `go vet`, Staticcheck 2026.2.2, the
   declared `govulncheck` v1.6.0 tool, race detector in CI, Postgres-backed
   integration tests.
 - Docker: CI builds production images for validation.
