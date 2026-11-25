@@ -26,7 +26,8 @@ body is a spec, ticket or triage brief, and it is not labelled `blocked`.
   mirroring its internals (Vitest's empty `Matchers<R, T>` interface exists for jest-dom-style
   libraries). Present the real options with a recommendation, including what waiting costs and
   whether the dependency earns its place. A shim that must exist is tied to the condition that
-  justifies it by a policy test, as `scripts/jest-dom-shim-policy.test.mjs` does.
+  justifies it by a policy test that fails once the condition clears, so the shim is deleted
+  rather than left to rot (the jest-dom Vitest 5 matcher shim went this way in #467).
 - **A change that supersedes a documented decision corrects the doc in the same change.** Grep for
   the claim, not the filename: one retired rule survived as five paraphrases in five files. When
   retiring a doc, scrub live references in `.agents/skills/` too, which can recreate it.
