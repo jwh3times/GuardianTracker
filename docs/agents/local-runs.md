@@ -81,8 +81,8 @@ digest-only `node` bump passes every check while leaving
 
 ## Staticcheck needs the pinned toolchain
 
-`GOTOOLCHAIN=go1.26.11` on the Staticcheck line is required, not decoration.
-Staticcheck 2026.1 is compiled by whatever Go is active, and on a newer
+`GOTOOLCHAIN=go1.27.4` on the Staticcheck line is required, not decoration.
+Staticcheck 2026.2.2 is compiled by whatever Go is active, and on a newer
 toolchain it cannot decode the standard library's export data, so it fails while
 loading and analyzes nothing at all. Every error names a stdlib package rather
 than project code, and the empty output that follows is indistinguishable from a
@@ -90,9 +90,12 @@ clean run — which is exactly how an unpinned run gets mistaken for "no
 findings". `go.mod`'s `toolchain` directive is a floor, not a pin, and does not
 prevent it.
 
-The pinned value must equal `GO_VERSION` in both workflows;
+The pinned value must equal `GO_VERSION` in both workflows, `go.mod`'s
+`toolchain` and the `golang` builder tag in `backend/api-service/Dockerfile`;
 `npm run test:go-toolchain-policy` fails the build if they drift apart, so
-moving the Go pin means moving it everywhere at once.
+moving the Go pin means moving it everywhere at once. A new Go minor also needs
+a Staticcheck release that supports it (2026.2 added Go 1.27), so check the
+Staticcheck release notes and move its version with the toolchain.
 
 ## Full Go coverage locally (matches CI)
 

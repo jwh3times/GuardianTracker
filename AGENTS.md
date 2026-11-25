@@ -245,7 +245,7 @@ npm run lint:agents
 
 # Go (from backend/api-service/)
 go test ./...
-GOTOOLCHAIN=go1.26.11 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...   # pin required; see docs/agents/local-runs.md
+GOTOOLCHAIN=go1.27.4 go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...   # pin required; see docs/agents/local-runs.md
 go tool govulncheck ./...
 ./test-local.ps1          # full CI-equivalent: cgo + Postgres (see go-services agent for flags)
 

@@ -82,9 +82,12 @@ Regression) and `version.yml` (the release after a merge).
   so Compose reports `postgres` unhealthy. That happened on 2026-11-24 after #537 (18 to 19). It
   is always NEEDS EFFORT and needs no external confirmation, with the steps grounded in this
   repository.
-- The `golang` builder image in `backend/api-service/Dockerfile` is not tied to `GO_VERSION` by
-  any policy test, and on 2026-11-22 it ran a newer Go release than `GO_VERSION`. The tests run on
-  `GO_VERSION`; only `Build Docker Images` compiles with the builder image.
+- A `golang` builder bump in `backend/api-service/Dockerfile` fails `Format Check` on its own:
+  `scripts/go-toolchain-policy.test.mjs` requires the builder tag to equal `GO_VERSION`, because
+  the tests run on `GO_VERSION` and only `Build Docker Images` compiles with the builder image
+  (#544). Such a PR is NEEDS EFFORT: on its branch, move `go.mod`'s `toolchain`, `GO_VERSION` in
+  both workflows and the `GOTOOLCHAIN=` lines to the same release. A new Go minor also needs a
+  Staticcheck release that supports it.
 - Every job runs on GitHub-hosted `ubuntu-latest` except the non-required
   `Test Workspace Portability (Windows)` job in `ci-cd.yml`, on `windows-latest`.
 - `scripts/node-version-policy.test.mjs` compares versions and tags, never digests, so a
@@ -137,8 +140,8 @@ Regression) and `version.yml` (the release after a merge).
   `./test-local.ps1` (cgo plus Postgres, as CI runs it), and cite the specific breaking change from
   the release notes (gin, pgx, golang-jwt and go-sqlite3 are the load-bearing ones). Staticcheck
   needs the `GOTOOLCHAIN=` value AGENTS.md's Staticcheck line carries. Moving the Go version itself
-  means `go.mod`'s `toolchain`, `GO_VERSION` in both workflows and those `GOTOOLCHAIN=` lines
-  together (`npm run test:go-toolchain-policy`). Close Dependabot's Go release-candidate proposals
+  means `go.mod`'s `toolchain`, `GO_VERSION` in both workflows, those `GOTOOLCHAIN=` lines and the
+  `golang` builder tag together (`npm run test:go-toolchain-policy`). Close Dependabot's Go release-candidate proposals
   for the builder image.
 - **Build-critical npm major** (frontend): from `frontend/`, run `npm run type-check`,
   `npm run lint`, `npm test -- --coverage` (the gate in `vite.config.ts` is lines 70% and branches

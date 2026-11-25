@@ -2,7 +2,7 @@ module guardian-tracker/api-service
 
 go 1.26.0
 
-toolchain go1.26.11
+toolchain go1.27.4
 
 require (
 	github.com/gin-gonic/gin v1.12.0
