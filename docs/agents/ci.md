@@ -13,7 +13,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    It also runs `npm run test:policy` (the `node --test` list of every policy test in the root
    `package.json`), which exercises the generator's and the tool-neutrality lint's own logic
    and enforces the repository's workflow-action, Go security-tool, Go-toolchain, Node-version,
-   PostgreSQL-image, workspace-portability, safe main-branch synchronization, local documentation-link, jest-dom-shim, and
+   PostgreSQL-image, workspace-portability, safe main-branch synchronization, local documentation-link, and
    changelog-footer policies, and tests the parsing behind `npm run board:blockers`
    (which itself reads the private board locally, not in CI). It also runs
    `k8s/startup.ps1`'s cluster start-up against fake `minikube`, `docker` and
@@ -29,11 +29,7 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    the three Compose PostgreSQL services — Dependabot's `docker-compose` ecosystem does not see
    workflow service images — and fails on any retired `postgres:<version>` reference left behind
    in a tracked file outside the release history (`CHANGELOG.md`, `changelog.d/`,
-   `docs/changelog/`). The jest-dom policy keeps `frontend/src/test/jest-dom.d.ts` and its
-   scoped `typescript/no-empty-object-type` exemption alive exactly while
-   `@testing-library/jest-dom` still augments the Vitest 4 assertion shape, and fails once
-   upstream ships Vitest 5 support so the shim is deleted rather than left to rot — a
-   redundant augmentation keeps working and would redden no other check. The changelog-footer
+   `docs/changelog/`). The changelog-footer
    policy keeps `CHANGELOG.md`'s reference-link definitions in step with its version
    headings — every released section defined, no orphans, each comparing from the section
    below it, and `[Unreleased]` comparing from the newest release. `version.yml` keeps

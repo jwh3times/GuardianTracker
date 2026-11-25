@@ -32,9 +32,6 @@ Regression) and `version.yml` (the release after a merge).
   `Browser Visual Regression` go red.
 - **`node` in the frontend Dockerfiles, any bump, a digest too.** `.nvmrc` owns the Node patch,
   and Dependabot edits only `frontend/Dockerfile` and `frontend/Dockerfile.dev`.
-- **`@testing-library/jest-dom`, any bump.** `scripts/jest-dom-shim-policy.test.mjs` fails
-  `Format Check` on purpose once upstream stops shipping the Vitest 4 assertion shape that
-  `frontend/src/test/jest-dom.d.ts` works around; its failure message lists the removal steps.
 
 ## Resolution
 
