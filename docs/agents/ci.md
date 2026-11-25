@@ -11,12 +11,16 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
    It also runs `npm run test:policy` (the `node --test` list of every policy test in the root
    `package.json`), which exercises the generator's and the tool-neutrality lint's own logic
-   and enforces the repository's workflow-action, Go security-tool, Node-version,
+   and enforces the repository's workflow-action, Go security-tool, Go-toolchain, Node-version,
    PostgreSQL-image, workspace-portability, safe main-branch synchronization, local documentation-link, jest-dom-shim, and
    changelog-footer policies, and tests the parsing behind `npm run board:blockers`
    (which itself reads the private board locally, not in CI). It also runs
    `k8s/startup.ps1`'s cluster start-up against fake `minikube`, `docker` and
-   `kubectl` executables, since no CI job runs Minikube. The Node policy keeps
+   `kubectl` executables, since no CI job runs Minikube. The Go-toolchain policy
+   (`scripts/go-toolchain-policy.test.mjs`) holds `go.mod`'s `toolchain`, the `golang` builder tag
+   in `backend/api-service/Dockerfile` and every documented `GOTOOLCHAIN=` Staticcheck line to the
+   one full `X.Y.Z` release in both workflows' `GO_VERSION`, so the shipped binary is compiled by
+   the Go that CI tested (#544). The Node policy keeps
    `.nvmrc`, both workflows, all three frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as

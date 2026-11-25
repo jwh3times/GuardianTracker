@@ -55,7 +55,8 @@ Regression) and `version.yml` (the release after a merge).
 - Node: `.nvmrc`, the three frontend Dockerfiles, `engines` in `frontend/package.json` and
   `@types/node`; `scripts/node-version-policy.test.mjs` holds them to one Node 26 patch.
 - Go: the import paths under `backend/api-service/`, the `tool` line in `go.mod` (govulncheck),
-  the Staticcheck version in `ci-cd.yml`, and `GO_VERSION` in `ci-cd.yml` and `browser.yml`.
+  the Staticcheck version in `ci-cd.yml`, `GO_VERSION` in `ci-cd.yml` and `browser.yml`, and the
+  `golang` builder image in `backend/api-service/Dockerfile`.
 - Frontend config: `frontend/vite.config.ts` (Vitest and its coverage thresholds),
   `frontend/tsconfig.json`, `frontend/.oxlintrc.json`, `frontend/postcss.config.cjs`,
   `frontend/tailwind.config.cjs`, `frontend/playwright.config.ts`.
