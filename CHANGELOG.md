@@ -17,6 +17,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.137] - 2026-11-25
+
+### Changed
+
+- chore: bump `@testing-library/jest-dom` from `7.0.1` to `8.0.0` in `/frontend` in the testing-library group across 1 directory (#560)
+
 ## [1.18.136] - 2026-11-25
 
 ### Changed
@@ -2915,7 +2921,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.136...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.137...HEAD
+[1.18.137]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.136...v1.18.137
 [1.18.136]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.135...v1.18.136
 [1.18.135]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.134...v1.18.135
 [1.18.134]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.133...v1.18.134
