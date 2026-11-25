@@ -37,10 +37,10 @@ Services` on `main` and every open PR at once. Grep the failing log for `GO-20`:
   - a module advisory: bump the module (`go get <module>@<fixed>`, `go mod tidy`); it is often
     indirect, so Dependabot won't;
   - a standard-library advisory ("Found in … go1.x.y"): bump the Go patch everywhere it is pinned —
-    `backend/api-service/go.mod`'s `toolchain`, `GO_VERSION` in `ci-cd.yml` and `browser.yml`, and
-    the `GOTOOLCHAIN=` Staticcheck line in `AGENTS.md`, `SETUP.md` and
-    `.claude/agents/go-services.md` (`npm run test:go-toolchain-policy` checks they agree), then
-    `npm run sync:agents`.
+    `backend/api-service/go.mod`'s `toolchain`, `GO_VERSION` in `ci-cd.yml` and `browser.yml`, the
+    `golang` builder tag and digest in `backend/api-service/Dockerfile`, and the `GOTOOLCHAIN=`
+    Staticcheck line in `AGENTS.md`, `SETUP.md` and `.claude/agents/go-services.md`
+    (`npm run test:go-toolchain-policy` checks they agree), then `npm run sync:agents`.
 
   Fix it on its own branch off `main`, then update the blocked PRs. Before blaming your branch for
   any red `Test Go Services`, check that `main` is green at your merge base

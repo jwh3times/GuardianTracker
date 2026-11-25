@@ -402,21 +402,22 @@ go vet ./...
 Staticcheck, from `backend/api-service/` in a POSIX shell:
 
 ```bash
-GOTOOLCHAIN=go1.26.11 go run honnef.co/go/tools/cmd/staticcheck@2026.1 ./...
+GOTOOLCHAIN=go1.27.4 go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...
 ```
 
 The `VAR=value command` prefix is POSIX shell syntax. In PowerShell, set
-`$env:GOTOOLCHAIN` to the same `go1.26.11` value first, then run the command
+`$env:GOTOOLCHAIN` to the same `go1.27.4` value first, then run the command
 without the prefix.
 
-`GOTOOLCHAIN` is not optional. Staticcheck 2026.1 is built by whatever Go is
+`GOTOOLCHAIN` is not optional. Staticcheck 2026.2.2 is built by whatever Go is
 active, and on a toolchain newer than the pin it cannot decode the standard
 library's export data — so it fails during loading and analyzes nothing. The
 errors all name stdlib packages rather than project code, and empty output
 afterwards reads exactly like a clean run. `go.mod`'s `toolchain` directive is a
 floor, not a pin, so it does not prevent this. The pinned value matches
-`GO_VERSION` in the CI workflows, and `npm run test:go-toolchain-policy` fails if
-the two drift apart.
+`GO_VERSION` in the CI workflows and the `golang` builder image in
+`backend/api-service/Dockerfile`, and `npm run test:go-toolchain-policy` fails if
+any of them drift apart.
 
 Frontend:
 
