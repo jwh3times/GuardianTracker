@@ -52,6 +52,12 @@ Services` on `main` and every open PR at once. Grep the failing log for `GO-20`:
   maintainer's agreement; when one points at a half-finished migration to a helper, finish the
   migration rather than patching the flagged line. An alert stays open until CodeQL's push
   analysis on `main` finishes.
+- **A CodeQL job that fails at "Uploading results"** with no `##[error]` line and no alerts is
+  GitHub's upload failing, not the code (all three default-setup jobs on #565, during a GitHub
+  outage). Default-setup runs (`dynamic/github-code-scanning/codeql`) can't be re-run, even once
+  GitHub recovers: `gh run rerun <id> --failed` answers "This workflow run cannot be retried".
+  Push an empty commit to the PR branch (`git commit --allow-empty`), which starts a fresh
+  analysis; until one registers, the code-scanning rule keeps the PR from merging.
 - **`Browser Visual Regression`'s log opens with hundreds of `curl: (7) Failed to connect to
 127.0.0.1 port 8090` lines**: the fake-Bungie readiness loop, which then succeeds. Grep for
   `toHaveScreenshot`, `Snapshot:` or `failed`. First rule out drifted image pins

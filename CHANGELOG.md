@@ -17,6 +17,27 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.136] - 2026-11-25
+
+### Changed
+
+- chore: bump the `npm-minor-and-patch` group across 1 directory with 3 updates (#566)
+
+## [1.18.135] - 2026-11-25
+
+### Changed
+
+- Take the latest shared skills and scripts from `jwh3times/skills` (#563)
+
+## [1.18.134] - 2026-11-25
+
+### Changed
+
+- `docs/agents/merging.md` now covers a CodeQL job that fails at "Uploading results" with no error
+  line and no alerts. That is GitHub's upload failing, not the code. A default-setup CodeQL run
+  cannot be re-run ("This workflow run cannot be retried"), so an empty commit on the PR branch
+  starts a fresh analysis. Until one registers, the code-scanning rule keeps the PR from merging.
+
 ## [1.18.133] - 2026-11-25
 
 ### Changed
@@ -2894,7 +2915,10 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.133...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.136...HEAD
+[1.18.136]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.135...v1.18.136
+[1.18.135]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.134...v1.18.135
+[1.18.134]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.133...v1.18.134
 [1.18.133]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.132...v1.18.133
 [1.18.132]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.131...v1.18.132
 [1.18.131]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.130...v1.18.131
