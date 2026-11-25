@@ -36,11 +36,10 @@ confident wrong answer.
 Services` on `main` and every open PR at once. Grep the failing log for `GO-20`:
   - a module advisory: bump the module (`go get <module>@<fixed>`, `go mod tidy`); it is often
     indirect, so Dependabot won't;
-  - a standard-library advisory ("Found in … go1.x.y"): bump the Go patch everywhere it is pinned —
-    `backend/api-service/go.mod`'s `toolchain`, `GO_VERSION` in `ci-cd.yml` and `browser.yml`, the
-    `golang` builder tag and digest in `backend/api-service/Dockerfile`, and the `GOTOOLCHAIN=`
-    Staticcheck line in `AGENTS.md`, `SETUP.md` and `.claude/agents/go-services.md`
-    (`npm run test:go-toolchain-policy` checks they agree), then `npm run sync:agents`.
+  - a standard-library advisory ("Found in … go1.x.y"): bump the Go patch with
+    `go mod edit -toolchain=go<X.Y.Z>` in `backend/api-service/`, then `npm run sync:image-pins`
+    (the `golang` builder tag and digest, and the `GOTOOLCHAIN=` pins) and `npm run sync:agents`.
+    CI reads the release from `go.mod`; `npm run test:go-toolchain-policy` checks every copy.
 
   Fix it on its own branch off `main`, then update the blocked PRs. Before blaming your branch for
   any red `Test Go Services`, check that `main` is green at your merge base
@@ -117,12 +116,13 @@ git push origin fixup:<dependabot-branch>
 
 The bumps that arrive red, and their fixes:
 
-| Bump               | Why it is red                                                                                                                                                                                                                                              | Fix                                                                                                                                      |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Node               | the Node policy wants one exact patch everywhere, and Dependabot edits only two Dockerfiles; its digest can also be single-platform, failing `Build Docker Images`                                                                                         | set `.nvmrc` to the new patch, `npm run sync:image-pins`, then `node --test scripts/node-version-policy.test.mjs`                        |
-| Node, digest only  | lands green but can leave `Dockerfile.playwright` stale: the policy test compares versions, not digests                                                                                                                                                    | `npm run sync:image-pins -- --check` on every Node bump, green or not                                                                    |
-| `@playwright/test` | the image pin is in the docker ecosystem, so the npm PR can't move it; the visual job then fails at browser launch                                                                                                                                         | `npm run sync:image-pins`; `Browser E2E + Axe` staying green says nothing, since it installs browsers on the runner                      |
-| PostgreSQL version | the `docker-compose` ecosystem doesn't move the `Test Go Services` service container, and the pin policy fails on any retired `postgres:<version>` tag left in a tracked file outside the release history, such as `.claude/agents/postgres-specialist.md` | realign `ci-cd.yml`'s service image and edit the authored agent file, then `npm run sync:agents`; `sync:image-pins` doesn't own this pin |
+| Bump               | Why it is red                                                                                                                                                                                                                                              | Fix                                                                                                                                           |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node               | the Node policy wants one exact patch everywhere, and Dependabot edits only two Dockerfiles; its digest can also be single-platform, failing `Build Docker Images`                                                                                         | set `.nvmrc` to the new patch, `npm run sync:image-pins`, then `node --test scripts/node-version-policy.test.mjs`                             |
+| Node, digest only  | lands green but can leave `Dockerfile.playwright` stale: the policy test compares versions, not digests                                                                                                                                                    | `npm run sync:image-pins -- --check` on every Node bump, green or not                                                                         |
+| `@playwright/test` | the image pin is in the docker ecosystem, so the npm PR can't move it; the visual job then fails at browser launch                                                                                                                                         | `npm run sync:image-pins`; `Browser E2E + Axe` staying green says nothing, since it installs browsers on the runner                           |
+| `golang` image     | Dependabot moves the builder but never `go.mod`'s `toolchain`, and the Go toolchain policy wants the builder on `go.mod`'s release                                                                                                                         | `go mod edit -toolchain=go<X.Y.Z>` in `backend/api-service/` with the proposed release, `npm run sync:image-pins`, then `npm run sync:agents` |
+| PostgreSQL version | the `docker-compose` ecosystem doesn't move the `Test Go Services` service container, and the pin policy fails on any retired `postgres:<version>` tag left in a tracked file outside the release history, such as `.claude/agents/postgres-specialist.md` | realign `ci-cd.yml`'s service image and edit the authored agent file, then `npm run sync:agents`; `sync:image-pins` doesn't own this pin      |
 
 `sync:image-pins` re-resolves every pin, and Microsoft republishes Playwright tags in place, so it
 can move the Playwright digest with no version change. Say so in the PR: that image renders the

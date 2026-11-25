@@ -16,9 +16,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  GO_VERSION: "1.27.4"
-
 jobs:
   format-check:
     name: Format Check
@@ -86,7 +83,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: backend/api-service/go.mod
 
       - name: Check gofmt (Go services)
         working-directory: ./backend/api-service
@@ -198,7 +195,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version-file: backend/api-service/go.mod
 
       # TEST_DATABASE_URL (not DATABASE_URL) gates the db integration tests.
       # DATABASE_URL stays unset on purpose: unit tests must exercise the

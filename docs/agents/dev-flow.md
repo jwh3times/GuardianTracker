@@ -57,7 +57,7 @@ evidence, and its tests exercise the new seam rather than duplicating its data.
 
 ## Exemption details
 
-- **Dependency bumps** also cover the `npm run sync:image-pins` commit a Node or
-  `@playwright/test` bump needs, and a toolchain or module pin moved to clear a
-  `govulncheck` advisory.
+- **Dependency bumps** also cover the `npm run sync:image-pins` commit a Node,
+  `@playwright/test` or `golang` image bump needs (with its `go mod edit -toolchain`), and a
+  toolchain or module pin moved to clear a `govulncheck` advisory.
 - **Release prep** also covers a `VERSION` bump.

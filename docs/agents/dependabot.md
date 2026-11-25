@@ -40,7 +40,8 @@ Regression) and `version.yml` (the release after a merge).
 
 - Node: the version in the root `.nvmrc` (CI's `setup-node` reads it with `node-version-file`),
   then `( cd frontend && npm ci )`.
-- Go: the version in `GO_VERSION` in `ci-cd.yml`, which equals `go.mod`'s `toolchain`, then
+- Go: the release `backend/api-service/go.mod` names (CI's `setup-go` reads it with
+  `go-version-file`), then
   `( cd backend/api-service && go mod download && go build ./... && go vet ./... )` and
   `( cd backend/api-service && go mod verify )`. CI's `Test Go Services` also runs `go mod tidy`,
   Staticcheck, `go tool govulncheck ./...` and `go test -race`.
@@ -55,8 +56,9 @@ Regression) and `version.yml` (the release after a merge).
 - Node: `.nvmrc`, the three frontend Dockerfiles, `engines` in `frontend/package.json` and
   `@types/node`; `scripts/node-version-policy.test.mjs` holds them to one Node 26 patch.
 - Go: the import paths under `backend/api-service/`, the `tool` line in `go.mod` (govulncheck),
-  the Staticcheck version in `ci-cd.yml`, `GO_VERSION` in `ci-cd.yml` and `browser.yml`, and the
-  `golang` builder image in `backend/api-service/Dockerfile`.
+  the Staticcheck version in `ci-cd.yml`, the `toolchain` line in `go.mod`, and the `golang`
+  builder image in `backend/api-service/Dockerfile`, which `npm run sync:image-pins` derives from
+  it.
 - Frontend config: `frontend/vite.config.ts` (Vitest and its coverage thresholds),
   `frontend/tsconfig.json`, `frontend/.oxlintrc.json`, `frontend/postcss.config.cjs`,
   `frontend/tailwind.config.cjs`, `frontend/playwright.config.ts`.
@@ -84,11 +86,15 @@ Regression) and `version.yml` (the release after a merge).
   is always NEEDS EFFORT and needs no external confirmation, with the steps grounded in this
   repository.
 - A `golang` builder bump in `backend/api-service/Dockerfile` fails `Format Check` on its own:
-  `scripts/go-toolchain-policy.test.mjs` requires the builder tag to equal `GO_VERSION`, because
-  the tests run on `GO_VERSION` and only `Build Docker Images` compiles with the builder image
-  (#544). Such a PR is NEEDS EFFORT: on its branch, move `go.mod`'s `toolchain`, `GO_VERSION` in
-  both workflows and the `GOTOOLCHAIN=` lines to the same release. A new Go minor also needs a
-  Staticcheck release that supports it.
+  `scripts/go-toolchain-policy.test.mjs` requires the builder tag to equal the release `go.mod`
+  names, because CI tests on that release and only `Build Docker Images` compiles with the builder
+  image (#544). Dependabot never moves `go.mod`'s `toolchain` line (dependabot-core #13520). Such
+  a PR is NEEDS EFFORT with a mechanical fix on its branch: `go mod edit -toolchain=go<X.Y.Z>` in
+  `backend/api-service/` with the release it proposed, then `npm run sync:image-pins`, which also
+  rewrites the `GOTOOLCHAIN=` pins; then `npm run sync:agents`. The `docker` entry ignores
+  `golang` minor and major updates, so these PRs are patches of the current Go minor: Dependabot
+  proposes only the highest tag, and a new minor would otherwise hide the next patch. Moving to a
+  new Go minor is deliberate, and also needs a Staticcheck release that supports it (#564).
 - Every job runs on GitHub-hosted `ubuntu-latest` except the non-required
   `Test Workspace Portability (Windows)` job in `ci-cd.yml`, on `windows-latest`.
 - `scripts/node-version-policy.test.mjs` compares versions and tags, never digests, so a
@@ -141,9 +147,9 @@ Regression) and `version.yml` (the release after a merge).
   `./test-local.ps1` (cgo plus Postgres, as CI runs it), and cite the specific breaking change from
   the release notes (gin, pgx, golang-jwt and go-sqlite3 are the load-bearing ones). Staticcheck
   needs the `GOTOOLCHAIN=` value AGENTS.md's Staticcheck line carries. Moving the Go version itself
-  means `go.mod`'s `toolchain`, `GO_VERSION` in both workflows, those `GOTOOLCHAIN=` lines and the
-  `golang` builder tag together (`npm run test:go-toolchain-policy`). Close Dependabot's Go release-candidate proposals
-  for the builder image.
+  is `go mod edit -toolchain=go<X.Y.Z>`, then `npm run sync:image-pins` and `npm run sync:agents`
+  (`npm run test:go-toolchain-policy` checks every copy). Close Dependabot's Go release-candidate
+  proposals for the builder image.
 - **Build-critical npm major** (frontend): from `frontend/`, run `npm run type-check`,
   `npm run lint`, `npm test -- --coverage` (the gate in `vite.config.ts` is lines 70% and branches
   65%) and `npm run build`, the steps `Test Frontend` runs, and cite the specific change.

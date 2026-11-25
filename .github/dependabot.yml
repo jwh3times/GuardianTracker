@@ -132,6 +132,17 @@ updates:
     commit-message:
       prefix: "chore"
     open-pull-requests-limit: 10
+    # The golang builder follows go.mod's toolchain, and Dependabot proposes only
+    # the highest tag: once a new Go minor ships, a patch for the current minor
+    # would never arrive. Patches only, so a minor move (which can also need a
+    # Staticcheck release) stays deliberate. A golang PR arrives red until
+    # `go mod edit -toolchain=go<X.Y.Z>` and `npm run sync:image-pins` run on its
+    # branch (scripts/go-toolchain-policy.test.mjs).
+    ignore:
+      - dependency-name: "golang"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
     groups:
       docker-minor-and-patch:
         patterns:

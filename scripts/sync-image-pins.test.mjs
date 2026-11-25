@@ -17,14 +17,64 @@ const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
 const DIGEST_A = `sha256:${"a".repeat(64)}`;
 const DIGEST_B = `sha256:${"b".repeat(64)}`;
 
-test("parseVersions reads the two files that own the tags", () => {
+const PACKAGE_LOCK = JSON.stringify({
+  packages: { "node_modules/@playwright/test": { version: "1.63.0" } },
+});
+const GOMOD = "module example\n\ngo 1.26.0\n\ntoolchain go1.27.4\n";
+
+test("parseVersions reads the three files that own the tags", () => {
   const versions = parseVersions({
     nvmrc: "26.8.2\n",
-    packageLock: JSON.stringify({
-      packages: { "node_modules/@playwright/test": { version: "1.63.0" } },
-    }),
+    packageLock: PACKAGE_LOCK,
+    gomod: GOMOD,
   });
-  assert.deepEqual(versions, { node: "26.8.2", playwright: "1.63.0" });
+  assert.deepEqual(versions, {
+    node: "26.8.2",
+    playwright: "1.63.0",
+    go: "1.27.4",
+  });
+});
+
+test("parseVersions takes Go's release from the go line once Go drops toolchain", () => {
+  // `go mod tidy` removes a toolchain line that would equal the go line, so a
+  // dependency that raises `go` to 1.27.5 leaves no toolchain line at all.
+  const { go } = parseVersions({
+    nvmrc: "26.8.2",
+    packageLock: PACKAGE_LOCK,
+    gomod: "module example\n\ngo 1.27.5\n",
+  });
+  assert.equal(go, "1.27.5");
+});
+
+test("parseVersions reads a Go release that carries a trailing comment", () => {
+  // go.mod allows `// comment` after a directive; it must not hide the toolchain
+  // line and leave the go line to answer instead.
+  const go = (gomod) =>
+    parseVersions({ nvmrc: "26.8.2", packageLock: PACKAGE_LOCK, gomod }).go;
+  assert.equal(
+    go("module example\n\ngo 1.26.0\n\ntoolchain go1.27.4 // pinned for CI\n"),
+    "1.27.4",
+  );
+  assert.equal(go("module example\n\ngo 1.27.5 // language level\n"), "1.27.5");
+});
+
+test("parseVersions rejects a Go release that is not an exact X.Y.Z", () => {
+  const go = (gomod) =>
+    parseVersions({ nvmrc: "26.8.2", packageLock: PACKAGE_LOCK, gomod });
+  // A go line without a patch names no image tag; the fix is a toolchain line.
+  assert.throws(
+    () => go("module example\n\ngo 1.27\n"),
+    /go\.mod.*1\.27.*add a toolchain line/s,
+  );
+  assert.throws(
+    () => go("module example\n\ngo 1.26.0\n\ntoolchain go1.27\n"),
+    /go\.mod.*go1\.27.*not an exact/s,
+  );
+  assert.throws(
+    () => go("module example\n\ngo 1.26.0\n\ntoolchain default\n"),
+    /go\.mod.*default.*not an exact/s,
+  );
+  assert.throws(() => go("module example\n"), /go\.mod declares no Go release/);
 });
 
 test("parseVersions rejects an inexact Node version rather than pinning a range", () => {
@@ -114,6 +164,7 @@ test("plan still matches the real Dockerfiles", () => {
   const versions = parseVersions({
     nvmrc: read(".nvmrc"),
     packageLock: read("frontend", "package-lock.json"),
+    gomod: read("backend", "api-service", "go.mod"),
   });
   for (const target of plan(versions)) {
     const contents = read(...target.file.split("/"));
@@ -126,10 +177,11 @@ test("plan still matches the real Dockerfiles", () => {
 });
 
 test("plan derives its tags from the version files, not from the Dockerfiles", () => {
-  const targets = plan({ node: "26.8.2", playwright: "1.63.0" });
+  const targets = plan({ node: "26.8.2", playwright: "1.63.0", go: "1.27.4" });
   assert.deepEqual(
     targets.map((t) => `${t.image}:${t.tag}`),
     [
+      "golang:1.27.4-alpine",
       "node:26.8.2-alpine3.24",
       "node:26.8.2-alpine3.24",
       "node:26.8.2-bookworm-slim",
@@ -142,9 +194,12 @@ test("plan covers every pin the Node policy test enforces", () => {
   // These two must not drift apart: a pin the policy gate checks but this script
   // does not rewrite is exactly the hand-edit this work exists to remove.
   const policy = read("scripts", "node-version-policy.test.mjs");
-  const files = new Set(
-    plan({ node: "1.2.3", playwright: "4.5.6" }).map((t) => t.file),
-  );
+  const frontendTargets = plan({
+    node: "1.2.3",
+    playwright: "4.5.6",
+    go: "7.8.9",
+  }).filter((t) => t.image !== "golang");
+  const files = new Set(frontendTargets.map((t) => t.file));
   assert.deepEqual([...files].sort(), [
     "frontend/Dockerfile",
     "frontend/Dockerfile.dev",
@@ -160,7 +215,7 @@ test("plan covers every pin the Node policy test enforces", () => {
   // The policy test spells its variants inside regex literals, where dots are
   // escaped (`-alpine3\.24`), so compare against a de-escaped copy.
   const policyLiterals = policy.replaceAll("\\", "");
-  for (const target of plan({ node: "1.2.3", playwright: "4.5.6" })) {
+  for (const target of frontendTargets) {
     const variant = target.tag.replace(/^v?[\d.]+/, "");
     assert.ok(
       policyLiterals.includes(variant),
@@ -168,6 +223,25 @@ test("plan covers every pin the Node policy test enforces", () => {
     );
   }
 });
+
+/** The files that document the pinned local Staticcheck command, at `release`. */
+function staticcheckDocs(release) {
+  const command = `GOTOOLCHAIN=go${release} go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...`;
+  return {
+    "AGENTS.md": `# Go\ngo test ./...\n${command}   # pin required\n`,
+    "SETUP.md": `\`\`\`bash\n${command}\n\`\`\`\n`,
+    ".claude/agents/go-services.md": `go test ./...\n${command}\n`,
+    ".claude/settings.json": [
+      "{",
+      '  "allow": [',
+      '    "Bash(go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...)",',
+      `    "Bash(${command})"`,
+      "  ]",
+      "}",
+      "",
+    ].join("\n"),
+  };
+}
 
 function fakeRepo(overrides = {}) {
   const files = {
@@ -182,12 +256,17 @@ function fakeRepo(overrides = {}) {
       `ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.62.1-noble@${DIGEST_A}`,
       "",
     ].join("\n"),
+    "backend/api-service/go.mod": GOMOD,
+    "backend/api-service/Dockerfile": `FROM golang:1.26.11-alpine@${DIGEST_A} AS builder\n`,
+    ...staticcheckDocs("1.26.11"),
     ...overrides,
   };
   const written = {};
+  const resolved = [];
   return {
     files,
     written,
+    resolved,
     deps: {
       read: (rel) => {
         if (!(rel in files)) throw new Error(`unexpected read: ${rel}`);
@@ -196,10 +275,26 @@ function fakeRepo(overrides = {}) {
       write: (rel, text) => {
         written[rel] = text;
       },
-      resolveDigest: async () => DIGEST_B,
+      resolveDigest: async ({ registry, repository, tag }) => {
+        resolved.push({ registry, repository, tag });
+        return DIGEST_B;
+      },
     },
   };
 }
+
+/** Every file in the fake repository already carrying what main would write. */
+const CURRENT = {
+  "frontend/Dockerfile": `FROM node:26.8.2-alpine3.24@${DIGEST_B} AS builder\n`,
+  "frontend/Dockerfile.dev": `FROM node:26.8.2-alpine3.24@${DIGEST_B}\n`,
+  "frontend/Dockerfile.playwright": [
+    `ARG NODE_IMAGE=node:26.8.2-bookworm-slim@${DIGEST_B}`,
+    `ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble@${DIGEST_B}`,
+    "",
+  ].join("\n"),
+  "backend/api-service/Dockerfile": `FROM golang:1.27.4-alpine@${DIGEST_B} AS builder\n`,
+  ...staticcheckDocs("1.27.4"),
+};
 
 test("main rewrites both pins in a file that carries two", async () => {
   const repo = fakeRepo();
@@ -226,16 +321,56 @@ test("main rewrites both pins in a file that carries two", async () => {
   );
 });
 
-test("main writes nothing when every pin already matches", async () => {
+test("main rewrites the Go builder pin from go.mod's release", async () => {
+  const repo = fakeRepo();
+  assert.equal(await main([], repo.deps), 0);
+  assert.equal(
+    repo.written["backend/api-service/Dockerfile"],
+    `FROM golang:1.27.4-alpine@${DIGEST_B} AS builder\n`,
+  );
+  // The official image lives under library/ on Docker Hub, which takes the
+  // pull-token flow; a wrong repository would 404 only against the network.
+  assert.deepEqual(
+    repo.resolved.find((r) => r.tag === "1.27.4-alpine"),
+    {
+      registry: "dockerhub",
+      repository: "library/golang",
+      tag: "1.27.4-alpine",
+    },
+  );
+});
+
+test("main refuses to proceed when the API Dockerfile loses its Go builder pin", async () => {
   const repo = fakeRepo({
-    "frontend/Dockerfile": `FROM node:26.8.2-alpine3.24@${DIGEST_B} AS builder\n`,
-    "frontend/Dockerfile.dev": `FROM node:26.8.2-alpine3.24@${DIGEST_B}\n`,
-    "frontend/Dockerfile.playwright": [
-      `ARG NODE_IMAGE=node:26.8.2-bookworm-slim@${DIGEST_B}`,
-      `ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble@${DIGEST_B}`,
-      "",
-    ].join("\n"),
+    ...CURRENT,
+    "backend/api-service/Dockerfile": "FROM golang:1.27.4-alpine AS builder\n",
   });
+  assert.equal(await main([], repo.deps), 1);
+  assert.deepEqual(repo.written, {});
+});
+
+test("main pins every documented Staticcheck command to go.mod's release", async () => {
+  // The Dockerfile is current, so only the GOTOOLCHAIN= lines can be written.
+  const repo = fakeRepo({
+    "backend/api-service/Dockerfile": CURRENT["backend/api-service/Dockerfile"],
+  });
+  assert.equal(await main([], repo.deps), 0);
+  for (const [file, text] of Object.entries(staticcheckDocs("1.27.4"))) {
+    assert.equal(repo.written[file], text, file);
+  }
+});
+
+test("main refuses to proceed when a doc no longer carries its GOTOOLCHAIN pin", async () => {
+  const repo = fakeRepo({
+    ...CURRENT,
+    "SETUP.md": "go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...\n",
+  });
+  assert.equal(await main([], repo.deps), 1);
+  assert.deepEqual(repo.written, {});
+});
+
+test("main writes nothing when every pin already matches", async () => {
+  const repo = fakeRepo(CURRENT);
   assert.equal(await main([], repo.deps), 0);
   assert.deepEqual(repo.written, {});
 });
@@ -247,16 +382,17 @@ test("--check reports drift and writes nothing", async () => {
 });
 
 test("--check passes once the pins are current", async () => {
-  const repo = fakeRepo({
-    "frontend/Dockerfile": `FROM node:26.8.2-alpine3.24@${DIGEST_B} AS builder\n`,
-    "frontend/Dockerfile.dev": `FROM node:26.8.2-alpine3.24@${DIGEST_B}\n`,
-    "frontend/Dockerfile.playwright": [
-      `ARG NODE_IMAGE=node:26.8.2-bookworm-slim@${DIGEST_B}`,
-      `ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.63.0-noble@${DIGEST_B}`,
-      "",
-    ].join("\n"),
-  });
+  const repo = fakeRepo(CURRENT);
   assert.equal(await main(["--check"], repo.deps), 0);
+});
+
+test("--check reports a stale Go builder pin and writes nothing", async () => {
+  const repo = fakeRepo({
+    ...CURRENT,
+    "backend/api-service/Dockerfile": `FROM golang:1.27.3-alpine@${DIGEST_B} AS builder\n`,
+  });
+  assert.equal(await main(["--check"], repo.deps), 1);
+  assert.deepEqual(repo.written, {});
 });
 
 test("main refuses to proceed when a file no longer carries its pin", async () => {

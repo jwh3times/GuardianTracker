@@ -163,8 +163,11 @@ The Dockerfiles, Compose file, workflow service declarations, `.nvmrc`, Go
 module, and frontend lockfile own exact versions. Inspect those sources before
 changing a pin; this guide owns only the coupling rules:
 
-- Keep the Go builder compatible with the `go` directive and `toolchain` in
-  `backend/api-service/go.mod`.
+- Keep the Go builder on the exact release `backend/api-service/go.mod` names
+  (its `toolchain`, else its `go` line), with its digest:
+  `node --test scripts/go-toolchain-policy.test.mjs` enforces it, and
+  `npm run sync:image-pins` rewrites the `golang` tag and digest from `go.mod`.
+  Move Go with `go mod edit -toolchain=go<X.Y.Z>`, never by editing the tag.
 - Keep `.nvmrc`, all frontend Dockerfiles, package engine metadata, Node ambient
   types, and their OCI digests aligned.
   `node --test scripts/node-version-policy.test.mjs` aligns versions and tags
