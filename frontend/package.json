@@ -10,7 +10,7 @@
     "msw": false
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.108.1",
+    "@tanstack/react-query": "^5.108.2",
     "@tanstack/react-virtual": "^3.14.26",
     "clsx": "^2.1.1",
     "react": "^19.3.1",
@@ -53,7 +53,7 @@
     "jsdom": "^31.0.1",
     "msw": "^3.0.7",
     "oxlint": "1.94.0",
-    "oxlint-tsgolint": "7.0.2007",
+    "oxlint-tsgolint": "7.0.2008",
     "postcss": "^8.5.33",
     "prettier": "^3.10.1",
     "tailwindcss": "^4.3.1",
