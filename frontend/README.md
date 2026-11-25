@@ -243,8 +243,15 @@ script in that image:
 
 ```powershell
 $repo = (Get-Location).Path -replace '\\','/'
-$goImage = "golang:" + (Select-String -Path backend/api-service/go.mod `
-  -Pattern '^toolchain go(.+)$').Matches.Groups[1].Value
+# go.mod's toolchain line, else its go line (Go drops toolchain when they match)
+$goMod = Select-String -Path backend/api-service/go.mod -Pattern '^toolchain go(\S+)$'
+if (-not $goMod) {
+  $goMod = Select-String -Path backend/api-service/go.mod -Pattern '^go (\S+)$'
+}
+$goImage = "golang:" + $goMod.Matches.Groups[1].Value
+if ($goImage -notmatch '^golang:\d+\.\d+\.\d+$') {
+  throw "go.mod names no exact Go release ($goImage); add a toolchain go<X.Y.Z> line"
+}
 docker build --pull -t guardian-tracker/playwright:local `
   -f frontend/Dockerfile.playwright frontend
 docker compose --profile e2e up -d --wait e2e-postgres

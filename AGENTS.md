@@ -275,8 +275,8 @@ baselines are Linux renderings and must be regenerated inside the
 Windows. Both procedures, including baseline regeneration, are in
 [frontend/README.md](./frontend/README.md#browser-tests).
 
-Before running Staticcheck or measuring Go coverage locally, or when a Node or
-`@playwright/test` bump moves an image pin, read
+Before running Staticcheck or measuring Go coverage locally, or when a Node,
+`@playwright/test` or Go bump moves an image pin, read
 [docs/agents/local-runs.md](./docs/agents/local-runs.md): it explains the Staticcheck
 `GOTOOLCHAIN` pin, why a plain `go test ./...` under-reports coverage, and
 `npm run sync:image-pins`.

@@ -499,7 +499,10 @@ the full-SHA plus release-comment policy in the format job. Dependabot manages
 both those action pins and the declared Go vulnerability-scanner tool.
 Frontend development, CI, and container builds take one exact Node 26 patch from
 the root `.nvmrc`; a repository policy test checks the workflows, Dockerfiles,
-package engine range, and Node ambient types for alignment. The three Compose
+package engine range, and Node ambient types for alignment. The Go release is the
+one `backend/api-service/go.mod` names (its `toolchain` line, else its `go`
+line): CI installs it from that file, and a repository policy test holds the
+`golang` builder image and the documented Staticcheck `GOTOOLCHAIN` pins to it. The three Compose
 PostgreSQL services and the `Test Go Services` service container share one
 `major.minor` server version across their Alpine and Debian variants; a
 repository policy test enforces the alignment and rejects a retired

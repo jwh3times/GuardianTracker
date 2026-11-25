@@ -62,18 +62,20 @@ a pack go in `frontend/design/`, which both `.prettierignore` files exclude.
   from the cause. When a change adds a request that fires on every authenticated page, add its stub
   to that handler in the same PR and run the spec locally.
 
-## Refreshing frontend image pins
+## Refreshing image pins
 
 When the `mcr.microsoft.com/playwright` image tag (which must match the installed
 `@playwright/test`) no longer matches the lockfile — every `@playwright/test` bump,
 because npm and docker are separate Dependabot ecosystems — run
 `npm run sync:image-pins` from the repo root instead of hand-resolving a digest.
-It rewrites every frontend image pin whose tag a version file owns: the
-Playwright image, and the `node` pins in all three frontend Dockerfiles that
-`.nvmrc` drives. It needs network access, needs no Docker daemon, and is
-deliberately not a CI step — a required check must not depend on a registry
-being reachable, so the offline `scripts/node-version-policy.test.mjs` remains
-the gate and now names this command when it fails. `-- --check` reports drift
+It rewrites every pin whose version a repository file owns: the Playwright
+image; the `node` pins in all three frontend Dockerfiles that `.nvmrc` drives;
+and, from the Go release `backend/api-service/go.mod` names, the `golang`
+builder image and the documented `GOTOOLCHAIN=` Staticcheck commands. It needs
+network access, needs no Docker daemon, and is deliberately not a CI step — a
+required check must not depend on a registry being reachable, so the offline
+`scripts/node-version-policy.test.mjs` and `scripts/go-toolchain-policy.test.mjs`
+remain the gates and name this command when they fail. `-- --check` reports drift
 without writing. The policy test compares versions and tags, never digests, so a
 digest-only `node` bump passes every check while leaving
 `frontend/Dockerfile.playwright` stale; run `-- --check` on every Dependabot
@@ -81,7 +83,7 @@ digest-only `node` bump passes every check while leaving
 
 ## Staticcheck needs the pinned toolchain
 
-`GOTOOLCHAIN=go1.27.4` on the Staticcheck line is required, not decoration.
+The `GOTOOLCHAIN=` pin on the Staticcheck line is required, not decoration.
 Staticcheck 2026.2.2 is compiled by whatever Go is active, and on a newer
 toolchain it cannot decode the standard library's export data, so it fails while
 loading and analyzes nothing at all. Every error names a stdlib package rather
@@ -90,10 +92,16 @@ clean run — which is exactly how an unpinned run gets mistaken for "no
 findings". `go.mod`'s `toolchain` directive is a floor, not a pin, and does not
 prevent it.
 
-The pinned value must equal `GO_VERSION` in both workflows, `go.mod`'s
-`toolchain` and the `golang` builder tag in `backend/api-service/Dockerfile`;
-`npm run test:go-toolchain-policy` fails the build if they drift apart, so
-moving the Go pin means moving it everywhere at once. A new Go minor also needs
+`backend/api-service/go.mod` is the one place the Go release is written: its
+`toolchain` directive, or its `go` directive when Go has dropped the `toolchain`
+line. CI's `setup-go` steps read it with `go-version-file`, and
+`npm run sync:image-pins` writes it into the `golang` builder image in
+`backend/api-service/Dockerfile` and every `GOTOOLCHAIN=` pin (the commands in
+`AGENTS.md`, `SETUP.md` and `.claude/agents/go-services.md`, and the
+`.claude/settings.json` allowlist entry; then `npm run sync:agents` for the
+Codex mirror). Moving Go is `go mod edit -toolchain=go<X.Y.Z>` in
+`backend/api-service/`, then that sync; `npm run test:go-toolchain-policy` fails
+the build when any copy drifts and names the fix. A new Go minor also needs
 a Staticcheck release that supports it (2026.2 added Go 1.27), so check the
 Staticcheck release notes and move its version with the toolchain.
 

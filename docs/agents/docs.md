@@ -186,7 +186,7 @@ environment-specific operations notes. Public contributors do not need it.
 - Migrations: `backend/api-service/db/migrations/*.sql`
 - Coverage gates: `thresholds` in `frontend/vite.config.ts`; the `Enforce Go coverage gate` step
   in `.github/workflows/ci-cd.yml`
-- Go and Node pins: `GO_VERSION` in both workflows; `.nvmrc`
+- Go and Node pins: the `toolchain` (else `go`) line in `backend/api-service/go.mod`; `.nvmrc`
 - CI jobs: the keys under `jobs:` in `.github/workflows/ci-cd.yml` and `browser.yml`, then each
   one's `name:` — never a bare `name:` grep, which counts steps too
 - Policy tests: `test:policy` in `package.json`

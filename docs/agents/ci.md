@@ -6,7 +6,8 @@ and versioning. What to do once a PR is open, and the reds that aren't the code,
 
 GitHub Actions (`.github/workflows/ci-cd.yml`) — five required jobs. Both this
 workflow and `.github/workflows/browser.yml` provision Node from the root
-`.nvmrc`:
+`.nvmrc` and Go from `backend/api-service/go.mod` (`setup-go`'s
+`go-version-file`):
 
 1. **format-check** — Prettier over `frontend/`, Prettier over repo markdown, and `gofmt`. Fix: `npm run format` from `frontend/`; `./frontend/node_modules/.bin/prettier --write "**/*.md"` from the repo root; `gofmt -w .` from `backend/api-service/`. The frontend-scoped run cannot reach markdown outside `frontend/`, which is why the root markdown step exists — editing `README.md`, `SETUP.md`, `docs/`, or `.claude/` requires the root command.
    It also runs `npm run test:policy` (the `node --test` list of every policy test in the root
@@ -17,10 +18,11 @@ workflow and `.github/workflows/browser.yml` provision Node from the root
    (which itself reads the private board locally, not in CI). It also runs
    `k8s/startup.ps1`'s cluster start-up against fake `minikube`, `docker` and
    `kubectl` executables, since no CI job runs Minikube. The Go-toolchain policy
-   (`scripts/go-toolchain-policy.test.mjs`) holds `go.mod`'s `toolchain`, the `golang` builder tag
-   in `backend/api-service/Dockerfile` and every documented `GOTOOLCHAIN=` Staticcheck line to the
-   one full `X.Y.Z` release in both workflows' `GO_VERSION`, so the shipped binary is compiled by
-   the Go that CI tested (#544). The Node policy keeps
+   (`scripts/go-toolchain-policy.test.mjs`) holds the `golang` builder tag in
+   `backend/api-service/Dockerfile` and every `GOTOOLCHAIN=` pin to the one full `X.Y.Z` release
+   `backend/api-service/go.mod` names, requires every `setup-go` step to read it with
+   `go-version-file`, and requires the `docker` Dependabot entry to ignore `golang` minor and major
+   updates, so the shipped binary is compiled by the Go that CI tested (#544, #564). The Node policy keeps
    `.nvmrc`, both workflows, all three frontend Dockerfiles, package engine metadata, and Node ambient
    types on the Node 26 line, with one exact patch for local, CI, and container tooling. The
    PostgreSQL policy keeps the `Test Go Services` service container on the same `major.minor` as

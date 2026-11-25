@@ -1,17 +1,24 @@
 #!/usr/bin/env node
-// Rewrites every frontend container image pin whose tag is dictated by a version
-// file in this repository, resolving each tag to its current registry digest.
+// Rewrites every pin whose version is dictated by a version file in this
+// repository: container image pins, each resolved to its current registry
+// digest, and the Go release in the documented local Staticcheck commands.
 //
-//   .nvmrc                        -> node:<version>-alpine3.24      (Dockerfile, Dockerfile.dev)
-//                                 -> node:<version>-bookworm-slim   (Dockerfile.playwright)
+//   .nvmrc                        -> node:<version>-alpine3.24      (frontend Dockerfile, Dockerfile.dev)
+//                                 -> node:<version>-bookworm-slim   (frontend Dockerfile.playwright)
 //   frontend/package-lock.json    -> mcr.microsoft.com/playwright:v<version>-noble
+//   backend/api-service/go.mod    -> golang:<release>-alpine         (backend/api-service/Dockerfile)
+//                                 -> GOTOOLCHAIN=go<release>         (GOTOOLCHAIN_PINS)
 //
-// Why this exists: npm and docker are separate Dependabot ecosystems and cannot
-// land in one PR. A `@playwright/test` bump therefore arrives with the image pin
-// untouched, and a Node bump edits only the two plain frontend Dockerfiles. Both
-// leave `Format Check` red on scripts/node-version-policy.test.mjs until someone
-// hand-edits a tag and pastes a fresh digest. That edit is always mechanical, so
-// it belongs in a script rather than in a reviewer's memory.
+// Why this exists: npm, gomod and docker are separate Dependabot ecosystems and
+// cannot land in one PR. A `@playwright/test` bump therefore arrives with the
+// image pin untouched, a Node bump edits only the two plain frontend
+// Dockerfiles, and a golang bump moves the builder without go.mod (Dependabot
+// never moves a toolchain directive). Each leaves `Format Check` red on
+// node-version-policy or go-toolchain-policy until someone hand-edits a tag and
+// pastes a fresh digest. That edit is always mechanical, so it belongs in a
+// script rather than in a reviewer's memory. go.mod's release changes only by
+// `go mod edit -toolchain=go<X.Y.Z>`; this script never reads it back from a
+// Dockerfile.
 //
 // Only pins a repo version file *owns* are in scope. nginx, alpine, and postgres
 // are pinned too, but Dependabot's docker ecosystem moves their tag and digest
@@ -40,8 +47,36 @@ const ACCEPT = [
   "application/vnd.docker.distribution.manifest.v2+json",
 ].join(", ");
 
+/**
+ * The Go release the API module declares: its `toolchain` directive, or its `go`
+ * directive when Go has dropped the `toolchain` line (it does whenever the two
+ * would be equal). This is the same rule `go` and actions/setup-go follow, so
+ * CI, the builder image and the documented commands all name one release.
+ */
+export function goRelease(gomod) {
+  // A directive may carry a trailing `// comment`, which go.mod allows.
+  const toolchain = /^toolchain\s+(\S+)\s*(?:\/\/.*)?$/m.exec(gomod)?.[1];
+  if (toolchain !== undefined) {
+    const release = /^go(\d+\.\d+\.\d+)$/.exec(toolchain)?.[1];
+    if (!release) {
+      throw new Error(
+        `go.mod's toolchain ${JSON.stringify(toolchain)} is not an exact go<X.Y.Z> release`,
+      );
+    }
+    return release;
+  }
+  const go = /^go\s+(\S+)\s*(?:\/\/.*)?$/m.exec(gomod)?.[1];
+  if (go === undefined) throw new Error("go.mod declares no Go release");
+  if (!/^\d+\.\d+\.\d+$/.test(go)) {
+    throw new Error(
+      `go.mod's go line ${JSON.stringify(go)} names no patch release; add a toolchain line such as "toolchain go${go}.0"`,
+    );
+  }
+  return go;
+}
+
 /** Reads the versions that own the tags. Pure; the caller supplies the text. */
-export function parseVersions({ nvmrc, packageLock }) {
+export function parseVersions({ nvmrc, packageLock, gomod }) {
   const node = nvmrc.trim();
   if (!/^\d+\.\d+\.\d+$/.test(node)) {
     throw new Error(`.nvmrc is not an exact version: ${JSON.stringify(node)}`);
@@ -51,7 +86,7 @@ export function parseVersions({ nvmrc, packageLock }) {
   if (!entry?.version) {
     throw new Error("package-lock.json has no @playwright/test entry");
   }
-  return { node, playwright: entry.version };
+  return { node, playwright: entry.version, go: goRelease(gomod) };
 }
 
 /**
@@ -59,8 +94,16 @@ export function parseVersions({ nvmrc, packageLock }) {
  * silently stops matching would turn this script into a no-op that still exits
  * 0, which is a worse failure than the drift it exists to fix.
  */
-export function plan({ node, playwright }) {
+export function plan({ node, playwright, go }) {
   return [
+    {
+      file: "backend/api-service/Dockerfile",
+      image: "golang",
+      tag: `${go}-alpine`,
+      registry: "dockerhub",
+      repository: "library/golang",
+      occurrences: 1,
+    },
     {
       file: "frontend/Dockerfile",
       image: "node",
@@ -94,6 +137,30 @@ export function plan({ node, playwright }) {
       occurrences: 1,
     },
   ];
+}
+
+/**
+ * The authored files that carry the pinned local Staticcheck command, with how
+ * many `GOTOOLCHAIN=go<X.Y.Z>` pins each holds. Staticcheck is built by whatever
+ * Go is active and analyzes nothing on a newer one, so each documented command
+ * pins the release go.mod names. `.claude/settings.json` holds the exact-match
+ * allowlist entry for that command, which must change with it. The generated
+ * Codex mirror is not listed: `npm run sync:agents` copies it from the agent
+ * file. scripts/go-toolchain-policy.test.mjs checks this same list.
+ */
+export const GOTOOLCHAIN_PINS = [
+  { file: "AGENTS.md", occurrences: 1 },
+  { file: "SETUP.md", occurrences: 1 },
+  { file: ".claude/agents/go-services.md", occurrences: 1 },
+  { file: ".claude/settings.json", occurrences: 1 },
+];
+
+/** A `GOTOOLCHAIN=go<X.Y.Z>` pin, capturing the release. */
+const GOTOOLCHAIN = /GOTOOLCHAIN=go(\d+\.\d+\.\d+)/g;
+
+/** Every release named by a `GOTOOLCHAIN=` pin in `contents`, in order. */
+export function gotoolchainReleases(contents) {
+  return [...contents.matchAll(GOTOOLCHAIN)].map(([, release]) => release);
 }
 
 /**
@@ -194,18 +261,43 @@ export async function main(argv = [], deps = {}) {
   const versions = parseVersions({
     nvmrc: read(".nvmrc"),
     packageLock: read("frontend/package-lock.json"),
+    gomod: read("backend/api-service/go.mod"),
   });
 
   // One read per file, so two pins in the same Dockerfile compose rather than
   // the second overwriting the first.
   const originals = new Map();
   const updated = new Map();
-  for (const target of plan(versions)) {
-    if (!originals.has(target.file)) {
-      const contents = read(target.file);
-      originals.set(target.file, contents);
-      updated.set(target.file, contents);
+  const load = (file) => {
+    if (!originals.has(file)) {
+      const contents = read(file);
+      originals.set(file, contents);
+      updated.set(file, contents);
     }
+  };
+
+  for (const target of GOTOOLCHAIN_PINS) {
+    load(target.file);
+    const found = gotoolchainReleases(originals.get(target.file)).length;
+    if (found !== target.occurrences) {
+      console.error(
+        `${target.file}: expected ${target.occurrences} GOTOOLCHAIN=go<X.Y.Z> pin(s), found ${found}.`,
+      );
+      console.error(
+        "The file moved on without this script. Update GOTOOLCHAIN_PINS in scripts/sync-image-pins.mjs.",
+      );
+      return 1;
+    }
+    updated.set(
+      target.file,
+      updated
+        .get(target.file)
+        .replace(GOTOOLCHAIN, `GOTOOLCHAIN=go${versions.go}`),
+    );
+  }
+
+  for (const target of plan(versions)) {
+    load(target.file);
     const found = countPins(originals.get(target.file), target.image);
     if (found !== target.occurrences) {
       console.error(
@@ -229,10 +321,12 @@ export async function main(argv = [], deps = {}) {
 
   if (check) {
     if (drifted.length === 0) {
-      console.log(`Image pins are in sync (${originals.size} files).`);
+      console.log(`Pins are in sync (${originals.size} files).`);
       return 0;
     }
-    console.error("Image pins are out of date:");
+    console.error(
+      "Pins are out of date (image tags and digests, GOTOOLCHAIN= lines):",
+    );
     for (const file of drifted) console.error(`  stale: ${file}`);
     console.error("\nFix: node scripts/sync-image-pins.mjs");
     return 1;
@@ -242,7 +336,7 @@ export async function main(argv = [], deps = {}) {
 
   console.log(
     drifted.length === 0
-      ? `Image pins already up to date (${originals.size} files).`
+      ? `Pins already up to date (${originals.size} files).`
       : `Updated ${drifted.length} file(s): ${drifted.join(", ")}`,
   );
   return 0;
