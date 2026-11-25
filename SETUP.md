@@ -256,7 +256,8 @@ aligned; documentation intentionally does not cache their versions. Maintainers
 changing a pin should follow the authored Docker agent guide and run the
 repository policy suite (`npm run test:policy`) before rebuilding with `--pull --no-cache`.
 The policy suite compares versions and tags only; for the frontend `node` and
-Playwright pins, `npm run sync:image-pins -- --check` also checks digests.
+Playwright pins and the `golang` builder pin, `npm run sync:image-pins -- --check`
+also checks digests.
 
 A tag plus digest selects the exact image contents adopted in review. Daily
 Dependabot checks still propose newer releases, so these pins support frequent
@@ -419,8 +420,8 @@ release `backend/api-service/go.mod` names, the same one CI installs and the
 `golang` builder image compiles with. To move Go, run
 `go mod edit -toolchain=go<X.Y.Z>` in `backend/api-service/`, then
 `npm run sync:image-pins` from the repo root, which rewrites this command, the
-builder image and its digest; `npm run test:go-toolchain-policy` fails if any
-copy drifts.
+builder image and its digest, then `npm run sync:agents` to regenerate the Codex
+agent mirror; `npm run test:go-toolchain-policy` fails if any copy drifts.
 
 Frontend:
 
