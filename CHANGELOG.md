@@ -17,6 +17,18 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.138] - 2026-11-25
+
+### Fixed
+
+- `scripts/postgres-pin-policy.test.mjs` now catches a broken release-history exemption in its
+  retired PostgreSQL tag sweep (#546). Dropping the trailing `/` from `changelog.d/`, or matching
+  `changelog.d/` anywhere in a path, used to pass, because no negative case shared the prefix
+  without being inside the folder. Deleting the exemption from the sweep was caught only while
+  `CHANGELOG.md` happened to quote a retired tag. The sweep is now `retiredReferences`, and a
+  fixture test checks that release history is skipped and that the same tag anywhere else is
+  reported.
+
 ## [1.18.137] - 2026-11-25
 
 ### Changed
@@ -2921,7 +2933,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.137...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.138...HEAD
+[1.18.138]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.137...v1.18.138
 [1.18.137]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.136...v1.18.137
 [1.18.136]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.135...v1.18.136
 [1.18.135]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.134...v1.18.135
