@@ -145,9 +145,62 @@ test("release history is exempt from the retired-tag sweep, and nothing else", (
     "SETUP.md",
     ".claude/agents/postgres-specialist.md",
     "frontend/CHANGELOG.md",
+    // Siblings that share a folder's name without being inside it, and
+    // folders of the same name below the repository root.
+    "changelog.d.old/x.md",
+    "changelog.dx",
+    "frontend/changelog.d/x.md",
+    "frontend/docs/changelog/x.md",
   ]) {
     assert.equal(isReleaseHistory(file), false, file);
   }
+});
+
+/**
+ * Every PostgreSQL image reference in `files` (`{ file, contents }`, with
+ * repository-relative `/` paths) that is not in `allowed`, as `file: reference`.
+ */
+export function retiredReferences(files, allowed) {
+  const failures = [];
+
+  for (const { file, contents } of files) {
+    // Release history records the image each release ran, and no branch may edit
+    // a released section (`Changelog Version`), so a retired tag there is
+    // history, not stale guidance. Without this, every PostgreSQL tag bump fails.
+    if (isReleaseHistory(file)) continue;
+    // Requires the `<major>.<minor>` tag shape so `postgres:5432` host:port
+    // pairs inside connection strings are not mistaken for image references.
+    for (const [reference] of contents.matchAll(
+      /postgres:\d+\.\d+[^\s`'"]*/g,
+    )) {
+      if (allowed.has(reference)) continue;
+      failures.push(`${file}: ${reference}`);
+    }
+  }
+
+  return failures;
+}
+
+// The repository sweep below passes or fails on whatever release history holds
+// today, so this fixture pins the exemption's use in the sweep on its own.
+test("the retired-tag sweep skips release history and reports a retired tag anywhere else", () => {
+  const retired = "postgres:18.6-alpine3.24";
+  const files = [
+    "CHANGELOG.md",
+    "changelog.d/build-postgres-19-0.md",
+    "docs/changelog/1.0-1.1.md",
+    "SETUP.md",
+    "changelog.d.old/x.md",
+  ].map((file) => ({ file, contents: `image: ${retired}\n` }));
+  files.push({
+    file: "docs/architecture.md",
+    contents: "image: postgres:19.0-alpine3.24\nhost: postgres:5432\n",
+  });
+
+  assert.deepEqual(
+    retiredReferences(files, new Set(["postgres:19.0-alpine3.24"])),
+    [`SETUP.md: ${retired}`, `changelog.d.old/x.md: ${retired}`],
+  );
 });
 
 // A version bump also touches coupling guidance when a tag has been copied into
@@ -160,26 +213,16 @@ test("no tracked file references a retired PostgreSQL image", () => {
     ciRef,
     ciRef.split("@")[0],
   ]);
-  const failures = [];
-
-  for (const path of textFiles(root)) {
-    const file = relative(root, path).split(sep).join("/");
-    // Release history records the image each release ran, and no branch may edit
-    // a released section (`Changelog Version`), so a retired tag there is
-    // history, not stale guidance. Without this, every PostgreSQL tag bump fails.
-    if (isReleaseHistory(file)) continue;
-    const contents = readFileSync(path, "utf8");
-    // Requires the `<major>.<minor>` tag shape so `postgres:5432` host:port
-    // pairs inside connection strings are not mistaken for image references.
-    for (const [reference] of contents.matchAll(
-      /postgres:\d+\.\d+[^\s`'"]*/g,
-    )) {
-      if (allowed.has(reference)) continue;
-      failures.push(`${file}: ${reference}`);
+  const files = function* () {
+    for (const path of textFiles(root)) {
+      yield {
+        file: relative(root, path).split(sep).join("/"),
+        contents: readFileSync(path, "utf8"),
+      };
     }
-  }
+  };
 
-  assert.deepEqual(failures, []);
+  assert.deepEqual(retiredReferences(files(), allowed), []);
 });
 
 test("SETUP.md delegates PostgreSQL pins to their owning configuration", () => {
