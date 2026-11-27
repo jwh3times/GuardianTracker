@@ -17,6 +17,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.139] - 2026-11-26
+
+### Changed
+
+- Merge pull request #569 from jwh3times/dependabot/npm_and_yarn/frontend/npm-minor-and-patch-b43c1c169a (#569)
+
 ## [1.18.138] - 2026-11-25
 
 ### Fixed
@@ -2933,7 +2939,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.138...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.139...HEAD
+[1.18.139]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.138...v1.18.139
 [1.18.138]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.137...v1.18.138
 [1.18.137]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.136...v1.18.137
 [1.18.136]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.135...v1.18.136
