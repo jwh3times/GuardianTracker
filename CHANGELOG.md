@@ -17,6 +17,12 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.141] - 2026-11-27
+
+### Changed
+
+- chore: bump the `npm-minor-and-patch` group in `/frontend` with 2 updates (#572)
+
 ## [1.18.140] - 2026-11-27
 
 ### Changed
@@ -2945,7 +2951,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.140...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.141...HEAD
+[1.18.141]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.140...v1.18.141
 [1.18.140]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.139...v1.18.140
 [1.18.139]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.138...v1.18.139
 [1.18.138]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.137...v1.18.138
