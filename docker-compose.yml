@@ -10,7 +10,7 @@
 
 services:
   postgres:
-    image: postgres:19.0-alpine3.24@sha256:8b0ff4cdf221f0c53d7fcda681d3b461be725c492cd881c5ec9c0ad25023f188
+    image: postgres:19.0-alpine3.24@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-guardian_tracker}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -113,7 +113,7 @@ services:
   # (sits next to the dev `postgres` port at 5532) so it never collides. No volume:
   # removing the container wipes the data — it's disposable (tests recreate schema + rows).
   test-postgres:
-    image: postgres:19.0-alpine3.24@sha256:8b0ff4cdf221f0c53d7fcda681d3b461be725c492cd881c5ec9c0ad25023f188
+    image: postgres:19.0-alpine3.24@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
     profiles: ["test"]
     container_name: gt-test-pg
     environment:
@@ -134,7 +134,7 @@ services:
   # real API, and Vite processes; Compose supplies only an isolated Postgres.
   # No data volume is attached, so removing the container resets every scenario.
   e2e-postgres:
-    image: postgres:19.0-alpine3.24@sha256:8b0ff4cdf221f0c53d7fcda681d3b461be725c492cd881c5ec9c0ad25023f188
+    image: postgres:19.0-alpine3.24@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
     profiles: ["e2e"]
     environment:
       POSTGRES_DB: guardian_tracker
