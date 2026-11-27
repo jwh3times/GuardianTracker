@@ -252,7 +252,7 @@ three-minute context deadline releases waiting callers and prevents late cache
 or tree publication, although a context-free Manifest read may finish later.
 Analysis publication still requires both generation fences and an active shared
 load; the membership-independent tree requires the Manifest fence and active load.
-Completed, failed, and abandoned loads leave the in-flight registry; ordinary
+Completed, failed, and abandoned flights are retired; ordinary
 cache hits retain their existing TTL and projections.
 
 Records separately coalesces overlapping component-900 cache misses for
@@ -262,7 +262,7 @@ Manifest, so a Manifest swap neither splits the shared read nor retires its
 result. Callers cancel independently; the last waiter cancels the shared load,
 and a three-minute context deadline releases waiters and prevents late cache
 publication. Publication requires the current membership generation and an
-active load. Finished or abandoned loads leave the registry; cache TTL and the
+active load. Finished or abandoned flights are retired; cache TTL and the
 original fetch timestamp are preserved.
 
 Both owners delegate that shared-read lifetime to one generic in-process module,
