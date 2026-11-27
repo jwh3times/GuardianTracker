@@ -40,9 +40,10 @@ no ready issue exists. `/ask-matt` maps the flow itself.
   `/dependabot` read a red check with `/ci-triage`, which never re-runs anything.
   `/records-audit` checks the board, the trackers, the follow-up wiki and the changelog against
   each other; run it weekly, and `/what-next` says when it is due.
-- **`/handoff` is the shared skill.** It parks the session for another machine or harness, closes it
-  out with `/end-session`, and `/lets-go` resumes it. It does not write the portable file `/ask-matt`
-  describes, so a `/prototype` detour stays in the session or uses a branch.
+- **`/handoff` is the shared skill.** It parks the session for the next one, on either machine or
+  harness, closes it out with `/end-session`, and `/lets-go` resumes it. It does not write the
+  portable file `/ask-matt` describes, so a `/prototype` detour stays in the session or uses a
+  branch.
 - **A wizard is not the record.** A step only a human can take follows the `## Procedure` in
   `.agents/skills/open-pr/settings/human-follow-up.md`, whose instructions stand without the script.
 - **Research goes where it is safe to keep.** `/research` findings that would expose private material
@@ -54,8 +55,8 @@ no ready issue exists. `/ask-matt` maps the flow itself.
 <!-- shared:shared-skills -->
 
 `end-session`, `handoff`, `lets-go`, `open-pr`, `land`, `dependabot`, `docs-updater`, `what-next`,
-`test-prover`, `ci-triage` and `records-audit` install from `jwh3times/skills`, and are never
-edited here: reinstalling overwrites a local edit.
+`test-prover`, `ci-triage`, `records-audit` and `tldr` install from `jwh3times/skills`, and are
+never edited here: reinstalling overwrites a local edit.
 A fix goes upstream, and what they need to know about this repository goes in the settings files
 under `docs/agents/`, which each skill proposes on first run.
 
@@ -69,7 +70,7 @@ Re-running the install is the update; never run `npx skills update`, which leave
 linked to its source instead of copied:
 
 ```bash
-npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s open-pr -s land -s dependabot -s docs-updater -s what-next -s test-prover -s ci-triage -s records-audit -a codex --copy -y
+npx skills add jwh3times/skills -s end-session -s handoff -s lets-go -s open-pr -s land -s dependabot -s docs-updater -s what-next -s test-prover -s ci-triage -s records-audit -s tldr -a codex --copy -y
 npx skills add mattpocock/skills#d1478fcb140db0b93c0c8df17bcfd311844749d0 \
   -s ask-matt -s code-review -s codebase-design -s diagnosing-bugs -s domain-modeling -s grill-me \
   -s grill-with-docs -s grilling -s implement -s improve-codebase-architecture -s prototype \
