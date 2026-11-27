@@ -257,15 +257,16 @@ membership, so one user's refresh cannot retire another user's in-flight work.
 An owner fenced on both axes takes Manifest outside, membership inside. See
 [ADR 0018](./docs/adr/0018-own-complete-membership-collections.md).
 
-**Shared read** (`sharedread.Group`) — concurrent cache misses for one key join
-a single detached load, a **flight**, instead of each starting their own. Each
+**Shared read** (`sharedread.Group`) — concurrent reads for one key join a
+single detached load, a **flight**, instead of each starting their own. Each
 caller cancels independently; the last waiter to leave cancels the flight, and
 the next caller starts a replacement. The Group owns the waiters, the flight's
 deadline, cancellation, replacement safety and the still-active guard it hands
 each load. Its owner keeps the key, what a load reads, cache policy, and its
-Manifest and Membership publication, publishing only through that guard. The
-Group holds no cache and never publishes anything itself. Used by Membership
-collections analysis and by Records' component-900 profile read. See
+own generation fences (Manifest publication, Membership publication, or both),
+publishing only through that guard. The Group holds no cache and never
+publishes anything itself. Used by Membership collections analysis and by
+Records' component-900 profile read. See
 [ADR 0013](./docs/adr/0013-own-the-application-cache-contract.md),
 [ADR 0014](./docs/adr/0014-own-manifest-derived-publication.md) and
 [ADR 0018](./docs/adr/0018-own-complete-membership-collections.md).
