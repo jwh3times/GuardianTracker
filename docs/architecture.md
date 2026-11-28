@@ -247,32 +247,33 @@ policy itself. See [ADR 0018](./adr/0018-own-complete-membership-collections.md)
 The membership-analysis owner coalesces concurrent cold reads and Manifest-only
 rebuilds. Callers share work only for the same membership type/ID, refresh and
 Manifest generations, and Bungie credential fingerprint. Each caller can cancel
-independently; the last departing caller cancels the shared load. Its separate
+independently; the last departing caller cancels the flight. Its separate
 three-minute context deadline releases waiting callers and prevents late cache
 or tree publication, although a context-free Manifest read may finish later.
-Analysis publication still requires both generation fences and an active shared
-load; the membership-independent tree requires the Manifest fence and active load.
-Completed, failed, and abandoned loads leave the in-flight registry; ordinary
+Analysis publication still requires both generation fences and an active
+flight; the membership-independent tree requires the Manifest fence and an
+active flight. Completed, failed, and abandoned flights are dropped; ordinary
 cache hits retain their existing TTL and projections.
 
 Records separately coalesces overlapping component-900 cache misses for
 Catalysts, Crafting, and Seals by membership type/ID, refresh generation, and
 Bungie credential fingerprint. This raw profile data is independent of the
 Manifest, so a Manifest swap neither splits the shared read nor retires its
-result. Callers cancel independently; the last waiter cancels the shared load,
-and a three-minute context deadline releases waiters and prevents late cache
+result. Callers cancel independently; the last waiter cancels the flight, and a
+three-minute context deadline releases waiters and prevents late cache
 publication. Publication requires the current membership generation and an
-active load. Finished or abandoned loads leave the registry; cache TTL and the
+active flight. Finished or abandoned flights are dropped; cache TTL and the
 original fetch timestamp are preserved.
 
 Both owners delegate that shared-read lifetime to one generic in-process module,
-`services/sharedread`. Its `Group` owns the waiters, the detached deadline,
-cancellation, replacement safety, and the "still active" guard it hands each
-load. Each owner keeps its flight key, what it loads, its cache policy, and its
-generation fences, and calls the guard from inside its own publication. The
-group never takes an owner's lock, so the Manifest -> membership lock order is
-unchanged. It holds no cache and publishes nothing itself (ADRs 0013, 0014,
-0018).
+`services/sharedread`, the glossary's
+[Shared read](../CONTEXT.md#architectural-names). Its `Group` owns the waiters,
+the detached deadline, cancellation, replacement safety, and the "still active"
+guard it hands each load. Each owner keeps its flight key, what it loads, its
+cache policy, and its generation fences, and calls the guard from inside its own
+publication. The group never takes an owner's lock, so the Manifest ->
+membership lock order is unchanged. It holds no cache and publishes nothing
+itself (ADRs 0013, 0014, 0018).
 
 ## Collection and Acquisition Model
 
@@ -439,7 +440,7 @@ A request whose client disconnected or aborted before its response was ready
 is recorded as status 499 at info, with no error-level handler log: Bungie,
 roll-target, store, preferences, Wish list, Digest, and Weekly failure paths
 first check whether the failure is the request's own cancellation. A server
-deadline, a detached shared load canceled by something else, or a real failure
+deadline, a detached flight canceled by something else, or a real failure
 that coincides with a disconnect is still reported as that failure.
 
 Application logs never include query strings, bodies, authorization headers,
