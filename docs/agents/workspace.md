@@ -56,9 +56,10 @@ the fetch. Where only Windows PowerShell 5.1 exists, run it with `powershell` in
   (a ~290MB Bungie re-download); `docker compose --profile test down` or
   `docker compose --profile e2e down` — either takes the main stack down too.
 - **Only on the user's word:** `docker compose down -v` — it wipes `postgres-data` and
-  `manifest-data` too, so an agent never runs it on its own, only when the user says to at the
-  guard's prompt. A PostgreSQL major bump does not need it: the Dependabot playbook moves the old
-  cluster aside instead ([dependabot](dependabot.md#playbook)).
+  `manifest-data` (a ~290MB Bungie re-download), so an agent never runs it on its own and never
+  as a way of stopping the stack: only when the user asks for this command by name. Where the
+  guard runs, it prompts for that word. A PostgreSQL major bump does not need it: the Dependabot
+  playbook moves the old cluster aside instead ([dependabot](dependabot.md#playbook)).
 
 ## Generated-config check
 
