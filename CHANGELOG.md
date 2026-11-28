@@ -17,6 +17,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.149] - 2026-11-28
+
+### Fixed
+
+- `SETUP.md` and `SECURITY.md` link PostgreSQL's current libpq SSL
+  documentation instead of PostgreSQL 18's, which the stack stopped running
+  when it moved to PostgreSQL 19. The `current` link follows later majors
+  without another edit.
+
 ## [1.18.148] - 2026-11-28
 
 ### Fixed
@@ -3020,7 +3029,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.148...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.149...HEAD
+[1.18.149]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.148...v1.18.149
 [1.18.148]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.147...v1.18.148
 [1.18.147]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.146...v1.18.147
 [1.18.146]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.145...v1.18.146
