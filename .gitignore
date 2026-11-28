@@ -88,7 +88,7 @@ frontend/playwright-report/
 frontend/test-results/
 # Manifest + search-index artifacts the E2E API writes at MANIFEST_DB_PATH
 backend/api-service/.e2e/
-# Snapshots, screenshots, and logs the shared Playwright MCP server writes (see AGENTS.md)
+# Snapshots, screenshots, and logs the shared Playwright MCP server writes (see docs/agents/mcp.md)
 .playwright-mcp/
 
 # TypeScript incremental build cache
