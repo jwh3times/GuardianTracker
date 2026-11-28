@@ -208,8 +208,8 @@ schema_migrations (version PK, applied_at)
 ```
 
 The pinned version above must match the Compose `postgres`/`test-postgres`/`e2e-postgres`
-services exactly. See `.claude/agents/docker-containers.md`'s "When updating
-PostgreSQL" guidance before bumping it — `scripts/postgres-pin-policy.test.mjs`
+services exactly. See `.claude/agents/docker-containers.md`'s "Pin
+maintenance" section before bumping it — `scripts/postgres-pin-policy.test.mjs`
 enforces alignment across Compose, the CI service container, and this file.
 
 ## When to use which database
