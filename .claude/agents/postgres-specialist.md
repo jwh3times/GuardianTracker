@@ -210,7 +210,7 @@ schema_migrations (version PK, applied_at)
 # Application schema is applied automatically at startup via db.Migrate()
 ```
 
-The pinned digest above must match the Compose `postgres`/`test-postgres`/`e2e-postgres`
+The pinned version above must match the Compose `postgres`/`test-postgres`/`e2e-postgres`
 services exactly. See `.claude/agents/docker-containers.md`'s "When updating
 PostgreSQL" guidance before bumping it — `scripts/postgres-pin-policy.test.mjs`
 enforces alignment across Compose, the CI service container, and this file.
