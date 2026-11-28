@@ -189,7 +189,7 @@ certificate trust and hostname matching before deployment; `sslmode=require`
 alone is insufficient for the production identity-verification policy. Any
 provider-specific equivalent must have documented, validated server identity
 verification. No production provider is selected by this guide. See
-[PostgreSQL's SSL guidance](https://www.postgresql.org/docs/18/libpq-ssl.html).
+[PostgreSQL's SSL guidance](https://www.postgresql.org/docs/current/libpq-ssl.html).
 
 Run the driver regression from `backend/api-service/`:
 

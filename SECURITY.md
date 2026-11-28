@@ -67,7 +67,7 @@ DNS hostname covered by the server certificate's DNS Subject Alternative Name,
 and an explicit `sslrootcert` pointing to a provider-approved trusted CA bundle.
 This verifies both the certificate chain and server hostname; `sslmode=require`
 is not the production identity-verification policy. See
-[PostgreSQL's SSL guidance](https://www.postgresql.org/docs/18/libpq-ssl.html)
+[PostgreSQL's SSL guidance](https://www.postgresql.org/docs/current/libpq-ssl.html)
 and [the setup example](./SETUP.md#production-postgresql-tls).
 
 The API passes the supplied DSN to pgx; it does not enforce `verify-full` at
