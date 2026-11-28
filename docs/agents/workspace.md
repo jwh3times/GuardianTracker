@@ -52,10 +52,13 @@ the fetch. Where only Windows PowerShell 5.1 exists, run it with `powershell` in
 - **Main stack** (`postgres`, `pgadmin`, `api-service`, `frontend`): leave it running unless the
   user asks; stop it with `docker compose stop` or `docker compose down`. Minikube:
   `./k8s/shutdown.ps1` (interactive), only on request.
-- **Never run:** `docker compose down -v` or any `docker volume rm`/`prune` — it wipes
-  `postgres-data` and `manifest-data` (a ~290MB Bungie re-download);
-  `docker compose --profile test down` or `docker compose --profile e2e down` — either takes the
-  main stack down too.
+- **Never run:** any `docker volume rm`/`prune` — it wipes `postgres-data` and `manifest-data`
+  (a ~290MB Bungie re-download); `docker compose --profile test down` or
+  `docker compose --profile e2e down` — either takes the main stack down too.
+- **Only on the user's word:** `docker compose down -v` — it wipes `postgres-data` and
+  `manifest-data` too, so an agent never runs it on its own, only when the user says to at the
+  guard's prompt. A PostgreSQL major bump does not need it: the Dependabot playbook moves the old
+  cluster aside instead ([dependabot](dependabot.md#playbook)).
 
 ## Generated-config check
 
