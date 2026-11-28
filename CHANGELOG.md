@@ -17,6 +17,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.147] - 2026-11-28
+
+### Fixed
+
+- Two code comments that still sent readers to `AGENTS.md` for rules it no
+  longer holds now point where those rules live. The `.gitignore` comment on
+  `.playwright-mcp/` points at the MCP servers agent doc, and the Collections
+  data-access contract tests credit their "tests exercise the new seam rather
+  than duplicating its data" rule to the development-flow doc's rules for
+  architecture-deepening slices. Comments only; no behavior changes.
+
 ## [1.18.146] - 2026-11-28
 
 ### Changed
@@ -3000,7 +3011,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.146...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.147...HEAD
+[1.18.147]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.146...v1.18.147
 [1.18.146]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.145...v1.18.146
 [1.18.145]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.144...v1.18.145
 [1.18.144]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.143...v1.18.144
