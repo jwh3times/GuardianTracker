@@ -17,6 +17,21 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.144] - 2026-11-27
+
+### Changed
+
+- The CI agent doc's branch-protection section now matches the live ruleset:
+  it covers `main` and `release/**`, and names strict up-to-date checks, merge
+  commits as the only merge method, required review-thread resolution, Copilot
+  code review on every push, the code-quality rule, and the deletion and
+  force-push protections, linking the merging guide for what they mean when
+  landing.
+- The `postgres-specialist` agent calls its example a pinned version rather
+  than a digest, and points at the `docker-containers` agent's "Pin
+  maintenance" section, where the PostgreSQL pin guidance lives, instead of a
+  "When updating PostgreSQL" section that does not exist.
+
 ## [1.18.143] - 2026-11-27
 
 ### Changed
@@ -2968,7 +2983,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.143...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.144...HEAD
+[1.18.144]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.143...v1.18.144
 [1.18.143]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.142...v1.18.143
 [1.18.142]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.141...v1.18.142
 [1.18.141]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.140...v1.18.141
