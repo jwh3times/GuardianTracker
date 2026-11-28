@@ -165,7 +165,7 @@ Tell it this is `end-session`, and give it the session's discoveries as a list o
 the diff: decisions and findings land in the `Doc map`
 documents whose **when** they match, honoring each one's marker. Run step 4's procedure for any
 human actions it returns. Its edits come back uncommitted, and join step 6's question about
-uncommitted work. Keep its report for step 7.
+uncommitted work. Keep its report for step 7, its **drift fixed outside the change** list too.
 
 - **Companion.** When the `Private companion` is set and its checkout exists, inspect it from its
   own root: the outer repository's `git log`, `git show` and `git diff` cannot see inside it. When
@@ -303,6 +303,7 @@ Then print this template, every section every time, with `none` where there is n
 ### Docs
 - Searched: <documents checked, the terms searched for, and where, from docs-updater's report>
 - Updated: <documents and their commit state, the companion's too, or that it was absent>
+- Drift fixed outside the change: <docs-updater's list from a scoped fix run, or none>
 - Drift reported, not fixed: <list>
 
 ### Repository status

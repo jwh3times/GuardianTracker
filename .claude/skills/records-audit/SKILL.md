@@ -6,6 +6,7 @@ argument-hint: "Optional: board, issues, follow-ups or changelog, to run only th
 model: inherit
 metadata:
   settings: issue-tracker triage-labels human-follow-up releases workspace
+  helpers: end-session/board.mjs
 ---
 
 # Records audit
@@ -22,7 +23,7 @@ need the user to sign in to `gh` (the `read:project` scope) or to a secret store
 private tracker and wiki, which a cloud routine cannot reach. It runs on the session's model.
 
 **Read-only.** Never change an issue, label, board item, field, wiki page, tag or file, and never
-commit or push. Board reads go through `.agents/skills/end-session/board.mjs audit` and
+commit or push. Board reads go through `.agents/skills/records-audit/board.mjs audit` and
 `gh project item-list`; `board.mjs`'s writing commands are never run here. Clones of a wiki go to
 a temporary folder and are deleted after. Apart from the settings files step 0 may write, the one
 file it writes is its report (step 6), outside the working tree, so `git status` reads the same
@@ -56,7 +57,7 @@ An argument (`board`, `issues`, `follow-ups`, `changelog`) runs only those secti
 With a `Board`, `<board>` its two words:
 
 ```bash
-node .agents/skills/end-session/board.mjs audit --board "<board>" --repo "<Public repository>" [--repo "<Private issue repository>"] [--status-field "<field>" --done "<option>"]
+node .agents/skills/records-audit/board.mjs audit --board "<board>" --repo "<Public repository>" [--repo "<Private issue repository>"] [--status-field "<field>" --done "<option>"]
 gh project item-list <number> --owner <owner> --format json --limit 1000
 ```
 

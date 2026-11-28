@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Reads and writes one GitHub project board (Projects v2) for the shared skills: end-session files
-// and updates items and audits the board against the issues. end-session writes to a board only
-// through this script, so the quirks below are handled once.
+// and updates items and audits the board against the issues, land moves merged work to Done, and
+// the human follow-up procedure files its issues. Every skill that touches a board does it only
+// through this script, so the quirks below are handled once. This file in end-session is the
+// source; `npm run build` copies it into each skill that names `helpers: end-session/board.mjs`,
+// so `<skill>` below is the skill whose copy runs.
 //
-//   node .agents/skills/end-session/board.mjs fields --board "<owner> <number>"
-//   node .agents/skills/end-session/board.mjs get    --board "<owner> <number>" (--item <ref> | --item-id <id>)
-//   node .agents/skills/end-session/board.mjs file   --board "<owner> <number>" --item <ref> [--set "<Field>=<value>" ...]
-//   node .agents/skills/end-session/board.mjs set    --board "<owner> <number>" (--item <ref> | --item-id <id>) --set "<Field>=<value>" ...
-//   node .agents/skills/end-session/board.mjs audit  --board "<owner> <number>" [--repo <owner/name> ...]
-//                                                    [--status-field <name>] [--done <option>] [--due-field <name>]
+//   node .agents/skills/<skill>/board.mjs fields --board "<owner> <number>"
+//   node .agents/skills/<skill>/board.mjs get    --board "<owner> <number>" (--item <ref> | --item-id <id>)
+//   node .agents/skills/<skill>/board.mjs file   --board "<owner> <number>" --item <ref> [--set "<Field>=<value>" ...]
+//   node .agents/skills/<skill>/board.mjs set    --board "<owner> <number>" (--item <ref> | --item-id <id>) --set "<Field>=<value>" ...
+//   node .agents/skills/<skill>/board.mjs audit  --board "<owner> <number>" [--repo <owner/name> ...]
+//                                                [--status-field <name>] [--done <option>] [--due-field <name>]
 //
 // <ref> is an issue or pull request, as `owner/name#123` or its github.com URL. `file` adds it to
 // the board when it is not there yet, then sets the fields; `set` refuses an item not on the board.

@@ -132,7 +132,7 @@ test("frontmatter rejects block scalars and unparseable lines", () => {
   );
 });
 
-test("Codex agent drops Claude-only fields and marks read-only tool lists", () => {
+test("Codex agent drops Claude-only fields and tells a read-only agent not to write", () => {
   withFixture((root) => {
     syncMirrors(root);
     const toml = read(root, ".codex/agents/reviewer.toml");
@@ -141,27 +141,38 @@ test("Codex agent drops Claude-only fields and marks read-only tool lists", () =
       /^# GENERATED — do not edit\. Source: \.claude\/agents\/reviewer\.md/,
     );
     assert.match(toml, /^description = "Reviews a diff: finds bugs\."$/m);
-    assert.match(toml, /^sandbox_mode = "read-only"$/m);
     assert.match(
       toml,
-      /^developer_instructions = '''\nReview carefully\.'''\n$/m,
+      /^developer_instructions = '''\nDo not create, edit or delete files: this agent only reads\.\n\nReview carefully\.'''\n$/m,
     );
-    assert.doesNotMatch(toml, /model|tools/);
+    assert.doesNotMatch(toml, /model|tools|sandbox_mode/);
   });
 });
 
 const md = (tools) => `---\nname: a\ndescription: d\n${tools}---\nBody`;
+const noWrites = /Do not create, edit or delete files/;
 
-test("an agent with a writing tool or no tool list gets no sandbox line", () => {
-  assert.doesNotMatch(
-    renderCodexAgent("a.md", md("tools: Read, Edit\n")),
-    /sandbox_mode/,
-  );
-  assert.doesNotMatch(renderCodexAgent("a.md", md("")), /sandbox_mode/);
-  assert.match(
-    renderCodexAgent("a.md", md("tools: [Read, Grep]\n")),
-    /sandbox_mode/,
-  );
+// Codex runs a subagent in its parent's sandbox and ignores `sandbox_mode` in a custom agent file,
+// so no agent gets the line; a read-only one is told in its instructions instead.
+test("only an agent whose tool list names no writing tool is told not to write", () => {
+  const writers = [
+    "tools: Read, Edit\n",
+    "tools: [Write]\n",
+    "tools: Read, MultiEdit\n",
+    "tools: [Read, NotebookEdit]\n",
+    "",
+  ];
+  for (const tools of writers) {
+    const toml = renderCodexAgent("a.md", md(tools));
+    assert.doesNotMatch(toml, noWrites, tools);
+    assert.doesNotMatch(toml, /sandbox_mode/, tools);
+    assert.match(toml, /^developer_instructions = '''\nBody'''$/m, tools);
+  }
+  for (const tools of ["tools: [Read, Grep]\n", "tools: Read, Bash\n"]) {
+    const toml = renderCodexAgent("a.md", md(tools));
+    assert.match(toml, noWrites, tools);
+    assert.doesNotMatch(toml, /sandbox_mode/, tools);
+  }
 });
 
 test("an agent name must match its filename", () => {
