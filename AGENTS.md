@@ -169,8 +169,11 @@ docker compose up --build
 
 ```powershell
 docker compose down        # stop (keeps volumes)
-docker compose down -v     # stop and wipe Postgres/manifest volumes
+docker compose down -v     # wipe Postgres/manifest volumes: only on the user's word
 ```
+
+Before stopping the stack or wiping a volume, read
+[Dev stack in docs/agents/workspace.md](./docs/agents/workspace.md#dev-stack).
 
 ### Option B: Kubernetes (Minikube)
 
