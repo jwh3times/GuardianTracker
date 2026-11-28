@@ -17,6 +17,17 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.145] - 2026-11-27
+
+### Changed
+
+- The workspace settings' Dev stack no longer lists `docker compose down -v`
+  as never run, beside the volume deletes the guard denies. It is a command an
+  agent runs only when the user asks for it by name, never as a way of
+  stopping the stack, matching the guard's Ask rule; a PostgreSQL major does
+  not need it. `AGENTS.md`'s Compose commands mark it the same way and point at
+  the Dev stack rules before stopping the stack or wiping a volume.
+
 ## [1.18.144] - 2026-11-27
 
 ### Changed
@@ -2983,7 +2994,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.144...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.145...HEAD
+[1.18.145]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.144...v1.18.145
 [1.18.144]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.143...v1.18.144
 [1.18.143]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.142...v1.18.143
 [1.18.142]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.141...v1.18.142
