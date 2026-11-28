@@ -17,6 +17,15 @@ Older release notes are retained in [1.0–1.1](docs/changelog/1.0-1.1.md) and [
 
 No unreleased changes.
 
+## [1.18.148] - 2026-11-28
+
+### Fixed
+
+- The open-pr settings' Fast checks list now says the repository policy
+  tests (`npm run test:policy`) take about 40 seconds on CI and up to two
+  minutes on Windows, instead of about 20 seconds. They stay in the local
+  list, which keeps a suite that finishes in about two minutes.
+
 ## [1.18.147] - 2026-11-28
 
 ### Fixed
@@ -3011,7 +3020,8 @@ No unreleased changes.
   paths, and require quoted Kubernetes `stringData` values before installing a
   plaintext target.
 
-[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.147...HEAD
+[Unreleased]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.148...HEAD
+[1.18.148]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.147...v1.18.148
 [1.18.147]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.146...v1.18.147
 [1.18.146]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.145...v1.18.146
 [1.18.145]: https://github.com/jwh3times/GuardianTracker/compare/v1.18.144...v1.18.145
