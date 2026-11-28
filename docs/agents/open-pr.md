@@ -19,7 +19,8 @@ the frontend checks need `frontend/node_modules` (`npm ci` in `frontend/`).
 - repo root: `npm run sync:agents:check` (**Format Check**), fixed by the root Prettier `--write`
   then `npm run sync:agents`, committing the regenerated mirrors
 - repo root: `npm run lint:agents` (**Format Check**)
-- repo root: `npm run test:policy` (**Format Check**'s policy tests, about 20 seconds)
+- repo root: `npm run test:policy` (**Format Check**'s policy tests, about 40 seconds on CI and
+  up to two minutes on Windows)
 - repo root: `node scripts/check-docs.mjs` (**Format Check**)
 - repo root: `node scripts/check-skills.mjs` (**Format Check**)
 - repo root, only when `scripts/next-version.mjs`, `scripts/check-changelog.mjs` or
