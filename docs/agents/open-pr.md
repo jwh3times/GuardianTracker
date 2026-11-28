@@ -12,7 +12,7 @@ the frontend checks need `frontend/node_modules` (`npm ci` in `frontend/`).
 - `frontend/`, only when `frontend/` changed: `npm run type-check` and `npm run lint`
   (**Test Frontend**)
 - `frontend/`, only when `frontend/` changed: `npm test -- --coverage` (**Test Frontend**'s
-  Vitest suite, about 10 seconds)
+  Vitest suite, about 30 seconds on CI and up to a minute on Windows)
 - `backend/api-service/`, only when `backend/` changed: `test -z "$(gofmt -l .)"`
   (**Format Check**), fixed by `gofmt -w .`; then `go vet ./...` (**Test Go Services**). Without
   a Go toolchain both are left to CI.
