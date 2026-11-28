@@ -70,8 +70,14 @@ line in a final message is not a follow-up.
    run: `gh repo view <repository> --json visibility --jq .visibility` must print `PRIVATE`, for
    its wiki too; otherwise stop and publish nothing there.
 4. **Board.** Add the issue to the follow-up board and set its fields from current evidence:
-   actionable, blocked by a named prerequisite, or parked until a conditional trigger. Look up
-   field and option IDs; never assume them. When the action has a real deadline (a token or
+   actionable, blocked by a named prerequisite, or parked until a conditional trigger. Write
+   through the skill's own copy of the board script, never `gh project item-edit`:
+   `node .agents/skills/<skill>/board.mjs file --board "<board>" --item <owner/name#N> --set "<Field>=<value>" ...`,
+   where `<skill>` is the skill whose `settings/` folder holds this file
+   (`.agents/skills/<skill>/settings/human-follow-up.md`) and
+   `<board>` the follow-up board's two words. `file` adds the issue when it is not on the board
+   yet, matches field and option names whatever their case or dash, and reads the write back; it
+   needs the `gh` token's `project` scope. When the action has a real deadline (a token or
    certificate expiry, a renewal, an offer or support window ending, a date someone else set) and
    the board has a `Due` date field, set it to that date (`--set "Due=YYYY-MM-DD"`) and name the
    source of the date in the issue. Never set one for a date that is only a wish; a deadline lives

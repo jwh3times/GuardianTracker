@@ -202,9 +202,11 @@ updating the branch, never `@dependabot rebase`, which would drop the fix. Wait 
 A PR is ready to offer when its checks passed on its current head and it is ROUTINE, or carries a
 `current` `low-risk` verdict. List the ready ones, oldest first. The user's words name
 the PRs to land; "land the ready ones" names that list as shown. Hand them to `land` one at a time,
-in that order, each through all of its steps. After each merge, run step 1 again: Dependabot
-rebases the others, or closes one and opens a replacement, which is a new PR the user has not
-named.
+in that order, each through all of its steps. Run `land` here, in the session the user spoke to:
+its merge is never handed to a subagent, which has no word from the user to merge with and is
+refused. A subagent may still read a PR or catch it up. After each merge, run step 1 again:
+Dependabot rebases the others, or closes one and opens a replacement, which is a new PR the user
+has not named.
 
 ## 10. Report
 

@@ -3,6 +3,7 @@ name: docs-updater
 description: Bring the repository's documentation in line with the code — find where the docs and the code disagree, and fix the docs (or, in check mode, only report it). Use after a feature, fix, or architectural change; when the user asks to update or audit the docs; and from open-pr and end-session, which run it scoped to a branch's diff.
 metadata:
   settings: docs workspace issue-tracker human-follow-up
+  helpers: end-session/board.mjs
 ---
 
 # Docs updater
@@ -81,8 +82,17 @@ truth: the `Drift probes`, and otherwise the code, manifests, configs and CI wor
 Executable config outranks prose. Count what a probe lists rather than trusting a number in a doc
 (CI jobs by their top-level keys, not by every `name:`).
 
-A scoped run reports drift it finds outside its scope (an older claim a probe contradicts) without
-fixing it: that drift belongs to its own change. A full audit fixes it.
+A scoped run sorts older drift by file. Older drift is a claim a probe contradicts that the change
+did not cause:
+
+- **In a file the scope's diff changes:** fix it in this run (fix mode), and keep it apart from
+  the change's own edits, on the **drift fixed outside the change** list, one line per fix. The
+  test is whether the diff changes the file, whatever the fix's size.
+- **In any other file:** report it without fixing it. That drift belongs to its own change.
+
+The scope's diff is its range, or, for a list of changes, the files those changes edited; a
+change that edits no file, such as a decision or a finding, adds none. A full audit fixes all of
+it.
 
 **Companion documents.** When the `Private companion` is set, require its checkout before reading
 or editing them, and inspect it from its own root (`git -C private status`, `git -C private log`):
@@ -158,9 +168,11 @@ text:
 - **current** — checked against the code, no change needed;
 - **changed** — what changed (fix mode);
 - **drift** — what disagrees and with which source: left unfixed in check mode, or not resolvable
-  from the code alone (a feature disabled or removed?), or in an `owner-only` or `frozen` document.
+  from the code alone (a feature disabled or removed?), or in an `owner-only` or `frozen` document,
+  or in a file outside a scoped run's diff.
 
-Then the terms step 2 searched for and where (tracked Markdown, the companion, each wiki), or that
-it searched for none; the changes no `Doc map` item's **when** matched; the human actions found
+Then, for a scoped run, the **drift fixed outside the change** list, or that it is empty. Then the
+terms step 2 searched for and where (tracked Markdown, the companion, each wiki), or that it
+searched for none; the changes no `Doc map` item's **when** matched; the human actions found
 (and, run on its own, their follow-up links or the publication blocker); validation results;
 companion checks that could not run; and that the edits are uncommitted.

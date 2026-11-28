@@ -214,17 +214,21 @@ export function renderCodexAgent(sourceFile, raw) {
   }
 
   // `model`, `color`, and the tool list itself are dropped: they name Claude Code's model ids and
-  // tool registry, neither of which transfers. Only the read-only fact survives, as a sandbox.
+  // tool registry, neither of which transfers. Only the read-only fact survives, and only as
+  // advice in the instructions: Codex runs a subagent in its parent's sandbox, and a custom agent
+  // file's `sandbox_mode` is ignored, so nothing in the file can enforce it.
   const tools = toolList(data.get("tools"));
   const readOnly =
     tools !== null && !tools.some((tool) => writingTools.has(tool));
+  const instructions = readOnly
+    ? `Do not create, edit or delete files: this agent only reads.\n\n${body}`
+    : body;
 
   return [
     `# GENERATED — do not edit. Source: ${sourceFile} — regenerate with '${regenerateCommand}'.`,
     `name = ${tomlBasicString(data.get("name"))}`,
     `description = ${tomlBasicString(data.get("description"))}`,
-    ...(readOnly ? ['sandbox_mode = "read-only"'] : []),
-    `developer_instructions = ${tomlMultiline(body)}`,
+    `developer_instructions = ${tomlMultiline(instructions)}`,
     "",
   ].join("\n");
 }
