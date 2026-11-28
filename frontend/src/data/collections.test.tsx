@@ -18,7 +18,8 @@ import { useMembershipRefresh } from "./membershipRefresh";
  * Projection is NOT retested here. `toCollections` and `toCollectionsSummary`
  * stay in `lib/collectionsView.ts` with the ADR 0018 survivor tests that own
  * them; duplicating those assertions would be the "tests exercise the new seam
- * rather than duplicating its data" failure AGENTS.md names.
+ * rather than duplicating its data" failure that `docs/agents/dev-flow.md`
+ * names in its rules for architecture-deepening slices.
  */
 
 function SummaryProbe({ enabled }: { enabled?: boolean }) {
